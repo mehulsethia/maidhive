@@ -1,0 +1,330 @@
+generator client {
+  provider        = "prisma-client-js"
+  previewFeatures = ["multiSchema"]
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+  schemas   = ["public"]
+}
+
+model User {
+  id        String    @id @db.Uuid
+  email     String    @unique
+  name      String
+  phone     String?
+  role      String    // 'client' | 'cleaner' | 'admin'
+  avatarUrl String?   @map("avatar_url")
+  isActive  Boolean   @default(true) @map("is_active")
+  deletedAt DateTime? @map("deleted_at") @db.Timestamptz(6)
+  createdAt DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  cleaner             Cleaner?
+  client              Client?
+  sentMessages        Message[]          @relation("MessageSender")
+  notifications       Notification[]
+  googleCalendarToken GoogleCalendarToken?
+  cancelledBookings   Booking[]          @relation("BookingCancelledBy")
+  raisedDisputes      Dispute[]          @relation("DisputeRaisedBy")
+  resolvedDisputes    Dispute[]          @relation("DisputeResolvedBy")
+  approvedCleaners    Cleaner[]          @relation("CleanerApprovedBy")
+  issuedStrikes       CleanerStrike[]    @relation("StrikeIssuedBy")
+
+  @@map("users")
+  @@schema("public")
+}
+
+model Cleaner {
+  id                       String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId                   String    @unique @map("user_id") @db.Uuid
+  bio                      String?
+  yearsExperience          Int       @default(0) @map("years_experience")
+  hourlyRate               Decimal   @map("hourly_rate") @db.Decimal(10, 2)
+  status                   String    @default("pending") // pending|approved|rejected|suspended
+  rejectionReason          String?   @map("rejection_reason")
+  approvedAt               DateTime? @map("approved_at") @db.Timestamptz(6)
+  approvedBy               String?   @map("approved_by") @db.Uuid
+  profileComplete          Boolean   @default(false) @map("profile_complete")
+  identityVerified         Boolean   @default(false) @map("identity_verified")
+  stripeOnboardingComplete Boolean   @default(false) @map("stripe_onboarding_complete")
+  stripeAccountId          String?   @unique @map("stripe_account_id")
+  totalJobs                Int       @default(0) @map("total_jobs")
+  averageRating            Decimal?  @map("average_rating") @db.Decimal(3, 2)
+  createdAt                DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt                DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  user                  User                   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  approvedByUser        User?                  @relation("CleanerApprovedBy", fields: [approvedBy], references: [id])
+  serviceAreas          ServiceArea[]
+  availabilitySchedules AvailabilitySchedule[]
+  blockedTimes          BlockedTime[]
+  bookingsAsClean       Booking[]              @relation("BookingCleaner")
+  reviews               Review[]
+  strikes               CleanerStrike[]
+
+  @@map("cleaners")
+  @@schema("public")
+}
+
+model Client {
+  id               String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId           String    @unique @map("user_id") @db.Uuid
+  stripeCustomerId String?   @unique @map("stripe_customer_id")
+  defaultAddress   String?   @map("default_address")
+  defaultCity      String?   @map("default_city")
+  defaultPostcode  String?   @map("default_postcode")
+  defaultCountry   String    @default("IE") @map("default_country")
+  createdAt        DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt        DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  user     User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  bookings Booking[] @relation("BookingClient")
+  reviews  Review[]
+
+  @@map("clients")
+  @@schema("public")
+}
+
+model ServiceArea {
+  id             String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  cleanerId      String   @map("cleaner_id") @db.Uuid
+  city           String
+  postcodePrefix String?  @map("postcode_prefix")
+  radiusKm       Decimal? @map("radius_km") @db.Decimal(5, 2)
+  createdAt      DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  cleaner Cleaner @relation(fields: [cleanerId], references: [id], onDelete: Cascade)
+
+  @@map("service_areas")
+  @@schema("public")
+}
+
+model AvailabilitySchedule {
+  id            String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  cleanerId     String   @map("cleaner_id") @db.Uuid
+  dayOfWeek     Int      @map("day_of_week") // 1=Mon ... 7=Sun
+  startTime     String   @map("start_time")  // stored as "HH:MM"
+  endTime       String   @map("end_time")
+  bufferMinutes Int      @default(30) @map("buffer_minutes")
+  isActive      Boolean  @default(true) @map("is_active")
+  createdAt     DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt     DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  cleaner Cleaner @relation(fields: [cleanerId], references: [id], onDelete: Cascade)
+
+  @@unique([cleanerId, dayOfWeek])
+  @@map("availability_schedules")
+  @@schema("public")
+}
+
+model BlockedTime {
+  id            String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  cleanerId     String    @map("cleaner_id") @db.Uuid
+  startDatetime DateTime  @map("start_datetime") @db.Timestamptz(6)
+  endDatetime   DateTime  @map("end_datetime") @db.Timestamptz(6)
+  reason        String?
+  bookingId     String?   @map("booking_id") @db.Uuid
+  createdAt     DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  cleaner Cleaner  @relation(fields: [cleanerId], references: [id], onDelete: Cascade)
+  booking Booking? @relation(fields: [bookingId], references: [id], onDelete: SetNull)
+
+  @@map("blocked_times")
+  @@schema("public")
+}
+
+model Booking {
+  id                  String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  clientId            String    @map("client_id") @db.Uuid
+  cleanerId           String    @map("cleaner_id") @db.Uuid
+  status              String    @default("pending")
+  serviceType         String    @map("service_type")
+  specialInstructions String?   @map("special_instructions")
+  address             String
+  city                String
+  postcode            String
+  country             String    @default("IE")
+  scheduledStart      DateTime  @map("scheduled_start") @db.Timestamptz(6)
+  scheduledEnd        DateTime  @map("scheduled_end") @db.Timestamptz(6)
+  durationHours       Decimal   @map("duration_hours") @db.Decimal(4, 2)
+  hourlyRate          Decimal   @map("hourly_rate") @db.Decimal(10, 2)
+  subtotal            Decimal   @db.Decimal(10, 2)
+  platformFeePct      Decimal   @default(15.00) @map("platform_fee_pct") @db.Decimal(5, 2)
+  platformFee         Decimal   @map("platform_fee") @db.Decimal(10, 2)
+  cleanerPayout       Decimal   @map("cleaner_payout") @db.Decimal(10, 2)
+  totalAmount         Decimal   @map("total_amount") @db.Decimal(10, 2)
+  cancellationReason  String?   @map("cancellation_reason")
+  cancelledBy         String?   @map("cancelled_by") @db.Uuid
+  cancelledAt         DateTime? @map("cancelled_at") @db.Timestamptz(6)
+  acceptedAt          DateTime? @map("accepted_at") @db.Timestamptz(6)
+  confirmedAt         DateTime? @map("confirmed_at") @db.Timestamptz(6)
+  startedAt           DateTime? @map("started_at") @db.Timestamptz(6)
+  completedAt         DateTime? @map("completed_at") @db.Timestamptz(6)
+  acceptBy            DateTime? @map("accept_by") @db.Timestamptz(6)
+  payBy               DateTime? @map("pay_by") @db.Timestamptz(6)
+  clientGcalEventId   String?   @map("client_gcal_event_id")
+  cleanerGcalEventId  String?   @map("cleaner_gcal_event_id")
+  createdAt           DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt           DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  client           Client          @relation("BookingClient", fields: [clientId], references: [id])
+  cleaner          Cleaner         @relation("BookingCleaner", fields: [cleanerId], references: [id])
+  cancelledByUser  User?           @relation("BookingCancelledBy", fields: [cancelledBy], references: [id])
+  payment          Payment?
+  review           Review?
+  dispute          Dispute?
+  messages         Message[]
+  blockedTimes     BlockedTime[]
+  strikes          CleanerStrike[]
+
+  @@map("bookings")
+  @@schema("public")
+}
+
+model Payment {
+  id                    String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  bookingId             String    @unique @map("booking_id") @db.Uuid
+  stripePaymentIntentId String    @unique @map("stripe_payment_intent_id")
+  stripeChargeId        String?   @unique @map("stripe_charge_id")
+  stripeTransferId      String?   @unique @map("stripe_transfer_id")
+  stripeRefundId        String?   @map("stripe_refund_id")
+  amount                Decimal   @db.Decimal(10, 2)
+  platformFee           Decimal   @map("platform_fee") @db.Decimal(10, 2)
+  cleanerPayout         Decimal   @map("cleaner_payout") @db.Decimal(10, 2)
+  currency              String    @default("eur")
+  status                String    @default("pending")
+  refundAmount          Decimal?  @map("refund_amount") @db.Decimal(10, 2)
+  refundReason          String?   @map("refund_reason")
+  authorizedAt          DateTime? @map("authorized_at") @db.Timestamptz(6)
+  capturedAt            DateTime? @map("captured_at") @db.Timestamptz(6)
+  transferredAt         DateTime? @map("transferred_at") @db.Timestamptz(6)
+  payoutScheduledAt     DateTime? @map("payout_scheduled_at") @db.Timestamptz(6)
+  refundedAt            DateTime? @map("refunded_at") @db.Timestamptz(6)
+  failedAt              DateTime? @map("failed_at") @db.Timestamptz(6)
+  createdAt             DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt             DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  booking Booking @relation(fields: [bookingId], references: [id])
+
+  @@map("payments")
+  @@schema("public")
+}
+
+model Review {
+  id        String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  bookingId String   @unique @map("booking_id") @db.Uuid
+  cleanerId String   @map("cleaner_id") @db.Uuid
+  clientId  String   @map("client_id") @db.Uuid
+  rating    Int
+  comment   String?
+  isPublic  Boolean  @default(true) @map("is_public")
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  booking Booking @relation(fields: [bookingId], references: [id])
+  cleaner Cleaner @relation(fields: [cleanerId], references: [id])
+  client  Client  @relation(fields: [clientId], references: [id])
+
+  @@map("reviews")
+  @@schema("public")
+}
+
+model Dispute {
+  id             String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  bookingId      String    @unique @map("booking_id") @db.Uuid
+  raisedBy       String    @map("raised_by") @db.Uuid
+  reason         String
+  evidence       Json?
+  status         String    @default("open")
+  resolutionType String?   @map("resolution_type")
+  resolutionNote String?   @map("resolution_note")
+  refundAmount   Decimal?  @map("refund_amount") @db.Decimal(10, 2)
+  resolvedBy     String?   @map("resolved_by") @db.Uuid
+  resolvedAt     DateTime? @map("resolved_at") @db.Timestamptz(6)
+  createdAt      DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt      DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  booking        Booking @relation(fields: [bookingId], references: [id])
+  raisedByUser   User    @relation("DisputeRaisedBy", fields: [raisedBy], references: [id])
+  resolvedByUser User?   @relation("DisputeResolvedBy", fields: [resolvedBy], references: [id])
+
+  @@map("disputes")
+  @@schema("public")
+}
+
+model CleanerStrike {
+  id         String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  cleanerId  String   @map("cleaner_id") @db.Uuid
+  bookingId  String?  @map("booking_id") @db.Uuid
+  strikeType String   @map("strike_type")
+  reason     String
+  issuedBy   String?  @map("issued_by") @db.Uuid
+  createdAt  DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  cleaner      Cleaner  @relation(fields: [cleanerId], references: [id], onDelete: Cascade)
+  booking      Booking? @relation(fields: [bookingId], references: [id], onDelete: SetNull)
+  issuedByUser User?    @relation("StrikeIssuedBy", fields: [issuedBy], references: [id])
+
+  @@map("cleaner_strikes")
+  @@schema("public")
+}
+
+model Message {
+  id        String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  bookingId String   @map("booking_id") @db.Uuid
+  senderId  String   @map("sender_id") @db.Uuid
+  content   String
+  isRead    Boolean  @default(false) @map("is_read")
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  booking Booking @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+  sender  User    @relation("MessageSender", fields: [senderId], references: [id])
+
+  @@map("messages")
+  @@schema("public")
+}
+
+model Notification {
+  id        String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId    String   @map("user_id") @db.Uuid
+  type      String
+  title     String
+  body      String
+  data      Json?
+  isRead    Boolean  @default(false) @map("is_read")
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("notifications")
+  @@schema("public")
+}
+
+model GoogleCalendarToken {
+  id           String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId       String   @unique @map("user_id") @db.Uuid
+  accessToken  String   @map("access_token")
+  refreshToken String   @map("refresh_token")
+  tokenExpiry  DateTime @map("token_expiry") @db.Timestamptz(6)
+  calendarId   String   @default("primary") @map("calendar_id")
+  createdAt    DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt    DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("google_calendar_tokens")
+  @@schema("public")
+}
+
+model PlatformConfig {
+  key         String   @id
+  value       String
+  description String?
+  updatedAt   DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  @@map("platform_config")
+  @@schema("public")
+}
