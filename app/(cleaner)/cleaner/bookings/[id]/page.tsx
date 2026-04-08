@@ -6,7 +6,7 @@ import { Calendar, Clock, MapPin, ArrowLeft } from 'lucide-react'
 import { bookingsApi } from '@/lib/api'
 import { BookingStatusBadge } from '@/components/booking-status-badge'
 import { Chat } from '@/components/chat'
-import { LoadingSpinner } from '@/components/loading-spinner'
+import { DetailPageSkeleton } from '@/components/page-skeletons'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Separator } from '@/components/ui/separator'
@@ -77,19 +77,19 @@ export default function CleanerBookingDetailPage() {
     }
   }
 
-  if (loading) return <LoadingSpinner />
+  if (loading) return <DetailPageSkeleton />
   if (!booking) return <div className="text-center py-16 text-muted-foreground">Booking not found.</div>
 
   const showChat = CHAT_STATUSES.includes(booking.status)
 
   return (
-    <div className="max-w-xl mx-auto space-y-5">
-      <button onClick={() => router.back()} className="flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground">
+    <div className="mx-auto max-w-xl space-y-5">
+      <button onClick={() => router.back()} className="inline-flex items-center gap-1 rounded-xl border border-slate-200 px-2.5 py-1.5 text-sm font-semibold text-slate-500 transition-all duration-200 hover:-translate-y-0.5 hover:text-slate-800">
         <ArrowLeft className="h-4 w-4" /> Back
       </button>
 
       <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold">Job details</h1>
+        <h1 className="marketplace-title text-2xl text-slate-900">Job details</h1>
         <BookingStatusBadge status={booking.status} />
       </div>
 

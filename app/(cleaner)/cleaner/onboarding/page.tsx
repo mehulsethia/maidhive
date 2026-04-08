@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useMemo, useState } from 'react'
+import { Suspense, useEffect, useMemo, useState } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { ArrowLeft, Check, CircleCheck, Plus, Trash2 } from 'lucide-react'
 import { cleanersApi, availabilityApi, paymentsApi } from '@/lib/api'
@@ -10,7 +10,7 @@ import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { Select } from '@/components/ui/select'
 import { Card, CardContent } from '@/components/ui/card'
-import { LoadingSpinner } from '@/components/loading-spinner'
+import { FormPageSkeleton } from '@/components/page-skeletons'
 import { cn } from '@/lib/utils'
 import type { CleanerOnboardingProgress, CleanerRead } from '@/types'
 import { toast } from 'sonner'
@@ -85,7 +85,7 @@ function StepDots({ current }: { current: number }) {
   )
 }
 
-export default function CleanerOnboardingPage() {
+function CleanerOnboardingPageContent() {
   const router = useRouter()
   const params = useSearchParams()
   const [loading, setLoading] = useState(true)
@@ -384,7 +384,7 @@ export default function CleanerOnboardingPage() {
     setSlots((prev) => prev.filter((slot) => slot.id !== slotId))
   }
 
-  if (loading) return <LoadingSpinner />
+  if (loading) return <FormPageSkeleton />
 
   return (
     <div className="max-w-xl mx-auto">
@@ -451,7 +451,7 @@ export default function CleanerOnboardingPage() {
                         type="button"
                         onClick={() => toggleSkill(skill)}
                         className={cn(
-                          'px-3 py-1.5 rounded-md border text-sm',
+                          'rounded-xl border px-3 py-1.5 text-sm transition-all duration-200 hover:-translate-y-0.5',
                           active ? 'border-primary bg-primary/10 text-primary' : 'border-gray-300 bg-white text-gray-700',
                         )}
                       >
@@ -548,7 +548,7 @@ export default function CleanerOnboardingPage() {
                 {slotsByDay.map((day) => (
                   <div key={day.value} className="rounded-lg border border-gray-200 bg-white p-3">
                     <div className="flex items-center justify-between mb-2">
-                      <span className={cn('inline-flex h-8 min-w-12 px-3 items-center justify-center rounded-md text-sm font-semibold', day.slots.length > 0 ? 'bg-primary text-white' : 'bg-gray-100 text-gray-700')}>
+                      <span className={cn('inline-flex h-8 min-w-12 px-3 items-center justify-center rounded-xl text-sm font-semibold', day.slots.length > 0 ? 'bg-primary text-white' : 'bg-gray-100 text-gray-700')}>
                         {day.label}
                       </span>
                       <button className="text-xs text-primary" onClick={() => addSlot(day.value)} type="button">
@@ -557,7 +557,7 @@ export default function CleanerOnboardingPage() {
                     </div>
 
                     {day.slots.length === 0 ? (
-                      <div className="text-sm text-gray-500 border border-dashed rounded-md py-2 text-center">Unavailable</div>
+                      <div className="rounded-xl border border-dashed py-2 text-center text-sm text-gray-500">Unavailable</div>
                     ) : (
                       <div className="space-y-2">
                         {day.slots.map((slot) => (
@@ -578,7 +578,7 @@ export default function CleanerOnboardingPage() {
                             <button
                               type="button"
                               onClick={() => removeSlot(slot.id)}
-                              className="h-9 w-9 border rounded-md flex items-center justify-center text-gray-600 hover:text-red-600"
+                              className="flex h-9 w-9 items-center justify-center rounded-xl border text-gray-600 transition-all duration-200 hover:-translate-y-0.5 hover:text-red-600"
                             >
                               <Trash2 className="h-4 w-4" />
                             </button>
@@ -604,7 +604,7 @@ export default function CleanerOnboardingPage() {
                 {blocked.length > 0 && (
                   <div className="pt-2 space-y-2">
                     {blocked.slice(0, 5).map((b) => (
-                      <div key={b.id} className="text-xs border rounded-md p-2 flex items-center justify-between">
+                      <div key={b.id} className="flex items-center justify-between rounded-xl border p-2 text-xs">
                         <span>{new Date(b.start_datetime).toLocaleString()} - {new Date(b.end_datetime).toLocaleString()}</span>
                         <button type="button" className="text-red-500" onClick={() => removeBlocked(b.id)}>
                           Remove
@@ -633,13 +633,13 @@ export default function CleanerOnboardingPage() {
                 <div>
                   <p className="text-2xl font-semibold text-[#635BFF] leading-none">stripe</p>
                   <p className="text-sm text-gray-500 mt-2">Manage your earnings and payouts seamlessly.</p>
-                  <a href="https://stripe.com/connect" target="_blank" rel="noreferrer" className="text-sm text-primary font-medium">Click here to learn more.</a>
+                  <a href="https://stripe.com/connect" target="_blank" rel="noreferrer" className="text-sm font-semibold text-primary hover:underline">Click here to learn more.</a>
                 </div>
                 <Button onClick={connectStripe} variant="outline">Connect with Stripe</Button>
               </div>
 
               {stripeConnected && (
-                <div className="text-sm text-green-700 bg-green-50 border border-green-200 rounded-md p-2">
+                <div className="rounded-xl border border-green-200 bg-green-50 p-2 text-sm text-green-700">
                   Stripe is connected. You can now receive payouts.
                 </div>
               )}
@@ -664,5 +664,13 @@ export default function CleanerOnboardingPage() {
         </p>
       )}
     </div>
+  )
+}
+
+export default function CleanerOnboardingPage() {
+  return (
+    <Suspense fallback={<FormPageSkeleton />}>
+      <CleanerOnboardingPageContent />
+    </Suspense>
   )
 }

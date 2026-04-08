@@ -4,6 +4,7 @@ import { useEffect, useRef, useState, useCallback } from 'react'
 import { Send } from 'lucide-react'
 import { createClient } from '@/lib/supabase'
 import { messagesApi } from '@/lib/api'
+import { Skeleton } from '@/components/ui/skeleton'
 import { cn } from '@/lib/utils'
 import type { MessageRead } from '@/types'
 import { toast } from 'sonner'
@@ -112,14 +113,16 @@ export function Chat({ bookingId, currentUserId }: ChatProps) {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center h-32 text-sm text-muted-foreground">
-        Loading messages…
+      <div className="space-y-2 p-4">
+        <Skeleton className="h-12 w-3/4 rounded-2xl" />
+        <Skeleton className="h-12 w-2/3 rounded-2xl" />
+        <Skeleton className="h-12 w-4/5 rounded-2xl" />
       </div>
     )
   }
 
   return (
-    <div className="flex flex-col border rounded-lg overflow-hidden bg-background" style={{ height: 420 }}>
+    <div className="flex flex-col overflow-hidden rounded-2xl border bg-background" style={{ height: 420 }}>
       {/* Header */}
       <div className="px-4 py-3 border-b bg-muted/40 text-sm font-medium shrink-0">
         In-booking chat
@@ -165,7 +168,7 @@ export function Chat({ bookingId, currentUserId }: ChatProps) {
       </div>
 
       {/* Input */}
-      <div className="border-t p-3 flex gap-2 items-end shrink-0 bg-background">
+      <div className="flex shrink-0 items-end gap-2 border-t bg-background p-3">
         <textarea
           ref={inputRef}
           value={input}
@@ -173,13 +176,13 @@ export function Chat({ bookingId, currentUserId }: ChatProps) {
           onKeyDown={handleKeyDown}
           placeholder="Type a message… (Enter to send)"
           rows={1}
-          className="flex-1 resize-none rounded-md border border-input bg-background px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring placeholder:text-muted-foreground max-h-24 overflow-y-auto"
+          className="max-h-24 flex-1 resize-none overflow-y-auto rounded-xl border border-input bg-background px-3 py-2 text-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
           style={{ minHeight: 38 }}
         />
         <button
           onClick={handleSend}
           disabled={!input.trim() || sending}
-          className="h-10 w-10 rounded-md bg-primary text-primary-foreground flex items-center justify-center disabled:opacity-40 hover:opacity-90 transition-opacity shrink-0"
+          className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-primary text-primary-foreground transition-all duration-200 hover:-translate-y-0.5 hover:opacity-95 disabled:opacity-40"
           aria-label="Send message"
         >
           <Send className="h-4 w-4" />

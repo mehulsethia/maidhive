@@ -81,3 +81,46 @@ export function ReportPageSkeleton() {
     </div>
   )
 }
+
+export function DetailPageSkeleton() {
+  return (
+    <div className="mx-auto max-w-2xl space-y-5">
+      <div className="flex items-center justify-between">
+        <Skeleton className="h-8 w-48" />
+        <Skeleton className="h-6 w-24 rounded-full" />
+      </div>
+      <Skeleton className="h-52 rounded-2xl" />
+      <Skeleton className="h-36 rounded-2xl" />
+      <Skeleton className="h-24 rounded-2xl" />
+      <Skeleton className="h-[420px] rounded-2xl" />
+    </div>
+  )
+}
+
+export function FormPageSkeleton() {
+  return (
+    <div className="mx-auto max-w-2xl space-y-5">
+      <div className="space-y-2">
+        <Skeleton className="h-8 w-56" />
+        <Skeleton className="h-4 w-72" />
+      </div>
+      <Skeleton className="h-56 rounded-2xl" />
+      <Skeleton className="h-64 rounded-2xl" />
+      <Skeleton className="h-64 rounded-2xl" />
+      <Skeleton className="h-28 rounded-2xl" />
+      <Skeleton className="h-11 rounded-2xl" />
+    </div>
+  )
+}
+
+export function CheckoutPageSkeleton() {
+  return (
+    <div className="mx-auto max-w-lg space-y-5">
+      <Skeleton className="h-8 w-52" />
+      <Skeleton className="h-40 rounded-2xl" />
+      <Skeleton className="h-32 rounded-2xl" />
+      <Skeleton className="h-56 rounded-2xl" />
+      <Skeleton className="h-4 w-72" />
+    </div>
+  )
+}

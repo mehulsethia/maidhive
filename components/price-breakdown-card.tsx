@@ -4,8 +4,8 @@ import type { PriceBreakdown } from '@/types'
 
 export function PriceBreakdownCard({ breakdown }: { breakdown: PriceBreakdown }) {
   return (
-    <div className="rounded-lg border p-4 space-y-2 text-sm">
-      <h4 className="font-semibold">Price breakdown</h4>
+    <div className="space-y-2 rounded-2xl border border-slate-200 bg-white p-4 text-sm">
+      <h4 className="font-semibold tracking-tight">Price breakdown</h4>
       <Separator />
       <div className="flex justify-between">
         <span className="text-muted-foreground">

@@ -7,7 +7,7 @@ import { bookingsApi, reviewsApi } from '@/lib/api'
 import { BookingStatusBadge } from '@/components/booking-status-badge'
 import { PriceBreakdownCard } from '@/components/price-breakdown-card'
 import { Chat } from '@/components/chat'
-import { LoadingSpinner } from '@/components/loading-spinner'
+import { DetailPageSkeleton } from '@/components/page-skeletons'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Separator } from '@/components/ui/separator'
@@ -80,7 +80,7 @@ export default function ClientBookingDetailPage() {
     }
   }
 
-  if (loading) return <LoadingSpinner />
+  if (loading) return <DetailPageSkeleton />
   if (!booking) return <div className="text-center py-16 text-muted-foreground">Booking not found.</div>
 
   const canCancel = ['pending', 'accepted', 'confirmed'].includes(booking.status)
@@ -89,9 +89,9 @@ export default function ClientBookingDetailPage() {
   const showChat = CHAT_STATUSES.includes(booking.status)
 
   return (
-    <div className="max-w-xl mx-auto space-y-5">
+    <div className="mx-auto max-w-xl space-y-5">
       <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold">Booking details</h1>
+        <h1 className="marketplace-title text-2xl text-slate-900">Booking details</h1>
         <BookingStatusBadge status={booking.status} />
       </div>
 
@@ -130,12 +130,12 @@ export default function ClientBookingDetailPage() {
 
       {/* TTL warnings */}
       {booking.status === 'pending' && booking.accept_by && (
-        <p className="text-sm text-yellow-700 bg-yellow-50 border border-yellow-200 rounded-md px-3 py-2">
+        <p className="rounded-xl border border-yellow-200 bg-yellow-50 px-3 py-2 text-sm text-yellow-700">
           Waiting for cleaner to accept. Expires: {formatDate(booking.accept_by)}
         </p>
       )}
       {booking.status === 'accepted' && booking.pay_by && (
-        <p className="text-sm text-blue-700 bg-blue-50 border border-blue-200 rounded-md px-3 py-2">
+        <p className="rounded-xl border border-blue-200 bg-blue-50 px-3 py-2 text-sm text-blue-700">
           Complete payment by {formatDate(booking.pay_by)} to confirm this booking.
         </p>
       )}

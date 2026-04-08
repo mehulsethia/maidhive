@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useMemo, useState } from 'react'
+import { Suspense, useEffect, useMemo, useState } from 'react'
 import { useSearchParams } from 'next/navigation'
 import { CalendarDays } from 'lucide-react'
 import { bookingsApi, disputesApi } from '@/lib/api'
@@ -44,7 +44,7 @@ function getDisputeResolutionNote(dispute: any) {
   return dispute?.resolution_note ?? dispute?.resolutionNote ?? ''
 }
 
-export default function ClientReportPage() {
+function ClientReportPageContent() {
   const searchParams = useSearchParams()
   const bookingFromQuery = searchParams.get('booking') ?? ''
 
@@ -251,5 +251,13 @@ export default function ClientReportPage() {
         </CardContent>
       </Card>
     </div>
+  )
+}
+
+export default function ClientReportPage() {
+  return (
+    <Suspense fallback={<ReportPageSkeleton />}>
+      <ClientReportPageContent />
+    </Suspense>
   )
 }

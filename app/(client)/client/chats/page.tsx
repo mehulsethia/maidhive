@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useMemo, useState } from 'react'
+import { Suspense, useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
 import { useSearchParams } from 'next/navigation'
 import { MessageCircleMore } from 'lucide-react'
@@ -23,7 +23,7 @@ const SERVICE_LABELS: Record<string, string> = {
   move_in: 'Move-in Clean',
 }
 
-export default function ClientChatsPage() {
+function ClientChatsPageContent() {
   const searchParams = useSearchParams()
   const bookingFromQuery = searchParams.get('booking')
 
@@ -152,5 +152,13 @@ export default function ClientChatsPage() {
         </CardContent>
       </Card>
     </div>
+  )
+}
+
+export default function ClientChatsPage() {
+  return (
+    <Suspense fallback={<SplitChatPageSkeleton />}>
+      <ClientChatsPageContent />
+    </Suspense>
   )
 }

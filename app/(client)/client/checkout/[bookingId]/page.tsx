@@ -6,7 +6,7 @@ import { loadStripe } from '@stripe/stripe-js'
 import { Elements, PaymentElement, useStripe, useElements } from '@stripe/react-stripe-js'
 import { bookingsApi, paymentsApi } from '@/lib/api'
 import { PriceBreakdownCard } from '@/components/price-breakdown-card'
-import { LoadingSpinner } from '@/components/loading-spinner'
+import { CheckoutPageSkeleton } from '@/components/page-skeletons'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { BookingStatusBadge } from '@/components/booking-status-badge'
@@ -82,12 +82,12 @@ export default function CheckoutPage() {
     init()
   }, [bookingId])
 
-  if (loading) return <LoadingSpinner />
+  if (loading) return <CheckoutPageSkeleton />
   if (!booking || !clientSecret) return <div className="text-center py-16 text-muted-foreground">Unable to load checkout.</div>
 
   return (
-    <div className="max-w-lg mx-auto space-y-5">
-      <h1 className="text-2xl font-bold">Complete payment</h1>
+    <div className="mx-auto max-w-lg space-y-5">
+      <h1 className="marketplace-title text-2xl text-slate-900">Complete payment</h1>
 
       {/* Booking summary */}
       <Card>

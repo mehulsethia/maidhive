@@ -11,7 +11,7 @@ import { Separator } from '@/components/ui/separator'
 import { Dialog, DialogTitle } from '@/components/ui/dialog'
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
 import { Badge } from '@/components/ui/badge'
-import { LoadingSpinner } from '@/components/loading-spinner'
+import { ListPageSkeleton } from '@/components/page-skeletons'
 import { cn } from '@/lib/utils'
 import { toast } from 'sonner'
 
@@ -232,12 +232,12 @@ export default function AvailabilityPage() {
   const totalCapacity3h = activeDays.reduce((sum, d) => sum + computeCapacity(d, 3), 0)
 
   // ── Render ───────────────────────────────────────────────────────────────────
-  if (loading) return <LoadingSpinner />
+  if (loading) return <ListPageSkeleton />
 
   return (
     <div className="max-w-2xl mx-auto space-y-6">
       <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold">Availability</h1>
+        <h1 className="marketplace-title text-2xl text-slate-900">Availability</h1>
         {saved && (
           <span className="flex items-center gap-1 text-xs text-green-700">
             <CheckCircle2 className="h-3.5 w-3.5" /> Saved

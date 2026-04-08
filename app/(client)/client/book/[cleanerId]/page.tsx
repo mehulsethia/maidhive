@@ -5,7 +5,7 @@ import { useParams, useRouter } from 'next/navigation'
 import { CalendarDays, Clock } from 'lucide-react'
 import { cleanersApi, bookingsApi, availabilityApi } from '@/lib/api'
 import { PriceBreakdownCard } from '@/components/price-breakdown-card'
-import { LoadingSpinner } from '@/components/loading-spinner'
+import { FormPageSkeleton } from '@/components/page-skeletons'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -101,13 +101,13 @@ export default function BookingFormPage() {
     }
   }
 
-  if (loading) return <LoadingSpinner />
+  if (loading) return <FormPageSkeleton />
   if (!cleaner) return <div className="text-center py-16 text-muted-foreground">Cleaner not found.</div>
 
   return (
-    <div className="max-w-2xl mx-auto">
-      <h1 className="text-2xl font-bold mb-2">Book a cleaner</h1>
-      <p className="text-muted-foreground mb-6">
+    <div className="mx-auto max-w-2xl space-y-2">
+      <h1 className="marketplace-title text-2xl text-slate-900 md:text-3xl">Book a cleaner</h1>
+      <p className="mb-6 text-sm text-slate-500">
         Rate: <strong>{formatCurrency(cleaner.hourly_rate)}/hr</strong>
       </p>
 
@@ -165,7 +165,7 @@ export default function BookingFormPage() {
                 ) : slots.length === 0 ? (
                   <p className="text-sm text-muted-foreground mt-2">No available slots on this date.</p>
                 ) : (
-                  <div className="grid grid-cols-3 gap-2 mt-2">
+                  <div className="mt-2 grid grid-cols-2 gap-2 sm:grid-cols-3">
                     {slots.map(slot => {
                       const time = new Date(slot.start).toLocaleTimeString('en-IE', { hour: '2-digit', minute: '2-digit' })
                       return (
@@ -173,10 +173,10 @@ export default function BookingFormPage() {
                           key={slot.start}
                           type="button"
                           onClick={() => setSelectedSlot(slot.start)}
-                          className={`border rounded-md py-2 text-sm font-medium transition-colors ${
+                          className={`rounded-xl border py-2 text-sm font-semibold transition-all duration-200 ${
                             selectedSlot === slot.start
                               ? 'bg-primary text-primary-foreground border-primary'
-                              : 'hover:bg-muted'
+                              : 'hover:-translate-y-0.5 hover:bg-muted'
                           }`}
                         >
                           {time}
@@ -198,7 +198,7 @@ export default function BookingFormPage() {
               <Label>Street address</Label>
               <Input value={address} onChange={e => setAddress(e.target.value)} placeholder="123 Main Street" className="mt-1" required />
             </div>
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
               <div>
                 <Label>City</Label>
                 <Input value={city} onChange={e => setCity(e.target.value)} placeholder="Dublin" className="mt-1" required />

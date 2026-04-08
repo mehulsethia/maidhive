@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useMemo, useState } from 'react'
+import { Suspense, useEffect, useMemo, useState } from 'react'
 import { useSearchParams } from 'next/navigation'
 import { Star, ChartNoAxesCombined, CalendarDays, Wallet, Plus, Trash2 } from 'lucide-react'
 import { availabilityApi, bookingsApi, cleanersApi, paymentsApi, reviewsApi, usersApi } from '@/lib/api'
@@ -48,7 +48,7 @@ function uid() {
   return Math.random().toString(36).slice(2, 10)
 }
 
-export default function CleanerProfilePage() {
+function CleanerProfilePageContent() {
   const params = useSearchParams()
   const initialTab = (params.get('tab') as TabKey) || 'overview'
   const [tab, setTab] = useState<TabKey>(
@@ -558,5 +558,13 @@ export default function CleanerProfilePage() {
         </Card>
       </div>
     </div>
+  )
+}
+
+export default function CleanerProfilePage() {
+  return (
+    <Suspense fallback={<ProfilePageSkeleton />}>
+      <CleanerProfilePageContent />
+    </Suspense>
   )
 }

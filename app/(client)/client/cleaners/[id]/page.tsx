@@ -5,7 +5,7 @@ import { useParams, useRouter } from 'next/navigation'
 import { MapPin, Briefcase, Clock, Star } from 'lucide-react'
 import { cleanersApi, reviewsApi } from '@/lib/api'
 import { StarRating } from '@/components/star-rating'
-import { LoadingSpinner } from '@/components/loading-spinner'
+import { DetailPageSkeleton } from '@/components/page-skeletons'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Separator } from '@/components/ui/separator'
@@ -33,11 +33,11 @@ export default function CleanerProfilePage() {
       .finally(() => setLoading(false))
   }, [id])
 
-  if (loading) return <LoadingSpinner />
+  if (loading) return <DetailPageSkeleton />
   if (!cleaner) return <div className="text-center py-16 text-muted-foreground">Cleaner not found.</div>
 
   return (
-    <div className="max-w-2xl mx-auto">
+    <div className="mx-auto max-w-2xl">
       {/* Header */}
       <Card className="mb-6">
         <CardContent className="p-6">
@@ -46,7 +46,7 @@ export default function CleanerProfilePage() {
               <span className="text-primary font-bold text-2xl">C</span>
             </div>
             <div className="flex-1">
-              <h1 className="text-2xl font-bold">Professional Cleaner</h1>
+              <h1 className="marketplace-title text-2xl text-slate-900">Professional Cleaner</h1>
               <StarRating rating={cleaner.average_rating ?? 0} size="md" className="mt-1" />
 
               <div className="flex flex-wrap gap-4 mt-3 text-sm text-muted-foreground">

@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react'
 import { TrendingUp, Briefcase, Clock, DollarSign } from 'lucide-react'
 import { bookingsApi } from '@/lib/api'
 import { BookingStatusBadge } from '@/components/booking-status-badge'
-import { LoadingSpinner } from '@/components/loading-spinner'
+import { ListPageSkeleton } from '@/components/page-skeletons'
 import { EmptyState } from '@/components/empty-state'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Separator } from '@/components/ui/separator'
@@ -31,11 +31,11 @@ export default function EarningsPage() {
   const pending = bookings.filter(b => ['confirmed', 'in_progress'].includes(b.status))
   const pendingAmount = pending.reduce((sum, b) => sum + b.cleaner_payout, 0)
 
-  if (loading) return <LoadingSpinner />
+  if (loading) return <ListPageSkeleton />
 
   return (
     <div className="space-y-6">
-      <h1 className="text-2xl font-bold">Earnings</h1>
+      <h1 className="marketplace-title text-2xl text-slate-900">Earnings</h1>
 
       {/* Stats cards */}
       <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
