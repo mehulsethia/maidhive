@@ -1,11 +1,13 @@
+import { LandingHeader } from '@/components/landing-header'
+
 export default function AuthLayout({ children }: { children: React.ReactNode }) {
   return (
-    <div className="min-h-screen flex items-center justify-center bg-muted px-4">
-      <div className="w-full max-w-md bg-background rounded-xl border shadow-sm p-8">
-        <div className="mb-8 text-center">
-          <span className="text-2xl font-bold text-primary">MaidHive</span>
+    <div className="min-h-screen bg-gray-50 flex flex-col">
+      <LandingHeader />
+      <div className="flex-1 flex items-center justify-center px-4 py-12">
+        <div className="w-full max-w-4xl bg-white rounded-2xl shadow-xl border border-gray-100 overflow-hidden">
+          {children}
         </div>
-        {children}
       </div>
     </div>
   )

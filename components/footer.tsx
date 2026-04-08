@@ -2,50 +2,89 @@ import Link from 'next/link'
 
 export default function Footer() {
   return (
-    <footer
-      className="text-white"
-      style={{
-        background: 'radial-gradient(ellipse at 30% 50%, #0088DD 19%, #044EE2 38%, #030016 100%)',
-      }}
-    >
-      <div className="max-w-6xl mx-auto px-6 py-16">
-        <div className="grid md:grid-cols-3 gap-12 mb-12">
+    <footer className="bg-gray-950 text-white">
+      <div className="max-w-7xl mx-auto px-6 py-16">
+        <div className="grid md:grid-cols-4 gap-10 mb-14">
           {/* Brand */}
-          <div>
-            <span className="text-2xl font-bold tracking-tight">MaidHive</span>
-            <p className="mt-3 text-sm text-white/70 leading-relaxed">
-              Connecting you with verified, professional cleaners. Transparent pricing, secure payments, guaranteed quality.
+          <div className="md:col-span-1">
+            <Link href="/" className="flex items-center gap-2.5 mb-4">
+              <div className="w-8 h-8 rounded-full bg-primary flex items-center justify-center">
+                <span className="text-white font-bold text-xs">M</span>
+              </div>
+              <span className="text-lg font-bold">MaidHive</span>
+            </Link>
+            <p className="text-sm text-gray-400 leading-relaxed">
+              Connecting trusted cleaners with homeowners through a secure, transparent platform.
             </p>
           </div>
 
-          {/* Platform */}
+          {/* For customers */}
           <div>
-            <h4 className="text-sm font-semibold uppercase tracking-widest text-white/50 mb-4">Platform</h4>
+            <h4 className="text-sm font-semibold text-gray-300 mb-4">For customers</h4>
             <ul className="space-y-3 text-sm">
-              <li><Link href="/signup" className="text-white/80 hover:text-white transition-colors">Book a cleaner</Link></li>
-              <li><Link href="/signup?role=cleaner" className="text-white/80 hover:text-white transition-colors">Become a cleaner</Link></li>
-              <li><Link href="/login" className="text-white/80 hover:text-white transition-colors">Sign in</Link></li>
+              <li>
+                <Link href="/#how-it-works" className="text-gray-400 hover:text-white transition-colors">
+                  How it works
+                </Link>
+              </li>
+              <li>
+                <Link href="/#services" className="text-gray-400 hover:text-white transition-colors">
+                  Services
+                </Link>
+              </li>
+              <li>
+                <Link href="/#faq" className="text-gray-400 hover:text-white transition-colors">
+                  FAQs
+                </Link>
+              </li>
             </ul>
           </div>
 
-          {/* Legal */}
+          {/* For cleaners */}
           <div>
-            <h4 className="text-sm font-semibold uppercase tracking-widest text-white/50 mb-4">Legal</h4>
+            <h4 className="text-sm font-semibold text-gray-300 mb-4">For cleaners</h4>
             <ul className="space-y-3 text-sm">
-              <li><Link href="/terms-and-conditions" className="text-white/80 hover:text-white transition-colors">Terms &amp; Conditions</Link></li>
-              <li><Link href="/privacy-policy" className="text-white/80 hover:text-white transition-colors">Privacy Policy</Link></li>
-              <li><Link href="/responsible-disclosure-policy" className="text-white/80 hover:text-white transition-colors">Responsible Disclosure</Link></li>
+              <li>
+                <Link href="/for-cleaners" className="text-gray-400 hover:text-white transition-colors">
+                  Become a cleaner
+                </Link>
+              </li>
+              <li>
+                <Link href="/for-cleaners#how-it-works" className="text-gray-400 hover:text-white transition-colors">
+                  Cleaner resources
+                </Link>
+              </li>
+              <li>
+                <Link href="/for-cleaners#faq" className="text-gray-400 hover:text-white transition-colors">
+                  FAQs
+                </Link>
+              </li>
+            </ul>
+          </div>
+
+          {/* Support */}
+          <div>
+            <h4 className="text-sm font-semibold text-gray-300 mb-4">Support</h4>
+            <ul className="space-y-3 text-sm">
+              <li>
+                <Link href="/terms-and-conditions" className="text-gray-400 hover:text-white transition-colors">
+                  Terms of service
+                </Link>
+              </li>
+              <li>
+                <Link href="/privacy-policy" className="text-gray-400 hover:text-white transition-colors">
+                  Privacy policy
+                </Link>
+              </li>
             </ul>
           </div>
         </div>
 
-        <div className="border-t border-white/10 pt-8 flex flex-col sm:flex-row items-center justify-between gap-4 text-xs text-white/40">
+        <div className="border-t border-gray-800 pt-8 flex flex-col sm:flex-row items-center justify-between gap-4 text-xs text-gray-500">
           <span>&copy; {new Date().getFullYear()} MaidHive. All rights reserved.</span>
-          <div className="flex gap-6">
-            <Link href="/privacy-policy" className="hover:text-white/70 transition-colors">Privacy</Link>
-            <Link href="/terms-and-conditions" className="hover:text-white/70 transition-colors">Terms</Link>
-            <Link href="/responsible-disclosure-policy" className="hover:text-white/70 transition-colors">Disclosure</Link>
-          </div>
+          <Link href="/responsible-disclosure-policy" className="hover:text-gray-300 transition-colors">
+            Responsible Disclosure Policy
+          </Link>
         </div>
       </div>
     </footer>
