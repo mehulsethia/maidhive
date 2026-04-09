@@ -27,7 +27,10 @@ export async function getAuthUser(req: NextRequest): Promise<User | null> {
     }
   }
 
-  // 2) Fallback path: Supabase cookie session (more resilient on Vercel env drift).
+  // 2) Fallback path: Supabase cookie session.
+  //    The Next.js middleware already refreshes tokens and forwards updated
+  //    cookies on the request, so we can safely read them here. setAll is a
+  //    no-op because we only need to read the (already-refreshed) cookies.
   try {
     const supabase = createServerClient(
       process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -36,7 +39,7 @@ export async function getAuthUser(req: NextRequest): Promise<User | null> {
         cookies: {
           getAll: () => req.cookies.getAll(),
           setAll: () => {
-            // No-op in route auth checks.
+            /* no-op — middleware handles cookie refresh */
           },
         },
       },

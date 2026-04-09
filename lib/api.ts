@@ -47,6 +47,18 @@ function normalizePaginated<T>(payload: AnyObj, key: string): PaginatedResponse<
 
 async function getAuthHeaders(): Promise<HeadersInit> {
   const supabase = createClient()
+
+  // getSession() can return stale/expired tokens from storage.
+  // Call getUser() first — it validates against Supabase Auth and
+  // triggers a token refresh when the access token has expired.
+  const { error: userError } = await supabase.auth.getUser()
+  if (userError) {
+    // Session is gone or refresh failed — skip Bearer header.
+    // The server cookie fallback may still authenticate the request.
+    return { 'Content-Type': 'application/json' }
+  }
+
+  // After getUser() succeeds, getSession() returns the (possibly refreshed) session.
   const { data } = await supabase.auth.getSession()
   const token = data.session?.access_token
   return {
