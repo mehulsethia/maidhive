@@ -101,11 +101,11 @@ export default function CleanerBookingsPage() {
   if (loading) return <ListPageSkeleton />
 
   return (
-    <div className="space-y-5">
+    <div className="space-y-6">
       <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
         <div>
           <h1 className="marketplace-title text-3xl text-slate-900">My Bookings</h1>
-          <p className="text-sm text-slate-500">Track requests, active jobs, and completed work.</p>
+          <p className="mt-1 text-sm text-slate-500">Track requests, active jobs, and completed work.</p>
         </div>
       </div>
 

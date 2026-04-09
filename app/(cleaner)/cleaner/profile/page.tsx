@@ -2,8 +2,8 @@
 
 import { Suspense, useEffect, useMemo, useState } from 'react'
 import { useSearchParams } from 'next/navigation'
-import { Star, ChartNoAxesCombined, CalendarDays, Wallet, Plus, Trash2 } from 'lucide-react'
-import { availabilityApi, bookingsApi, cleanersApi, paymentsApi, reviewsApi, usersApi } from '@/lib/api'
+import { Star, ChartNoAxesCombined, CalendarDays, Wallet } from 'lucide-react'
+import { bookingsApi, cleanersApi, paymentsApi, reviewsApi, usersApi } from '@/lib/api'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
@@ -11,6 +11,7 @@ import { Label } from '@/components/ui/label'
 import { Select } from '@/components/ui/select'
 import { Textarea } from '@/components/ui/textarea'
 import { ProfilePageSkeleton } from '@/components/page-skeletons'
+import { ScheduleEditor } from '@/components/schedule-editor'
 import { formatCurrency } from '@/lib/utils'
 import type { BookingRead, ReviewRead } from '@/types'
 import { toast } from 'sonner'
@@ -28,25 +29,6 @@ const DAYS = [
 ]
 
 const SKILLS = ['Ironing', 'Windows', 'Deep Cleaning', 'Move In/Out']
-
-type WeeklySlot = {
-  id: string
-  day_of_week: number
-  start_time: string
-  end_time: string
-  buffer_minutes: number
-}
-
-type BlockedTime = {
-  id: string
-  start_datetime: string
-  end_datetime: string
-  reason?: string
-}
-
-function uid() {
-  return Math.random().toString(36).slice(2, 10)
-}
 
 function CleanerProfilePageContent() {
   const params = useSearchParams()
@@ -86,20 +68,12 @@ function CleanerProfilePageContent() {
     details_submitted: false,
   })
 
-  const [slots, setSlots] = useState<WeeklySlot[]>([])
-  const [blocked, setBlocked] = useState<BlockedTime[]>([])
-  const [blockStart, setBlockStart] = useState('')
-  const [blockEnd, setBlockEnd] = useState('')
-  const [blockReason, setBlockReason] = useState('')
-
   async function loadAll() {
     setLoading(true)
     try {
-      const [meRes, bookingRes, scheduleRes, blockedRes, stripeRes] = await Promise.all([
+      const [meRes, bookingRes, stripeRes] = await Promise.all([
         cleanersApi.me(),
         bookingsApi.my(),
-        availabilityApi.getMySchedule(),
-        availabilityApi.getMyBlocked(),
         paymentsApi.getConnectStatus(),
       ])
 
@@ -122,24 +96,6 @@ function CleanerProfilePageContent() {
       setLastName(names.slice(1).join(' '))
 
       setBookings(bookingRes.data?.items ?? [])
-
-      setSlots(
-        ((scheduleRes.data ?? []) as any[]).map((s) => ({
-          id: uid(),
-          day_of_week: s.day_of_week ?? s.dayOfWeek,
-          start_time: s.start_time ?? s.startTime,
-          end_time: s.end_time ?? s.endTime,
-          buffer_minutes: s.buffer_minutes ?? s.bufferMinutes ?? 30,
-        })),
-      )
-      setBlocked(
-        ((blockedRes.data ?? []) as any[]).map((b) => ({
-          id: b.id,
-          start_datetime: b.start_datetime ?? b.startDatetime,
-          end_datetime: b.end_datetime ?? b.endDatetime,
-          reason: b.reason,
-        })),
-      )
       setStripe({
         connected: Boolean(stripeRes.data?.connected),
         onboarded: Boolean(stripeRes.data?.onboarded),
@@ -188,18 +144,6 @@ function CleanerProfilePageContent() {
     setSkills((prev) => (prev.includes(skill) ? prev.filter((s) => s !== skill) : [...prev, skill]))
   }
 
-  function addSlot(day: number) {
-    setSlots((prev) => [...prev, { id: uid(), day_of_week: day, start_time: '09:00', end_time: '12:00', buffer_minutes: 30 }])
-  }
-
-  function updateSlot(id: string, field: keyof WeeklySlot, value: string | number) {
-    setSlots((prev) => prev.map((s) => (s.id === id ? { ...s, [field]: value } : s)))
-  }
-
-  function removeSlot(id: string) {
-    setSlots((prev) => prev.filter((s) => s.id !== id))
-  }
-
   async function saveOverview() {
     if (!firstName.trim()) return toast.error('First name is required.')
     if (!lastName.trim()) return toast.error('Last name is required.')
@@ -229,63 +173,6 @@ function CleanerProfilePageContent() {
     }
   }
 
-  async function saveAvailability() {
-    if (slots.length === 0) return toast.error('Add at least one available slot.')
-    setSaving(true)
-    try {
-      await availabilityApi.setMySchedule(
-        slots.map((s) => ({
-          day_of_week: s.day_of_week,
-          start_time: s.start_time,
-          end_time: s.end_time,
-          buffer_minutes: s.buffer_minutes,
-          is_active: true,
-        })),
-      )
-      toast.success('Availability updated.')
-      await loadAll()
-    } catch (err: any) {
-      toast.error(err.message ?? 'Failed to save availability.')
-    } finally {
-      setSaving(false)
-    }
-  }
-
-  async function addBlockedDate() {
-    if (!blockStart || !blockEnd) return toast.error('Set start and end time.')
-    if (new Date(blockEnd) <= new Date(blockStart)) return toast.error('End must be after start.')
-    try {
-      const res = await availabilityApi.addBlocked({
-        start_datetime: new Date(blockStart).toISOString(),
-        end_datetime: new Date(blockEnd).toISOString(),
-        reason: blockReason || undefined,
-      })
-      const b: any = res.data
-      setBlocked((prev) => [
-        ...prev,
-        {
-          id: b.id,
-          start_datetime: b.start_datetime ?? b.startDatetime,
-          end_datetime: b.end_datetime ?? b.endDatetime,
-          reason: b.reason,
-        },
-      ])
-      setBlockStart('')
-      setBlockEnd('')
-      setBlockReason('')
-    } catch (err: any) {
-      toast.error(err.message ?? 'Failed to add blocked date.')
-    }
-  }
-
-  async function removeBlockedDate(id: string) {
-    try {
-      await availabilityApi.deleteBlocked(id)
-      setBlocked((prev) => prev.filter((b) => b.id !== id))
-    } catch {
-      toast.error('Failed to remove blocked date.')
-    }
-  }
 
   async function connectStripe() {
     try {
@@ -301,11 +188,11 @@ function CleanerProfilePageContent() {
   if (loading) return <ProfilePageSkeleton />
 
   return (
-    <div className="space-y-5">
+    <div className="space-y-6">
       <div className="flex items-end justify-between gap-3">
         <div>
           <h1 className="marketplace-title text-3xl text-slate-900">My Profile</h1>
-          <p className="text-sm text-slate-500">Manage your profile details, availability, reviews, and payouts.</p>
+          <p className="mt-1 text-sm text-slate-500">Manage your profile details, availability, reviews, and payouts.</p>
         </div>
         <Button variant="outline" onClick={saveOverview} disabled={tab !== 'overview'} loading={saving && tab === 'overview'}>
           Update profile
@@ -425,61 +312,8 @@ function CleanerProfilePageContent() {
             )}
 
             {tab === 'availability' && (
-              <div className="space-y-4">
-                <div className="space-y-3">
-                  {DAYS.map((day) => {
-                    const daySlots = slots.filter((s) => s.day_of_week === day.value)
-                    return (
-                      <div key={day.value} className="rounded-lg border border-slate-200 bg-slate-50 p-3">
-                        <div className="mb-2 flex items-center justify-between">
-                          <span className={`inline-flex h-8 min-w-12 items-center justify-center rounded-md px-3 text-sm font-semibold ${
-                            daySlots.length > 0 ? 'bg-primary text-white' : 'bg-white text-slate-700'
-                          }`}>{day.label}</span>
-                          <button onClick={() => addSlot(day.value)} className="text-xs font-medium text-primary">+ Add slot</button>
-                        </div>
-                        {daySlots.length === 0 ? (
-                          <div className="rounded-md border border-dashed border-slate-300 py-2 text-center text-sm text-slate-500">Unavailable</div>
-                        ) : (
-                          <div className="space-y-2">
-                            {daySlots.map((slot) => (
-                              <div key={slot.id} className="flex items-center gap-2">
-                                <Input type="time" value={slot.start_time} onChange={(e) => updateSlot(slot.id, 'start_time', e.target.value)} />
-                                <span className="text-slate-500">-</span>
-                                <Input type="time" value={slot.end_time} onChange={(e) => updateSlot(slot.id, 'end_time', e.target.value)} />
-                                <button onClick={() => removeSlot(slot.id)} className="grid h-10 w-10 place-items-center rounded-md border border-slate-300 text-slate-600 hover:text-rose-600"><Trash2 className="h-4 w-4" /></button>
-                              </div>
-                            ))}
-                          </div>
-                        )}
-                      </div>
-                    )
-                  })}
-                </div>
-
-                <div className="rounded-lg border border-slate-200 p-3">
-                  <p className="mb-2 text-sm font-semibold text-slate-800">Block Dates</p>
-                  <div className="grid gap-2 md:grid-cols-2">
-                    <Input type="datetime-local" value={blockStart} onChange={(e) => setBlockStart(e.target.value)} />
-                    <Input type="datetime-local" value={blockEnd} onChange={(e) => setBlockEnd(e.target.value)} />
-                  </div>
-                  <Input value={blockReason} onChange={(e) => setBlockReason(e.target.value)} placeholder="Reason (optional)" className="mt-2" />
-                  <Button variant="outline" className="mt-2" onClick={addBlockedDate}><Plus className="mr-1 h-4 w-4" />Add block</Button>
-
-                  {blocked.length > 0 && (
-                    <div className="mt-3 space-y-2">
-                      {blocked.slice(0, 6).map((b) => (
-                        <div key={b.id} className="flex items-center justify-between rounded-md bg-slate-50 px-2 py-1 text-xs text-slate-600">
-                          <span>{new Date(b.start_datetime).toLocaleString()} - {new Date(b.end_datetime).toLocaleString()}</span>
-                          <button onClick={() => removeBlockedDate(b.id)} className="text-rose-500">Remove</button>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </div>
-
-                <div className="flex justify-end">
-                  <Button onClick={saveAvailability} loading={saving}>Save & Publish</Button>
-                </div>
+              <div className="-mx-4 -mb-4 sm:-mx-5 sm:-mb-5">
+                <ScheduleEditor />
               </div>
             )}
 

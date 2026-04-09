@@ -1,8 +1,8 @@
 'use client'
 
-import { Suspense, useEffect, useMemo, useState } from 'react'
+import { Suspense, useEffect, useState } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
-import { ArrowLeft, Check, CircleCheck, Plus, Trash2 } from 'lucide-react'
+import { ArrowLeft, Check, CircleCheck } from 'lucide-react'
 import { cleanersApi, availabilityApi, paymentsApi } from '@/lib/api'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -11,6 +11,7 @@ import { Textarea } from '@/components/ui/textarea'
 import { Select } from '@/components/ui/select'
 import { Card, CardContent } from '@/components/ui/card'
 import { FormPageSkeleton } from '@/components/page-skeletons'
+import { ScheduleEditor } from '@/components/schedule-editor'
 import { cn } from '@/lib/utils'
 import type { CleanerOnboardingProgress, CleanerRead } from '@/types'
 import { toast } from 'sonner'
@@ -18,44 +19,6 @@ import { toast } from 'sonner'
 const STEP_LABELS = ['1', '2', '3', '4']
 const SKILLS = ['Ironing', 'Windows', 'Deep Cleaning', 'Move In/Out']
 
-const DAYS = [
-  { value: 1, label: 'Mon' },
-  { value: 2, label: 'Tue' },
-  { value: 3, label: 'Wed' },
-  { value: 4, label: 'Thu' },
-  { value: 5, label: 'Fri' },
-  { value: 6, label: 'Sat' },
-  { value: 7, label: 'Sun' },
-]
-
-type WeeklySlot = {
-  id: string
-  day_of_week: number
-  start_time: string
-  end_time: string
-  buffer_minutes: number
-}
-
-type BlockedTime = {
-  id: string
-  start_datetime: string
-  end_datetime: string
-  reason?: string
-}
-
-function uid() {
-  return Math.random().toString(36).slice(2, 10)
-}
-
-function defaultSlots(): WeeklySlot[] {
-  return [1, 2, 3, 4, 5].map((day) => ({
-    id: uid(),
-    day_of_week: day,
-    start_time: '09:00',
-    end_time: '17:00',
-    buffer_minutes: 30,
-  }))
-}
 
 function StepDots({ current }: { current: number }) {
   return (
@@ -108,21 +71,14 @@ function CleanerOnboardingPageContent() {
   const [workEligibilityConfirmed, setWorkEligibilityConfirmed] = useState(false)
   const [termsAccepted, setTermsAccepted] = useState(false)
 
-  const [slots, setSlots] = useState<WeeklySlot[]>(defaultSlots)
-  const [blocked, setBlocked] = useState<BlockedTime[]>([])
-  const [blockStart, setBlockStart] = useState('')
-  const [blockEnd, setBlockEnd] = useState('')
-  const [blockReason, setBlockReason] = useState('')
 
   const [stripeConnected, setStripeConnected] = useState(false)
 
   async function loadAll() {
     setLoading(true)
     try {
-      const [meRes, scheduleRes, blockedRes, stripeRes] = await Promise.all([
+      const [meRes, stripeRes] = await Promise.all([
         cleanersApi.me(),
-        availabilityApi.getMySchedule(),
-        availabilityApi.getMyBlocked(),
         paymentsApi.getConnectStatus(),
       ])
 
@@ -148,27 +104,6 @@ function CleanerOnboardingPageContent() {
       setWorkEligibilityConfirmed(Boolean(c.work_eligibility_confirmed ?? c.workEligibilityConfirmed))
       setTermsAccepted(Boolean(c.terms_accepted ?? c.termsAccepted))
 
-      const schedule = (scheduleRes.data ?? []) as any[]
-      if (schedule.length > 0) {
-        setSlots(
-          schedule.map((s) => ({
-            id: uid(),
-            day_of_week: s.day_of_week ?? s.dayOfWeek,
-            start_time: s.start_time ?? s.startTime,
-            end_time: s.end_time ?? s.endTime,
-            buffer_minutes: s.buffer_minutes ?? s.bufferMinutes ?? 30,
-          })),
-        )
-      }
-
-      setBlocked(
-        ((blockedRes.data ?? []) as any[]).map((b) => ({
-          id: b.id,
-          start_datetime: b.start_datetime ?? b.startDatetime,
-          end_datetime: b.end_datetime ?? b.endDatetime,
-          reason: b.reason ?? undefined,
-        })),
-      )
       setStripeConnected(Boolean(stripeRes.data?.connected || stripeRes.data?.charges_enabled))
     } catch (err: any) {
       toast.error(err?.message ?? 'Failed to load onboarding.')
@@ -197,13 +132,6 @@ function CleanerOnboardingPageContent() {
       }
     })()
   }, [params])
-
-  const slotsByDay = useMemo(() => {
-    return DAYS.map((day) => ({
-      ...day,
-      slots: slots.filter((s) => s.day_of_week === day.value),
-    }))
-  }, [slots])
 
   function toggleSkill(skill: string) {
     setSkills((prev) => (prev.includes(skill) ? prev.filter((s) => s !== skill) : [...prev, skill]))
@@ -266,37 +194,6 @@ function CleanerOnboardingPageContent() {
     }
   }
 
-  async function saveStep3() {
-    if (slots.length === 0) return toast.error('Add at least one availability slot.')
-
-    setSaving(true)
-    try {
-      await availabilityApi.setMySchedule(
-        slots.map((s) => ({
-          day_of_week: s.day_of_week,
-          start_time: s.start_time,
-          end_time: s.end_time,
-          buffer_minutes: s.buffer_minutes,
-          is_active: true,
-        })),
-      )
-
-      const res = await cleanersApi.updateMyOnboarding({
-        onboarding_step: 4,
-        onboarding_skipped_step3: false,
-      })
-
-      setCleaner(res.data?.cleaner ?? cleaner)
-      setProgress(res.data?.onboarding ?? progress)
-      setStep(4)
-      toast.success('Availability saved.')
-    } catch (err: any) {
-      toast.error(err.message ?? 'Failed to save step 3.')
-    } finally {
-      setSaving(false)
-    }
-  }
-
   async function skipStep3() {
     setSaving(true)
     try {
@@ -338,50 +235,6 @@ function CleanerOnboardingPageContent() {
     } catch (err: any) {
       toast.error(err.message ?? 'Failed to connect Stripe.')
     }
-  }
-
-  async function addBlockedRange() {
-    if (!blockStart || !blockEnd) return toast.error('Add start and end for blocked time.')
-    if (new Date(blockEnd) <= new Date(blockStart)) return toast.error('End must be after start.')
-
-    try {
-      const res = await availabilityApi.addBlocked({
-        start_datetime: new Date(blockStart).toISOString(),
-        end_datetime: new Date(blockEnd).toISOString(),
-        reason: blockReason || undefined,
-      })
-      setBlocked((prev) => [...prev, res.data as BlockedTime])
-      setBlockStart('')
-      setBlockEnd('')
-      setBlockReason('')
-      toast.success('Blocked date added.')
-    } catch (err: any) {
-      toast.error(err.message ?? 'Failed to add blocked date.')
-    }
-  }
-
-  async function removeBlocked(id: string) {
-    try {
-      await availabilityApi.deleteBlocked(id)
-      setBlocked((prev) => prev.filter((b) => b.id !== id))
-    } catch {
-      toast.error('Failed to remove blocked date.')
-    }
-  }
-
-  function addSlot(day: number) {
-    setSlots((prev) => [
-      ...prev,
-      { id: uid(), day_of_week: day, start_time: '09:00', end_time: '12:00', buffer_minutes: 30 },
-    ])
-  }
-
-  function updateSlot(slotId: string, field: keyof WeeklySlot, value: string | number) {
-    setSlots((prev) => prev.map((slot) => (slot.id === slotId ? { ...slot, [field]: value } : slot)))
-  }
-
-  function removeSlot(slotId: string) {
-    setSlots((prev) => prev.filter((slot) => slot.id !== slotId))
   }
 
   if (loading) return <FormPageSkeleton />
@@ -544,76 +397,24 @@ function CleanerOnboardingPageContent() {
 
           {step === 3 && (
             <div className="space-y-4">
-              <div className="space-y-3">
-                {slotsByDay.map((day) => (
-                  <div key={day.value} className="rounded-lg border border-gray-200 bg-white p-3">
-                    <div className="flex items-center justify-between mb-2">
-                      <span className={cn('inline-flex h-8 min-w-12 px-3 items-center justify-center rounded-xl text-sm font-semibold', day.slots.length > 0 ? 'bg-primary text-white' : 'bg-gray-100 text-gray-700')}>
-                        {day.label}
-                      </span>
-                      <button className="text-xs text-primary" onClick={() => addSlot(day.value)} type="button">
-                        + Add slot
-                      </button>
-                    </div>
-
-                    {day.slots.length === 0 ? (
-                      <div className="rounded-xl border border-dashed py-2 text-center text-sm text-gray-500">Unavailable</div>
-                    ) : (
-                      <div className="space-y-2">
-                        {day.slots.map((slot) => (
-                          <div key={slot.id} className="flex items-center gap-2">
-                            <Input
-                              type="time"
-                              value={slot.start_time}
-                              onChange={(e) => updateSlot(slot.id, 'start_time', e.target.value)}
-                              className="h-9"
-                            />
-                            <span className="text-sm text-gray-500">-</span>
-                            <Input
-                              type="time"
-                              value={slot.end_time}
-                              onChange={(e) => updateSlot(slot.id, 'end_time', e.target.value)}
-                              className="h-9"
-                            />
-                            <button
-                              type="button"
-                              onClick={() => removeSlot(slot.id)}
-                              className="flex h-9 w-9 items-center justify-center rounded-xl border text-gray-600 transition-all duration-200 hover:-translate-y-0.5 hover:text-red-600"
-                            >
-                              <Trash2 className="h-4 w-4" />
-                            </button>
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                ))}
-              </div>
-
-              <div className="rounded-lg border border-gray-200 bg-white p-3 space-y-2">
-                <p className="text-sm font-medium">Block future date/time</p>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
-                  <Input type="datetime-local" value={blockStart} onChange={(e) => setBlockStart(e.target.value)} />
-                  <Input type="datetime-local" value={blockEnd} onChange={(e) => setBlockEnd(e.target.value)} />
-                </div>
-                <Input value={blockReason} onChange={(e) => setBlockReason(e.target.value)} placeholder="Reason (optional)" />
-                <Button variant="outline" onClick={addBlockedRange}>
-                  <Plus className="h-4 w-4 mr-1" /> Add blocked date
-                </Button>
-
-                {blocked.length > 0 && (
-                  <div className="pt-2 space-y-2">
-                    {blocked.slice(0, 5).map((b) => (
-                      <div key={b.id} className="flex items-center justify-between rounded-xl border p-2 text-xs">
-                        <span>{new Date(b.start_datetime).toLocaleString()} - {new Date(b.end_datetime).toLocaleString()}</span>
-                        <button type="button" className="text-red-500" onClick={() => removeBlocked(b.id)}>
-                          Remove
-                        </button>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
+              <ScheduleEditor
+                compact
+                onSaveExternal={async (schedules) => {
+                  if (schedules.length === 0) {
+                    toast.error('Add at least one availability slot.')
+                    throw new Error('No slots')
+                  }
+                  await availabilityApi.setMySchedule(schedules)
+                  const res = await cleanersApi.updateMyOnboarding({
+                    onboarding_step: 4,
+                    onboarding_skipped_step3: false,
+                  })
+                  setCleaner(res.data?.cleaner ?? cleaner)
+                  setProgress(res.data?.onboarding ?? progress)
+                  setStep(4)
+                  toast.success('Availability saved.')
+                }}
+              />
 
               <div className="flex items-center justify-between pt-1">
                 <Button variant="outline" onClick={() => setStep(2)}>
@@ -621,7 +422,6 @@ function CleanerOnboardingPageContent() {
                 </Button>
                 <div className="flex items-center gap-2">
                   <Button variant="ghost" onClick={skipStep3} disabled={saving}>Skip for now</Button>
-                  <Button onClick={saveStep3} loading={saving}>Save & Continue</Button>
                 </div>
               </div>
             </div>

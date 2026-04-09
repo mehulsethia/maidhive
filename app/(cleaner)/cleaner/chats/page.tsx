@@ -32,15 +32,27 @@ export default function CleanerChatsPage() {
   useEffect(() => {
     ;(async () => {
       try {
-        const [{ data }, userRes, meRes] = await Promise.all([
+        const [bookingsRes, userRes, meRes] = await Promise.allSettled([
           bookingsApi.my(),
           createClient().auth.getUser(),
-          authApi.me().catch(() => null),
+          authApi.me(),
         ])
-        const chatBookings = (data?.items ?? []).filter((b) => CHAT_AVAILABLE.includes(b.status))
-        setBookings(chatBookings)
-        setSelectedBookingId(chatBookings[0]?.id ?? null)
-        setCurrentUserId(userRes.data.user?.id ?? meRes?.data?.id ?? null)
+
+        if (bookingsRes.status === 'fulfilled') {
+          const chatBookings = (bookingsRes.value.data?.items ?? []).filter((b) =>
+            CHAT_AVAILABLE.includes(b.status),
+          )
+          setBookings(chatBookings)
+          setSelectedBookingId(chatBookings[0]?.id ?? null)
+        } else {
+          toast.error('Failed to load chats.')
+        }
+
+        const supabaseUserId =
+          userRes.status === 'fulfilled' ? userRes.value.data.user?.id : null
+        const apiUserId =
+          meRes.status === 'fulfilled' ? meRes.value.data?.id : null
+        setCurrentUserId(supabaseUserId ?? apiUserId ?? null)
       } catch {
         toast.error('Failed to load chats.')
       } finally {
@@ -71,18 +83,28 @@ export default function CleanerChatsPage() {
 
   if (!currentUserId) {
     return (
-      <div className="rounded-2xl border border-slate-200 bg-white p-8 text-center text-slate-500">
-        Unable to load your account for chat.
+      <div className="space-y-6">
+        <div>
+          <h1 className="marketplace-title text-3xl text-slate-900">Chats</h1>
+          <p className="mt-1 text-sm text-slate-500">Manage all your client conversations.</p>
+        </div>
+        <div className="rounded-2xl border border-slate-200 bg-white p-8 text-center text-slate-500">
+          Unable to load your account for chat. Please try refreshing the page.
+        </div>
       </div>
     )
   }
 
   return (
-    <div className="grid gap-4 lg:grid-cols-[360px_1fr]">
+    <div className="space-y-6">
+      <div>
+        <h1 className="marketplace-title text-3xl text-slate-900">Chats</h1>
+        <p className="mt-1 text-sm text-slate-500">Manage all your client conversations.</p>
+      </div>
+      <div className="grid gap-4 lg:grid-cols-[340px_1fr]">
       <Card className="border-slate-200">
         <CardHeader className="pb-3">
-          <CardTitle className="text-2xl">Chats</CardTitle>
-          <p className="text-sm text-slate-500">Manage all your client conversations.</p>
+          <CardTitle className="text-lg">Conversations</CardTitle>
         </CardHeader>
         <CardContent className="space-y-3">
           <Input
@@ -123,7 +145,7 @@ export default function CleanerChatsPage() {
       <Card className="border-slate-200">
         <CardContent className="p-0">
           {!selected ? (
-            <div className="flex h-[70vh] flex-col items-center justify-center gap-3 text-center text-slate-500">
+            <div className="flex min-h-[50vh] flex-col items-center justify-center gap-3 text-center text-slate-500">
               <MessageCircleMore className="h-9 w-9 text-slate-300" />
               <p className="text-sm">Select a conversation to start chatting.</p>
             </div>
@@ -141,6 +163,7 @@ export default function CleanerChatsPage() {
           )}
         </CardContent>
       </Card>
+      </div>
     </div>
   )
 }

@@ -1,7 +1,8 @@
 import { NextResponse } from 'next/server'
+import { serialize } from './serialize'
 
 export function ok(data: unknown, status = 200) {
-  return NextResponse.json({ success: true, data }, { status })
+  return NextResponse.json({ success: true, data: serialize(data) }, { status })
 }
 
 export function err(message: string, status = 400) {
@@ -11,7 +12,7 @@ export function err(message: string, status = 400) {
 export function paginated(data: unknown[], total: number, page: number, pageSize: number) {
   return NextResponse.json({
     success: true,
-    data,
+    data: serialize(data),
     pagination: {
       total,
       page,
