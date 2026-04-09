@@ -25,7 +25,7 @@ export function computeCleanerOnboardingProgress(args: {
   const step1BasicDetails =
     hasValue(cleaner.profileImageUrl) &&
     hasValue(cleaner.bio) &&
-    Number(cleaner.hourlyRate) >= 15 &&
+    Number(cleaner.hourlyRate) >= 6 &&
     cleaner.skills.length > 0
 
   const needsPickupLocation = cleaner.transportMode === 'requires_pickup'

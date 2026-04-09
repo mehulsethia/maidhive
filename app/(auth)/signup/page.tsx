@@ -49,6 +49,7 @@ function SignupForm() {
       email,
       password,
       options: {
+        emailRedirectTo: `${window.location.origin}/${role === 'cleaner' ? 'cleaner/onboarding' : 'client/dashboard'}`,
         data: { name, role, phone: fullPhone, address, experience: role === 'cleaner' ? experience : undefined },
       },
     })
@@ -59,14 +60,14 @@ function SignupForm() {
       return
     }
 
-    // If email confirmation is enabled, Supabase may not create an active session on signup.
+    // If Supabase didn't auto-create a session (e.g. email confirmation enabled),
+    // sign in immediately — we skip email verification for now.
     if (!data.session) {
       const signInRes = await supabase.auth.signInWithPassword({ email, password })
       if (signInRes.error) {
-        toast.success('Account created. Please verify your email and log in to continue.')
-        router.push('/login')
-        setLoading(false)
-        return
+        // Email confirmation may be enforced at the Supabase level.
+        // Still try to proceed — worst case the sync call will fail gracefully.
+        console.warn('Auto sign-in after signup failed:', signInRes.error.message)
       }
     }
 

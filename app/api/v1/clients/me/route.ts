@@ -15,14 +15,18 @@ const updateClientMeSchema = z.object({
 })
 
 export const GET = requireClient(async (_req, _ctx, user) => {
-  const client = await clientRepo.findByUserId(user.id)
-  if (!client) return err('Client profile not found', 404)
+  let client = await clientRepo.findByUserId(user.id)
+  if (!client) {
+    client = await clientRepo.create(user.id)
+  }
   return ok(client)
 })
 
 export const PATCH = requireClient(async (req: NextRequest, _ctx, user) => {
-  const client = await clientRepo.findByUserId(user.id)
-  if (!client) return err('Client profile not found', 404)
+  let client = await clientRepo.findByUserId(user.id)
+  if (!client) {
+    client = await clientRepo.create(user.id)
+  }
 
   const body = await req.json()
   const parsed = updateClientMeSchema.safeParse(body)

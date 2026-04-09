@@ -15,7 +15,7 @@ export const cleanerRepo = {
 
   create: (userId: string) =>
     db.cleaner.create({
-      data: { userId, hourlyRate: 15 },
+      data: { userId, hourlyRate: 0 },
       include: { user: true, serviceAreas: true },
     }),
 

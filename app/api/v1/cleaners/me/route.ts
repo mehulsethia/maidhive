@@ -7,8 +7,12 @@ import { ok, err } from '@/server/response'
 import { updateCleanerSchema } from '@/server/schemas/cleaner.schema'
 
 export const GET = requireCleaner(async (_req, _ctx, user) => {
-  const cleaner = await cleanerRepo.findByUserId(user.id)
-  if (!cleaner) return err('Cleaner profile not found', 404)
+  let cleaner = await cleanerRepo.findByUserId(user.id)
+
+  // Auto-create the cleaner profile if it doesn't exist yet (e.g. sync race condition)
+  if (!cleaner) {
+    cleaner = await cleanerRepo.create(user.id)
+  }
 
   const schedules = await availabilityRepo.getSchedule(cleaner.id)
   const hasAvailabilitySlots = schedules.some((s) => s.isActive)
@@ -22,8 +26,10 @@ export const PATCH = requireCleaner(async (req: NextRequest, _ctx, user) => {
   const parsed = updateCleanerSchema.safeParse(body)
   if (!parsed.success) return err(parsed.error.message, 422)
 
-  const cleaner = await cleanerRepo.findByUserId(user.id)
-  if (!cleaner) return err('Cleaner profile not found', 404)
+  let cleaner = await cleanerRepo.findByUserId(user.id)
+  if (!cleaner) {
+    cleaner = await cleanerRepo.create(user.id)
+  }
 
   const interim = await cleanerRepo.update(cleaner.id, {
     ...(parsed.data.bio !== undefined ? { bio: parsed.data.bio } : {}),

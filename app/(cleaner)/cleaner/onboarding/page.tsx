@@ -60,7 +60,7 @@ function CleanerOnboardingPageContent() {
 
   const [profileImage, setProfileImage] = useState('')
   const [bio, setBio] = useState('')
-  const [hourlyRate, setHourlyRate] = useState('15')
+  const [hourlyRate, setHourlyRate] = useState('')
   const [skills, setSkills] = useState<string[]>([])
 
   const [transportMode, setTransportMode] = useState('')
@@ -93,7 +93,7 @@ function CleanerOnboardingPageContent() {
 
       setProfileImage(c.profile_image_url ?? c.profileImageUrl ?? '')
       setBio(c.bio ?? '')
-      setHourlyRate(String(c.hourly_rate ?? c.hourlyRate ?? 15))
+      setHourlyRate(c.hourly_rate ?? c.hourlyRate ? String(c.hourly_rate ?? c.hourlyRate) : '')
       setSkills(c.skills ?? [])
 
       setTransportMode(c.transport_mode ?? c.transportMode ?? '')
@@ -140,7 +140,8 @@ function CleanerOnboardingPageContent() {
   async function saveStep1() {
     if (!profileImage.trim()) return toast.error('Profile picture is required.')
     if (!bio.trim()) return toast.error('Professional bio is required.')
-    if (Number(hourlyRate) < 15) return toast.error('Min hourly rate is 15.')
+    if (!hourlyRate || Number(hourlyRate) < 6) return toast.error('Min hourly rate is €6.')
+    if (Number(hourlyRate) > 20) return toast.error('Max hourly rate is €20.')
     if (skills.length === 0) return toast.error('Select at least one skill.')
 
     setSaving(true)
@@ -284,13 +285,14 @@ function CleanerOnboardingPageContent() {
                 <Label className="text-sm font-medium">Hourly Rate <span className="text-red-500">*</span></Label>
                 <Input
                   type="number"
-                  min={15}
+                  min={6}
+                  max={20}
                   value={hourlyRate}
                   onChange={(e) => setHourlyRate(e.target.value)}
-                  placeholder="Enter your hourly rate"
+                  placeholder="Enter your hourly rate (€6 – €20)"
                   className="mt-2"
                 />
-                <p className="text-xs text-red-500 text-right mt-1">Min 15</p>
+                <p className="text-xs text-gray-500 text-right mt-1">€6 – €20 per hour</p>
               </div>
 
               <div>

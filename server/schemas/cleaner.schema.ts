@@ -5,7 +5,7 @@ export const updateCleanerSchema = z.object({
   profile_image_url: z.string().min(1).optional().nullable(),
   skills: z.array(z.string().min(1)).max(12).optional(),
   years_experience: z.number().int().min(0).optional(),
-  hourly_rate: z.number().min(15).optional(),
+  hourly_rate: z.number().min(6).max(20).optional(),
   transport_mode: z.enum(['own_car', 'bus_walk', 'requires_pickup']).optional().nullable(),
   transport_pickup_location: z.string().max(200).optional().nullable(),
   id_type: z.enum(['passport', 'national_id', 'drivers_licence']).optional().nullable(),
