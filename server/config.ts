@@ -1,7 +1,7 @@
 import { z } from 'zod'
 
 const schema = z.object({
-  SUPABASE_URL: z.string().url(),
+  NEXT_PUBLIC_SUPABASE_URL: z.string().url(),
   SUPABASE_JWT_SECRET: z.string().min(1),
   SUPABASE_SERVICE_ROLE_KEY: z.string().min(1),
   STRIPE_SECRET_KEY: z.string().startsWith('sk_'),
