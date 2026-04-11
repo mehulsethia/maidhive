@@ -131,7 +131,7 @@ export default function CleanerDashboardPage() {
               <p className="text-sm font-semibold text-amber-900">Profile completion: {completionPct}%</p>
               <p className="text-xs text-amber-700">Your profile appears to clients only after 100% completion.</p>
             </div>
-            <Link href="/cleaner/onboarding" className="inline-flex h-8 items-center rounded-xl bg-primary px-3 text-xs font-semibold text-white transition-all duration-200 hover:-translate-y-0.5 hover:opacity-95">
+            <Link href="/cleaner/profile" className="inline-flex h-8 items-center rounded-xl bg-primary px-3 text-xs font-semibold text-white transition-all duration-200 hover:-translate-y-0.5 hover:opacity-95">
               Complete now
             </Link>
           </div>

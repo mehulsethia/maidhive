@@ -52,6 +52,8 @@ function CleanerProfilePageContent() {
   const [bio, setBio] = useState('')
   const [skills, setSkills] = useState<string[]>([])
 
+  const [completionPct, setCompletionPct] = useState<number>(100)
+  const [cleanerStatus, setCleanerStatus] = useState<string>('pending')
   const [bookings, setBookings] = useState<BookingRead[]>([])
   const [reviews, setReviews] = useState<ReviewRead[]>([])
   const [stripe, setStripe] = useState<{
@@ -78,7 +80,11 @@ function CleanerProfilePageContent() {
       ])
 
       const c = (meRes.data?.cleaner ?? {}) as any
+      const onboarding = meRes.data?.onboarding
       const user = c.user ?? {}
+
+      setCompletionPct(onboarding?.completion_pct ?? 0)
+      setCleanerStatus(c.status ?? 'pending')
 
       setCleanerId(c.id ?? '')
       setFullName(user.name ?? '')
@@ -198,6 +204,30 @@ function CleanerProfilePageContent() {
           Update profile
         </Button>
       </div>
+
+      {(completionPct < 100 || cleanerStatus !== 'approved') && (
+        <div className="rounded-2xl border border-amber-200 bg-gradient-to-r from-amber-50 to-yellow-50 px-4 py-3">
+          <div className="flex items-center justify-between gap-3">
+            <div>
+              <p className="text-sm font-semibold text-amber-900">
+                {completionPct < 100
+                  ? `Profile completion: ${completionPct}%`
+                  : 'Profile complete — pending admin approval'}
+              </p>
+              <p className="text-xs text-amber-700">
+                {completionPct < 100
+                  ? 'Complete all steps so your profile can be reviewed and listed to clients.'
+                  : 'Your profile is under review. You\'ll be notified once approved.'}
+              </p>
+            </div>
+            {completionPct < 100 && (
+              <div className="h-2 w-32 overflow-hidden rounded-full bg-amber-200">
+                <div className="h-full rounded-full bg-amber-500 transition-all" style={{ width: `${completionPct}%` }} />
+              </div>
+            )}
+          </div>
+        </div>
+      )}
 
       <div className="grid gap-4 lg:grid-cols-[320px_1fr]">
         <div className="space-y-4">

@@ -1,6 +1,6 @@
 'use client'
 
-import { Suspense, useEffect, useState } from 'react'
+import { Suspense, useEffect, useRef, useState } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { ArrowLeft, Check, CircleCheck } from 'lucide-react'
 import { cleanersApi, availabilityApi, paymentsApi } from '@/lib/api'
@@ -74,6 +74,7 @@ function CleanerOnboardingPageContent() {
 
 
   const [stripeConnected, setStripeConnected] = useState(false)
+  const scheduleSaveRef = useRef<(() => Promise<void>) | null>(null)
 
   async function loadAll() {
     setLoading(true)
@@ -415,6 +416,7 @@ function CleanerOnboardingPageContent() {
             <div className="space-y-4">
               <ScheduleEditor
                 compact
+                saveRef={scheduleSaveRef}
                 onSaveExternal={async (schedules) => {
                   if (schedules.length === 0) {
                     toast.error('Add at least one availability slot.')
@@ -432,12 +434,13 @@ function CleanerOnboardingPageContent() {
                 }}
               />
 
-              <div className="flex items-center justify-between pt-1">
+              <div className="flex items-center justify-between pt-2">
                 <Button variant="outline" onClick={() => setStep(2)}>
                   <ArrowLeft className="h-4 w-4 mr-1" /> Back
                 </Button>
                 <div className="flex items-center gap-2">
                   <Button variant="ghost" onClick={skipStep3} disabled={saving}>Skip for now</Button>
+                  <Button onClick={() => scheduleSaveRef.current?.()} loading={saving} className="min-w-36">Save & Continue</Button>
                 </div>
               </div>
             </div>

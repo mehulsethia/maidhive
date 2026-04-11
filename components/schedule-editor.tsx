@@ -81,7 +81,7 @@ type BlockedDate = {
 }
 
 interface ScheduleEditorProps {
-  /** If true, shows in compact mode for onboarding (no Google Calendar card) */
+  /** If true, shows in compact mode for onboarding (no Google Calendar card, hides internal save button) */
   compact?: boolean
   /** Called after successful save */
   onSave?: () => void
@@ -95,6 +95,8 @@ interface ScheduleEditorProps {
       is_active: boolean
     }>,
   ) => Promise<void>
+  /** Ref-like callback to expose the save function to the parent */
+  saveRef?: React.MutableRefObject<(() => Promise<void>) | null>
 }
 
 // ─── Validation ──────────────────────────────────────────────────────────────
@@ -158,7 +160,7 @@ function TimeSelect({
 
 // ─── Main Component ──────────────────────────────────────────────────────────
 
-export function ScheduleEditor({ compact, onSave, onSaveExternal }: ScheduleEditorProps) {
+export function ScheduleEditor({ compact, onSave, onSaveExternal, saveRef }: ScheduleEditorProps) {
   const tab = 'schedule' as const
   const [days, setDays] = useState<DaySchedule[]>(
     DAYS.map((d) => ({
@@ -333,6 +335,11 @@ export function ScheduleEditor({ compact, onSave, onSaveExternal }: ScheduleEdit
     )
   }
 
+  // ── Expose save to parent via ref ─────────────────────────────────────────
+  useEffect(() => {
+    if (saveRef) saveRef.current = save
+  })
+
   // ── Save schedule ─────────────────────────────────────────────────────────
   async function save() {
     // Validate all days
@@ -458,10 +465,12 @@ export function ScheduleEditor({ compact, onSave, onSaveExternal }: ScheduleEdit
             {/* Header */}
             <div className="mb-5 flex items-center justify-between">
               <p className="text-sm font-semibold text-slate-700">Weeks</p>
-              <Button size="sm" variant="outline" onClick={save} loading={saving}>
-                <Download className="mr-1.5 h-3.5 w-3.5" />
-                Save
-              </Button>
+              {!compact && (
+                <Button size="sm" variant="outline" onClick={save} loading={saving}>
+                  <Download className="mr-1.5 h-3.5 w-3.5" />
+                  Save
+                </Button>
+              )}
             </div>
 
             {/* Day rows */}
