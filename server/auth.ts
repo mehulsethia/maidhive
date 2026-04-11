@@ -20,8 +20,11 @@ export async function getAuthUser(req: NextRequest): Promise<User | null> {
       }) as { sub: string }
 
       const user = await db.user.findUnique({ where: { id: payload.sub } })
-      if (!user || !user.isActive || user.deletedAt) return null
-      return user
+      if (user) {
+        if (!user.isActive || user.deletedAt) return null
+        return user
+      }
+      // User not in DB — fall through to cookie path which can auto-create
     } catch {
       // Fall through to cookie-based Supabase auth.
     }
@@ -48,7 +51,28 @@ export async function getAuthUser(req: NextRequest): Promise<User | null> {
     const { data, error } = await supabase.auth.getUser()
     if (error || !data.user) return null
 
-    const user = await db.user.findUnique({ where: { id: data.user.id } })
+    let user = await db.user.findUnique({ where: { id: data.user.id } })
+
+    // Auto-create user row if authenticated in Supabase but missing from DB
+    // (handles case where the auth.users trigger didn't fire)
+    if (!user) {
+      const meta = data.user.user_metadata ?? {}
+      try {
+        user = await db.user.create({
+          data: {
+            id: data.user.id,
+            email: data.user.email!,
+            name: (meta.name as string) || data.user.email!.split('@')[0],
+            role: (meta.role as string) || 'client',
+            phone: (meta.phone as string) || null,
+          },
+        })
+      } catch {
+        // Race condition — another request may have created it
+        user = await db.user.findUnique({ where: { id: data.user.id } })
+      }
+    }
+
     if (!user || !user.isActive || user.deletedAt) return null
     return user
   } catch {

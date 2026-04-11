@@ -9,10 +9,10 @@ import {
   MessagesSquare,
   User,
   Flag,
-  LogOut,
 } from 'lucide-react'
 import { createClient } from '@/lib/supabase'
 import { cn } from '@/lib/utils'
+import { SidebarProfile } from '@/components/sidebar-profile'
 
 const NAV_ITEMS = [
   { href: '/client/dashboard', label: 'Dashboard', icon: LayoutGrid },
@@ -64,14 +64,7 @@ export function ClientShell({ children }: { children: React.ReactNode }) {
             })}
           </nav>
 
-          <button
-            type="button"
-            onClick={handleLogout}
-            className="mt-auto flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-semibold text-slate-600 transition-all duration-200 hover:bg-slate-100 hover:text-slate-900"
-          >
-            <LogOut className="h-4 w-4" />
-            Log out
-          </button>
+          <SidebarProfile profileHref="/client/profile" role="client" />
         </aside>
 
         <div className="min-w-0 flex-1">
@@ -110,7 +103,7 @@ export function ClientShell({ children }: { children: React.ReactNode }) {
             </nav>
           </header>
 
-          <main className="app-shell-main mx-auto w-full max-w-[1240px] px-3 py-4 sm:px-4 sm:py-5 md:px-8 md:py-8">{children}</main>
+          <main className="app-shell-main mx-auto w-full max-w-[1240px] px-4 py-6 sm:px-6 md:px-8 md:py-8">{children}</main>
         </div>
       </div>
     </div>
