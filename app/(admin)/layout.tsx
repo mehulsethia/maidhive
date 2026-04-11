@@ -8,12 +8,12 @@ import {
   BookOpen,
   LogOut,
   MessageSquareWarning,
-  Settings,
   ShieldCheck,
   Users,
 } from 'lucide-react'
 import { createClient } from '@/lib/supabase'
 import { cn } from '@/lib/utils'
+import { toast } from 'sonner'
 
 const NAV = [
   { href: '/admin/dashboard', label: 'Overview',  icon: BarChart3 },
@@ -23,49 +23,149 @@ const NAV = [
   { href: '/admin/users',     label: 'Users',     icon: Users },
 ]
 
+type AuthState = 'loading' | 'login' | 'authed'
+
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname()
   const router = useRouter()
-  const [checking, setChecking] = useState(true)
+  const [authState, setAuthState] = useState<AuthState>('loading')
+  const [email, setEmail] = useState('')
+  const [password, setPassword] = useState('')
+  const [loginLoading, setLoginLoading] = useState(false)
 
-  // Guard: only admins may enter
   useEffect(() => {
-    const supabase = createClient()
-    supabase.auth.getSession().then(async ({ data }) => {
-      if (!data.session) {
-        router.replace('/login')
-        return
-      }
-      // Fetch role from our backend
-      const res = await fetch('/api/v1/auth/me', {
-        headers: { Authorization: `Bearer ${data.session.access_token}` },
-      }).then(r => r.json()).catch(() => null)
+    checkAdmin()
+  }, [])
 
-      if (res?.data?.role !== 'admin') {
-        router.replace('/')
-        return
-      }
-      setChecking(false)
-    })
-  }, [router])
+  async function checkAdmin() {
+    setAuthState('loading')
+    const supabase = createClient()
+    const { data } = await supabase.auth.getSession()
+
+    if (!data.session) {
+      setAuthState('login')
+      return
+    }
+
+    const res = await fetch('/api/v1/auth/me', {
+      headers: { Authorization: `Bearer ${data.session.access_token}` },
+    }).then(r => r.json()).catch(() => null)
+
+    if (res?.data?.role === 'admin') {
+      setAuthState('authed')
+    } else {
+      // Signed in but not admin — sign out of this session and show login
+      await supabase.auth.signOut()
+      setAuthState('login')
+    }
+  }
+
+  async function handleLogin(e: React.FormEvent) {
+    e.preventDefault()
+    setLoginLoading(true)
+
+    const supabase = createClient()
+    const { error } = await supabase.auth.signInWithPassword({ email, password })
+
+    if (error) {
+      toast.error('Invalid credentials.')
+      setLoginLoading(false)
+      return
+    }
+
+    // Verify admin role
+    const { data } = await supabase.auth.getSession()
+    const res = await fetch('/api/v1/auth/me', {
+      headers: { Authorization: `Bearer ${data.session!.access_token}` },
+    }).then(r => r.json()).catch(() => null)
+
+    if (res?.data?.role !== 'admin') {
+      toast.error('Access denied. Admin privileges required.')
+      await supabase.auth.signOut()
+      setLoginLoading(false)
+      return
+    }
+
+    setAuthState('authed')
+    setLoginLoading(false)
+    router.push('/admin/dashboard')
+  }
 
   async function signOut() {
     const supabase = createClient()
     await supabase.auth.signOut()
-    router.push('/login')
+    setAuthState('login')
+    setEmail('')
+    setPassword('')
   }
 
-  if (checking) {
+  // Loading spinner
+  if (authState === 'loading') {
     return (
-      <div className="min-h-screen flex items-center justify-center">
+      <div className="min-h-screen flex items-center justify-center bg-slate-50">
         <div className="h-6 w-6 animate-spin rounded-full border-2 border-primary border-t-transparent" />
       </div>
     )
   }
 
+  // Admin login screen
+  if (authState === 'login') {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-slate-50 px-4">
+        <div className="w-full max-w-sm">
+          <div className="mb-8 text-center">
+            <div className="mx-auto mb-4 grid h-14 w-14 place-items-center rounded-2xl bg-gradient-to-br from-primary to-indigo-700 text-xl font-extrabold text-white shadow-lg">
+              M
+            </div>
+            <h1 className="text-2xl font-bold text-slate-900">Admin Console</h1>
+            <p className="mt-1 text-sm text-slate-500">Sign in with your admin credentials</p>
+          </div>
+
+          <form onSubmit={handleLogin} className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+            <div className="space-y-4">
+              <div>
+                <label className="mb-1.5 block text-sm font-medium text-slate-700">Email</label>
+                <input
+                  type="email"
+                  required
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  placeholder="admin@example.com"
+                  className="w-full rounded-lg border border-slate-200 px-3.5 py-2.5 text-sm focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20 transition-colors"
+                />
+              </div>
+              <div>
+                <label className="mb-1.5 block text-sm font-medium text-slate-700">Password</label>
+                <input
+                  type="password"
+                  required
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  placeholder="Enter password"
+                  className="w-full rounded-lg border border-slate-200 px-3.5 py-2.5 text-sm focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20 transition-colors"
+                />
+              </div>
+              <button
+                type="submit"
+                disabled={loginLoading}
+                className="w-full rounded-lg bg-primary py-2.5 text-sm font-semibold text-white shadow-sm transition-all hover:bg-primary/90 disabled:opacity-50"
+              >
+                {loginLoading ? 'Signing in...' : 'Sign in'}
+              </button>
+            </div>
+          </form>
+
+          <p className="mt-4 text-center text-xs text-slate-400">
+            This area is restricted to authorized administrators.
+          </p>
+        </div>
+      </div>
+    )
+  }
+
+  // Authenticated admin — full layout
   return (
     <div className="min-h-screen flex">
-      {/* Sidebar */}
       <aside className="w-60 border-r min-h-screen flex flex-col bg-muted/20">
         <div className="px-6 py-5 border-b">
           <Link href="/admin/dashboard" className="text-base font-bold text-primary">
@@ -108,7 +208,6 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
         </div>
       </aside>
 
-      {/* Content */}
       <main className="flex-1 px-4 py-6 sm:px-6 md:px-8 md:py-8 overflow-auto">{children}</main>
     </div>
   )
