@@ -4,24 +4,33 @@ import { bookingRepo } from '../repositories/booking.repo'
 interface TimeSlot {
   start: string // ISO string
   end: string
+  disabled: boolean
 }
 
+const SLOT_INTERVAL_MS = 30 * 60 * 1000 // 30 minutes
+
 export const availabilityService = {
+  /**
+   * Returns 30-minute interval slots for a given cleaner on a given date.
+   *
+   * Each slot represents a possible start time. Slots are generated at 30-min
+   * intervals from the start of each schedule window to (end - 30min).
+   *
+   * A slot is marked `disabled: true` when:
+   *  - The selected duration would overflow past the schedule window end
+   *  - There is a conflict with a blocked time or existing booking
+   */
   async getAvailableSlots(
     cleanerId: string,
     dateStr: string,
     durationHours: number,
   ): Promise<TimeSlot[]> {
-    const date = new Date(dateStr)
+    const date = new Date(dateStr + 'T00:00:00Z')
     const dayOfWeek = isoWeekday(date) // 1=Mon...7=Sun
 
     const [schedules, blockedTimes, existingBookings] = await Promise.all([
       availabilityRepo.getSchedule(cleanerId),
-      availabilityRepo.getBlockedTimesInRange(
-        cleanerId,
-        startOfDay(date),
-        endOfDay(date),
-      ),
+      availabilityRepo.getBlockedTimesInRange(cleanerId, startOfDay(date), endOfDay(date)),
       bookingRepo.findActiveForCleaner(cleanerId, startOfDay(date), endOfDay(date)),
     ])
 
@@ -37,39 +46,53 @@ export const availabilityService = {
     for (const schedule of daySchedules) {
       const [startH, startM] = schedule.startTime.split(':').map(Number)
       const [endH, endM] = schedule.endTime.split(':').map(Number)
-      const bufferMs = schedule.bufferMinutes * 60 * 1000
 
-      const dayStart = new Date(date)
-      dayStart.setUTCHours(startH, startM, 0, 0)
+      const windowStart = new Date(date)
+      windowStart.setUTCHours(startH, startM, 0, 0)
 
-      const dayEnd = new Date(date)
-      dayEnd.setUTCHours(endH, endM, 0, 0)
+      const windowEnd = new Date(date)
+      windowEnd.setUTCHours(endH, endM, 0, 0)
 
-      let cursor = dayStart.getTime()
+      // Generate 30-min interval slots from window start to (window end - 30min)
+      let cursor = windowStart.getTime()
+      const lastSlotTime = windowEnd.getTime() - SLOT_INTERVAL_MS
 
-      while (cursor + durationMs <= dayEnd.getTime()) {
+      while (cursor <= lastSlotTime) {
         const slotStart = new Date(cursor)
         const slotEnd = new Date(cursor + durationMs)
 
-        const hasConflict =
+        // Check if the duration overflows past the schedule window
+        const overflows = slotEnd.getTime() > windowEnd.getTime()
+
+        // Check conflicts with blocked times and existing bookings
+        const hasConflict = !overflows && (
           blockedTimes.some(
             (b) => b.startDatetime < slotEnd && b.endDatetime > slotStart,
           ) ||
           existingBookings.some(
             (b) => b.scheduledStart < slotEnd && b.scheduledEnd > slotStart,
           )
+        )
 
-        if (!hasConflict) {
-          allSlots.push({ start: slotStart.toISOString(), end: slotEnd.toISOString() })
-        }
+        allSlots.push({
+          start: slotStart.toISOString(),
+          end: slotEnd.toISOString(),
+          disabled: overflows || hasConflict,
+        })
 
-        cursor += durationMs + bufferMs
+        cursor += SLOT_INTERVAL_MS
       }
     }
 
+    // Deduplicate (in case of overlapping schedule windows)
     const uniqueSlots = new Map<string, TimeSlot>()
     for (const slot of allSlots) {
-      uniqueSlots.set(`${slot.start}_${slot.end}`, slot)
+      const key = slot.start
+      const existing = uniqueSlots.get(key)
+      // Keep the "enabled" version if any window allows it
+      if (!existing || (!slot.disabled && existing.disabled)) {
+        uniqueSlots.set(key, slot)
+      }
     }
     return Array.from(uniqueSlots.values())
   },

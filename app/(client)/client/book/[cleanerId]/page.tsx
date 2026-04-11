@@ -27,7 +27,7 @@ const SERVICE_LABELS: Record<string, string> = {
   move_in: 'Move-in Clean',
 }
 
-const DURATION_OPTIONS = [1, 1.5, 2, 2.5, 3, 3.5, 4, 5, 6, 8]
+const DURATION_OPTIONS = [1, 1.5, 2, 2.5, 3, 3.5, 4, 4.5, 5]
 
 const STEP_INFO = [
   { num: 1, title: 'Service &\nDate', desc: 'Select service and schedule' },
@@ -102,7 +102,7 @@ function DatePicker({
   }
 
   return (
-    <div className="relative">
+    <div className="relative overflow-hidden">
       {/* Left arrow */}
       {canScrollLeft && (
         <button
@@ -113,12 +113,12 @@ function DatePicker({
         </button>
       )}
 
-      {/* Scrollable dates */}
+      {/* Scrollable dates — shows ~5 blocks, scroll for more */}
       <div
         ref={scrollRef}
         onScroll={handleScroll}
-        className="flex gap-2 overflow-x-auto scrollbar-hide px-1 py-1"
-        style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
+        className="flex gap-2 overflow-x-auto scrollbar-hide py-1"
+        style={{ scrollbarWidth: 'none', msOverflowStyle: 'none', paddingLeft: canScrollLeft ? 36 : 4, paddingRight: 36 }}
       >
         {availableDates.map(dateStr => {
           const d = new Date(dateStr + 'T12:00:00Z') // noon UTC to avoid timezone shift
@@ -132,7 +132,7 @@ function DatePicker({
               key={dateStr}
               type="button"
               onClick={() => onSelect(dateStr)}
-              className={`shrink-0 flex flex-col items-center justify-center rounded-xl border-2 px-4 py-3 min-w-[90px] transition-all ${
+              className={`shrink-0 flex flex-col items-center justify-center rounded-xl border-2 px-4 py-3 w-[80px] transition-all ${
                 isSelected
                   ? 'border-primary bg-primary/5 text-primary shadow-sm'
                   : 'border-slate-200 bg-white text-slate-700 hover:border-slate-300 hover:-translate-y-0.5'
@@ -306,7 +306,7 @@ export default function BookingFlowPage() {
   const [datesLoading, setDatesLoading] = useState(true)
   const [date, setDate] = useState('')
   const [selectedSlot, setSelectedSlot] = useState('')
-  const [slots, setSlots] = useState<{ start: string; end: string }[]>([])
+  const [slots, setSlots] = useState<{ start: string; end: string; disabled?: boolean }[]>([])
   const [slotsLoading, setSlotsLoading] = useState(false)
   const [breakdown, setBreakdown] = useState<PriceBreakdown | null>(null)
 
@@ -452,7 +452,7 @@ export default function BookingFlowPage() {
           onClick={() => step > 1 && step < 4 ? setStep(step - 1) : router.back()}
           className="inline-flex items-center gap-1 text-sm text-slate-500 hover:text-slate-900 transition-colors"
         >
-          <ArrowLeft className="h-4 w-4" /> {step > 1 && step < 4 ? 'Previous' : 'Back to Profile'}
+          <ArrowLeft className="h-4 w-4" /> {step > 1 && step < 4 ? 'Previous' : 'Back to All Cleaners'}
         </button>
         <h1 className="text-xl font-bold text-slate-900">Book Service</h1>
         <div className="w-24" />
@@ -520,15 +520,20 @@ export default function BookingFlowPage() {
                       <div className="grid grid-cols-3 sm:grid-cols-4 gap-2">
                         {slots.map(slot => {
                           const time = new Date(slot.start).toLocaleTimeString('en-IE', { hour: 'numeric', minute: '2-digit', hour12: true })
+                          const isDisabled = !!slot.disabled
+                          const isSelected = selectedSlot === slot.start
                           return (
                             <button
                               key={slot.start}
                               type="button"
-                              onClick={() => setSelectedSlot(slot.start)}
+                              disabled={isDisabled}
+                              onClick={() => !isDisabled && setSelectedSlot(slot.start)}
                               className={`rounded-xl border py-2.5 text-sm font-medium transition-all ${
-                                selectedSlot === slot.start
-                                  ? 'bg-primary text-white border-primary shadow-sm'
-                                  : 'bg-white border-slate-200 text-slate-700 hover:border-primary/40 hover:-translate-y-0.5'
+                                isDisabled
+                                  ? 'bg-slate-50 border-slate-100 text-slate-300 cursor-not-allowed'
+                                  : isSelected
+                                    ? 'bg-primary text-white border-primary shadow-sm'
+                                    : 'bg-white border-slate-200 text-slate-700 hover:border-primary/40 hover:-translate-y-0.5'
                               }`}
                             >
                               {time}
