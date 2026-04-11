@@ -51,6 +51,18 @@ export async function middleware(request: NextRequest) {
     return NextResponse.redirect(url)
   }
 
+  // Prevent role mismatch: don't let users access another role's area
+  if (isProtected && user) {
+    const role = typeof user.user_metadata?.role === 'string' ? user.user_metadata.role : null
+    const isClientRoute = pathname.startsWith('/client')
+    const isCleanerRoute = pathname.startsWith('/cleaner')
+    if ((isClientRoute && role === 'cleaner') || (isCleanerRoute && role === 'client')) {
+      const url = request.nextUrl.clone()
+      url.pathname = getPostLoginPath(user)
+      return NextResponse.redirect(url)
+    }
+  }
+
   if (isAuthRoute && user) {
     // Redirect logged-in users away from auth pages, preserving a safe `next` destination.
     const url = request.nextUrl.clone()

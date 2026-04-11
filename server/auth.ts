@@ -51,28 +51,7 @@ export async function getAuthUser(req: NextRequest): Promise<User | null> {
     const { data, error } = await supabase.auth.getUser()
     if (error || !data.user) return null
 
-    let user = await db.user.findUnique({ where: { id: data.user.id } })
-
-    // Auto-create user row if authenticated in Supabase but missing from DB
-    // (handles case where the auth.users trigger didn't fire)
-    if (!user) {
-      const meta = data.user.user_metadata ?? {}
-      try {
-        user = await db.user.create({
-          data: {
-            id: data.user.id,
-            email: data.user.email!,
-            name: (meta.name as string) || data.user.email!.split('@')[0],
-            role: (meta.role as string) || 'client',
-            phone: (meta.phone as string) || null,
-          },
-        })
-      } catch {
-        // Race condition — another request may have created it
-        user = await db.user.findUnique({ where: { id: data.user.id } })
-      }
-    }
-
+    const user = await db.user.findUnique({ where: { id: data.user.id } })
     if (!user || !user.isActive || user.deletedAt) return null
     return user
   } catch {

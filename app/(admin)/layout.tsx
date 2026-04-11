@@ -6,6 +6,8 @@ import { usePathname, useRouter } from 'next/navigation'
 import {
   BarChart3,
   BookOpen,
+  Eye,
+  EyeOff,
   LogOut,
   MessageSquareWarning,
   ShieldCheck,
@@ -31,6 +33,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
   const [authState, setAuthState] = useState<AuthState>('loading')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
+  const [showPassword, setShowPassword] = useState(false)
   const [loginLoading, setLoginLoading] = useState(false)
 
   useEffect(() => {
@@ -136,14 +139,23 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
               </div>
               <div>
                 <label className="mb-1.5 block text-sm font-medium text-slate-700">Password</label>
-                <input
-                  type="password"
-                  required
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  placeholder="Enter password"
-                  className="w-full rounded-lg border border-slate-200 px-3.5 py-2.5 text-sm focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20 transition-colors"
-                />
+                <div className="relative">
+                  <input
+                    type={showPassword ? 'text' : 'password'}
+                    required
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    placeholder="Enter password"
+                    className="w-full rounded-lg border border-slate-200 px-3.5 py-2.5 pr-11 text-sm focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20 transition-colors"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowPassword(!showPassword)}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 transition-colors"
+                  >
+                    {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                  </button>
+                </div>
               </div>
               <button
                 type="submit"

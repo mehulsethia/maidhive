@@ -59,6 +59,7 @@ function CleanerOnboardingPageContent() {
   const [cleaner, setCleaner] = useState<CleanerRead | null>(null)
 
   const [profileImage, setProfileImage] = useState('')
+  const [profileImagePreview, setProfileImagePreview] = useState('')
   const [bio, setBio] = useState('')
   const [hourlyRate, setHourlyRate] = useState('')
   const [skills, setSkills] = useState<string[]>([])
@@ -91,7 +92,9 @@ function CleanerOnboardingPageContent() {
       setProgress(onboarding)
       setStep(onboarding.current_step)
 
-      setProfileImage(c.profile_image_url ?? c.profileImageUrl ?? '')
+      const imgUrl = c.profile_image_url ?? c.profileImageUrl ?? ''
+      setProfileImage(imgUrl)
+      if (imgUrl) setProfileImagePreview(imgUrl)
       setBio(c.bio ?? '')
       setHourlyRate(c.hourly_rate ?? c.hourlyRate ? String(c.hourly_rate ?? c.hourlyRate) : '')
       setSkills(c.skills ?? [])
@@ -138,16 +141,15 @@ function CleanerOnboardingPageContent() {
   }
 
   async function saveStep1() {
-    if (!profileImage.trim()) return toast.error('Profile picture is required.')
     if (!bio.trim()) return toast.error('Professional bio is required.')
-    if (!hourlyRate || Number(hourlyRate) < 6) return toast.error('Min hourly rate is €6.')
-    if (Number(hourlyRate) > 20) return toast.error('Max hourly rate is €20.')
+    if (!hourlyRate || Number(hourlyRate) < 15) return toast.error('Min hourly rate is €15.')
+    if (Number(hourlyRate) > 100) return toast.error('Max hourly rate is €100.')
     if (skills.length === 0) return toast.error('Select at least one skill.')
 
     setSaving(true)
     try {
       const res = await cleanersApi.updateMyOnboarding({
-        profile_image_url: profileImage,
+        ...(profileImage ? { profile_image_url: profileImage } : {}),
         bio,
         hourly_rate: Number(hourlyRate),
         skills,
@@ -255,18 +257,30 @@ function CleanerOnboardingPageContent() {
           {step === 1 && (
             <div className="space-y-4">
               <div>
-                <Label className="text-sm font-medium">Profile Picture <span className="text-red-500">*</span></Label>
-                <div className="mt-2 flex items-center gap-3">
-                  <label className="h-20 w-20 rounded-full bg-gray-200 border border-gray-300 flex items-center justify-center text-[11px] text-gray-500 text-center px-2 cursor-pointer overflow-hidden">
-                    {profileImage ? 'Selected' : 'Upload'}
+                <Label className="text-sm font-medium">Profile Picture</Label>
+                <div className="mt-2 flex items-center gap-4">
+                  <label className="relative h-20 w-20 shrink-0 rounded-full bg-gray-200 border-2 border-dashed border-gray-300 flex items-center justify-center cursor-pointer overflow-hidden hover:border-primary/50 transition-colors">
+                    {profileImagePreview ? (
+                      <img src={profileImagePreview} alt="Profile" className="h-full w-full object-cover" />
+                    ) : (
+                      <span className="text-[11px] text-gray-500 text-center leading-tight">Upload<br/>Photo</span>
+                    )}
                     <input
                       type="file"
                       accept="image/*"
                       className="hidden"
-                      onChange={(e) => setProfileImage(e.target.files?.[0]?.name ?? '')}
+                      onChange={(e) => {
+                        const file = e.target.files?.[0]
+                        if (file) {
+                          setProfileImage(file.name)
+                          setProfileImagePreview(URL.createObjectURL(file))
+                        }
+                      }}
                     />
                   </label>
-                  <Input value={profileImage} onChange={(e) => setProfileImage(e.target.value)} placeholder="Image file name" />
+                  <p className="text-xs text-gray-500">
+                    {profileImage || 'Click the circle to upload a photo (optional)'}
+                  </p>
                 </div>
               </div>
 
@@ -285,14 +299,14 @@ function CleanerOnboardingPageContent() {
                 <Label className="text-sm font-medium">Hourly Rate <span className="text-red-500">*</span></Label>
                 <Input
                   type="number"
-                  min={6}
-                  max={20}
+                  min={15}
+                  max={100}
                   value={hourlyRate}
                   onChange={(e) => setHourlyRate(e.target.value)}
-                  placeholder="Enter your hourly rate (€6 – €20)"
+                  placeholder="Enter your hourly rate (€15 – €100)"
                   className="mt-2"
                 />
-                <p className="text-xs text-gray-500 text-right mt-1">€6 – €20 per hour</p>
+                <p className="text-xs text-gray-500 text-right mt-1">€15 – €100 per hour</p>
               </div>
 
               <div>
