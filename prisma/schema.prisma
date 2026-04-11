@@ -119,8 +119,8 @@ model AvailabilitySchedule {
   id            String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   cleanerId     String   @map("cleaner_id") @db.Uuid
   dayOfWeek     Int      @map("day_of_week") // 1=Mon ... 7=Sun
-  startTime     String   @map("start_time")  // stored as "HH:MM"
-  endTime       String   @map("end_time")
+  startTime     DateTime @map("start_time") @db.Time(6)
+  endTime       DateTime @map("end_time") @db.Time(6)
   bufferMinutes Int      @default(30) @map("buffer_minutes")
   isActive      Boolean  @default(true) @map("is_active")
   createdAt     DateTime @default(now()) @map("created_at") @db.Timestamptz(6)

@@ -1,11 +1,35 @@
 import { db } from '../db'
 
+/** Convert "HH:MM" string to a Date with only the time portion set (UTC) */
+function timeStringToDate(time: string): Date {
+  const [h, m] = time.split(':').map(Number)
+  return new Date(Date.UTC(1970, 0, 1, h, m, 0, 0))
+}
+
+/** Convert a Date (time-only, UTC) back to "HH:MM" string */
+function dateToTimeString(d: Date): string {
+  const h = d.getUTCHours().toString().padStart(2, '0')
+  const m = d.getUTCMinutes().toString().padStart(2, '0')
+  return `${h}:${m}`
+}
+
+/** Normalise a schedule row from Prisma (DateTime time fields) to plain strings */
+function normalizeSchedule(row: any) {
+  return {
+    ...row,
+    startTime: row.startTime instanceof Date ? dateToTimeString(row.startTime) : row.startTime,
+    endTime: row.endTime instanceof Date ? dateToTimeString(row.endTime) : row.endTime,
+  }
+}
+
 export const availabilityRepo = {
-  getSchedule: (cleanerId: string) =>
-    db.availabilitySchedule.findMany({
+  getSchedule: async (cleanerId: string) => {
+    const rows = await db.availabilitySchedule.findMany({
       where: { cleanerId },
       orderBy: { dayOfWeek: 'asc' },
-    }),
+    })
+    return rows.map(normalizeSchedule)
+  },
 
   replaceSchedule: async (
     cleanerId: string,
@@ -20,21 +44,24 @@ export const availabilityRepo = {
     await db.availabilitySchedule.deleteMany({ where: { cleanerId } })
     if (schedules.length === 0) return []
 
-    await db.availabilitySchedule.createMany({
-      data: schedules.map((s) => ({
-        cleanerId,
-        dayOfWeek: s.dayOfWeek,
-        startTime: s.startTime,
-        endTime: s.endTime,
-        bufferMinutes: s.bufferMinutes,
-        isActive: s.isActive,
-      })),
-    })
+    for (const s of schedules) {
+      await db.availabilitySchedule.create({
+        data: {
+          cleanerId,
+          dayOfWeek: s.dayOfWeek,
+          startTime: timeStringToDate(s.startTime),
+          endTime: timeStringToDate(s.endTime),
+          bufferMinutes: s.bufferMinutes,
+          isActive: s.isActive,
+        },
+      })
+    }
 
-    return db.availabilitySchedule.findMany({
+    const rows = await db.availabilitySchedule.findMany({
       where: { cleanerId },
       orderBy: [{ dayOfWeek: 'asc' }, { startTime: 'asc' }],
     })
+    return rows.map(normalizeSchedule)
   },
 
   getBlockedTimes: (cleanerId: string) =>

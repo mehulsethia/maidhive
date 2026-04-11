@@ -1,7 +1,7 @@
 'use client'
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { Download, Plus, X, Trash2, CalendarDays } from 'lucide-react'
+import { CalendarDays, Download, Plus, X, Trash2 } from 'lucide-react'
 import { availabilityApi } from '@/lib/api'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -159,7 +159,7 @@ function TimeSelect({
 // ─── Main Component ──────────────────────────────────────────────────────────
 
 export function ScheduleEditor({ compact, onSave, onSaveExternal }: ScheduleEditorProps) {
-  const [tab, setTab] = useState<'calendar' | 'schedule'>('schedule')
+  const tab = 'schedule' as const
   const [days, setDays] = useState<DaySchedule[]>(
     DAYS.map((d) => ({
       dayOfWeek: d.value,
@@ -448,28 +448,9 @@ export function ScheduleEditor({ compact, onSave, onSaveExternal }: ScheduleEdit
     <div className={cn('grid gap-5', compact ? '' : 'lg:grid-cols-[1fr_340px]')}>
       {/* ── Left: Schedule ──────────────────────────────────────────────── */}
       <div className="rounded-2xl border border-slate-200 bg-white">
-        {/* Tab bar */}
-        <div className="flex items-center justify-between border-b border-slate-100 px-5 pt-4 pb-3">
-          <div className="flex items-center gap-6">
-            <button
-              onClick={() => setTab('calendar')}
-              className={cn(
-                'text-sm font-medium transition-colors',
-                tab === 'calendar' ? 'text-slate-900' : 'text-slate-400 hover:text-slate-600',
-              )}
-            >
-              Calendar
-            </button>
-            <button
-              onClick={() => setTab('schedule')}
-              className={cn(
-                'text-sm font-semibold transition-colors',
-                tab === 'schedule' ? 'text-slate-900' : 'text-slate-400 hover:text-slate-600',
-              )}
-            >
-              Schedule
-            </button>
-          </div>
+        {/* Header */}
+        <div className="border-b border-slate-100 px-5 pt-4 pb-3">
+          <p className="text-sm font-semibold text-slate-900">Schedule</p>
         </div>
 
         {tab === 'schedule' && (
@@ -578,53 +559,6 @@ export function ScheduleEditor({ compact, onSave, onSaveExternal }: ScheduleEdit
           </div>
         )}
 
-        {tab === 'calendar' && (
-          <div className="p-5">
-            <p className="mb-4 text-sm font-semibold text-slate-700">Blocked Dates</p>
-            {blocked.length === 0 ? (
-              <div className="rounded-xl border border-dashed border-slate-200 py-10 text-center text-sm text-slate-400">
-                No blocked dates. Your weekly schedule applies to all dates.
-              </div>
-            ) : (
-              <div className="space-y-2">
-                {blocked
-                  .sort(
-                    (a, b) =>
-                      new Date(a.start_datetime).getTime() - new Date(b.start_datetime).getTime(),
-                  )
-                  .map((b) => {
-                    const d = new Date(b.start_datetime)
-                    return (
-                      <div
-                        key={b.id}
-                        className="flex items-center justify-between rounded-xl border border-slate-200 bg-slate-50 px-4 py-2.5"
-                      >
-                        <div>
-                          <p className="text-sm font-medium text-slate-700">
-                            {d.toLocaleDateString(undefined, {
-                              weekday: 'short',
-                              month: 'short',
-                              day: 'numeric',
-                              year: 'numeric',
-                            })}
-                          </p>
-                          {b.reason && (
-                            <p className="text-xs text-slate-400">{b.reason}</p>
-                          )}
-                        </div>
-                        <button
-                          onClick={() => removeBlockedDate(b.id)}
-                          className="text-slate-400 transition-colors hover:text-red-500"
-                        >
-                          <X className="h-4 w-4" />
-                        </button>
-                      </div>
-                    )
-                  })}
-              </div>
-            )}
-          </div>
-        )}
       </div>
 
       {/* ── Right: Block Dates + Google Calendar ────────────────────────── */}

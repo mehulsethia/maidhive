@@ -11,7 +11,7 @@ export const dayScheduleSchema = z.object({
 })
 
 export const setScheduleSchema = z.object({
-  schedules: z.array(dayScheduleSchema).min(1).max(7),
+  schedules: z.array(dayScheduleSchema).min(1).max(28),
 })
 
 export const addBlockedTimeSchema = z.object({
