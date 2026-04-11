@@ -30,9 +30,10 @@ export default function ClientDashboardPage() {
   useEffect(() => {
     ;(async () => {
       try {
-        const [bookingRes, meRes] = await Promise.all([bookingsApi.my(), authApi.me()])
-        setBookings(bookingRes.data?.items ?? [])
+        const meRes = await authApi.me()
         setName((meRes.data?.name ?? '').trim())
+        const bookingRes = await bookingsApi.my()
+        setBookings(bookingRes.data?.items ?? [])
       } catch {
         toast.error('Failed to load dashboard data.')
       } finally {

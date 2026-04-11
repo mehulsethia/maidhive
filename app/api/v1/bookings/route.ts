@@ -16,15 +16,15 @@ export const GET = requireAuth(async (req: NextRequest, _ctx, user) => {
   const { page, page_size, status } = parsed.data
 
   if (user.role === 'client') {
-    const client = await clientRepo.findByUserId(user.id)
-    if (!client) return err('Client profile not found', 404)
+    let client = await clientRepo.findByUserId(user.id)
+    if (!client) client = await clientRepo.create(user.id)
     const [bookings, total] = await bookingRepo.findByClient(client.id, { page, pageSize: page_size, status })
     return ok({ bookings, total, page, page_size })
   }
 
   if (user.role === 'cleaner') {
-    const cleaner = await cleanerRepo.findByUserId(user.id)
-    if (!cleaner) return err('Cleaner profile not found', 404)
+    let cleaner = await cleanerRepo.findByUserId(user.id)
+    if (!cleaner) cleaner = await cleanerRepo.create(user.id)
     const [bookings, total] = await bookingRepo.findByCleaner(cleaner.id, { page, pageSize: page_size, status })
     return ok({ bookings, total, page, page_size })
   }

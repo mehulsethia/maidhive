@@ -34,18 +34,22 @@ export default function CleanerDashboardPage() {
 
   async function refresh() {
     try {
-      const [bookingRes, cleanerRes] = await Promise.allSettled([bookingsApi.my(), cleanersApi.me()])
-      if (bookingRes.status === 'fulfilled') {
-        setBookings(bookingRes.value.data?.items ?? [])
-      } else {
-        toast.error('Failed to load bookings.')
-      }
-      if (cleanerRes.status === 'fulfilled') {
-        setCompletionPct(cleanerRes.value.data?.onboarding?.completion_pct ?? 0)
-        const cleaner = cleanerRes.value.data?.cleaner as any
+      // Call cleaners/me first — it auto-creates the cleaner profile if missing.
+      // Bookings endpoint needs the cleaner row to exist, so this must complete first.
+      try {
+        const cleanerRes = await cleanersApi.me()
+        setCompletionPct(cleanerRes.data?.onboarding?.completion_pct ?? 0)
+        const cleaner = cleanerRes.data?.cleaner as any
         setAvgRating(cleaner?.average_rating ?? null)
-      } else {
+      } catch {
         toast.error('Failed to load profile data.')
+      }
+
+      try {
+        const bookingRes = await bookingsApi.my()
+        setBookings(bookingRes.data?.items ?? [])
+      } catch {
+        toast.error('Failed to load bookings.')
       }
     } catch {
       toast.error('Failed to load dashboard data.')
