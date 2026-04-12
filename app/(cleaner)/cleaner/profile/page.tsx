@@ -11,6 +11,7 @@ import { Label } from '@/components/ui/label'
 import { Select } from '@/components/ui/select'
 import { Textarea } from '@/components/ui/textarea'
 import { ProfilePageSkeleton } from '@/components/page-skeletons'
+import { AvatarUpload } from '@/components/avatar-upload'
 import { ScheduleEditor } from '@/components/schedule-editor'
 import { formatCurrency } from '@/lib/utils'
 import type { BookingRead, ReviewRead } from '@/types'
@@ -51,6 +52,7 @@ function CleanerProfilePageContent() {
   const [homeAddress, setHomeAddress] = useState('')
   const [bio, setBio] = useState('')
   const [skills, setSkills] = useState<string[]>([])
+  const [profileImageUrl, setProfileImageUrl] = useState<string | null>(null)
 
   const [completionPct, setCompletionPct] = useState<number>(100)
   const [cleanerStatus, setCleanerStatus] = useState<string>('pending')
@@ -101,6 +103,7 @@ function CleanerProfilePageContent() {
       setHomeAddress(c.transport_pickup_location ?? c.transportPickupLocation ?? '')
       setBio(c.bio ?? '')
       setSkills(c.skills ?? [])
+      setProfileImageUrl(c.profile_image_url ?? c.profileImageUrl ?? null)
 
       const names = String(user.name ?? '').trim().split(' ').filter(Boolean)
       setFirstName(names[0] ?? '')
@@ -283,8 +286,12 @@ function CleanerProfilePageContent() {
         <div className="space-y-4">
           <Card className="border-slate-200">
             <CardContent className="p-5 text-center">
-              <div className="mx-auto mb-3 grid h-24 w-24 place-items-center rounded-full bg-primary text-4xl font-bold text-white">
-                {(fullName || 'M').trim().charAt(0).toUpperCase()}
+              <div className="mx-auto mb-3">
+                <AvatarUpload
+                  currentUrl={profileImageUrl}
+                  fallbackInitial={(fullName || 'M').trim().charAt(0)}
+                  onUploaded={(url) => setProfileImageUrl(url)}
+                />
               </div>
               <p className="text-2xl font-bold text-slate-900">{fullName || 'Cleaner'}</p>
               <p className="text-sm text-slate-500">{email || 'No email found'}</p>
@@ -414,7 +421,7 @@ function CleanerProfilePageContent() {
                           ))}
                         </div>
                       </div>
-                      <p className="text-xs text-slate-500">{new Date(r.created_at).toLocaleDateString()}</p>
+                      <p className="text-xs text-slate-500">{new Date(r.created_at).toLocaleDateString('en-IE', { timeZone: 'Europe/Nicosia' })}</p>
                       <p className="mt-2 text-sm text-slate-700">{r.comment || 'No written comment provided.'}</p>
                     </div>
                   ))

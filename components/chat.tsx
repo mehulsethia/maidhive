@@ -157,7 +157,7 @@ export function Chat({ bookingId, currentUserId }: ChatProps) {
                     isOwn ? 'text-primary-foreground/60 text-right' : 'text-muted-foreground',
                   )}
                 >
-                  {new Date(msg.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                  {new Date(msg.created_at).toLocaleTimeString('en-IE', { hour: '2-digit', minute: '2-digit', timeZone: 'Europe/Nicosia' })}
                   {isOwn && msg.is_read && <span className="ml-1">✓✓</span>}
                 </p>
               </div>

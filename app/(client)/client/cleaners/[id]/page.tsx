@@ -53,7 +53,7 @@ export default function CleanerProfilePage() {
   if (!cleaner) return <div className="text-center py-16 text-muted-foreground">Cleaner not found.</div>
 
   const cleanerName = cleaner.user?.name ?? 'Professional Cleaner'
-  const memberSince = cleaner.created_at ? new Date(cleaner.created_at).toLocaleDateString('en-IE', { month: 'long', day: 'numeric', year: 'numeric' }) : ''
+  const memberSince = cleaner.created_at ? new Date(cleaner.created_at).toLocaleDateString('en-IE', { month: 'long', day: 'numeric', year: 'numeric', timeZone: 'Europe/Nicosia' }) : ''
   const location = cleaner.service_areas?.[0]?.city ?? ''
 
   return (

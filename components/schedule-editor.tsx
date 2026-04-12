@@ -606,10 +606,11 @@ export function ScheduleEditor({ compact, onSave, onSaveExternal, saveRef }: Sch
                       className="flex items-center justify-between rounded-lg bg-slate-50 px-3 py-2 text-sm"
                     >
                       <span className="text-slate-600">
-                        {new Date(b.start_datetime).toLocaleDateString(undefined, {
+                        {new Date(b.start_datetime).toLocaleDateString('en-IE', {
                           weekday: 'short',
                           month: 'short',
                           day: 'numeric',
+                          timeZone: 'Europe/Nicosia',
                         })}
                       </span>
                       <button

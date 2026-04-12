@@ -66,8 +66,10 @@ export default function CleanerChatsPage() {
     const q = query.toLowerCase()
     return bookings.filter((b) => {
       const service = SERVICE_LABELS[b.service_type] ?? b.service_type
+      const clientName = ((b as any)?.client?.user?.name ?? '').toLowerCase()
       return (
         service.toLowerCase().includes(q) ||
+        clientName.includes(q) ||
         b.city.toLowerCase().includes(q) ||
         b.postcode.toLowerCase().includes(q)
       )
@@ -121,6 +123,8 @@ export default function CleanerChatsPage() {
             <div className="max-h-[60vh] space-y-2 overflow-y-auto pr-1">
               {filtered.map((b) => {
                 const active = b.id === selectedBookingId
+                const clientName = (b as any)?.client?.user?.name ?? 'Client'
+                const initial = clientName.charAt(0).toUpperCase()
                 return (
                   <button
                     key={b.id}
@@ -131,9 +135,15 @@ export default function CleanerChatsPage() {
                         : 'border-slate-200 bg-white hover:-translate-y-0.5 hover:bg-slate-50'
                     }`}
                   >
-                    <p className="text-sm font-semibold text-slate-900">{SERVICE_LABELS[b.service_type] ?? b.service_type}</p>
-                    <p className="mt-1 text-xs text-slate-500">{formatDate(b.scheduled_start)}</p>
-                    <p className="text-xs text-slate-500">{b.city}, {b.postcode}</p>
+                    <div className="flex items-center gap-3">
+                      <div className="h-10 w-10 rounded-full bg-primary/10 flex items-center justify-center shrink-0">
+                        <span className="text-sm font-bold text-primary">{initial}</span>
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <p className="text-sm font-semibold text-slate-900 truncate">{clientName}</p>
+                        <p className="text-xs text-slate-500 truncate">{formatDate(b.scheduled_start)}</p>
+                      </div>
+                    </div>
                   </button>
                 )
               })}

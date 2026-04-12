@@ -5,6 +5,7 @@ import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { ChevronUp, LogOut, Settings, User } from 'lucide-react'
 import { createClient } from '@/lib/supabase'
+import { clearAuthCache } from '@/lib/auth-cache'
 import { cn } from '@/lib/utils'
 
 interface SidebarProfileProps {
@@ -46,6 +47,7 @@ export function SidebarProfile({ profileHref, role }: SidebarProfileProps) {
   }, [open])
 
   async function handleLogout() {
+    clearAuthCache()
     await createClient().auth.signOut()
     router.push('/login')
     router.refresh()

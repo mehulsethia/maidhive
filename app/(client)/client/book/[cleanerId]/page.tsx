@@ -15,8 +15,8 @@ import { Textarea } from '@/components/ui/textarea'
 import { Separator } from '@/components/ui/separator'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { BookableCalendar } from '@/components/ui/bookable-calendar'
-import { formatCurrency, cn } from '@/lib/utils'
-import type { CleanerRead, PriceBreakdown, BookingRead, ClientProfileRead, ServiceType } from '@/types'
+import { formatCurrency, cn, APP_TIMEZONE } from '@/lib/utils'
+import type { CleanerRead, PriceBreakdown, BookingRead, ClientProfileRead } from '@/types'
 import { toast } from 'sonner'
 
 const stripePromise = loadStripe(process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY!)
@@ -28,12 +28,10 @@ const SERVICE_LABELS: Record<string, string> = {
   move_in: 'Move-in Clean',
 }
 
-const SERVICE_OPTIONS: ServiceType[] = ['standard', 'deep_clean', 'end_of_tenancy', 'move_in']
-
 const DURATION_OPTIONS = [1, 1.5, 2, 2.5, 3, 3.5, 4, 4.5, 5]
 
 const STEP_INFO = [
-  { num: 1, title: 'Service &\nDate', desc: 'Select service and schedule' },
+  { num: 1, title: 'Schedule', desc: 'Choose duration and date' },
   { num: 2, title: 'Your\nDetails', desc: 'Contact and location info' },
   { num: 3, title: 'Payment', desc: 'Secure payment processing' },
   { num: 4, title: 'Confirmation', desc: 'Booking confirmation' },
@@ -124,9 +122,9 @@ function DatePicker({
       >
         {availableDates.map(dateStr => {
           const d = new Date(dateStr + 'T12:00:00Z') // noon UTC to avoid timezone shift
-          const dayName = d.toLocaleDateString('en-IE', { weekday: 'short', timeZone: 'UTC' })
+          const dayName = d.toLocaleDateString('en-IE', { weekday: 'short', timeZone: APP_TIMEZONE })
           const dayNum = d.getUTCDate()
-          const month = d.toLocaleDateString('en-IE', { month: 'short', timeZone: 'UTC' })
+          const month = d.toLocaleDateString('en-IE', { month: 'short', timeZone: APP_TIMEZONE })
           const isSelected = selectedDate === dateStr
 
           return (
@@ -163,12 +161,10 @@ function DatePicker({
 // ── Booking Summary Sidebar ───────────────────────────────────────────────
 function BookingSummary({
   cleaner,
-  serviceType,
   duration,
   breakdown,
 }: {
   cleaner: CleanerRead
-  serviceType: ServiceType
   duration: number
   breakdown: PriceBreakdown | null
 }) {
@@ -208,7 +204,7 @@ function BookingSummary({
         <div className="space-y-2 text-sm">
           <div className="flex items-center gap-2">
             <div className="h-2.5 w-2.5 rounded-sm bg-primary" />
-            <span className="text-slate-700">{SERVICE_LABELS[serviceType] ?? 'Cleaning Service'}</span>
+            <span className="text-slate-700">Cleaning Service</span>
           </div>
           <div className="flex items-center gap-2 text-slate-500">
             <Clock className="h-3.5 w-3.5" />
@@ -319,8 +315,7 @@ export default function BookingFlowPage() {
   const [step, setStep] = useState(1)
 
   // Step 1: Schedule
-  const [serviceType, setServiceType] = useState<ServiceType>('standard')
-  const [duration, setDuration] = useState(2)
+  const [duration, setDuration] = useState(1)
   const [bookableDates, setBookableDates] = useState<string[]>([])
   const [bookableDatesLoading, setBookableDatesLoading] = useState(false)
   const [date, setDate] = useState('')
@@ -432,7 +427,7 @@ export default function BookingFlowPage() {
     try {
       const res = await bookingsApi.create({
         cleaner_id: cleanerId,
-        service_type: serviceType,
+        service_type: 'standard',
         address: address.trim(),
         city: city.trim(),
         postcode: postcode.trim(),
@@ -497,36 +492,24 @@ export default function BookingFlowPage() {
           {step === 1 && (
             <Card className="rounded-2xl border-slate-200">
               <CardHeader>
-                <CardTitle>Select Service & Schedule</CardTitle>
+                <CardTitle>Select Schedule</CardTitle>
               </CardHeader>
               <CardContent className="space-y-6">
 
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 items-end">
                   <div>
-                    <Label className="text-sm font-semibold text-slate-700">Service Type</Label>
-                    <Select value={serviceType} onChange={e => setServiceType(e.target.value as ServiceType)} className="mt-1">
-                      {SERVICE_OPTIONS.map(service => (
-                        <option key={service} value={service}>{SERVICE_LABELS[service]}</option>
-                      ))}
-                    </Select>
-                  </div>
-
-                  <div>
-                    <Label className="text-sm font-semibold text-slate-700">Duration (hours)</Label>
+                    <Label className="text-sm font-semibold text-slate-700">Duration</Label>
                     <Select value={String(duration)} onChange={e => setDuration(Number(e.target.value))} className="mt-1">
                       {DURATION_OPTIONS.map(d => <option key={d} value={d}>{d} hour{d !== 1 ? 's' : ''}</option>)}
                     </Select>
                   </div>
-                </div>
-
-                <div className="flex items-center justify-between border-y border-slate-100 py-4">
                   <div>
-                    <p className="text-xs font-medium text-slate-500">Estimated Cost</p>
-                    <p className="text-2xl font-bold text-slate-900">{formatCurrency(estimatedCost)}</p>
+                    <Label className="text-sm font-semibold text-slate-700">Hourly Rate</Label>
+                    <p className="mt-1 text-lg font-bold text-slate-900">{formatCurrency(cleaner.hourly_rate)}<span className="text-sm font-normal text-slate-500">/hr</span></p>
                   </div>
-                  <div className="text-right">
-                    <p className="text-xs font-medium text-slate-500">Hourly Rate</p>
-                    <p className="text-base font-semibold text-slate-700">{formatCurrency(cleaner.hourly_rate)}/hr</p>
+                  <div>
+                    <Label className="text-sm font-semibold text-slate-700">Estimated Cost</Label>
+                    <p className="mt-1 text-lg font-bold text-primary">{formatCurrency(estimatedCost)}</p>
                   </div>
                 </div>
 
@@ -550,6 +533,7 @@ export default function BookingFlowPage() {
                         day: '2-digit',
                         month: 'long',
                         year: 'numeric',
+                        timeZone: APP_TIMEZONE,
                       })}
                     </p>
                   )}
@@ -573,7 +557,7 @@ export default function BookingFlowPage() {
                     ) : (
                       <div className="grid grid-cols-3 sm:grid-cols-4 gap-2">
                         {slots.map(slot => {
-                          const time = new Date(slot.start).toLocaleTimeString('en-IE', { hour: 'numeric', minute: '2-digit', hour12: true, timeZone: 'UTC' })
+                          const time = new Date(slot.start).toLocaleTimeString('en-IE', { hour: 'numeric', minute: '2-digit', hour12: true, timeZone: APP_TIMEZONE })
                           const isDisabled = !!slot.disabled
                           const isSelected = selectedSlot === slot.start
                           return (
@@ -730,13 +714,13 @@ export default function BookingFlowPage() {
                   <div className="flex justify-between text-sm">
                     <span className="text-slate-500">Date:</span>
                     <span className="font-medium text-slate-900">
-                      {new Date(booking.scheduled_start).toLocaleDateString('en-IE', { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' })}
+                      {new Date(booking.scheduled_start).toLocaleDateString('en-IE', { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric', timeZone: APP_TIMEZONE })}
                     </span>
                   </div>
                   <div className="flex justify-between text-sm">
                     <span className="text-slate-500">Time:</span>
                     <span className="font-medium text-slate-900">
-                      {new Date(booking.scheduled_start).toLocaleTimeString('en-IE', { hour: '2-digit', minute: '2-digit' })}
+                      {new Date(booking.scheduled_start).toLocaleTimeString('en-IE', { hour: '2-digit', minute: '2-digit', timeZone: APP_TIMEZONE })}
                     </span>
                   </div>
                   <div className="flex justify-between text-sm">
@@ -769,7 +753,6 @@ export default function BookingFlowPage() {
           <div className="hidden lg:block">
             <BookingSummary
               cleaner={cleaner}
-              serviceType={serviceType}
               duration={duration}
               breakdown={breakdown}
             />

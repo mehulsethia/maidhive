@@ -11,7 +11,9 @@ import {
   Flag,
 } from 'lucide-react'
 import { createClient } from '@/lib/supabase'
+import { clearAuthCache } from '@/lib/auth-cache'
 import { cn } from '@/lib/utils'
+import { useCounts } from '@/hooks/use-counts'
 import { SidebarProfile } from '@/components/sidebar-profile'
 
 const NAV_ITEMS = [
@@ -27,7 +29,17 @@ export function ClientShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname()
   const router = useRouter()
 
+  const { data: counts } = useCounts()
+
+  function getBadge(href: string): number {
+    if (!counts) return 0
+    if (href === '/client/chats') return counts.unread_chats
+    if (href === '/client/bookings') return counts.pending_bookings
+    return 0
+  }
+
   async function handleLogout() {
+    clearAuthCache()
     await createClient().auth.signOut()
     router.push('/login')
     router.refresh()
@@ -59,6 +71,14 @@ export function ClientShell({ children }: { children: React.ReactNode }) {
                 >
                   <Icon className={cn('h-4 w-4', active && 'scale-105')} />
                   {item.label}
+                  {(() => {
+                    const badge = getBadge(item.href)
+                    return badge > 0 ? (
+                      <span className="ml-auto flex h-5 min-w-[1.25rem] items-center justify-center rounded-full bg-red-500 px-1.5 text-[10px] font-bold text-white">
+                        {badge > 99 ? '99+' : badge}
+                      </span>
+                    ) : null
+                  })()}
                 </Link>
               )
             })}
@@ -91,12 +111,20 @@ export function ClientShell({ children }: { children: React.ReactNode }) {
                     key={item.href}
                     href={item.href}
                     className={cn(
-                      'flex flex-col items-center gap-1 rounded-xl px-2 py-1.5 text-[11px] font-semibold transition-colors',
+                      'relative flex flex-col items-center gap-1 rounded-xl px-2 py-1.5 text-[11px] font-semibold transition-colors',
                       active ? 'bg-primary text-white' : 'bg-slate-100 text-slate-700',
                     )}
                   >
                     <Icon className="h-3.5 w-3.5" />
                     {item.label}
+                    {(() => {
+                      const badge = getBadge(item.href)
+                      return badge > 0 ? (
+                        <span className="absolute -top-1 -right-1 flex h-4 min-w-[1rem] items-center justify-center rounded-full bg-red-500 px-1 text-[9px] font-bold text-white">
+                          {badge > 9 ? '9+' : badge}
+                        </span>
+                      ) : null
+                    })()}
                   </Link>
                 )
               })}

@@ -111,6 +111,8 @@ function ClientChatsPageContent() {
               {filtered.map((b) => {
                 const active = b.id === selectedBookingId
                 const cleanerName = (b as any)?.cleaner?.user?.name ?? 'Cleaner'
+                const cleanerImage = (b as any)?.cleaner?.profile_image_url
+                const initial = cleanerName.charAt(0).toUpperCase()
                 return (
                   <button
                     key={b.id}
@@ -121,10 +123,19 @@ function ClientChatsPageContent() {
                         : 'border-slate-200 bg-white hover:-translate-y-0.5 hover:bg-slate-50'
                     }`}
                   >
-                    <p className="text-sm font-semibold text-slate-900">{SERVICE_LABELS[b.service_type] ?? b.service_type}</p>
-                    <p className="mt-0.5 text-xs text-slate-600">{cleanerName}</p>
-                    <p className="mt-1 text-xs text-slate-500">{formatDate(b.scheduled_start)}</p>
-                    <p className="text-xs text-slate-500">{b.city}, {b.postcode}</p>
+                    <div className="flex items-center gap-3">
+                      {cleanerImage ? (
+                        <img src={cleanerImage} alt="" className="h-10 w-10 rounded-full object-cover shrink-0" />
+                      ) : (
+                        <div className="h-10 w-10 rounded-full bg-primary/10 flex items-center justify-center shrink-0">
+                          <span className="text-sm font-bold text-primary">{initial}</span>
+                        </div>
+                      )}
+                      <div className="min-w-0 flex-1">
+                        <p className="text-sm font-semibold text-slate-900 truncate">{cleanerName}</p>
+                        <p className="text-xs text-slate-500 truncate">{formatDate(b.scheduled_start)}</p>
+                      </div>
+                    </div>
                   </button>
                 )
               })}

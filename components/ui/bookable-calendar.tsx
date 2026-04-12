@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react'
 import { ChevronLeft, ChevronRight } from 'lucide-react'
-import { cn } from '@/lib/utils'
+import { cn, APP_TIMEZONE } from '@/lib/utils'
 
 interface BookableCalendarProps {
   availableDates: string[]
@@ -49,7 +49,7 @@ export function BookableCalendar({
       new Date(Date.UTC(visibleYear, visibleMonth, 1)).toLocaleDateString('en-IE', {
         month: 'long',
         year: 'numeric',
-        timeZone: 'UTC',
+        timeZone: APP_TIMEZONE,
       }),
     [visibleMonth, visibleYear],
   )

@@ -156,9 +156,10 @@ export function NotificationBell({ userId }: NotificationBellProps) {
                     <p className={cn('text-sm leading-snug', !n.is_read && 'font-medium')}>{n.title}</p>
                     <p className="text-xs text-muted-foreground mt-0.5 line-clamp-2">{n.body}</p>
                     <p className="text-[10px] text-muted-foreground mt-1">
-                      {new Date(n.created_at).toLocaleString([], {
+                      {new Date(n.created_at).toLocaleString('en-IE', {
                         month: 'short', day: 'numeric',
                         hour: '2-digit', minute: '2-digit',
+                        timeZone: 'Europe/Nicosia',
                       })}
                     </p>
                   </Link>

@@ -8,6 +8,34 @@ interface TimeSlot {
 }
 
 const SLOT_INTERVAL_MS = 30 * 60 * 1000 // 30 minutes
+const APP_TIMEZONE = 'Europe/Nicosia'
+
+/**
+ * Get the UTC offset in milliseconds for APP_TIMEZONE at a given instant.
+ * Positive = east of UTC (e.g. +3h for EEST).
+ */
+function tzOffsetMs(date: Date): number {
+  const utcStr = date.toLocaleString('en-US', { timeZone: 'UTC' })
+  const tzStr = date.toLocaleString('en-US', { timeZone: APP_TIMEZONE })
+  return new Date(tzStr).getTime() - new Date(utcStr).getTime()
+}
+
+/**
+ * Convert a Cyprus local time (dateStr YYYY-MM-DD + hours + minutes) to UTC.
+ * Handles DST automatically (EET = UTC+2, EEST = UTC+3).
+ */
+function cyprusToUTC(dateStr: string, hours: number, minutes: number): Date {
+  const hh = String(hours).padStart(2, '0')
+  const mm = String(minutes).padStart(2, '0')
+  const asUTC = new Date(`${dateStr}T${hh}:${mm}:00Z`)
+  const offset = tzOffsetMs(asUTC)
+  return new Date(asUTC.getTime() - offset)
+}
+
+/** Today's date string (YYYY-MM-DD) in Cyprus timezone */
+function todayInCyprus(): string {
+  return new Intl.DateTimeFormat('en-CA', { timeZone: APP_TIMEZONE }).format(new Date())
+}
 
 export const availabilityService = {
   /**
@@ -30,10 +58,15 @@ export const availabilityService = {
     const date = new Date(dateStr + 'T00:00:00Z')
     const dayOfWeek = isoWeekday(date) // 1=Mon...7=Sun
 
+    // Query range covers the full Cyprus day in UTC
+    const dayStartUTC = cyprusToUTC(dateStr, 0, 0)
+    const dayEndUTC = cyprusToUTC(dateStr, 23, 59)
+    dayEndUTC.setUTCSeconds(59, 999)
+
     const [schedules, blockedTimes, existingBookings] = await Promise.all([
       availabilityRepo.getSchedule(cleanerId),
-      availabilityRepo.getBlockedTimesInRange(cleanerId, startOfDay(date), endOfDay(date)),
-      bookingRepo.findActiveForCleaner(cleanerId, startOfDay(date), endOfDay(date)),
+      availabilityRepo.getBlockedTimesInRange(cleanerId, dayStartUTC, dayEndUTC),
+      bookingRepo.findActiveForCleaner(cleanerId, dayStartUTC, dayEndUTC),
     ])
 
     const daySchedules = schedules
@@ -51,11 +84,9 @@ export const availabilityService = {
       const [startH, startM] = schedule.startTime.split(':').map(Number)
       const [endH, endM] = schedule.endTime.split(':').map(Number)
 
-      const windowStart = new Date(date)
-      windowStart.setUTCHours(startH, startM, 0, 0)
-
-      const windowEnd = new Date(date)
-      windowEnd.setUTCHours(endH, endM, 0, 0)
+      // Schedule times are in Cyprus local time — convert to UTC
+      const windowStart = cyprusToUTC(dateStr, startH, startM)
+      const windowEnd = cyprusToUTC(dateStr, endH, endM)
 
       const maxBookableStart = windowEnd.getTime() - 1 * 60 * 60 * 1000
 
@@ -70,10 +101,10 @@ export const availabilityService = {
         // Duration overflow
         const overflows = slotEnd.getTime() > windowEndTime
 
-        // hour lead time check
+        // Lead time check (2h from now)
         const isTooSoon = cursor < minBookableStart
 
-        // hour end buffer check
+        // End buffer check (1h before window end)
         const isTooLate = cursor > maxBookableStart
 
         // Conflicts check
@@ -112,25 +143,36 @@ export const availabilityService = {
   ): Promise<string[]> {
     if (daysAhead <= 0) return []
 
-    const dates: string[] = []
-    const today = new Date()
-    today.setUTCHours(0, 0, 0, 0)
-    const end = new Date(today)
-    end.setUTCDate(end.getUTCDate() + daysAhead)
+    // Start from today in Cyprus timezone
+    const todayStr = todayInCyprus()
+    const todayDate = new Date(todayStr + 'T00:00:00Z')
+
+    // Build date strings for the range
+    const dateStrings: string[] = []
+    for (let i = 0; i < daysAhead; i++) {
+      const d = new Date(todayDate)
+      d.setUTCDate(d.getUTCDate() + i)
+      dateStrings.push(d.toISOString().slice(0, 10))
+    }
+
+    // Query range in UTC covering all Cyprus days
+    const rangeStart = cyprusToUTC(dateStrings[0], 0, 0)
+    const rangeEnd = cyprusToUTC(dateStrings[dateStrings.length - 1], 23, 59)
+    rangeEnd.setUTCSeconds(59, 999)
 
     const [schedules, blockedTimes, existingBookings] = await Promise.all([
       availabilityRepo.getSchedule(cleanerId),
-      availabilityRepo.getBlockedTimesInRange(cleanerId, today, end),
-      bookingRepo.findActiveForCleaner(cleanerId, today, end),
+      availabilityRepo.getBlockedTimesInRange(cleanerId, rangeStart, rangeEnd),
+      bookingRepo.findActiveForCleaner(cleanerId, rangeStart, rangeEnd),
     ])
 
     const durationMs = durationHours * 60 * 60 * 1000
     const now = Date.now()
     const minBookableStart = now + 2 * 60 * 60 * 1000
+    const dates: string[] = []
 
-    for (let i = 0; i < daysAhead; i++) {
-      const d = new Date(today)
-      d.setUTCDate(d.getUTCDate() + i)
+    for (const dateStr of dateStrings) {
+      const d = new Date(dateStr + 'T00:00:00Z')
 
       const daySchedules = schedules
         .filter((s) => s.dayOfWeek === isoWeekday(d) && s.isActive)
@@ -143,17 +185,15 @@ export const availabilityService = {
         const [startH, startM] = schedule.startTime.split(':').map(Number)
         const [endH, endM] = schedule.endTime.split(':').map(Number)
 
-        const windowStart = new Date(d)
-        windowStart.setUTCHours(startH, startM, 0, 0)
-        const windowEnd = new Date(d)
-        windowEnd.setUTCHours(endH, endM, 0, 0)
+        // Schedule times are in Cyprus local time
+        const windowStart = cyprusToUTC(dateStr, startH, startM)
+        const windowEnd = cyprusToUTC(dateStr, endH, endM)
 
         const windowEndTime = windowEnd.getTime()
         const maxBookableStart = windowEndTime - 1 * 60 * 60 * 1000
         let cursor = windowStart.getTime()
 
         while (cursor + durationMs <= windowEndTime) {
-          // Lead time and buffer checks
           if (cursor < minBookableStart || cursor > maxBookableStart) {
             cursor += SLOT_INTERVAL_MS
             continue
@@ -177,7 +217,7 @@ export const availabilityService = {
       }
 
       if (hasBookableSlot) {
-        dates.push(d.toISOString().slice(0, 10))
+        dates.push(dateStr)
       }
     }
 
@@ -190,14 +230,3 @@ function isoWeekday(date: Date): number {
   return d === 0 ? 7 : d
 }
 
-function startOfDay(date: Date): Date {
-  const d = new Date(date)
-  d.setUTCHours(0, 0, 0, 0)
-  return d
-}
-
-function endOfDay(date: Date): Date {
-  const d = new Date(date)
-  d.setUTCHours(23, 59, 59, 999)
-  return d
-}

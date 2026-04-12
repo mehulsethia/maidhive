@@ -9,6 +9,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { ProfilePageSkeleton } from '@/components/page-skeletons'
+import { AvatarUpload } from '@/components/avatar-upload'
 import { formatCurrency } from '@/lib/utils'
 import type { BookingRead } from '@/types'
 import { toast } from 'sonner'
@@ -26,6 +27,7 @@ export default function ClientProfilePage() {
   const [defaultCity, setDefaultCity] = useState('')
   const [defaultPostcode, setDefaultPostcode] = useState('')
   const [bio, setBio] = useState('')
+  const [avatarUrl, setAvatarUrl] = useState<string | null>(null)
 
   useEffect(() => {
     ;(async () => {
@@ -44,6 +46,7 @@ export default function ClientProfilePage() {
         setDefaultCity(client?.default_city ?? '')
         setDefaultPostcode(client?.default_postcode ?? '')
         setBio('')
+        setAvatarUrl(user?.avatar_url ?? null)
 
         setBookings(bookingRes.data?.items ?? [])
       } catch {
@@ -96,9 +99,11 @@ export default function ClientProfilePage() {
         <CardContent className="p-5">
           <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
             <div className="flex items-center gap-4">
-              <div className="grid h-24 w-24 place-items-center rounded-full bg-primary text-4xl font-bold text-white">
-                {(firstName[0] ?? 'C').toUpperCase()}
-              </div>
+              <AvatarUpload
+                currentUrl={avatarUrl}
+                fallbackInitial={firstName[0] ?? 'C'}
+                onUploaded={(url) => setAvatarUrl(url)}
+              />
               <div>
                 <p className="text-4xl font-bold text-slate-900">{`${firstName} ${lastName}`.trim() || 'Client'}</p>
                 <p className="text-sm text-slate-500">{email || 'No email available'}</p>
