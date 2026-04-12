@@ -152,6 +152,8 @@ export default function ClientBookingsPage() {
               {filtered.map((b) => {
                 const cleanerName = (b as any)?.cleaner?.user?.name ?? 'Cleaner'
                 const canDispute = ['in_progress', 'completed', 'disputed'].includes(b.status)
+                const chatCutoff = b.scheduled_end ? new Date(b.scheduled_end).getTime() + 30 * 60 * 1000 : Infinity
+                const canChat = ['confirmed', 'in_progress', 'completed', 'disputed'].includes(b.status) && Date.now() < chatCutoff
                 return (
                   <article key={b.id} className="rounded-2xl border border-slate-200 bg-white p-6 transition-all duration-200 hover:-translate-y-0.5 hover:shadow-[0_10px_26px_rgba(15,23,42,0.08)]">
                     <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
@@ -174,12 +176,14 @@ export default function ClientBookingsPage() {
                       >
                         View details
                       </Link>
-                      <Link
-                        href={`/client/chats?booking=${b.id}`}
-                        className="inline-flex h-8 items-center rounded-xl border border-slate-300 px-3 text-xs font-semibold text-slate-700 transition-all duration-200 hover:-translate-y-0.5 hover:bg-slate-50"
-                      >
-                        Message
-                      </Link>
+                      {canChat && (
+                        <Link
+                          href={`/client/chats?booking=${b.id}`}
+                          className="inline-flex h-8 items-center rounded-xl border border-slate-300 px-3 text-xs font-semibold text-slate-700 transition-all duration-200 hover:-translate-y-0.5 hover:bg-slate-50"
+                        >
+                          Message
+                        </Link>
+                      )}
                       {canDispute && (
                         <Link
                           href={`/client/report?booking=${b.id}`}

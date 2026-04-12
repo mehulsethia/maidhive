@@ -15,12 +15,20 @@ export function CleanerCard({ cleaner }: CleanerCardProps) {
     <Card className="hover:shadow-md transition-shadow">
       <CardContent className="p-5">
         <div className="flex items-start justify-between gap-4">
-          {/* Avatar placeholder */}
-          <div className="h-14 w-14 rounded-full bg-primary/10 flex items-center justify-center shrink-0">
-            <span className="text-primary font-semibold text-lg">
-              {cleaner.name?.[0] ?? 'C'}
-            </span>
-          </div>
+          {/* Avatar */}
+          {(cleaner.profile_image_url || cleaner.user?.avatar_url) ? (
+            <img
+              src={cleaner.profile_image_url ?? cleaner.user?.avatar_url}
+              alt=""
+              className="h-14 w-14 rounded-full object-cover shrink-0"
+            />
+          ) : (
+            <div className="h-14 w-14 rounded-full bg-primary/10 flex items-center justify-center shrink-0">
+              <span className="text-primary font-semibold text-lg">
+                {cleaner.name?.[0] ?? 'C'}
+              </span>
+            </div>
+          )}
 
           <div className="flex-1 min-w-0">
             <h3 className="font-semibold truncate">{cleaner.name ?? 'Cleaner'}</h3>

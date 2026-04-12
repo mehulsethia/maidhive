@@ -88,6 +88,7 @@ export interface CleanerSummary {
   average_rating?: number
   bio?: string
   skills?: string[]
+  profile_image_url?: string
   user?: {
     id: string
     name: string

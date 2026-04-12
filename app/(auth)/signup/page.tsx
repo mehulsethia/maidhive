@@ -7,19 +7,8 @@ import { useRouter, useSearchParams } from 'next/navigation'
 import { Eye, EyeOff } from 'lucide-react'
 import { createClient } from '@/lib/supabase'
 import { authApi, cleanersApi } from '@/lib/api'
+import { PhoneInput } from '@/components/phone-input'
 import { toast } from 'sonner'
-
-const COUNTRY_CODES = [
-  { label: 'US/CA (+1)', value: '+1' },
-  { label: 'IN (+91)', value: '+91' },
-  { label: 'GB (+44)', value: '+44' },
-  { label: 'AU (+61)', value: '+61' },
-  { label: 'DE (+49)', value: '+49' },
-  { label: 'FR (+33)', value: '+33' },
-  { label: 'NL (+31)', value: '+31' },
-  { label: 'SG (+65)', value: '+65' },
-  { label: 'AE (+971)', value: '+971' },
-]
 
 function SignupForm() {
   const router = useRouter()
@@ -30,7 +19,6 @@ function SignupForm() {
   const [role, setRole] = useState<'client' | 'cleaner'>(defaultRole)
   const [firstName, setFirstName] = useState('')
   const [lastName, setLastName] = useState('')
-  const [countryCode, setCountryCode] = useState('+1')
   const [phone, setPhone] = useState('')
   const [address, setAddress] = useState('')
   const [experience, setExperience] = useState('')
@@ -44,15 +32,13 @@ function SignupForm() {
     setLoading(true)
 
     const name = `${firstName} ${lastName}`.trim()
-    const phoneDigits = phone.replace(/\D/g, '')
-    const fullPhone = `${countryCode}${phoneDigits}`
 
     const { data, error } = await supabase.auth.signUp({
       email,
       password,
       options: {
-        emailRedirectTo: `${window.location.origin}/${role === 'cleaner' ? 'cleaner/onboarding' : 'client/dashboard'}`,
-        data: { name, role, phone: fullPhone, address, experience: role === 'cleaner' ? experience : undefined },
+        emailRedirectTo: `${window.location.origin}/auth/callback`,
+        data: { name, role, phone, address, experience: role === 'cleaner' ? experience : undefined },
       },
     })
 
@@ -62,35 +48,31 @@ function SignupForm() {
       return
     }
 
-    // If Supabase didn't auto-create a session (e.g. email confirmation enabled),
-    // sign in immediately — we skip email verification for now.
-    if (!data.session) {
-      const signInRes = await supabase.auth.signInWithPassword({ email, password })
-      if (signInRes.error) {
-        // Email confirmation may be enforced at the Supabase level.
-        // Still try to proceed — worst case the sync call will fail gracefully.
-        console.warn('Auto sign-in after signup failed:', signInRes.error.message)
-      }
-    }
-
-    try {
-      await authApi.sync({ name, role, phone: fullPhone })
-    } catch {
-      // Non-fatal — the DB trigger already created the row
-    }
-
-    if (role === 'cleaner') {
+    if (data.session) {
+      // Session created immediately (email confirmation disabled in Supabase)
       try {
-        const cleanerRes = await cleanersApi.me()
-        router.push(cleanerRes.data?.onboarding?.completion_pct === 100 ? '/cleaner/dashboard' : '/cleaner/onboarding')
+        await authApi.sync({ name, role, phone })
       } catch {
-        router.push('/cleaner/onboarding')
+        // Non-fatal — the DB trigger already created the row
       }
+
+      if (role === 'cleaner') {
+        try {
+          const cleanerRes = await cleanersApi.me()
+          router.push(cleanerRes.data?.onboarding?.completion_pct === 100 ? '/cleaner/dashboard' : '/cleaner/onboarding')
+        } catch {
+          router.push('/cleaner/onboarding')
+        }
+      } else {
+        router.push('/client/dashboard')
+      }
+      toast.success('Account created successfully.')
     } else {
-      router.push('/client/dashboard')
+      // Email confirmation required — redirect to verification page
+      router.push(`/verify-email?email=${encodeURIComponent(email)}`)
+      toast.success('Please check your email to verify your account.')
     }
 
-    toast.success('Account created successfully.')
     setLoading(false)
   }
 
@@ -174,27 +156,7 @@ function SignupForm() {
             <label className="text-sm font-medium text-gray-700 mb-1.5 block">
               Phone Number <span className="text-red-500">*</span>
             </label>
-            <div className="grid grid-cols-[9.5rem_1fr] gap-3">
-              <select
-                value={countryCode}
-                onChange={(e) => setCountryCode(e.target.value)}
-                className="w-full border border-gray-200 rounded-lg px-3 py-2.5 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-colors"
-              >
-                {COUNTRY_CODES.map((code) => (
-                  <option key={code.value} value={code.value}>
-                    {code.label}
-                  </option>
-                ))}
-              </select>
-              <input
-                type="tel"
-                required
-                placeholder="Enter your phone number"
-                value={phone}
-                onChange={(e) => setPhone(e.target.value)}
-                className="w-full border border-gray-200 rounded-lg px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-colors placeholder:text-gray-400"
-              />
-            </div>
+            <PhoneInput value={phone} onChange={setPhone} />
           </div>
 
           {/* Role-specific field */}

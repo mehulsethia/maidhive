@@ -9,7 +9,7 @@ export const CLEANER_ACTIONS = ['accept', 'start'] as const
 
 export const previewPriceSchema = z.object({
   cleaner_id: z.string().uuid(),
-  duration_hours: z.number().min(1),
+  duration_hours: z.number().min(1).max(8),
 })
 
 export const createBookingSchema = z.object({
@@ -21,7 +21,7 @@ export const createBookingSchema = z.object({
   postcode: z.string().min(1),
   country: z.string().default('IE'),
   scheduled_start: z.string().datetime(),
-  duration_hours: z.number().min(1),
+  duration_hours: z.number().min(1).max(8),
 })
 
 export const bookingActionSchema = z.object({

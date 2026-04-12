@@ -12,6 +12,7 @@ import { Select } from '@/components/ui/select'
 import { Textarea } from '@/components/ui/textarea'
 import { ProfilePageSkeleton } from '@/components/page-skeletons'
 import { AvatarUpload } from '@/components/avatar-upload'
+import { PhoneInput } from '@/components/phone-input'
 import { ScheduleEditor } from '@/components/schedule-editor'
 import { formatCurrency } from '@/lib/utils'
 import type { BookingRead, ReviewRead } from '@/types'
@@ -351,7 +352,7 @@ function CleanerProfilePageContent() {
                 <div className="grid gap-3 md:grid-cols-2">
                   <div><Label>First Name</Label><Input value={firstName} onChange={(e) => setFirstName(e.target.value)} className="mt-1" /></div>
                   <div><Label>Last Name</Label><Input value={lastName} onChange={(e) => setLastName(e.target.value)} className="mt-1" /></div>
-                  <div><Label>Phone Number</Label><Input value={phone} onChange={(e) => setPhone(e.target.value)} className="mt-1" /></div>
+                  <div><Label>Phone Number</Label><PhoneInput value={phone} onChange={setPhone} className="mt-1" /></div>
                   <div><Label>Home Address</Label><Input value={homeAddress} onChange={(e) => setHomeAddress(e.target.value)} className="mt-1" /></div>
                   <div><Label>Years of Experience</Label><Input type="number" min={0} value={yearsExperience} onChange={(e) => setYearsExperience(e.target.value)} className="mt-1" /></div>
                   <div><Label>Hourly Rate</Label><Input type="number" min={15} value={hourlyRate} onChange={(e) => setHourlyRate(e.target.value)} className="mt-1" /></div>

@@ -17,6 +17,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { BookableCalendar } from '@/components/ui/bookable-calendar'
 import { formatCurrency, cn, APP_TIMEZONE } from '@/lib/utils'
 import type { CleanerRead, PriceBreakdown, BookingRead, ClientProfileRead } from '@/types'
+import { PhoneInput } from '@/components/phone-input'
 import { toast } from 'sonner'
 
 const stripePromise = loadStripe(process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY!)
@@ -28,7 +29,7 @@ const SERVICE_LABELS: Record<string, string> = {
   move_in: 'Move-in Clean',
 }
 
-const DURATION_OPTIONS = [1, 1.5, 2, 2.5, 3, 3.5, 4, 4.5, 5]
+const DURATION_OPTIONS = [1, 1.5, 2, 2.5, 3, 3.5, 4, 4.5, 5, 5.5, 6, 6.5, 7, 7.5, 8]
 
 const STEP_INFO = [
   { num: 1, title: 'Schedule', desc: 'Choose duration and date' },
@@ -615,7 +616,7 @@ export default function BookingFlowPage() {
                   </div>
                   <div>
                     <Label className="text-sm font-semibold">Phone Number</Label>
-                    <Input type="tel" value={phone} onChange={e => setPhone(e.target.value)} className="mt-1" placeholder="+353 XX XXX XXXX" />
+                    <PhoneInput value={phone} onChange={setPhone} className="mt-1" />
                   </div>
                 </div>
 

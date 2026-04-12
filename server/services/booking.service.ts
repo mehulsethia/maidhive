@@ -224,15 +224,43 @@ function isoWeekday(date: Date): number {
   return d === 0 ? 7 : d
 }
 
-function startOfDay(date: Date): Date {
-  const d = new Date(date)
-  d.setUTCHours(0, 0, 0, 0)
-  return d
+const APP_TIMEZONE = 'Europe/Nicosia'
+
+/**
+ * Get the UTC offset in milliseconds for APP_TIMEZONE at a given instant.
+ */
+function tzOffsetMs(date: Date): number {
+  const utcStr = date.toLocaleString('en-US', { timeZone: 'UTC' })
+  const tzStr = date.toLocaleString('en-US', { timeZone: APP_TIMEZONE })
+  return new Date(tzStr).getTime() - new Date(utcStr).getTime()
 }
 
-function endOfDay(date: Date): Date {
-  const d = new Date(date)
-  d.setUTCHours(23, 59, 59, 999)
+/**
+ * Convert a Cyprus local time (dateStr YYYY-MM-DD + hours + minutes) to UTC.
+ * Handles DST automatically (EET = UTC+2, EEST = UTC+3).
+ */
+function cyprusToUTC(dateStr: string, hours: number, minutes: number): Date {
+  const hh = String(hours).padStart(2, '0')
+  const mm = String(minutes).padStart(2, '0')
+  const asUTC = new Date(`${dateStr}T${hh}:${mm}:00Z`)
+  const offset = tzOffsetMs(asUTC)
+  return new Date(asUTC.getTime() - offset)
+}
+
+/** Get YYYY-MM-DD date string in Cyprus timezone from a UTC date */
+function cyprusDateStr(date: Date): string {
+  return new Intl.DateTimeFormat('en-CA', { timeZone: APP_TIMEZONE }).format(date)
+}
+
+function startOfDayCyprus(date: Date): Date {
+  const dateStr = cyprusDateStr(date)
+  return cyprusToUTC(dateStr, 0, 0)
+}
+
+function endOfDayCyprus(date: Date): Date {
+  const dateStr = cyprusDateStr(date)
+  const d = cyprusToUTC(dateStr, 23, 59)
+  d.setUTCSeconds(59, 999)
   return d
 }
 
@@ -255,13 +283,17 @@ async function validateBookingWindow(cleanerId: string, scheduledStart: Date, sc
     throw new ServiceError('Selected time must be at least 2 hours from now', 422)
   }
 
+  const dayStart = startOfDayCyprus(scheduledStart)
+  const dayEnd = endOfDayCyprus(scheduledStart)
+  const dateStr = cyprusDateStr(scheduledStart)
+
   const [schedules, blockedTimes, existingBookings] = await Promise.all([
     availabilityRepo.getSchedule(cleanerId),
-    availabilityRepo.getBlockedTimesInRange(cleanerId, startOfDay(scheduledStart), endOfDay(scheduledStart)),
-    bookingRepo.findActiveForCleaner(cleanerId, startOfDay(scheduledStart), endOfDay(scheduledStart)),
+    availabilityRepo.getBlockedTimesInRange(cleanerId, dayStart, dayEnd),
+    bookingRepo.findActiveForCleaner(cleanerId, dayStart, dayEnd),
   ])
 
-  const dayOfWeek = isoWeekday(scheduledStart)
+  const dayOfWeek = isoWeekday(new Date(dateStr + 'T00:00:00Z'))
   const activeDaySchedules = schedules
     .filter((s) => s.dayOfWeek === dayOfWeek && s.isActive)
     .sort((a, b) => a.startTime.localeCompare(b.startTime))
@@ -276,10 +308,9 @@ async function validateBookingWindow(cleanerId: string, scheduledStart: Date, sc
     const [sh, sm] = schedule.startTime.split(':').map(Number)
     const [eh, em] = schedule.endTime.split(':').map(Number)
 
-    const slotStart = new Date(scheduledStart)
-    slotStart.setUTCHours(sh, sm, 0, 0)
-    const slotEnd = new Date(scheduledStart)
-    slotEnd.setUTCHours(eh, em, 0, 0)
+    // Schedule times are in Cyprus local time — convert to UTC
+    const slotStart = cyprusToUTC(dateStr, sh, sm)
+    const slotEnd = cyprusToUTC(dateStr, eh, em)
 
     const maxBookableStart = slotEnd.getTime() - 1 * 60 * 60 * 1000
     return startMs >= slotStart.getTime() && startMs <= maxBookableStart && endMs <= slotEnd.getTime()

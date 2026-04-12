@@ -82,7 +82,10 @@ export default function CleanerBookingDetailPage() {
   if (loading) return <DetailPageSkeleton />
   if (!booking) return <div className="text-center py-16 text-muted-foreground">Booking not found.</div>
 
-  const showChat = CHAT_STATUSES.includes(booking.status)
+  const chatCutoff = booking.scheduled_end
+    ? new Date(booking.scheduled_end).getTime() + 30 * 60 * 1000
+    : Infinity
+  const showChat = CHAT_STATUSES.includes(booking.status) && Date.now() < chatCutoff
 
   return (
     <div className="mx-auto max-w-xl space-y-5">

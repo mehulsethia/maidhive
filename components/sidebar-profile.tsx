@@ -6,6 +6,7 @@ import { useRouter } from 'next/navigation'
 import { ChevronUp, LogOut, Settings, User } from 'lucide-react'
 import { createClient } from '@/lib/supabase'
 import { clearAuthCache } from '@/lib/auth-cache'
+import { clientsApi, cleanersApi } from '@/lib/api'
 import { cn } from '@/lib/utils'
 
 interface SidebarProfileProps {
@@ -18,7 +19,7 @@ interface SidebarProfileProps {
 export function SidebarProfile({ profileHref, role }: SidebarProfileProps) {
   const router = useRouter()
   const [open, setOpen] = useState(false)
-  const [user, setUser] = useState<{ name: string; email: string } | null>(null)
+  const [user, setUser] = useState<{ name: string; email: string; avatarUrl: string | null } | null>(null)
   const ref = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
@@ -29,10 +30,24 @@ export function SidebarProfile({ profileHref, role }: SidebarProfileProps) {
         setUser({
           name: (meta.name as string) || data.user.email?.split('@')[0] || 'User',
           email: data.user.email || '',
+          avatarUrl: null,
         })
       }
     })
-  }, [])
+
+    // Fetch avatar from app DB
+    ;(role === 'cleaner' ? cleanersApi.me() : clientsApi.me())
+      .then((res: any) => {
+        const u = role === 'cleaner'
+          ? res.data?.cleaner?.user
+          : res.data?.user
+        const url = u?.avatar_url ?? res.data?.cleaner?.profile_image_url ?? null
+        if (url) {
+          setUser(prev => prev ? { ...prev, avatarUrl: url } : prev)
+        }
+      })
+      .catch(() => {})
+  }, [role])
 
   // Close on outside click
   useEffect(() => {
@@ -77,9 +92,13 @@ export function SidebarProfile({ profileHref, role }: SidebarProfileProps) {
       >
         {/* User info */}
         <div className="mb-3 flex items-center gap-3">
-          <span className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-gradient-to-br from-primary to-indigo-600 text-sm font-bold text-white">
-            {initials}
-          </span>
+          {user?.avatarUrl ? (
+            <img src={user.avatarUrl} alt="" className="h-10 w-10 shrink-0 rounded-full object-cover" />
+          ) : (
+            <span className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-gradient-to-br from-primary to-indigo-600 text-sm font-bold text-white">
+              {initials}
+            </span>
+          )}
           <div className="min-w-0">
             <p className="truncate text-sm font-semibold text-slate-900">{user?.name}</p>
             <p className="truncate text-xs text-slate-500">{user?.email}</p>
@@ -120,9 +139,13 @@ export function SidebarProfile({ profileHref, role }: SidebarProfileProps) {
         onClick={() => setOpen(!open)}
         className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 transition-all duration-200 hover:bg-slate-100"
       >
-        <span className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-gradient-to-br from-primary to-indigo-600 text-xs font-bold text-white">
-          {initials}
-        </span>
+        {user?.avatarUrl ? (
+          <img src={user.avatarUrl} alt="" className="h-8 w-8 shrink-0 rounded-full object-cover" />
+        ) : (
+          <span className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-gradient-to-br from-primary to-indigo-600 text-xs font-bold text-white">
+            {initials}
+          </span>
+        )}
         <div className="min-w-0 text-left">
           <p className="truncate text-sm font-semibold text-slate-900">{user?.name ?? 'Loading...'}</p>
           <p className="text-[11px] text-slate-500">{roleLabel}</p>

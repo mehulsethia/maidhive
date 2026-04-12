@@ -117,7 +117,10 @@ export default function ClientBookingDetailPage() {
   const canAuthorize = ['pending', 'accepted'].includes(booking.status) && !isAuthorized
   const canComplete = booking.status === 'in_progress'
   const canReview = booking.status === 'completed'
-  const showChat = CHAT_STATUSES.includes(booking.status)
+  const chatCutoff = booking.scheduled_end
+    ? new Date(booking.scheduled_end).getTime() + 30 * 60 * 1000
+    : Infinity
+  const showChat = CHAT_STATUSES.includes(booking.status) && Date.now() < chatCutoff
 
   return (
     <div className="mx-auto max-w-xl space-y-5">

@@ -13,7 +13,7 @@ import { formatDate } from '@/lib/utils'
 import type { BookingRead } from '@/types'
 import { toast } from 'sonner'
 
-const CHAT_AVAILABLE = ['accepted', 'confirmed', 'in_progress', 'completed', 'disputed']
+const CHAT_AVAILABLE = ['confirmed', 'in_progress', 'completed', 'disputed']
 
 const SERVICE_LABELS: Record<string, string> = {
   standard: 'Standard Clean',
@@ -39,9 +39,16 @@ export default function CleanerChatsPage() {
         ])
 
         if (bookingsRes.status === 'fulfilled') {
-          const chatBookings = (bookingsRes.value.data?.items ?? []).filter((b) =>
-            CHAT_AVAILABLE.includes(b.status),
-          )
+          const now = Date.now()
+          const CHAT_CUTOFF_MS = 30 * 60 * 1000
+          const chatBookings = (bookingsRes.value.data?.items ?? []).filter((b) => {
+            if (!CHAT_AVAILABLE.includes(b.status)) return false
+            if (['completed', 'disputed'].includes(b.status) && b.scheduled_end) {
+              const endTime = new Date(b.scheduled_end).getTime()
+              if (now > endTime + CHAT_CUTOFF_MS) return false
+            }
+            return true
+          })
           setBookings(chatBookings)
           setSelectedBookingId(chatBookings[0]?.id ?? null)
         } else {

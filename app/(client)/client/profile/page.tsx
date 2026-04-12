@@ -10,6 +10,7 @@ import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { ProfilePageSkeleton } from '@/components/page-skeletons'
 import { AvatarUpload } from '@/components/avatar-upload'
+import { PhoneInput } from '@/components/phone-input'
 import { formatCurrency } from '@/lib/utils'
 import type { BookingRead } from '@/types'
 import { toast } from 'sonner'
@@ -135,7 +136,7 @@ export default function ClientProfilePage() {
             </div>
             <div>
               <Label>Phone Number</Label>
-              <Input value={phone} onChange={(e) => setPhone(e.target.value)} className="mt-1" />
+              <PhoneInput value={phone} onChange={setPhone} className="mt-1" />
             </div>
             <div>
               <Label>Default Address</Label>

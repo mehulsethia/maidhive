@@ -17,7 +17,7 @@ export const GET = requireAuth(async (_req, _ctx, user) => {
       senderId: { not: userId },
       booking: {
         ...bookingFilter,
-        status: { in: ['accepted', 'confirmed', 'in_progress', 'completed', 'disputed'] },
+        status: { in: ['confirmed', 'in_progress', 'completed', 'disputed'] },
       },
     },
   })

@@ -5,7 +5,7 @@ import { NextResponse, type NextRequest } from 'next/server'
 const PROTECTED_PREFIXES = ['/client', '/cleaner']
 // Admin routes handle their own auth — separate login screen at /admin
 // Routes only for unauthenticated users
-const AUTH_ROUTES = ['/login', '/signup']
+const AUTH_ROUTES = ['/login', '/signup', '/verify-email']
 
 function getPostLoginPath(user: { user_metadata?: Record<string, unknown> }) {
   const role = typeof user.user_metadata?.role === 'string' ? user.user_metadata.role : 'client'

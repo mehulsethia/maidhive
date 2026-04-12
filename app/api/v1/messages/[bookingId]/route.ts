@@ -38,6 +38,15 @@ export const POST = requireAuth(async (req: NextRequest, ctx, user) => {
     return err('Chat is only available for confirmed bookings', 400)
   }
 
+  // Chat closes 30 minutes after the scheduled end time
+  const CHAT_CUTOFF_MS = 30 * 60 * 1000
+  if (booking.scheduledEnd) {
+    const cutoff = new Date(booking.scheduledEnd).getTime() + CHAT_CUTOFF_MS
+    if (Date.now() > cutoff) {
+      return err('Chat has closed — 30 minutes after the scheduled end time', 400)
+    }
+  }
+
   const body = await req.json()
   const parsed = sendMessageSchema.safeParse(body)
   if (!parsed.success) return err(parsed.error.message, 422)
