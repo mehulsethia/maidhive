@@ -2,6 +2,8 @@
 
 import { useEffect, useState } from 'react'
 import { useParams, useRouter } from 'next/navigation'
+import { Bricolage_Grotesque, IBM_Plex_Mono } from 'next/font/google'
+import { ArrowLeft } from 'lucide-react'
 import { loadStripe } from '@stripe/stripe-js'
 import { Elements, PaymentElement, useStripe, useElements } from '@stripe/react-stripe-js'
 import { bookingsApi, paymentsApi } from '@/lib/api'
@@ -15,15 +17,16 @@ import type { BookingRead } from '@/types'
 import { toast } from 'sonner'
 
 const stripePromise = loadStripe(process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY!)
+const displayFont = Bricolage_Grotesque({ subsets: ['latin'], weight: ['400', '500', '700', '800'] })
+const monoFont = IBM_Plex_Mono({ subsets: ['latin'], weight: ['400', '500', '600'] })
 
-// Inner component — must live inside <Elements>
 function CheckoutForm({ booking, onSuccess }: { booking: BookingRead; onSuccess: () => void }) {
   const stripe = useStripe()
   const elements = useElements()
   const [submitting, setSubmitting] = useState(false)
 
-  async function handleSubmit(e: React.FormEvent) {
-    e.preventDefault()
+  async function handleSubmit(event: React.FormEvent) {
+    event.preventDefault()
     if (!stripe || !elements) return
 
     setSubmitting(true)
@@ -31,9 +34,7 @@ function CheckoutForm({ booking, onSuccess }: { booking: BookingRead; onSuccess:
     const { error } = await stripe.confirmPayment({
       elements,
       redirect: 'if_required',
-      confirmParams: {
-        return_url: returnUrl,
-      },
+      confirmParams: { return_url: returnUrl },
     })
 
     if (error) {
@@ -42,11 +43,12 @@ function CheckoutForm({ booking, onSuccess }: { booking: BookingRead; onSuccess:
       try {
         await paymentsApi.syncAuthorization(booking.id)
       } catch {
-        // Webhook normally handles this; sync is best-effort fallback for local dev.
+        // webhook normally handles this; sync is fallback
       }
       toast.success('Card authorised. Your booking request is now sent to the cleaner.')
       onSuccess()
     }
+
     setSubmitting(false)
   }
 
@@ -71,15 +73,16 @@ export default function CheckoutPage() {
     async function init() {
       try {
         const bookingRes = await bookingsApi.getById(bookingId)
-        const b = bookingRes.data
-        if (!b) throw new Error('Booking not found')
-        if (!['pending', 'accepted'].includes(b.status)) {
+        const nextBooking = bookingRes.data
+        if (!nextBooking) throw new Error('Booking not found')
+
+        if (!['pending', 'accepted'].includes(nextBooking.status)) {
           toast.error('This booking cannot be authorized right now.')
           router.push(`/client/bookings/${bookingId}`)
           return
         }
-        setBooking(b)
 
+        setBooking(nextBooking)
         const intentRes = await paymentsApi.createIntent(bookingId)
         setClientSecret(intentRes.data?.client_secret ?? null)
       } catch (err: any) {
@@ -92,54 +95,164 @@ export default function CheckoutPage() {
   }, [bookingId])
 
   if (loading) return <CheckoutPageSkeleton />
-  if (!booking || !clientSecret) return <div className="text-center py-16 text-muted-foreground">Unable to load checkout.</div>
+  if (!booking || !clientSecret) return <div className="py-16 text-center text-muted-foreground">Unable to load checkout.</div>
 
   return (
-    <div className="mx-auto max-w-lg space-y-5">
-      <h1 className="marketplace-title text-2xl text-slate-900">Authorize card</h1>
+    <>
+      <div className="client-checkout-revamp space-y-7 md:space-y-9">
+        <section className="client-stage overflow-hidden rounded-[2rem] border border-slate-200/70">
+          <div className="client-stage__media" aria-hidden="true" />
+          <div className="client-stage__grain" aria-hidden="true" />
 
-      {/* Booking summary */}
-      <Card>
-        <CardHeader><CardTitle>Booking summary</CardTitle></CardHeader>
-        <CardContent className="space-y-2 text-sm">
-          <div className="flex justify-between">
-            <span className="text-muted-foreground">Status</span>
-            <BookingStatusBadge status={booking.status} />
+          <div className="relative z-10 grid gap-7 px-5 py-7 sm:px-8 sm:py-8 lg:grid-cols-[1.2fr_0.8fr] lg:items-end lg:px-10 lg:py-9">
+            <div className="animate-stage-up space-y-4">
+              <Button
+                variant="outline"
+                size="sm"
+                className="w-fit rounded-full border-white/35 bg-white/10 text-white hover:bg-white/20 hover:text-white"
+                onClick={() => router.push(`/client/bookings/${bookingId}`)}
+              >
+                <ArrowLeft className="h-4 w-4" />
+                Back to booking
+              </Button>
+              <p className={`${monoFont.className} text-[0.7rem] uppercase tracking-[0.24em] text-white/75`}>
+                MaidHive Secure Checkout
+              </p>
+              <h1 className={`${displayFont.className} text-4xl font-extrabold tracking-[-0.03em] text-white sm:text-5xl lg:text-6xl`}>
+                Authorize Card
+              </h1>
+              <p className="max-w-xl text-sm text-slate-100/90 sm:text-base">
+                Reserve payment securely now. Capture happens only after service completion and dispute window.
+              </p>
+            </div>
+
+            <div className="animate-stage-up delay-120">
+              <div className="ml-auto w-full max-w-sm rounded-3xl border border-white/20 bg-black/35 p-4 backdrop-blur-sm">
+                <p className={`${monoFont.className} text-[0.62rem] uppercase tracking-[0.18em] text-cyan-200/90`}>
+                  Total to authorize
+                </p>
+                <p className={`${displayFont.className} mt-1 text-4xl font-bold tracking-[-0.02em] text-white`}>
+                  {new Intl.NumberFormat('en-IE', { style: 'currency', currency: 'EUR' }).format(booking.total_amount)}
+                </p>
+                <p className="mt-1 text-sm text-white/80">Status: {booking.status.replace('_', ' ')}</p>
+              </div>
+            </div>
           </div>
-          <div className="flex justify-between">
-            <span className="text-muted-foreground">Scheduled</span>
-            <span>{formatDate(booking.scheduled_start)}</span>
+        </section>
+
+        <section className="mx-auto grid max-w-5xl gap-4 lg:grid-cols-[1fr_0.9fr]">
+          <div className="space-y-4">
+            <Card className="border-slate-200 bg-white/90">
+              <CardHeader>
+                <CardTitle>Booking summary</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-2 text-sm">
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">Status</span>
+                  <BookingStatusBadge status={booking.status} />
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">Scheduled</span>
+                  <span>{formatDate(booking.scheduled_start)}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">Duration</span>
+                  <span>{booking.duration_hours}h</span>
+                </div>
+              </CardContent>
+            </Card>
+
+            <PriceBreakdownCard
+              breakdown={{
+                hourly_rate: booking.hourly_rate,
+                duration_hours: booking.duration_hours,
+                subtotal: booking.total_amount,
+                platform_fee_pct: 10,
+                platform_fee: booking.platform_fee,
+                cleaner_payout: booking.cleaner_payout,
+                total_amount: booking.total_amount,
+              }}
+            />
           </div>
-          <div className="flex justify-between">
-            <span className="text-muted-foreground">Duration</span>
-            <span>{booking.duration_hours}h</span>
-          </div>
-        </CardContent>
-      </Card>
 
-      <PriceBreakdownCard breakdown={{
-        hourly_rate: booking.hourly_rate,
-        duration_hours: booking.duration_hours,
-        subtotal: booking.total_amount,
-        platform_fee_pct: 10,
-        platform_fee: booking.platform_fee,
-        cleaner_payout: booking.cleaner_payout,
-        total_amount: booking.total_amount,
-      }} />
+          <Card className="border-slate-200 bg-white/90">
+            <CardHeader>
+              <CardTitle>Card authorization</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <Elements stripe={stripePromise} options={{ clientSecret, appearance: { theme: 'stripe' } }}>
+                <CheckoutForm booking={booking} onSuccess={() => router.push(`/client/bookings/${bookingId}`)} />
+              </Elements>
+            </CardContent>
+          </Card>
+        </section>
 
-      {/* Stripe payment form */}
-      <Card>
-        <CardHeader><CardTitle>Card authorization</CardTitle></CardHeader>
-        <CardContent>
-          <Elements stripe={stripePromise} options={{ clientSecret, appearance: { theme: 'stripe' } }}>
-            <CheckoutForm booking={booking} onSuccess={() => router.push(`/client/bookings/${bookingId}`)} />
-          </Elements>
-        </CardContent>
-      </Card>
+        <p className="text-center text-xs text-muted-foreground">
+          Your card is authorized now. Stripe captures it after the post-completion window unless a dispute is raised.
+        </p>
+      </div>
 
-      <p className="text-xs text-center text-muted-foreground">
-        Your card is authorized now. Stripe captures it after the post-completion window unless a dispute is raised.
-      </p>
-    </div>
+      <style jsx>{`
+        .client-stage {
+          position: relative;
+          isolation: isolate;
+          background: linear-gradient(125deg, #04162f 8%, #0f3b76 58%, #0e5698);
+        }
+
+        .client-stage__media {
+          position: absolute;
+          inset: 0;
+          background-image:
+            linear-gradient(105deg, rgba(2, 11, 27, 0.82) 10%, rgba(2, 11, 27, 0.5) 55%, rgba(8, 22, 44, 0.72) 100%),
+            url('/images/hero-client.gif');
+          background-size: cover;
+          background-position: center;
+          mix-blend-mode: screen;
+          opacity: 0.9;
+        }
+
+        .client-stage__grain {
+          position: absolute;
+          inset: 0;
+          background-image:
+            linear-gradient(90deg, rgba(255, 255, 255, 0.11) 0%, rgba(255, 255, 255, 0) 45%),
+            radial-gradient(circle at 18% 22%, rgba(56, 220, 255, 0.22), transparent 28%),
+            radial-gradient(circle at 82% 12%, rgba(244, 180, 0, 0.2), transparent 22%);
+          animation: hero-sweep 11s ease-in-out infinite;
+          pointer-events: none;
+        }
+
+        .animate-stage-up {
+          animation: stage-up 0.72s cubic-bezier(0.18, 0.82, 0.3, 1) both;
+        }
+
+        .delay-120 {
+          animation-delay: 120ms;
+        }
+
+        @keyframes stage-up {
+          from {
+            opacity: 0;
+            transform: translateY(18px);
+          }
+          to {
+            opacity: 1;
+            transform: translateY(0);
+          }
+        }
+
+        @keyframes hero-sweep {
+          0%,
+          100% {
+            transform: translateX(0%);
+            opacity: 1;
+          }
+          50% {
+            transform: translateX(1.8%);
+            opacity: 0.88;
+          }
+        }
+      `}</style>
+    </>
   )
 }

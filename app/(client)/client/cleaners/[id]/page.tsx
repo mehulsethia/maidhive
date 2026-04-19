@@ -1,8 +1,19 @@
 'use client'
 
-import { useEffect, useMemo, useState } from 'react'
+import { useDeferredValue, useEffect, useState, startTransition } from 'react'
 import { useParams, useRouter } from 'next/navigation'
-import { ArrowLeft, Briefcase, CalendarCheck, CheckCircle, Clock, MapPin, Phone, Star, TrendingUp } from 'lucide-react'
+import { Bricolage_Grotesque, IBM_Plex_Mono } from 'next/font/google'
+import {
+  ArrowLeft,
+  Briefcase,
+  CalendarCheck,
+  CheckCircle,
+  Clock,
+  MapPin,
+  Phone,
+  Star,
+  TrendingUp,
+} from 'lucide-react'
 import { cleanersApi, reviewsApi } from '@/lib/api'
 import { StarRating } from '@/components/star-rating'
 import { DetailPageSkeleton } from '@/components/page-skeletons'
@@ -11,6 +22,9 @@ import { Card, CardContent } from '@/components/ui/card'
 import { formatCurrency, formatDate } from '@/lib/utils'
 import type { CleanerRead, ReviewRead } from '@/types'
 import { toast } from 'sonner'
+
+const displayFont = Bricolage_Grotesque({ subsets: ['latin'], weight: ['400', '500', '700', '800'] })
+const monoFont = IBM_Plex_Mono({ subsets: ['latin'], weight: ['400', '500', '600'] })
 
 export default function CleanerProfilePage() {
   const { id } = useParams<{ id: string }>()
@@ -21,281 +35,357 @@ export default function CleanerProfilePage() {
   const [tab, setTab] = useState<'overview' | 'reviews'>('overview')
 
   useEffect(() => {
-    Promise.all([
-      cleanersApi.getById(id),
-      reviewsApi.getForCleaner(id),
-    ])
+    Promise.all([cleanersApi.getById(id), reviewsApi.getForCleaner(id)])
       .then(([cleanerRes, reviewsRes]) => {
-        setCleaner(cleanerRes.data ?? null)
-        setReviews(reviewsRes.data ?? [])
+        startTransition(() => {
+          setCleaner(cleanerRes.data ?? null)
+          setReviews(reviewsRes.data ?? [])
+          setLoading(false)
+        })
       })
-      .catch(() => toast.error('Failed to load cleaner profile'))
-      .finally(() => setLoading(false))
+      .catch(() => {
+        toast.error('Failed to load cleaner profile')
+        setLoading(false)
+      })
   }, [id])
 
-  const avgRating = useMemo(() => {
-    if (reviews.length === 0) return 0
-    return reviews.reduce((sum, r) => sum + r.rating, 0) / reviews.length
-  }, [reviews])
+  const deferredReviews = useDeferredValue(reviews)
 
-  const ratingDistribution = useMemo(() => {
-    const dist = [0, 0, 0, 0, 0]
-    reviews.forEach(r => { if (r.rating >= 1 && r.rating <= 5) dist[r.rating - 1]++ })
-    return dist
-  }, [reviews])
+  const avgRating =
+    deferredReviews.length === 0
+      ? 0
+      : deferredReviews.reduce((sum, review) => sum + review.rating, 0) / deferredReviews.length
 
-  const completionRate = useMemo(() => {
-    if (!cleaner || cleaner.total_jobs === 0) return 0
-    return 98 // placeholder — real value would come from backend
-  }, [cleaner])
+  const ratingDistribution = [0, 0, 0, 0, 0]
+  deferredReviews.forEach((review) => {
+    if (review.rating >= 1 && review.rating <= 5) ratingDistribution[review.rating - 1]++
+  })
+
+  const completionRate = !cleaner || cleaner.total_jobs === 0 ? 0 : 98
 
   if (loading) return <DetailPageSkeleton />
-  if (!cleaner) return <div className="text-center py-16 text-muted-foreground">Cleaner not found.</div>
+  if (!cleaner) return <div className="py-16 text-center text-muted-foreground">Cleaner not found.</div>
 
   const cleanerName = cleaner.user?.name ?? 'Professional Cleaner'
-  const memberSince = cleaner.created_at ? new Date(cleaner.created_at).toLocaleDateString('en-IE', { month: 'long', day: 'numeric', year: 'numeric', timeZone: 'Europe/Nicosia' }) : ''
+  const memberSince = cleaner.created_at
+    ? new Date(cleaner.created_at).toLocaleDateString('en-IE', {
+        month: 'long',
+        day: 'numeric',
+        year: 'numeric',
+        timeZone: 'Europe/Nicosia',
+      })
+    : ''
   const location = cleaner.service_areas?.[0]?.city ?? ''
 
   return (
-    <div className="mx-auto max-w-4xl space-y-6">
-      {/* Back button */}
-      <button
-        onClick={() => router.back()}
-        className="inline-flex items-center gap-1 text-sm text-slate-500 hover:text-slate-900 transition-colors"
-      >
-        <ArrowLeft className="h-4 w-4" /> Back
-      </button>
+    <>
+      <div className="client-cleaner-detail-revamp space-y-7 md:space-y-9">
+        <section className="client-stage overflow-hidden rounded-[2rem] border border-slate-200/70">
+          <div className="client-stage__media" aria-hidden="true" />
+          <div className="client-stage__grain" aria-hidden="true" />
 
-      {/* Hero section */}
-      <div className="relative">
-        {/* Cover image */}
-        <div className="h-48 rounded-t-2xl bg-gradient-to-r from-primary/80 to-indigo-500/80 overflow-hidden">
-          <div className="h-full w-full bg-[url('https://images.unsplash.com/photo-1558618666-fcd25c85f82e?w=1200&h=400&fit=crop')] bg-cover bg-center mix-blend-overlay opacity-40" />
-        </div>
+          <div className="relative z-10 grid gap-7 px-5 py-7 sm:px-8 sm:py-8 lg:grid-cols-[1.2fr_0.8fr] lg:items-end lg:px-10 lg:py-9">
+            <div className="animate-stage-up space-y-4">
+              <button
+                onClick={() => router.back()}
+                className="inline-flex items-center gap-1 rounded-full border border-white/35 bg-white/10 px-3 py-1.5 text-sm font-semibold text-white transition hover:bg-white/20"
+              >
+                <ArrowLeft className="h-4 w-4" /> Back
+              </button>
 
-        {/* Profile card overlaying the cover */}
-        <Card className="relative mx-4 -mt-20 border-slate-200 shadow-lg">
-          <CardContent className="p-5">
-            <div className="flex flex-col sm:flex-row items-start gap-4">
-              {/* Avatar */}
-              <div className="shrink-0 -mt-16 sm:-mt-16">
-                {cleaner.profile_image_url ? (
-                  <img
-                    src={cleaner.profile_image_url}
-                    alt={cleanerName}
-                    className="h-24 w-24 rounded-full border-4 border-white object-cover shadow-md"
-                  />
-                ) : (
-                  <div className="h-24 w-24 rounded-full border-4 border-white bg-primary flex items-center justify-center shadow-md">
-                    <span className="text-3xl font-bold text-white">{cleanerName.charAt(0).toUpperCase()}</span>
-                  </div>
-                )}
-              </div>
+              <p className={`${monoFont.className} text-[0.7rem] uppercase tracking-[0.24em] text-white/75`}>
+                MaidHive Cleaner Profile
+              </p>
+              <h1 className={`${displayFont.className} text-4xl font-extrabold tracking-[-0.03em] text-white sm:text-5xl lg:text-6xl`}>
+                {cleanerName}
+              </h1>
+              <p className="max-w-xl text-sm text-slate-100/90 sm:text-base">
+                View expertise, service quality, and recent client feedback before booking.
+              </p>
+            </div>
 
-              {/* Info */}
-              <div className="flex-1 min-w-0">
-                <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-2">
-                  <div>
-                    <h1 className="text-2xl font-bold text-slate-900">{cleanerName}</h1>
-                    <p className="text-sm text-slate-500">Member since {memberSince}</p>
-                    <div className="flex flex-wrap items-center gap-3 mt-2 text-sm text-slate-600">
-                      <span className="flex items-center gap-1"><Briefcase className="h-4 w-4" /> {cleaner.years_experience} year{cleaner.years_experience !== 1 ? 's' : ''} experience</span>
-                      {location && <span className="flex items-center gap-1"><MapPin className="h-4 w-4" /> {location}</span>}
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-3 sm:text-right">
-                    <div>
-                      <StarRating rating={avgRating} size="sm" />
-                      <p className="text-xs text-slate-500 mt-0.5">({reviews.length} review{reviews.length !== 1 ? 's' : ''})</p>
-                    </div>
-                    <div>
-                      <p className="text-2xl font-bold text-slate-900">{formatCurrency(cleaner.hourly_rate)}</p>
-                      <p className="text-xs text-slate-500">/hr</p>
-                    </div>
-                  </div>
-                </div>
-
-                {/* CTA buttons */}
-                <div className="flex flex-wrap gap-2 mt-4">
-                  <Button size="lg" className="flex-1 sm:flex-none min-w-[160px]" onClick={() => router.push(`/client/book/${id}`)}>
+            <div className="animate-stage-up delay-120">
+              <div className="ml-auto w-full max-w-sm rounded-3xl border border-white/20 bg-black/35 p-4 backdrop-blur-sm">
+                <p className={`${monoFont.className} text-[0.62rem] uppercase tracking-[0.18em] text-cyan-200/90`}>
+                  Snapshot
+                </p>
+                <p className={`${displayFont.className} mt-1 text-2xl font-bold tracking-[-0.02em] text-white`}>
+                  {formatCurrency(cleaner.hourly_rate)} / hr
+                </p>
+                <p className="mt-1 text-sm text-white/80">{deferredReviews.length} reviews · {cleaner.total_jobs} jobs completed</p>
+                <div className="mt-3 flex gap-2">
+                  <Button onClick={() => router.push(`/client/book/${id}`)} className="h-9 rounded-full bg-[#f4b400] px-4 text-slate-950 hover:bg-[#ffca3a]">
                     Book Service
                   </Button>
-                  <Button size="lg" variant="outline" className="flex-1 sm:flex-none min-w-[160px]">
+                  <Button variant="outline" className="h-9 rounded-full border-white/35 bg-white/10 text-white hover:bg-white/20 hover:text-white">
                     Send Message
                   </Button>
-                  {cleaner.user?.phone && (
-                    <a href={`tel:${cleaner.user.phone}`} className="inline-flex h-11 items-center justify-center gap-1.5 rounded-xl border border-slate-200 bg-white px-4 text-sm font-semibold text-slate-700 transition-all hover:-translate-y-0.5 hover:bg-slate-50">
-                      <Phone className="h-4 w-4" /> Call
-                    </a>
-                  )}
                 </div>
               </div>
             </div>
-          </CardContent>
-        </Card>
-      </div>
+          </div>
+        </section>
 
-      {/* Stats cards */}
-      <div className="grid grid-cols-3 gap-3">
-        <Card className="border-slate-200">
-          <CardContent className="flex flex-col items-center justify-center p-4 text-center">
-            <CheckCircle className="h-6 w-6 text-primary mb-2" />
-            <p className="text-2xl font-bold text-slate-900">{cleaner.total_jobs}</p>
-            <p className="text-xs text-slate-500">Jobs Completed</p>
-          </CardContent>
-        </Card>
-        <Card className="border-slate-200">
-          <CardContent className="flex flex-col items-center justify-center p-4 text-center">
-            <Star className="h-6 w-6 text-amber-400 mb-2" />
-            <p className="text-2xl font-bold text-slate-900">{avgRating > 0 ? `${avgRating.toFixed(1)}/5` : '—'}</p>
-            <p className="text-xs text-slate-500">Average Rating</p>
-          </CardContent>
-        </Card>
-        <Card className="border-slate-200">
-          <CardContent className="flex flex-col items-center justify-center p-4 text-center">
-            <TrendingUp className="h-6 w-6 text-emerald-500 mb-2" />
-            <p className="text-2xl font-bold text-slate-900">{completionRate}%</p>
-            <p className="text-xs text-slate-500">Completion Rate</p>
-          </CardContent>
-        </Card>
-      </div>
+        <section className="grid grid-cols-3 gap-3">
+          <MetricCard title="Jobs Completed" value={cleaner.total_jobs} icon={<CheckCircle className="h-6 w-6 text-[#0d4bc9]" />} displayFont={displayFont.className} />
+          <MetricCard title="Average Rating" value={avgRating > 0 ? `${avgRating.toFixed(1)}/5` : '—'} icon={<Star className="h-6 w-6 text-amber-400" />} displayFont={displayFont.className} />
+          <MetricCard title="Completion Rate" value={`${completionRate}%`} icon={<TrendingUp className="h-6 w-6 text-emerald-500" />} displayFont={displayFont.className} />
+        </section>
 
-      {/* Tabs */}
-      <div className="flex justify-center border-b border-slate-200">
-        <button
-          onClick={() => setTab('overview')}
-          className={`px-6 py-3 text-sm font-medium border-b-2 transition-colors ${tab === 'overview' ? 'border-primary text-primary' : 'border-transparent text-slate-500 hover:text-slate-700'}`}
-        >
-          Overview
-        </button>
-        <button
-          onClick={() => setTab('reviews')}
-          className={`px-6 py-3 text-sm font-medium border-b-2 transition-colors ${tab === 'reviews' ? 'border-primary text-primary' : 'border-transparent text-slate-500 hover:text-slate-700'}`}
-        >
-          Reviews
-        </button>
-      </div>
-
-      {/* Tab content */}
-      {tab === 'overview' && (
-        <div className="grid gap-4 lg:grid-cols-[1fr_300px]">
-          <div className="space-y-4">
-            {/* About */}
-            <Card className="border-slate-200">
-              <CardContent className="p-5">
-                <h3 className="font-semibold text-slate-900 mb-2">About {cleanerName}</h3>
-                <p className="text-sm text-slate-600 leading-relaxed">
-                  {cleaner.bio || 'No bio provided yet.'}
-                </p>
-
-                {cleaner.skills && cleaner.skills.length > 0 && (
-                  <div className="mt-4">
-                    <h4 className="text-sm font-semibold text-slate-900 mb-2">Services</h4>
-                    <div className="flex flex-wrap gap-2">
-                      {cleaner.skills.map(s => (
-                        <span key={s} className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-1.5 text-sm text-slate-700">{s}</span>
-                      ))}
-                    </div>
-                  </div>
-                )}
-              </CardContent>
-            </Card>
+        <section className="rounded-[1.5rem] border border-slate-200/80 bg-white/90 p-3 shadow-[0_18px_45px_rgba(11,33,78,0.08)] backdrop-blur-sm">
+          <div className="flex justify-center border-b border-slate-200">
+            <button
+              onClick={() => setTab('overview')}
+              className={`px-6 py-3 text-sm font-medium border-b-2 transition-colors ${
+                tab === 'overview'
+                  ? 'border-[#0d4bc9] text-[#0d4bc9]'
+                  : 'border-transparent text-slate-500 hover:text-slate-700'
+              }`}
+            >
+              Overview
+            </button>
+            <button
+              onClick={() => setTab('reviews')}
+              className={`px-6 py-3 text-sm font-medium border-b-2 transition-colors ${
+                tab === 'reviews'
+                  ? 'border-[#0d4bc9] text-[#0d4bc9]'
+                  : 'border-transparent text-slate-500 hover:text-slate-700'
+              }`}
+            >
+              Reviews
+            </button>
           </div>
 
-          {/* Contact info sidebar */}
-          <Card className="border-slate-200 h-fit">
-            <CardContent className="p-5 space-y-4">
-              <h3 className="font-semibold text-slate-900">Contact Information</h3>
-              {cleaner.user?.phone && (
-                <div className="flex items-start gap-3">
-                  <Phone className="h-4 w-4 text-slate-400 mt-0.5" />
-                  <div>
-                    <p className="text-xs text-slate-500">Phone Number</p>
-                    <p className="text-sm font-medium text-slate-900">{cleaner.user.phone}</p>
-                  </div>
-                </div>
-              )}
-              {cleaner.transport_mode && (
-                <div className="flex items-start gap-3">
-                  <Clock className="h-4 w-4 text-slate-400 mt-0.5" />
-                  <div>
-                    <p className="text-xs text-slate-500">Mode Of Transport</p>
-                    <p className="text-sm font-medium text-slate-900">
-                      {cleaner.transport_mode === 'own_car' ? 'Own Car' : cleaner.transport_mode === 'bus_walk' ? 'Bus / Walk' : 'Requires Pick-up'}
-                    </p>
-                  </div>
-                </div>
-              )}
-              <div className="flex items-start gap-3">
-                <CalendarCheck className="h-4 w-4 text-slate-400 mt-0.5" />
-                <div>
-                  <p className="text-xs text-slate-500">Availability</p>
-                  <p className="text-sm font-medium text-slate-900">Available this week</p>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-        </div>
-      )}
+          {tab === 'overview' && (
+            <div className="grid gap-4 p-3 lg:grid-cols-[1fr_300px]">
+              <div className="space-y-4">
+                <Card className="border-slate-200">
+                  <CardContent className="p-5">
+                    <h3 className={`${displayFont.className} mb-2 text-xl font-semibold tracking-[-0.02em] text-slate-900`}>
+                      About {cleanerName}
+                    </h3>
+                    <p className="text-sm leading-relaxed text-slate-600">{cleaner.bio || 'No bio provided yet.'}</p>
 
-      {tab === 'reviews' && (
-        <div className="grid gap-4 lg:grid-cols-[240px_1fr]">
-          {/* Rating summary */}
-          <Card className="border-slate-200 h-fit">
-            <CardContent className="p-5 text-center">
-              <p className="text-4xl font-bold text-slate-900">{avgRating > 0 ? avgRating.toFixed(1) : '—'}</p>
-              <StarRating rating={avgRating} size="md" showValue={false} className="justify-center mt-1" />
-              <p className="text-sm text-slate-500 mt-1">{reviews.length} Review{reviews.length !== 1 ? 's' : ''}</p>
-
-              {/* Rating distribution */}
-              <div className="mt-4 space-y-1.5">
-                {[5, 4, 3, 2, 1].map(star => {
-                  const count = ratingDistribution[star - 1]
-                  const pct = reviews.length > 0 ? Math.round((count / reviews.length) * 100) : 0
-                  return (
-                    <div key={star} className="flex items-center gap-2 text-sm">
-                      <span className="w-3 text-right text-slate-600">{star}</span>
-                      <Star className="h-3 w-3 fill-amber-400 text-amber-400" />
-                      <div className="flex-1 h-2 rounded-full bg-slate-100 overflow-hidden">
-                        <div className="h-full rounded-full bg-amber-400 transition-all" style={{ width: `${pct}%` }} />
+                    {cleaner.skills && cleaner.skills.length > 0 && (
+                      <div className="mt-4">
+                        <h4 className="mb-2 text-sm font-semibold text-slate-900">Services</h4>
+                        <div className="flex flex-wrap gap-2">
+                          {cleaner.skills.map((skill) => (
+                            <span key={skill} className="rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-sm text-slate-700">
+                              {skill}
+                            </span>
+                          ))}
+                        </div>
                       </div>
-                      <span className="w-8 text-right text-xs text-slate-500">{pct}%</span>
-                    </div>
-                  )
-                })}
-              </div>
-            </CardContent>
-          </Card>
-
-          {/* Reviews list */}
-          <div className="space-y-3">
-            {reviews.length === 0 ? (
-              <Card className="border-slate-200">
-                <CardContent className="p-8 text-center text-sm text-slate-500">
-                  No reviews yet.
-                </CardContent>
-              </Card>
-            ) : (
-              reviews.map(review => (
-                <Card key={review.id} className="border-slate-200">
-                  <CardContent className="p-4">
-                    <div className="flex items-start justify-between mb-2">
-                      <div>
-                        <p className="font-semibold text-slate-900">Client</p>
-                        <p className="text-xs text-slate-500">{formatDate(review.created_at)}</p>
-                      </div>
-                      <StarRating rating={review.rating} showValue={false} />
-                    </div>
-                    <p className="text-sm text-slate-600 leading-relaxed">
-                      {review.comment || 'No written comment provided.'}
-                    </p>
+                    )}
                   </CardContent>
                 </Card>
-              ))
-            )}
-          </div>
-        </div>
-      )}
+              </div>
+
+              <Card className="h-fit border-slate-200">
+                <CardContent className="space-y-4 p-5">
+                  <h3 className="font-semibold text-slate-900">Contact Information</h3>
+                  {cleaner.user?.phone && (
+                    <InfoLine icon={<Phone className="h-4 w-4 text-slate-400" />} title="Phone Number" value={cleaner.user.phone} />
+                  )}
+                  {cleaner.transport_mode && (
+                    <InfoLine
+                      icon={<Clock className="h-4 w-4 text-slate-400" />}
+                      title="Mode Of Transport"
+                      value={
+                        cleaner.transport_mode === 'own_car'
+                          ? 'Own Car'
+                          : cleaner.transport_mode === 'bus_walk'
+                            ? 'Bus / Walk'
+                            : 'Requires Pick-up'
+                      }
+                    />
+                  )}
+                  <InfoLine icon={<CalendarCheck className="h-4 w-4 text-slate-400" />} title="Availability" value="Available this week" />
+                  {location && <InfoLine icon={<MapPin className="h-4 w-4 text-slate-400" />} title="City" value={location} />}
+                  <InfoLine
+                    icon={<Briefcase className="h-4 w-4 text-slate-400" />}
+                    title="Experience"
+                    value={`${cleaner.years_experience} year${cleaner.years_experience !== 1 ? 's' : ''}`}
+                  />
+                  <InfoLine icon={<CalendarCheck className="h-4 w-4 text-slate-400" />} title="Member Since" value={memberSince} />
+                </CardContent>
+              </Card>
+            </div>
+          )}
+
+          {tab === 'reviews' && (
+            <div className="grid gap-4 p-3 lg:grid-cols-[240px_1fr]">
+              <Card className="h-fit border-slate-200">
+                <CardContent className="p-5 text-center">
+                  <p className={`${displayFont.className} text-4xl font-bold tracking-[-0.02em] text-slate-900`}>
+                    {avgRating > 0 ? avgRating.toFixed(1) : '—'}
+                  </p>
+                  <StarRating rating={avgRating} size="md" showValue={false} className="mt-1 justify-center" />
+                  <p className="mt-1 text-sm text-slate-500">
+                    {deferredReviews.length} Review{deferredReviews.length !== 1 ? 's' : ''}
+                  </p>
+
+                  <div className="mt-4 space-y-1.5">
+                    {[5, 4, 3, 2, 1].map((star) => {
+                      const count = ratingDistribution[star - 1]
+                      const pct = deferredReviews.length > 0 ? Math.round((count / deferredReviews.length) * 100) : 0
+                      return (
+                        <div key={star} className="flex items-center gap-2 text-sm">
+                          <span className="w-3 text-right text-slate-600">{star}</span>
+                          <Star className="h-3 w-3 fill-amber-400 text-amber-400" />
+                          <div className="h-2 flex-1 overflow-hidden rounded-full bg-slate-100">
+                            <div className="h-full rounded-full bg-amber-400" style={{ width: `${pct}%` }} />
+                          </div>
+                          <span className="w-8 text-right text-xs text-slate-500">{pct}%</span>
+                        </div>
+                      )
+                    })}
+                  </div>
+                </CardContent>
+              </Card>
+
+              <div className="space-y-3">
+                {deferredReviews.length === 0 ? (
+                  <Card className="border-slate-200">
+                    <CardContent className="p-8 text-center text-sm text-slate-500">No reviews yet.</CardContent>
+                  </Card>
+                ) : (
+                  deferredReviews.map((review, index) => (
+                    <Card key={review.id} className="review-row border-slate-200" style={{ animationDelay: `${index * 65}ms` }}>
+                      <CardContent className="p-4">
+                        <div className="mb-2 flex items-start justify-between">
+                          <div>
+                            <p className="font-semibold text-slate-900">Client</p>
+                            <p className={`${monoFont.className} text-[0.68rem] tracking-wide text-slate-500`}>
+                              {formatDate(review.created_at)}
+                            </p>
+                          </div>
+                          <StarRating rating={review.rating} showValue={false} />
+                        </div>
+                        <p className="text-sm leading-relaxed text-slate-600">
+                          {review.comment || 'No written comment provided.'}
+                        </p>
+                      </CardContent>
+                    </Card>
+                  ))
+                )}
+              </div>
+            </div>
+          )}
+        </section>
+      </div>
+
+      <style jsx>{`
+        .client-stage {
+          position: relative;
+          isolation: isolate;
+          background: linear-gradient(125deg, #04162f 8%, #0f3b76 58%, #0e5698);
+        }
+
+        .client-stage__media {
+          position: absolute;
+          inset: 0;
+          background-image:
+            linear-gradient(105deg, rgba(2, 11, 27, 0.82) 10%, rgba(2, 11, 27, 0.5) 55%, rgba(8, 22, 44, 0.72) 100%),
+            url('/images/hero-client.gif');
+          background-size: cover;
+          background-position: center;
+          mix-blend-mode: screen;
+          opacity: 0.9;
+        }
+
+        .client-stage__grain {
+          position: absolute;
+          inset: 0;
+          background-image:
+            linear-gradient(90deg, rgba(255, 255, 255, 0.11) 0%, rgba(255, 255, 255, 0) 45%),
+            radial-gradient(circle at 18% 22%, rgba(56, 220, 255, 0.22), transparent 28%),
+            radial-gradient(circle at 82% 12%, rgba(244, 180, 0, 0.2), transparent 22%);
+          animation: hero-sweep 11s ease-in-out infinite;
+          pointer-events: none;
+        }
+
+        .animate-stage-up {
+          animation: stage-up 0.72s cubic-bezier(0.18, 0.82, 0.3, 1) both;
+        }
+
+        .delay-120 {
+          animation-delay: 120ms;
+        }
+
+        .review-row {
+          animation: row-enter 0.45s ease both;
+        }
+
+        @keyframes stage-up {
+          from {
+            opacity: 0;
+            transform: translateY(18px);
+          }
+          to {
+            opacity: 1;
+            transform: translateY(0);
+          }
+        }
+
+        @keyframes row-enter {
+          from {
+            opacity: 0;
+            transform: translateY(8px);
+          }
+          to {
+            opacity: 1;
+            transform: translateY(0);
+          }
+        }
+
+        @keyframes hero-sweep {
+          0%,
+          100% {
+            transform: translateX(0%);
+            opacity: 1;
+          }
+          50% {
+            transform: translateX(1.8%);
+            opacity: 0.88;
+          }
+        }
+      `}</style>
+    </>
+  )
+}
+
+function MetricCard({
+  title,
+  value,
+  icon,
+  displayFont,
+}: {
+  title: string
+  value: string | number
+  icon: React.ReactNode
+  displayFont: string
+}) {
+  return (
+    <Card className="border-slate-200 bg-white/90">
+      <CardContent className="flex flex-col items-center justify-center p-4 text-center">
+        {icon}
+        <p className={`${displayFont} mt-2 text-2xl font-bold tracking-[-0.02em] text-slate-900`}>{value}</p>
+        <p className="text-xs text-slate-500">{title}</p>
+      </CardContent>
+    </Card>
+  )
+}
+
+function InfoLine({ icon, title, value }: { icon: React.ReactNode; title: string; value: string }) {
+  return (
+    <div className="flex items-start gap-3">
+      {icon}
+      <div>
+        <p className="text-xs text-slate-500">{title}</p>
+        <p className="text-sm font-medium text-slate-900">{value}</p>
+      </div>
     </div>
   )
 }

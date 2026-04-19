@@ -1,18 +1,21 @@
 'use client'
 
 import Link from 'next/link'
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useDeferredValue, useEffect, useState, startTransition } from 'react'
+import { Bricolage_Grotesque, IBM_Plex_Mono } from 'next/font/google'
 import { CalendarCheck2, CircleX, Clock3, Search } from 'lucide-react'
 import { bookingsApi } from '@/lib/api'
 import { BookingStatusBadge } from '@/components/booking-status-badge'
 import { EmptyState } from '@/components/empty-state'
 import { ListPageSkeleton } from '@/components/page-skeletons'
 import { Button } from '@/components/ui/button'
-import { Card, CardContent } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { formatCurrency, formatDate } from '@/lib/utils'
 import type { BookingRead, BookingStatus } from '@/types'
 import { toast } from 'sonner'
+
+const displayFont = Bricolage_Grotesque({ subsets: ['latin'], weight: ['400', '500', '700', '800'] })
+const monoFont = IBM_Plex_Mono({ subsets: ['latin'], weight: ['400', '500', '600'] })
 
 const STATUS_FILTERS: Array<{ key: 'all' | BookingStatus; label: string }> = [
   { key: 'all', label: 'All' },
@@ -39,20 +42,22 @@ export default function ClientBookingsPage() {
   const [query, setQuery] = useState('')
   const [filter, setFilter] = useState<'all' | BookingStatus>('all')
 
-  const loadBookings = useCallback(async () => {
+  async function loadBookings() {
     try {
       const res = await bookingsApi.my()
-      setBookings(res.data?.items ?? [])
+      startTransition(() => {
+        setBookings(res.data?.items ?? [])
+        setLoading(false)
+      })
     } catch {
       toast.error('Failed to load bookings.')
-    } finally {
       setLoading(false)
     }
-  }, [])
+  }
 
   useEffect(() => {
     loadBookings()
-  }, [loadBookings])
+  }, [])
 
   async function handleComplete(bookingId: string) {
     setActionLoadingId(bookingId)
@@ -67,173 +72,305 @@ export default function ClientBookingsPage() {
     }
   }
 
-  const filtered = useMemo(() => {
-    return bookings.filter((b) => {
-      if (filter !== 'all' && b.status !== filter) return false
-      if (!query.trim()) return true
-      const q = query.toLowerCase()
-      const cleanerName = ((b as any)?.cleaner?.user?.name ?? '').toLowerCase()
-      return (
-        cleanerName.includes(q) ||
-        (SERVICE_LABELS[b.service_type] ?? b.service_type).toLowerCase().includes(q) ||
-        b.city.toLowerCase().includes(q) ||
-        b.postcode.toLowerCase().includes(q)
-      )
-    })
-  }, [bookings, filter, query])
+  const deferredBookings = useDeferredValue(bookings)
 
-  const summary = useMemo(() => {
-    const active = bookings.filter((b) => ['pending', 'accepted', 'confirmed', 'in_progress'].includes(b.status)).length
-    const completed = bookings.filter((b) => b.status === 'completed').length
-    const cancelled = bookings.filter((b) => ['cancelled', 'expired'].includes(b.status)).length
-    return { active, completed, cancelled }
-  }, [bookings])
+  const filtered = deferredBookings.filter((booking) => {
+    if (filter !== 'all' && booking.status !== filter) return false
+    if (!query.trim()) return true
+
+    const q = query.toLowerCase()
+    const cleanerName = (booking.cleaner?.user?.name ?? '').toLowerCase()
+
+    return (
+      cleanerName.includes(q) ||
+      (SERVICE_LABELS[booking.service_type] ?? booking.service_type).toLowerCase().includes(q) ||
+      booking.city.toLowerCase().includes(q) ||
+      booking.postcode.toLowerCase().includes(q)
+    )
+  })
+
+  const activeCount = deferredBookings.filter((booking) =>
+    ['pending', 'accepted', 'confirmed', 'in_progress'].includes(booking.status),
+  ).length
+  const completedCount = deferredBookings.filter((booking) => booking.status === 'completed').length
+  const cancelledCount = deferredBookings.filter((booking) =>
+    ['cancelled', 'expired'].includes(booking.status),
+  ).length
 
   if (loading) return <ListPageSkeleton />
 
   return (
-    <div className="space-y-12">
-      <div className="mb-4">
-        <h1 className="marketplace-title text-4xl text-slate-900">My Bookings</h1>
-        <p className="mt-3 text-sm text-slate-500">Track all bookings, statuses, and next actions.</p>
-      </div>
+    <>
+      <div className="client-bookings-revamp space-y-7 md:space-y-9">
+        <section className="client-stage overflow-hidden rounded-[2rem] border border-slate-200/70">
+          <div className="client-stage__media" aria-hidden="true" />
+          <div className="client-stage__grain" aria-hidden="true" />
 
-      <div className="grid gap-6 sm:grid-cols-3">
-        <Card className="border-slate-200">
-          <CardContent className="flex items-center justify-between p-10 pt-10 md:pt-10">
-            <div>
-              <p className="text-xs text-slate-500">Active</p>
-              <p className="text-2xl font-bold">{summary.active}</p>
-            </div>
-            <Clock3 className="h-5 w-5 text-primary" />
-          </CardContent>
-        </Card>
-        <Card className="border-slate-200">
-          <CardContent className="flex items-center justify-between p-10 pt-10 md:pt-10">
-            <div>
-              <p className="text-xs text-slate-500">Completed</p>
-              <p className="text-2xl font-bold">{summary.completed}</p>
-            </div>
-            <CalendarCheck2 className="h-5 w-5 text-emerald-600" />
-          </CardContent>
-        </Card>
-        <Card className="border-slate-200">
-          <CardContent className="flex items-center justify-between p-10 pt-10 md:pt-10">
-            <div>
-              <p className="text-xs text-slate-500">Cancelled/Expired</p>
-              <p className="text-2xl font-bold">{summary.cancelled}</p>
-            </div>
-            <CircleX className="h-5 w-5 text-rose-600" />
-          </CardContent>
-        </Card>
-      </div>
-
-      <Card className="border-slate-200">
-        <CardContent className="space-y-10 p-10 pt-10 md:pt-10">
-          <div className="relative">
-            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
-            <Input
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
-              placeholder="Search by cleaner, service, city, postcode"
-              className="pl-9"
-            />
-          </div>
-
-          <div className="flex flex-wrap gap-2">
-            {STATUS_FILTERS.map((f) => (
-              <button
-                key={f.key}
-                onClick={() => setFilter(f.key)}
-                className={`rounded-full px-3 py-1.5 text-xs font-medium ${
-                  filter === f.key ? 'bg-primary text-white shadow-[0_8px_16px_rgba(39,70,250,0.3)]' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
-                }`}
+          <div className="relative z-10 grid gap-7 px-5 py-7 sm:px-8 sm:py-8 lg:grid-cols-[1.2fr_0.8fr] lg:items-end lg:px-10 lg:py-9">
+            <div className="animate-stage-up space-y-4">
+              <p className={`${monoFont.className} text-[0.7rem] uppercase tracking-[0.24em] text-white/75`}>
+                MaidHive Booking Command
+              </p>
+              <h1 className={`${displayFont.className} text-4xl font-extrabold tracking-[-0.03em] text-white sm:text-5xl lg:text-6xl`}>
+                Your Booking Ledger
+              </h1>
+              <p className="max-w-xl text-sm text-slate-100/90 sm:text-base">
+                Track status, complete active jobs, and jump to details from one focused booking stream.
+              </p>
+              <Link
+                href="/client/cleaners"
+                className="inline-flex h-11 items-center rounded-full bg-[#f4b400] px-5 text-sm font-semibold text-slate-950 transition duration-300 hover:-translate-y-0.5 hover:bg-[#ffca3a]"
               >
-                {f.label}
-              </button>
-            ))}
+                Book another service
+              </Link>
+            </div>
+
+            <div className="animate-stage-up delay-120">
+              <div className="ml-auto grid w-full max-w-sm grid-cols-3 gap-3 rounded-3xl border border-white/20 bg-black/35 p-4 backdrop-blur-sm">
+                <MetricChip label="Active" value={activeCount} icon={<Clock3 className="h-4 w-4" />} monoFont={monoFont.className} displayFont={displayFont.className} />
+                <MetricChip label="Done" value={completedCount} icon={<CalendarCheck2 className="h-4 w-4" />} monoFont={monoFont.className} displayFont={displayFont.className} />
+                <MetricChip label="Closed" value={cancelledCount} icon={<CircleX className="h-4 w-4" />} monoFont={monoFont.className} displayFont={displayFont.className} />
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <section className="rounded-[1.5rem] border border-slate-200/80 bg-white/90 p-4 shadow-[0_18px_45px_rgba(11,33,78,0.08)] backdrop-blur-sm sm:p-6">
+          <div className="grid gap-3 md:grid-cols-[1fr_auto] md:items-center">
+            <div className="relative">
+              <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+              <Input
+                value={query}
+                onChange={(event) => setQuery(event.target.value)}
+                placeholder="Search by cleaner, service, city, or postcode"
+                className="h-11 rounded-full border-slate-300 pl-9"
+              />
+            </div>
+            <div className="flex flex-wrap gap-2">
+              {STATUS_FILTERS.map((status) => (
+                <button
+                  key={status.key}
+                  onClick={() => setFilter(status.key)}
+                  className={`rounded-full px-3 py-1.5 text-xs font-semibold transition ${
+                    filter === status.key
+                      ? 'bg-[#0d4bc9] text-white shadow-[0_8px_16px_rgba(13,75,201,0.32)]'
+                      : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                  }`}
+                >
+                  {status.label}
+                </button>
+              ))}
+            </div>
           </div>
 
-          {filtered.length === 0 ? (
-            <EmptyState
-              title="No bookings found"
-              description={bookings.length === 0 ? 'You do not have bookings yet.' : 'Try a different search or filter.'}
-              action={
-                <Link href="/client/cleaners" className="inline-flex h-9 items-center rounded-xl bg-primary px-3 text-sm font-semibold text-white transition-all duration-200 hover:-translate-y-0.5">
-                  Browse cleaners
-                </Link>
-              }
-            />
-          ) : (
-            <div className="space-y-4">
-              {filtered.map((b) => {
-                const cleanerName = (b as any)?.cleaner?.user?.name ?? 'Cleaner'
-                const canDispute = ['in_progress', 'completed', 'disputed'].includes(b.status)
-                const isActiveBooking = ['pending', 'accepted', 'confirmed', 'in_progress'].includes(b.status)
-                const canComplete = b.status === 'in_progress'
-                const chatCutoff = b.scheduled_end ? new Date(b.scheduled_end).getTime() + 30 * 60 * 1000 : Infinity
-                const canChat = ['confirmed', 'in_progress', 'completed', 'disputed'].includes(b.status) && Date.now() < chatCutoff
-                return (
-                  <article key={b.id} className="rounded-2xl border border-slate-200 bg-white p-6 transition-all duration-200 hover:-translate-y-0.5 hover:shadow-[0_10px_26px_rgba(15,23,42,0.08)]">
-                    <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
-                      <div>
-                        <p className="text-base font-semibold text-slate-900">{SERVICE_LABELS[b.service_type] ?? b.service_type}</p>
-                        <p className="text-sm text-slate-600">{cleanerName}</p>
-                        <p className="text-xs text-slate-500">{formatDate(b.scheduled_start)}</p>
-                        <p className="text-xs text-slate-500">{b.address}, {b.city}, {b.postcode}</p>
-                      </div>
-                      <div className="text-left sm:text-right">
-                        <BookingStatusBadge status={b.status} />
-                        <p className="mt-2 text-sm font-semibold text-slate-900">{formatCurrency(Number(b.total_amount ?? 0))}</p>
-                      </div>
-                    </div>
+          <div className="mt-5">
+            {filtered.length === 0 ? (
+              <EmptyState
+                title="No bookings found"
+                description={
+                  deferredBookings.length === 0
+                    ? 'You do not have bookings yet.'
+                    : 'Try a different search or status filter.'
+                }
+                action={
+                  <Link
+                    href="/client/cleaners"
+                    className="inline-flex h-9 items-center rounded-full bg-[#0d4bc9] px-4 text-sm font-semibold text-white hover:bg-[#0a3ea8]"
+                  >
+                    Browse cleaners
+                  </Link>
+                }
+              />
+            ) : (
+              <div className="space-y-3">
+                {filtered.map((booking, index) => {
+                  const canDispute = ['in_progress', 'completed', 'disputed'].includes(booking.status)
+                  const isActiveBooking = ['pending', 'accepted', 'confirmed', 'in_progress'].includes(booking.status)
+                  const canComplete = booking.status === 'in_progress'
+                  const chatCutoff = booking.scheduled_end
+                    ? new Date(booking.scheduled_end).getTime() + 30 * 60 * 1000
+                    : Infinity
+                  const canChat =
+                    ['confirmed', 'in_progress', 'completed', 'disputed'].includes(booking.status) &&
+                    Date.now() < chatCutoff
 
-                    <div className="mt-4 flex flex-wrap items-center gap-2">
-                      <Link
-                        href={`/client/bookings/${b.id}`}
-                        className="inline-flex h-8 items-center rounded-xl border border-slate-300 px-3 text-xs font-semibold text-slate-700 transition-all duration-200 hover:-translate-y-0.5 hover:bg-slate-50"
-                      >
-                        View details
-                      </Link>
-                      {canChat && (
+                  return (
+                    <article
+                      key={booking.id}
+                      className="booking-row rounded-2xl border border-slate-200 bg-white px-4 py-4 transition duration-300 hover:-translate-y-0.5 hover:border-[#9eb7ec] hover:bg-[#f8fbff]"
+                      style={{ animationDelay: `${index * 75}ms` }}
+                    >
+                      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                        <div>
+                          <p className={`${displayFont.className} text-lg font-semibold tracking-[-0.01em] text-slate-900`}>
+                            {SERVICE_LABELS[booking.service_type] ?? booking.service_type}
+                          </p>
+                          <p className="text-sm text-slate-600">{booking.cleaner?.user?.name ?? 'Cleaner'}</p>
+                          <p className={`${monoFont.className} mt-1 text-[0.72rem] tracking-wide text-slate-500`}>
+                            {formatDate(booking.scheduled_start)}
+                          </p>
+                          <p className="text-xs text-slate-500">{booking.address}, {booking.city}, {booking.postcode}</p>
+                        </div>
+
+                        <div className="text-left sm:text-right">
+                          <BookingStatusBadge status={booking.status} />
+                          <p className={`${displayFont.className} mt-2 text-base font-semibold text-slate-900`}>
+                            {formatCurrency(Number(booking.total_amount ?? 0))}
+                          </p>
+                        </div>
+                      </div>
+
+                      <div className="mt-4 flex flex-wrap items-center gap-2">
                         <Link
-                          href={`/client/chats?booking=${b.id}`}
-                          className="inline-flex h-8 items-center rounded-xl border border-slate-300 px-3 text-xs font-semibold text-slate-700 transition-all duration-200 hover:-translate-y-0.5 hover:bg-slate-50"
+                          href={`/client/bookings/${booking.id}`}
+                          className="inline-flex h-8 items-center rounded-full border border-slate-300 px-3 text-xs font-semibold text-slate-700 transition hover:bg-slate-50"
                         >
-                          Message
+                          View details
                         </Link>
-                      )}
-                      {canDispute && (
-                        <Link
-                          href={`/client/report?booking=${b.id}`}
-                          className="inline-flex h-8 items-center rounded-xl bg-primary px-3 text-xs font-semibold text-white transition-all duration-200 hover:-translate-y-0.5 hover:opacity-95"
-                        >
-                          Report issue
-                        </Link>
-                      )}
-                      {isActiveBooking && (
-                        <Button
-                          size="sm"
-                          onClick={() => handleComplete(b.id)}
-                          loading={actionLoadingId === b.id}
-                          disabled={!canComplete}
-                          title={
-                            canComplete
-                              ? 'Mark this booking as complete'
-                              : 'Available when booking is in progress'
-                          }
-                        >
-                          Mark as Complete
-                        </Button>
-                      )}
-                    </div>
-                  </article>
-                )
-              })}
-            </div>
-          )}
-        </CardContent>
-      </Card>
+
+                        {canChat && (
+                          <Link
+                            href={`/client/chats?booking=${booking.id}`}
+                            className="inline-flex h-8 items-center rounded-full border border-slate-300 px-3 text-xs font-semibold text-slate-700 transition hover:bg-slate-50"
+                          >
+                            Message
+                          </Link>
+                        )}
+
+                        {canDispute && (
+                          <Link
+                            href={`/client/report?booking=${booking.id}`}
+                            className="inline-flex h-8 items-center rounded-full bg-[#0d4bc9] px-3 text-xs font-semibold text-white transition hover:bg-[#0a3ea8]"
+                          >
+                            Report issue
+                          </Link>
+                        )}
+
+                        {isActiveBooking && (
+                          <Button
+                            size="sm"
+                            onClick={() => handleComplete(booking.id)}
+                            loading={actionLoadingId === booking.id}
+                            disabled={!canComplete}
+                            title={
+                              canComplete
+                                ? 'Mark this booking as complete'
+                                : 'Available when booking is in progress'
+                            }
+                          >
+                            Mark as Complete
+                          </Button>
+                        )}
+                      </div>
+                    </article>
+                  )
+                })}
+              </div>
+            )}
+          </div>
+        </section>
+      </div>
+
+      <style jsx>{`
+        .client-stage {
+          position: relative;
+          isolation: isolate;
+          background: linear-gradient(125deg, #04162f 8%, #0f3b76 58%, #0e5698);
+        }
+
+        .client-stage__media {
+          position: absolute;
+          inset: 0;
+          background-image:
+            linear-gradient(105deg, rgba(2, 11, 27, 0.82) 10%, rgba(2, 11, 27, 0.5) 55%, rgba(8, 22, 44, 0.72) 100%),
+            url('/images/hero-client.gif');
+          background-size: cover;
+          background-position: center;
+          mix-blend-mode: screen;
+          opacity: 0.9;
+        }
+
+        .client-stage__grain {
+          position: absolute;
+          inset: 0;
+          background-image:
+            linear-gradient(90deg, rgba(255, 255, 255, 0.11) 0%, rgba(255, 255, 255, 0) 45%),
+            radial-gradient(circle at 18% 22%, rgba(56, 220, 255, 0.22), transparent 28%),
+            radial-gradient(circle at 82% 12%, rgba(244, 180, 0, 0.2), transparent 22%);
+          animation: hero-sweep 11s ease-in-out infinite;
+          pointer-events: none;
+        }
+
+        .animate-stage-up {
+          animation: stage-up 0.72s cubic-bezier(0.18, 0.82, 0.3, 1) both;
+        }
+
+        .delay-120 {
+          animation-delay: 120ms;
+        }
+
+        .booking-row {
+          animation: row-enter 0.45s ease both;
+        }
+
+        @keyframes stage-up {
+          from {
+            opacity: 0;
+            transform: translateY(18px);
+          }
+          to {
+            opacity: 1;
+            transform: translateY(0);
+          }
+        }
+
+        @keyframes row-enter {
+          from {
+            opacity: 0;
+            transform: translateY(8px);
+          }
+          to {
+            opacity: 1;
+            transform: translateY(0);
+          }
+        }
+
+        @keyframes hero-sweep {
+          0%,
+          100% {
+            transform: translateX(0%);
+            opacity: 1;
+          }
+          50% {
+            transform: translateX(1.8%);
+            opacity: 0.88;
+          }
+        }
+      `}</style>
+    </>
+  )
+}
+
+function MetricChip({
+  label,
+  value,
+  icon,
+  monoFont,
+  displayFont,
+}: {
+  label: string
+  value: number
+  icon: React.ReactNode
+  monoFont: string
+  displayFont: string
+}) {
+  return (
+    <div className="rounded-2xl border border-white/25 bg-white/10 p-3 text-white">
+      <div className="mb-1 inline-flex h-7 w-7 items-center justify-center rounded-full bg-white/15 text-cyan-100">
+        {icon}
+      </div>
+      <p className={`${monoFont} text-[0.6rem] uppercase tracking-[0.18em] text-white/70`}>{label}</p>
+      <p className={`${displayFont} mt-1 text-xl font-bold tracking-[-0.02em]`}>{value}</p>
     </div>
   )
 }

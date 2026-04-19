@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useParams, useRouter } from 'next/navigation'
+import { Bricolage_Grotesque, IBM_Plex_Mono } from 'next/font/google'
 import { ArrowLeft, ArrowRight, Check, CheckCircle2, ChevronLeft, ChevronRight, Clock, Lock, Shield, Star } from 'lucide-react'
 import { loadStripe } from '@stripe/stripe-js'
 import { Elements, PaymentElement, useStripe, useElements } from '@stripe/react-stripe-js'
@@ -21,6 +22,8 @@ import { PhoneInput } from '@/components/phone-input'
 import { toast } from 'sonner'
 
 const stripePromise = loadStripe(process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY!)
+const displayFont = Bricolage_Grotesque({ subsets: ['latin'], weight: ['400', '500', '700', '800'] })
+const monoFont = IBM_Plex_Mono({ subsets: ['latin'], weight: ['400', '500', '600'] })
 
 const SERVICE_LABELS: Record<string, string> = {
   standard: 'Standard Clean',
@@ -472,22 +475,51 @@ export default function BookingFlowPage() {
   const cleanerName = cleaner.user?.name ?? 'Professional Cleaner'
 
   return (
-    <div className="mx-auto max-w-5xl">
-      {/* Header */}
-      <div className="flex items-center justify-between mb-6">
-        <button
-          onClick={() => step > 1 && step < 4 ? setStep(step - 1) : router.back()}
-          className="inline-flex items-center gap-1.5 text-sm font-semibold text-slate-500 hover:text-slate-900 transition-colors"
-        >
-          <ArrowLeft className="h-4 w-4" /> {step > 1 && step < 4 ? 'Previous' : 'Back to All Cleaners'}
-        </button>
-        <h1 className="text-xl font-bold text-slate-900">Book Service</h1>
-        <div className="w-24 hidden sm:block" />
-      </div>
+    <>
+      <div className="client-book-flow-revamp space-y-7 md:space-y-9">
+        <section className="client-stage overflow-hidden rounded-[2rem] border border-slate-200/70">
+          <div className="client-stage__media" aria-hidden="true" />
+          <div className="client-stage__grain" aria-hidden="true" />
 
-      <StepIndicator current={step} />
+          <div className="relative z-10 grid gap-7 px-5 py-7 sm:px-8 sm:py-8 lg:grid-cols-[1.2fr_0.8fr] lg:items-end lg:px-10 lg:py-9">
+            <div className="animate-stage-up space-y-4">
+              <button
+                onClick={() => step > 1 && step < 4 ? setStep(step - 1) : router.back()}
+                className="inline-flex items-center gap-1 rounded-full border border-white/35 bg-white/10 px-3 py-1.5 text-sm font-semibold text-white transition hover:bg-white/20"
+              >
+                <ArrowLeft className="h-4 w-4" /> {step > 1 && step < 4 ? 'Previous' : 'Back to All Cleaners'}
+              </button>
+              <p className={`${monoFont.className} text-[0.7rem] uppercase tracking-[0.24em] text-white/75`}>
+                MaidHive Booking Flow
+              </p>
+              <h1 className={`${displayFont.className} text-4xl font-extrabold tracking-[-0.03em] text-white sm:text-5xl lg:text-6xl`}>
+                Book {cleanerName}
+              </h1>
+              <p className="max-w-xl text-sm text-slate-100/90 sm:text-base">
+                Select schedule, fill details, authorize payment, and confirm your booking in one guided flow.
+              </p>
+            </div>
 
-      <div className={cn('grid gap-6', step < 4 ? 'lg:grid-cols-[1fr_320px]' : 'max-w-2xl mx-auto w-full')}>
+            <div className="animate-stage-up delay-120">
+              <div className="ml-auto w-full max-w-sm rounded-3xl border border-white/20 bg-black/35 p-4 backdrop-blur-sm">
+                <p className={`${monoFont.className} text-[0.62rem] uppercase tracking-[0.18em] text-cyan-200/90`}>
+                  Current Step
+                </p>
+                <p className={`${displayFont.className} mt-1 text-3xl font-bold tracking-[-0.02em] text-white`}>
+                  {step} / 4
+                </p>
+                <p className="mt-1 text-sm text-white/80">
+                  {step === 1 ? 'Schedule' : step === 2 ? 'Your Details' : step === 3 ? 'Payment' : 'Confirmation'}
+                </p>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <div className="mx-auto max-w-5xl">
+          <StepIndicator current={step} />
+
+          <div className={cn('grid gap-6', step < 4 ? 'lg:grid-cols-[1fr_320px]' : 'max-w-2xl mx-auto w-full')}>
         {/* Main content */}
         <div>
           {/* ── Step 1: Service & Date ─────────────────────────────── */}
@@ -760,7 +792,71 @@ export default function BookingFlowPage() {
             />
           </div>
         )}
+          </div>
+        </div>
       </div>
-    </div>
+
+      <style jsx>{`
+        .client-stage {
+          position: relative;
+          isolation: isolate;
+          background: linear-gradient(125deg, #04162f 8%, #0f3b76 58%, #0e5698);
+        }
+
+        .client-stage__media {
+          position: absolute;
+          inset: 0;
+          background-image:
+            linear-gradient(105deg, rgba(2, 11, 27, 0.82) 10%, rgba(2, 11, 27, 0.5) 55%, rgba(8, 22, 44, 0.72) 100%),
+            url('/images/hero-client.gif');
+          background-size: cover;
+          background-position: center;
+          mix-blend-mode: screen;
+          opacity: 0.9;
+        }
+
+        .client-stage__grain {
+          position: absolute;
+          inset: 0;
+          background-image:
+            linear-gradient(90deg, rgba(255, 255, 255, 0.11) 0%, rgba(255, 255, 255, 0) 45%),
+            radial-gradient(circle at 18% 22%, rgba(56, 220, 255, 0.22), transparent 28%),
+            radial-gradient(circle at 82% 12%, rgba(244, 180, 0, 0.2), transparent 22%);
+          animation: hero-sweep 11s ease-in-out infinite;
+          pointer-events: none;
+        }
+
+        .animate-stage-up {
+          animation: stage-up 0.72s cubic-bezier(0.18, 0.82, 0.3, 1) both;
+        }
+
+        .delay-120 {
+          animation-delay: 120ms;
+        }
+
+        @keyframes stage-up {
+          from {
+            opacity: 0;
+            transform: translateY(18px);
+          }
+          to {
+            opacity: 1;
+            transform: translateY(0);
+          }
+        }
+
+        @keyframes hero-sweep {
+          0%,
+          100% {
+            transform: translateX(0%);
+            opacity: 1;
+          }
+          50% {
+            transform: translateX(1.8%);
+            opacity: 0.88;
+          }
+        }
+      `}</style>
+    </>
   )
 }
