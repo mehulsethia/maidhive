@@ -6,7 +6,7 @@ import { usePathname, useRouter } from 'next/navigation'
 import { LayoutGrid, CalendarDays, MessagesSquare, User } from 'lucide-react'
 import { createClient } from '@/lib/supabase'
 import { clearAuthCache } from '@/lib/auth-cache'
-import { cleanersApi, paymentsApi } from '@/lib/api'
+import { clearApiCache, cleanersApi, paymentsApi } from '@/lib/api'
 import { cn } from '@/lib/utils'
 import { useCounts } from '@/hooks/use-counts'
 import { SidebarProfile } from '@/components/sidebar-profile'
@@ -67,6 +67,7 @@ export function CleanerShell({ children }: { children: React.ReactNode }) {
 
   async function handleLogout() {
     clearAuthCache()
+    clearApiCache()
     await createClient().auth.signOut()
     router.push('/login')
     router.refresh()

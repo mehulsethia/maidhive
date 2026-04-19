@@ -12,6 +12,7 @@ import {
 } from 'lucide-react'
 import { createClient } from '@/lib/supabase'
 import { clearAuthCache } from '@/lib/auth-cache'
+import { clearApiCache } from '@/lib/api'
 import { cn } from '@/lib/utils'
 import { useCounts } from '@/hooks/use-counts'
 import { SidebarProfile } from '@/components/sidebar-profile'
@@ -40,6 +41,7 @@ export function ClientShell({ children }: { children: React.ReactNode }) {
 
   async function handleLogout() {
     clearAuthCache()
+    clearApiCache()
     await createClient().auth.signOut()
     router.push('/login')
     router.refresh()

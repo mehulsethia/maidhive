@@ -28,8 +28,13 @@ import type {
 } from '@/types'
 
 const BASE = process.env.NEXT_PUBLIC_API_URL ?? ''
+const GET_CACHE_TTL_MS = Number(process.env.NEXT_PUBLIC_API_CLIENT_CACHE_TTL_MS ?? 30000)
 
 type AnyObj = Record<string, any>
+type CachedResponse = { expiresAt: number; data: unknown }
+
+const getResponseCache = new Map<string, CachedResponse>()
+const inFlightGetRequests = new Map<string, Promise<unknown>>()
 
 function normalizePaginated<T>(payload: AnyObj, key: string): PaginatedResponse<T> {
   const items = (payload?.items ?? payload?.[key] ?? []) as T[]
@@ -53,7 +58,12 @@ async function getAuthHeaders(): Promise<HeadersInit> {
   }
 }
 
-async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
+export function clearApiCache() {
+  getResponseCache.clear()
+  inFlightGetRequests.clear()
+}
+
+async function executeRequest<T>(path: string, options: RequestInit, method: string): Promise<T> {
   const headers = await getAuthHeaders()
   const res = await fetch(`${BASE}/api/v1${path}`, {
     ...options,
@@ -65,7 +75,45 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
     const error = await res.json().catch(() => ({ detail: 'Unknown error' }))
     throw new Error(error.detail ?? error.message ?? `Request failed: ${res.status}`)
   }
-  return res.json() as Promise<T>
+
+  const json = (await res.json()) as T
+  if (method !== 'GET') {
+    // Avoid stale cross-page reads immediately after writes.
+    clearApiCache()
+  }
+  return json
+}
+
+async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
+  const method = String(options.method ?? 'GET').toUpperCase()
+
+  if (method !== 'GET' || GET_CACHE_TTL_MS <= 0) {
+    return executeRequest<T>(path, options, method)
+  }
+
+  const cacheKey = `${method}:${path}`
+  const now = Date.now()
+  const cached = getResponseCache.get(cacheKey)
+  if (cached && cached.expiresAt > now) {
+    return cached.data as T
+  }
+
+  const inflight = inFlightGetRequests.get(cacheKey)
+  if (inflight) {
+    return inflight as Promise<T>
+  }
+
+  const fetchPromise = executeRequest<T>(path, options, method)
+    .then((data) => {
+      getResponseCache.set(cacheKey, { data, expiresAt: Date.now() + GET_CACHE_TTL_MS })
+      return data
+    })
+    .finally(() => {
+      inFlightGetRequests.delete(cacheKey)
+    })
+
+  inFlightGetRequests.set(cacheKey, fetchPromise as Promise<unknown>)
+  return fetchPromise
 }
 
 // ---------------------------------------------------------------------------
