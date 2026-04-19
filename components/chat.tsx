@@ -126,7 +126,7 @@ export function Chat({ bookingId, currentUserId, fullHeight = false }: ChatProps
     <div
       className={cn(
         'flex flex-col overflow-hidden rounded-2xl border bg-background',
-        fullHeight ? 'h-full min-h-[560px]' : '',
+        fullHeight ? 'h-full min-h-0' : '',
       )}
       style={fullHeight ? undefined : { height: 420 }}
     >

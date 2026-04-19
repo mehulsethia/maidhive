@@ -99,7 +99,7 @@ function ClientChatsPageContent() {
   }
 
   return (
-    <div className="grid min-h-[calc(100vh-11rem)] gap-4 lg:grid-cols-[360px_1fr]">
+    <div className="grid gap-4 lg:h-[calc(100vh-10rem)] lg:grid-cols-[360px_1fr]">
       <Card className="border-slate-200 lg:h-full">
         <CardHeader className="pb-3">
           <CardTitle className="marketplace-title text-2xl">Chats</CardTitle>
@@ -162,7 +162,7 @@ function ClientChatsPageContent() {
               <p className="text-sm">Select a conversation to start chatting.</p>
             </div>
           ) : (
-            <div className="h-full p-3 md:p-4">
+            <div className="flex h-full min-h-0 flex-col p-3 md:p-4">
               <div className="mb-3 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2">
                 <p className="text-sm font-semibold text-slate-900">{SERVICE_LABELS[selected.service_type] ?? selected.service_type}</p>
                 <p className="text-xs text-slate-600">{(selected as any)?.cleaner?.user?.name ?? 'Cleaner'}</p>
@@ -171,7 +171,9 @@ function ClientChatsPageContent() {
                   Open booking details
                 </Link>
               </div>
-              <Chat bookingId={selected.id} currentUserId={currentUserId} fullHeight />
+              <div className="min-h-0 flex-1">
+                <Chat bookingId={selected.id} currentUserId={currentUserId} fullHeight />
+              </div>
             </div>
           )}
         </CardContent>

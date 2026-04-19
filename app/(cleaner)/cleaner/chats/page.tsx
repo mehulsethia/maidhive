@@ -110,7 +110,7 @@ export default function CleanerChatsPage() {
         <h1 className="marketplace-title text-3xl text-slate-900">Chats</h1>
         <p className="mt-1 text-sm text-slate-500">Manage all your client conversations.</p>
       </div>
-      <div className="grid min-h-[calc(100vh-14rem)] gap-4 lg:grid-cols-[340px_1fr]">
+      <div className="grid gap-4 lg:h-[calc(100vh-12.5rem)] lg:grid-cols-[340px_1fr]">
       <Card className="border-slate-200 lg:h-full">
         <CardHeader className="pb-3">
           <CardTitle className="text-lg">Conversations</CardTitle>
@@ -167,7 +167,7 @@ export default function CleanerChatsPage() {
               <p className="text-sm">Select a conversation to start chatting.</p>
             </div>
           ) : (
-            <div className="h-full p-3 md:p-4">
+            <div className="flex h-full min-h-0 flex-col p-3 md:p-4">
               <div className="mb-3 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2">
                 <p className="text-sm font-semibold text-slate-900">{SERVICE_LABELS[selected.service_type] ?? selected.service_type}</p>
                 <p className="text-xs text-slate-500">{selected.city}, {selected.postcode} · {formatDate(selected.scheduled_start)}</p>
@@ -175,7 +175,9 @@ export default function CleanerChatsPage() {
                   Open booking details
                 </Link>
               </div>
-              <Chat bookingId={selected.id} currentUserId={currentUserId} fullHeight />
+              <div className="min-h-0 flex-1">
+                <Chat bookingId={selected.id} currentUserId={currentUserId} fullHeight />
+              </div>
             </div>
           )}
         </CardContent>
