@@ -150,11 +150,11 @@ export function CleanerShell({ children }: { children: React.ReactNode }) {
           <section className="cleaner-stage overflow-hidden rounded-[2rem] border border-slate-200/70">
             <div className="cleaner-stage__media" aria-hidden="true" />
             <div className="cleaner-stage__grain" aria-hidden="true" />
-            <div className="relative z-10 px-5 py-4 sm:px-6 sm:py-4">
+            <div className="relative z-10 px-5 py-3 sm:px-6 sm:py-3">
               <p className={`${monoFont.className} text-[0.7rem] uppercase tracking-[0.24em] text-white/75`}>
                 {stage.tag}
               </p>
-              <h1 className={`${displayFont.className} mt-2 text-3xl font-extrabold tracking-[-0.03em] text-white sm:text-4xl`}>
+              <h1 className={`${displayFont.className} mt-1.5 text-2xl font-extrabold tracking-[-0.03em] text-white sm:text-3xl`}>
                 {stage.title}
               </h1>
               <p className="mt-2 max-w-2xl text-sm text-slate-100/90 sm:text-base">{stage.desc}</p>
@@ -262,11 +262,11 @@ export function CleanerShell({ children }: { children: React.ReactNode }) {
             <section className="cleaner-stage overflow-hidden rounded-[2rem] border border-slate-200/70">
               <div className="cleaner-stage__media" aria-hidden="true" />
               <div className="cleaner-stage__grain" aria-hidden="true" />
-              <div className="relative z-10 px-5 py-4 sm:px-6 sm:py-4">
+              <div className="relative z-10 px-5 py-3 sm:px-6 sm:py-3">
                 <p className={`${monoFont.className} text-[0.7rem] uppercase tracking-[0.24em] text-white/75`}>
                   {stage.tag}
                 </p>
-                <h1 className={`${displayFont.className} mt-2 text-3xl font-extrabold tracking-[-0.03em] text-white sm:text-4xl`}>
+                <h1 className={`${displayFont.className} mt-1.5 text-2xl font-extrabold tracking-[-0.03em] text-white sm:text-3xl`}>
                   {stage.title}
                 </h1>
                 <p className="mt-2 max-w-2xl text-sm text-slate-100/90 sm:text-base">{stage.desc}</p>

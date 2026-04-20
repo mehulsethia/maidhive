@@ -20,22 +20,22 @@ export default function AuthLayout({ children }: { children: React.ReactNode }) 
         <div className="mx-auto w-full max-w-6xl space-y-5">
           <section className="relative isolate overflow-hidden rounded-[2rem] border border-slate-200/70 bg-[linear-gradient(125deg,#04162f_8%,#0f3b76_58%,#0e5698)]">
             <div
-              className="absolute inset-0 bg-[url('/images/join-maidhive.avif')] bg-cover bg-center opacity-[0.84] mix-blend-screen"
+              className="absolute inset-0 opacity-[0.9] mix-blend-screen"
               aria-hidden="true"
               style={{
                 backgroundImage:
-                  "linear-gradient(105deg, rgba(2, 11, 27, 0.82) 10%, rgba(2, 11, 27, 0.5) 55%, rgba(8, 22, 44, 0.72) 100%), url('/images/join-maidhive.avif')",
+                  'linear-gradient(105deg, rgba(2, 11, 27, 0.84) 8%, rgba(2, 11, 27, 0.52) 52%, rgba(8, 22, 44, 0.74) 100%), radial-gradient(circle at 82% 18%, rgba(56, 220, 255, 0.24), transparent 34%), repeating-linear-gradient(135deg, rgba(255, 255, 255, 0.08) 0 2px, rgba(255, 255, 255, 0) 2px 12px)',
               }}
             />
             <div
               className="absolute inset-0 pointer-events-none bg-[linear-gradient(90deg,rgba(255,255,255,0.11)_0%,rgba(255,255,255,0)_45%),radial-gradient(circle_at_20%_28%,rgba(56,220,255,0.22),transparent_28%),radial-gradient(circle_at_82%_12%,rgba(244,180,0,0.2),transparent_22%)]"
               aria-hidden="true"
             />
-            <div className="relative z-10 px-5 py-7 sm:px-8 sm:py-8">
+            <div className="relative z-10 px-5 py-3 sm:px-6 sm:py-4">
               <p className={`${monoFont.className} text-[0.7rem] uppercase tracking-[0.24em] text-white/75`}>
                 MaidHive Access
               </p>
-              <h1 className={`${displayFont.className} mt-2 text-4xl font-extrabold tracking-[-0.03em] text-white sm:text-5xl`}>
+              <h1 className={`${displayFont.className} mt-1.5 text-2xl font-extrabold tracking-[-0.03em] text-white sm:text-3xl`}>
                 Sign In & Onboard
               </h1>
               <p className="mt-2 max-w-2xl text-sm text-slate-100/90 sm:text-base">

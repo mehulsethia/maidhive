@@ -101,12 +101,12 @@ export default function ClientProfilePage() {
           <div className="client-stage__media" aria-hidden="true" />
           <div className="client-stage__grain" aria-hidden="true" />
 
-          <div className="relative z-10 grid gap-4 px-5 py-4 sm:px-6 sm:py-4 lg:grid-cols-[1.2fr_0.8fr] lg:items-end lg:px-8 lg:py-5">
+          <div className="relative z-10 grid gap-3 px-5 py-3 sm:px-6 sm:py-3 lg:grid-cols-[1.2fr_0.8fr] lg:items-end lg:px-8 lg:py-4">
             <div className="animate-stage-up space-y-4">
               <p className={`${monoFont.className} text-[0.7rem] uppercase tracking-[0.24em] text-white/75`}>
                 MaidHive Identity Vault
               </p>
-              <h1 className={`${displayFont.className} text-3xl font-extrabold tracking-[-0.03em] text-white sm:text-4xl lg:text-5xl`}>
+              <h1 className={`${displayFont.className} text-2xl font-extrabold tracking-[-0.03em] text-white sm:text-3xl lg:text-4xl`}>
                 Client Profile
               </h1>
               <p className="max-w-xl text-sm text-slate-100/90 sm:text-base">

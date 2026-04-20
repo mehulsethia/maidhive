@@ -88,14 +88,14 @@ export default function ClientDashboardPage() {
           <div className="dashboard-stage__media" aria-hidden="true" />
           <div className="dashboard-stage__grain" aria-hidden="true" />
 
-          <div className="relative z-10 grid gap-4 px-5 py-4 sm:px-6 sm:py-5 lg:min-h-[16rem] lg:grid-cols-[1.15fr_0.85fr] lg:items-end lg:px-8 lg:py-5">
+          <div className="relative z-10 grid gap-3 px-5 py-3 sm:px-6 sm:py-3 lg:min-h-[12rem] lg:grid-cols-[1.15fr_0.85fr] lg:items-end lg:px-8 lg:py-4">
             <div className="space-y-5 lg:space-y-6 animate-stage-up">
               <p className={`${monoFont.className} text-[0.72rem] uppercase tracking-[0.28em] text-white/75`}>
                 MaidHive Client Space
               </p>
 
               <div className="space-y-2">
-                <p className={`${displayFont.className} text-3xl font-extrabold tracking-[-0.03em] text-white sm:text-4xl lg:text-5xl`}>
+                <p className={`${displayFont.className} text-2xl font-extrabold tracking-[-0.03em] text-white sm:text-3xl lg:text-4xl`}>
                   MaidHive
                 </p>
                 <h1 className={`${displayFont.className} text-lg font-medium tracking-[-0.01em] text-white/90 sm:text-xl`}>
