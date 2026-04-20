@@ -46,7 +46,6 @@ function joinedLabel(createdAt?: string) {
 
 export default function ClientCleanersPage() {
   const [loading, setLoading] = useState(true)
-  const [cityQuery, setCityQuery] = useState('')
   const [searchQuery, setSearchQuery] = useState('')
   const [minRating, setMinRating] = useState('0')
   const [minRate, setMinRate] = useState('')
@@ -54,10 +53,10 @@ export default function ClientCleanersPage() {
   const [view, setView] = useState<ViewMode>('card')
   const [cleaners, setCleaners] = useState<CleanerVM[]>([])
 
-  async function load(city?: string) {
+  async function load() {
     setLoading(true)
     try {
-      const res = await cleanersApi.search({ city: city || undefined })
+      const res = await cleanersApi.search({})
       const items = (res.data?.items ?? []) as any[]
       startTransition(() => {
         setCleaners(
@@ -126,30 +125,6 @@ export default function ClientCleanersPage() {
               <p className="max-w-xl text-sm text-slate-100/90 sm:text-base">
                 Discover vetted professionals, compare rates and ratings, then book with confidence.
               </p>
-
-              <form
-                className="flex gap-2"
-                onSubmit={(event) => {
-                  event.preventDefault()
-                  load(cityQuery)
-                }}
-              >
-                <div className="relative flex-1">
-                  <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-300" />
-                  <Input
-                    value={cityQuery}
-                    onChange={(event) => setCityQuery(event.target.value)}
-                    placeholder="Search by city"
-                    className="h-11 rounded-full border-white/35 bg-white/10 pl-9 text-white placeholder:text-white/65"
-                  />
-                </div>
-                <button
-                  type="submit"
-                  className="inline-flex h-11 items-center rounded-full bg-[#f4b400] px-4 text-sm font-semibold text-slate-950 transition hover:bg-[#ffca3a]"
-                >
-                  Search
-                </button>
-              </form>
             </div>
 
             <div className="animate-stage-up delay-120">
@@ -311,17 +286,19 @@ export default function ClientCleanersPage() {
                     </div>
                   </div>
 
-                  <div className="flex flex-wrap items-center gap-3 lg:justify-end">
+                  <div className="flex flex-col items-start gap-2 lg:items-end">
                     <p className={`${displayFont.className} text-2xl font-bold tracking-[-0.02em] text-slate-900`}>
                       {formatCurrency(Number(cleaner.hourly_rate ?? 0))}
                       <span className="text-sm font-medium text-slate-500">/hr</span>
                     </p>
-                    <Link href={`/client/cleaners/${cleaner.id}`} className="inline-flex h-9 items-center rounded-full border border-slate-300 px-3 text-sm font-semibold text-slate-700 hover:bg-slate-50">
-                      View Profile
-                    </Link>
-                    <Link href={`/client/book/${cleaner.id}`} className="inline-flex h-9 items-center rounded-full bg-[#0d4bc9] px-3 text-sm font-semibold text-white hover:bg-[#0a3ea8]">
-                      Book Now
-                    </Link>
+                    <div className="flex items-center gap-2">
+                      <Link href={`/client/cleaners/${cleaner.id}`} className="inline-flex h-9 items-center rounded-full border border-slate-300 px-3 text-sm font-semibold text-slate-700 hover:bg-slate-50">
+                        View Profile
+                      </Link>
+                      <Link href={`/client/book/${cleaner.id}`} className="inline-flex h-9 items-center rounded-full bg-[#0d4bc9] px-3 text-sm font-semibold text-white hover:bg-[#0a3ea8]">
+                        Book Now
+                      </Link>
+                    </div>
                   </div>
                 </div>
               </article>
