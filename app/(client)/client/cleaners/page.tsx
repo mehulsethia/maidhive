@@ -142,7 +142,7 @@ export default function ClientCleanersPage() {
         </section>
 
         <section className="rounded-[1.5rem] border border-slate-200/80 bg-white/90 p-4 shadow-[0_18px_45px_rgba(11,33,78,0.08)] backdrop-blur-sm sm:p-6">
-          <div className="grid gap-2 md:grid-cols-[1fr_170px_130px_130px_auto]">
+          <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-[minmax(0,1fr)_170px_130px_130px_auto]">
             <Input
               value={searchQuery}
               onChange={(event) => setSearchQuery(event.target.value)}
@@ -156,7 +156,7 @@ export default function ClientCleanersPage() {
             </Select>
             <Input type="number" min="0" value={minRate} onChange={(event) => setMinRate(event.target.value)} placeholder="Min €/hr" />
             <Input type="number" min="0" value={maxRate} onChange={(event) => setMaxRate(event.target.value)} placeholder="Max €/hr" />
-            <div className="inline-flex h-10 rounded-full border border-slate-200 p-0.5">
+            <div className="inline-flex h-10 w-full rounded-full border border-slate-200 p-0.5 sm:w-auto">
               <button
                 type="button"
                 onClick={() => setView('list')}

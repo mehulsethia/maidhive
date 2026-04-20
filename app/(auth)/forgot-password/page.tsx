@@ -30,9 +30,9 @@ export default function ForgotPasswordPage() {
   }
 
   return (
-    <div className="grid md:grid-cols-2 min-h-[620px]">
+    <div className="grid lg:grid-cols-2 min-h-[620px]">
       {/* Left — Branding panel */}
-      <div className="hidden md:flex flex-col bg-slate-50 p-5 lg:p-6">
+      <div className="hidden lg:flex flex-col bg-slate-50 p-5 lg:p-6">
         <div className="flex flex-1 min-h-[360px] flex-col justify-end rounded-xl border border-slate-200/70 bg-[linear-gradient(130deg,#04162f_5%,#0f3b76_55%,#0e5698_100%)] p-7 shadow-lg">
           <p className="text-xs uppercase tracking-[0.22em] text-cyan-100/85">MaidHive</p>
           <p className="mt-2 text-xl font-bold text-white">Securely reset access and get back to your schedule.</p>

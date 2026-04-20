@@ -50,6 +50,19 @@ body {
   overflow-x: hidden;
 }
 
+img,
+video,
+canvas,
+svg {
+  max-width: 100%;
+}
+
+@media (max-width: 1024px) {
+  body {
+    background-attachment: scroll;
+  }
+}
+
 /* Custom animations */
 @keyframes fade-in {
   from { opacity: 0; transform: translateY(16px); }

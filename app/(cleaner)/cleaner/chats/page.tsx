@@ -154,7 +154,7 @@ export default function CleanerChatsPage() {
       <Card className="border-slate-200 lg:h-full">
         <CardContent className="h-full p-0">
           {!selected ? (
-            <div className="flex h-full min-h-[560px] flex-col items-center justify-center gap-3 text-center text-slate-500">
+            <div className="flex h-full min-h-[22rem] flex-col items-center justify-center gap-3 text-center text-slate-500 sm:min-h-[26rem] md:min-h-[30rem] lg:min-h-0">
               <MessageCircleMore className="h-9 w-9 text-slate-300" />
               <p className="text-sm">Select a conversation to start chatting.</p>
             </div>

@@ -271,7 +271,7 @@ export function CleanerShell({ children }: { children: React.ReactNode }) {
                 Log out
               </button>
             </div>
-            <nav className="grid grid-cols-4 gap-1.5">
+            <nav className="flex gap-1.5 overflow-x-auto pb-0.5">
               {NAV_ITEMS.map((item) => {
                 const active = pathname.startsWith(item.href)
                 const Icon = item.icon
@@ -280,7 +280,7 @@ export function CleanerShell({ children }: { children: React.ReactNode }) {
                     key={item.href}
                     href={item.href}
                     className={cn(
-                      'relative flex flex-col items-center gap-1 rounded-xl px-2 py-1.5 text-[11px] font-semibold',
+                      'relative inline-flex min-w-[82px] shrink-0 flex-col items-center gap-1 rounded-xl px-2 py-1.5 text-[11px] font-semibold',
                       active ? 'bg-primary text-white' : 'bg-slate-100 text-slate-700',
                     )}
                   >

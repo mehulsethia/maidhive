@@ -274,7 +274,7 @@ function ClientReportPageContent() {
             </h2>
             <p className="mt-1 text-sm text-slate-500">Filter and track all submitted cases.</p>
 
-            <div className="mt-4 grid gap-2 md:grid-cols-[1fr_170px]">
+            <div className="mt-4 grid gap-2 lg:grid-cols-[1fr_170px]">
               <div className="relative">
                 <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
                 <Input

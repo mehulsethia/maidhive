@@ -53,9 +53,9 @@ function LoginForm() {
   }
 
   return (
-    <div className="grid md:grid-cols-2 min-h-[620px]">
+    <div className="grid lg:grid-cols-2 min-h-[620px]">
       {/* Left — Branding panel */}
-      <div className="hidden md:flex flex-col bg-gray-50 p-5 lg:p-6">
+      <div className="hidden lg:flex flex-col bg-gray-50 p-5 lg:p-6">
         <div className="relative rounded-xl overflow-hidden shadow-lg flex-1 min-h-[360px]">
           <Image
             src="/images/join-maidhive.avif"

@@ -77,9 +77,9 @@ function SignupForm() {
   }
 
   return (
-    <div className="grid md:grid-cols-2 min-h-[calc(100vh-8rem)]">
+    <div className="grid lg:grid-cols-2 min-h-[calc(100vh-8rem)]">
       {/* Left — Branding panel */}
-      <div className="hidden md:flex flex-col bg-gray-50 p-8 lg:p-10">
+      <div className="hidden lg:flex flex-col bg-gray-50 p-8 lg:p-10">
         <div className="relative rounded-xl overflow-hidden shadow-lg flex-1">
           <Image
             src="/images/join-maidhive.avif"
