@@ -162,6 +162,48 @@ export function CleanerShell({ children }: { children: React.ReactNode }) {
           </section>
           <div>{children}</div>
         </div>
+        <style jsx>{`
+          .cleaner-stage {
+            position: relative;
+            isolation: isolate;
+            background: linear-gradient(125deg, #04162f 8%, #0f3b76 58%, #0e5698);
+          }
+
+          .cleaner-stage__media {
+            position: absolute;
+            inset: 0;
+            background-image:
+              linear-gradient(105deg, rgba(2, 11, 27, 0.9) 6%, rgba(2, 11, 27, 0.66) 52%, rgba(8, 22, 44, 0.84) 100%),
+              radial-gradient(circle at 82% 18%, rgba(56, 220, 255, 0.24), transparent 34%),
+              repeating-linear-gradient(135deg, rgba(255, 255, 255, 0.08) 0 2px, rgba(255, 255, 255, 0) 2px 12px);
+            background-size: cover;
+            background-position: center;
+            opacity: 0.96;
+          }
+
+          .cleaner-stage__grain {
+            position: absolute;
+            inset: 0;
+            background-image:
+              linear-gradient(90deg, rgba(255, 255, 255, 0.11) 0%, rgba(255, 255, 255, 0) 45%),
+              radial-gradient(circle at 20% 28%, rgba(56, 220, 255, 0.22), transparent 28%),
+              radial-gradient(circle at 82% 12%, rgba(244, 180, 0, 0.2), transparent 22%);
+            animation: cleaner-sweep 11s ease-in-out infinite;
+            pointer-events: none;
+          }
+
+          @keyframes cleaner-sweep {
+            0%,
+            100% {
+              transform: translateX(0%);
+              opacity: 1;
+            }
+            50% {
+              transform: translateX(1.6%);
+              opacity: 0.88;
+            }
+          }
+        `}</style>
       </div>
     )
   }
