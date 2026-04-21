@@ -15,13 +15,15 @@ export async function POST(req: NextRequest) {
     return err('Unauthorized', 401)
   }
 
-  const [expirySummary, captureSummary] = await Promise.all([
+  const [expirySummary, captureSummary, autoCompletionSummary] = await Promise.all([
     paymentLifecycleService.expireBookingDeadlines(),
     paymentLifecycleService.processDueCaptures(),
+    paymentLifecycleService.processAutoCompletions(),
   ])
 
   return ok({
     expiry: expirySummary,
     captures: captureSummary,
+    auto_completions: autoCompletionSummary,
   })
 }

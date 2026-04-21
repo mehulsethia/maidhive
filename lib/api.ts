@@ -228,10 +228,29 @@ export const bookingsApi = {
     return { ...res, data: normalizePaginated<BookingRead>(res.data ?? {}, 'bookings') }
   },
   getById: (id: string) => request<APIResponse<BookingRead>>(`/bookings/${id}`),
-  action: (id: string, action: 'accept' | 'start') =>
+  action: (
+    id: string,
+    action:
+      | 'accept'
+      | 'start'
+      | 'propose_alternative'
+      | 'counter_proposal'
+      | 'accept_proposal'
+      | 'decline_proposal',
+    proposedStart?: string,
+    startLocation?: {
+      latitude: number
+      longitude: number
+      accuracy_m?: number
+    },
+  ) =>
     request<APIResponse<BookingRead>>(`/bookings/${id}/action`, {
       method: 'POST',
-      body: JSON.stringify({ action }),
+      body: JSON.stringify({
+        action,
+        ...(proposedStart ? { proposed_start: proposedStart } : {}),
+        ...(startLocation ? { start_location: startLocation } : {}),
+      }),
     }),
   complete: (id: string) =>
     request<APIResponse<BookingRead>>(`/bookings/${id}/complete`, {
@@ -285,6 +304,11 @@ export const reviewsApi = {
     request<APIResponse<ReviewRead>>(`/reviews/${bookingId}`, {
       method: 'POST',
       body: JSON.stringify(body),
+    }),
+  respond: (bookingId: string, response: string) =>
+    request<APIResponse<ReviewRead>>(`/reviews/${bookingId}/response`, {
+      method: 'POST',
+      body: JSON.stringify({ response }),
     }),
   getForCleaner: async (cleanerId: string) => {
     const res = await request<APIResponse<any>>(`/reviews/cleaner/${cleanerId}`)
@@ -400,7 +424,14 @@ export const disputesApi = {
     const res = await request<APIResponse<any>>(`/disputes?page=${page}&page_size=${pageSize}`)
     return { ...res, data: normalizePaginated<ClientDispute>(res.data ?? {}, 'disputes') }
   },
-  createForBooking: (bookingId: string, body: { reason: string; evidence?: string[] }) =>
+  createForBooking: (
+    bookingId: string,
+    body: {
+      issue_type: 'cleaner_didnt_arrive' | 'client_no_show' | 'service_not_completed' | 'property_damage_safety' | 'other_issue'
+      explanation: string
+      evidence?: string[]
+    },
+  ) =>
     request<APIResponse<any>>(`/disputes/${bookingId}`, {
       method: 'POST',
       body: JSON.stringify(body),

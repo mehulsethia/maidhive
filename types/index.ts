@@ -161,8 +161,17 @@ export interface BookingRead {
   special_instructions?: string
   accept_by?: string
   pay_by?: string
+  proposed_start?: string
+  proposed_end?: string
+  proposal_by?: 'client' | 'cleaner' | null
+  cleaner_proposals?: number
+  client_proposals?: number
   accepted_at?: string
   confirmed_at?: string
+  started_at?: string
+  started_latitude?: number
+  started_longitude?: number
+  started_accuracy_m?: number
   completed_at?: string
   cancelled_at?: string
   cancellation_reason?: string
@@ -222,6 +231,8 @@ export interface ReviewRead {
   client_id: string
   rating: number
   comment?: string
+  cleaner_response?: string
+  cleaner_responded_at?: string
   is_public: boolean
   created_at: string
 }
@@ -308,6 +319,9 @@ export interface AdminDispute {
   booking_id: string
   raised_by: string
   reason: string
+  issue_type?: string
+  explanation?: string
+  evidence?: string[] | null
   status: 'open' | 'under_review' | 'resolved' | 'closed'
   resolution_type?: string
   resolution_note?: string
@@ -321,6 +335,8 @@ export interface ClientDispute {
   booking_id: string
   raised_by: string
   reason: string
+  issue_type?: string
+  explanation?: string
   evidence?: string[] | null
   status: 'open' | 'under_review' | 'resolved' | 'closed'
   resolution_type?: string

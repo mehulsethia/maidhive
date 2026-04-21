@@ -8,6 +8,8 @@ interface TimeSlot {
 }
 
 const SLOT_INTERVAL_MS = 30 * 60 * 1000 // 30 minutes
+const BOOKING_PRE_BUFFER_MS = 15 * 60 * 1000
+const BOOKING_POST_BUFFER_MS = 15 * 60 * 1000
 const APP_TIMEZONE = 'Europe/Nicosia'
 
 /**
@@ -97,6 +99,8 @@ export const availabilityService = {
       while (cursor + SLOT_INTERVAL_MS <= windowEndTime) {
         const slotStart = new Date(cursor)
         const slotEnd = new Date(cursor + durationMs)
+        const slotBufferedStart = new Date(slotStart.getTime() - BOOKING_PRE_BUFFER_MS)
+        const slotBufferedEnd = new Date(slotEnd.getTime() + BOOKING_POST_BUFFER_MS)
 
         // Duration overflow
         const overflows = slotEnd.getTime() > windowEndTime
@@ -111,7 +115,11 @@ export const availabilityService = {
         const hasConflict =
           !overflows &&
           (blockedTimes.some((b) => b.startDatetime < slotEnd && b.endDatetime > slotStart) ||
-            existingBookings.some((b) => b.scheduledStart < slotEnd && b.scheduledEnd > slotStart))
+            existingBookings.some((b) => {
+              const existingBufferedStart = new Date(b.scheduledStart.getTime() - BOOKING_PRE_BUFFER_MS)
+              const existingBufferedEnd = new Date(b.scheduledEnd.getTime() + BOOKING_POST_BUFFER_MS)
+              return existingBufferedStart < slotBufferedEnd && existingBufferedEnd > slotBufferedStart
+            }))
 
         allSlots.push({
           start: slotStart.toISOString(),
@@ -201,9 +209,15 @@ export const availabilityService = {
 
           const slotStart = new Date(cursor)
           const slotEnd = new Date(cursor + durationMs)
+          const slotBufferedStart = new Date(slotStart.getTime() - BOOKING_PRE_BUFFER_MS)
+          const slotBufferedEnd = new Date(slotEnd.getTime() + BOOKING_POST_BUFFER_MS)
           const hasConflict =
             blockedTimes.some((b) => b.startDatetime < slotEnd && b.endDatetime > slotStart) ||
-            existingBookings.some((b) => b.scheduledStart < slotEnd && b.scheduledEnd > slotStart)
+            existingBookings.some((b) => {
+              const existingBufferedStart = new Date(b.scheduledStart.getTime() - BOOKING_PRE_BUFFER_MS)
+              const existingBufferedEnd = new Date(b.scheduledEnd.getTime() + BOOKING_POST_BUFFER_MS)
+              return existingBufferedStart < slotBufferedEnd && existingBufferedEnd > slotBufferedStart
+            })
 
           if (!hasConflict) {
             hasBookableSlot = true
@@ -229,4 +243,3 @@ function isoWeekday(date: Date): number {
   const d = date.getUTCDay() // 0=Sun...6=Sat
   return d === 0 ? 7 : d
 }
-

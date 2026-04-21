@@ -1,7 +1,16 @@
 import { z } from 'zod'
 
+export const DISPUTE_ISSUE_TYPES = [
+  'cleaner_didnt_arrive',
+  'client_no_show',
+  'service_not_completed',
+  'property_damage_safety',
+  'other_issue',
+] as const
+
 export const createDisputeSchema = z.object({
-  reason: z.string().min(1).max(2000),
+  issue_type: z.enum(DISPUTE_ISSUE_TYPES),
+  explanation: z.string().trim().min(20).max(2000),
   evidence: z.array(z.string().url()).optional(),
 })
 

@@ -4,7 +4,7 @@ import Link from 'next/link'
 import { useDeferredValue, useEffect, useState, startTransition } from 'react'
 import { Bricolage_Grotesque, IBM_Plex_Mono } from 'next/font/google'
 import { CalendarCheck2, CircleX, Clock3, Search } from 'lucide-react'
-import { bookingsApi } from '@/lib/api'
+import { bookingsApi, disputesApi } from '@/lib/api'
 import { BookingStatusBadge } from '@/components/booking-status-badge'
 import { EmptyState } from '@/components/empty-state'
 import { ListPageSkeleton } from '@/components/page-skeletons'
@@ -38,15 +38,21 @@ const SERVICE_LABELS: Record<string, string> = {
 export default function ClientBookingsPage() {
   const [loading, setLoading] = useState(true)
   const [bookings, setBookings] = useState<BookingRead[]>([])
+  const [bookingDisputeStatus, setBookingDisputeStatus] = useState<Map<string, string>>(new Map())
   const [actionLoadingId, setActionLoadingId] = useState<string | null>(null)
   const [query, setQuery] = useState('')
   const [filter, setFilter] = useState<'all' | BookingStatus>('all')
 
   async function loadBookings() {
     try {
-      const res = await bookingsApi.my()
+      const [res, disputesRes] = await Promise.all([bookingsApi.my(), disputesApi.listMine()])
+      const disputeMap = new Map<string, string>()
+      for (const dispute of disputesRes.data?.items ?? []) {
+        if (dispute?.booking_id) disputeMap.set(dispute.booking_id, dispute.status)
+      }
       startTransition(() => {
         setBookings(res.data?.items ?? [])
+        setBookingDisputeStatus(disputeMap)
         setLoading(false)
       })
     } catch {
@@ -184,7 +190,10 @@ export default function ClientBookingsPage() {
             ) : (
               <div className="space-y-3">
                 {filtered.map((booking, index) => {
-                  const canDispute = ['in_progress', 'completed', 'disputed'].includes(booking.status)
+                  const disputeStatusForBooking = bookingDisputeStatus.get(booking.id)
+                  const completedAtMs = booking.completed_at ? new Date(booking.completed_at).getTime() : 0
+                  const isWithinDisputeWindow = completedAtMs > 0 && Date.now() <= completedAtMs + 24 * 60 * 60 * 1000
+                  const canDispute = booking.status === 'completed' && isWithinDisputeWindow && !disputeStatusForBooking
                   const isActiveBooking = ['pending', 'accepted', 'confirmed', 'in_progress'].includes(booking.status)
                   const canComplete = booking.status === 'in_progress'
                   const chatCutoff = booking.scheduled_end
@@ -242,8 +251,13 @@ export default function ClientBookingsPage() {
                             href={`/client/report?booking=${booking.id}`}
                             className="inline-flex h-8 items-center rounded-full bg-[#0d4bc9] px-3 text-xs font-semibold text-white transition hover:bg-[#0a3ea8]"
                           >
-                            Report issue
+                            Report a Problem
                           </Link>
+                        )}
+                        {disputeStatusForBooking === 'under_review' && (
+                          <span className="inline-flex h-8 items-center rounded-full border border-amber-200 bg-amber-50 px-3 text-xs font-semibold text-amber-700">
+                            This booking is currently under review by MaidHive.
+                          </span>
                         )}
 
                         {isActiveBooking && (

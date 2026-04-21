@@ -8,6 +8,7 @@ import { bookingsApi, disputesApi } from '@/lib/api'
 import { EmptyState } from '@/components/empty-state'
 import { ReportPageSkeleton } from '@/components/page-skeletons'
 import { Button } from '@/components/ui/button'
+import { Dialog, DialogTitle } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Select } from '@/components/ui/select'
@@ -17,8 +18,15 @@ import type { BookingRead, ClientDispute } from '@/types'
 import { toast } from 'sonner'
 
 type ReportStatus = 'open' | 'under_review' | 'resolved' | 'closed'
-const DISPUTE_WINDOW_MINUTES = Number(process.env.NEXT_PUBLIC_POST_COMPLETION_BUFFER_MINUTES ?? 30)
-const DISPUTE_WINDOW_MS = DISPUTE_WINDOW_MINUTES * 60 * 1000
+const DISPUTE_WINDOW_HOURS = Number(process.env.NEXT_PUBLIC_DISPUTE_WINDOW_HOURS ?? 24)
+const DISPUTE_WINDOW_MS = DISPUTE_WINDOW_HOURS * 60 * 60 * 1000
+
+const ISSUE_OPTIONS = [
+  { value: 'cleaner_didnt_arrive', label: "Cleaner didn't arrive" },
+  { value: 'service_not_completed', label: 'Service not completed as expected' },
+  { value: 'property_damage_safety', label: 'Property damage or safety issue' },
+  { value: 'other_issue', label: 'Other issue' },
+] as const
 
 const STATUS_STYLES: Record<ReportStatus, string> = {
   open: 'bg-rose-100 text-rose-700',
@@ -60,8 +68,12 @@ function ClientReportPageContent() {
   const [disputes, setDisputes] = useState<ClientDispute[]>([])
 
   const [bookingId, setBookingId] = useState('')
-  const [reason, setReason] = useState('')
+  const [issueType, setIssueType] = useState<(typeof ISSUE_OPTIONS)[number]['value']>('service_not_completed')
+  const [explanation, setExplanation] = useState('')
   const [evidenceInput, setEvidenceInput] = useState('')
+  const [evidenceFiles, setEvidenceFiles] = useState<File[]>([])
+  const [confirmOpen, setConfirmOpen] = useState(false)
+  const [uploadingEvidence, setUploadingEvidence] = useState(false)
   const [search, setSearch] = useState('')
   const [statusFilter, setStatusFilter] = useState<'all' | ReportStatus>('all')
 
@@ -97,16 +109,26 @@ function ClientReportPageContent() {
   const deferredBookings = useDeferredValue(bookings)
   const deferredDisputes = useDeferredValue(disputes)
 
-  const disputeBookingIds = new Set(deferredDisputes.map((dispute) => getDisputeBookingId(dispute)))
+  const disputeByBookingId = new Map(deferredDisputes.map((dispute) => [getDisputeBookingId(dispute), dispute]))
+  const disputeBookingIds = new Set(disputeByBookingId.keys())
+  const queryBookingDisputeStatus = bookingFromQuery ? disputeByBookingId.get(bookingFromQuery)?.status : undefined
 
   const eligibleBookings = deferredBookings.filter((booking) => {
-    if (booking.status !== 'completed') return false
     if (disputeBookingIds.has(booking.id)) return false
 
-    const completedAt = booking.completed_at ? new Date(booking.completed_at).getTime() : 0
-    if (!completedAt) return false
+    if (booking.status === 'in_progress') return true
 
-    return Date.now() <= completedAt + DISPUTE_WINDOW_MS
+    if (booking.status === 'completed' || booking.status === 'disputed') {
+      const completedAt = booking.completed_at ? new Date(booking.completed_at).getTime() : 0
+      if (!completedAt) return false
+      return Date.now() <= completedAt + DISPUTE_WINDOW_MS
+    }
+
+    if (booking.status === 'confirmed') {
+      return Date.now() >= new Date(booking.scheduled_start).getTime() + 30 * 60 * 1000
+    }
+
+    return false
   })
 
   useEffect(() => {
@@ -120,27 +142,74 @@ function ClientReportPageContent() {
     }
   }, [eligibleBookings, bookingId])
 
+  const selectedBooking = eligibleBookings.find((booking) => booking.id === bookingId)
+  const canUseCleanerNoShowOption = selectedBooking
+    ? Date.now() >= new Date(selectedBooking.scheduled_start).getTime() + 30 * 60 * 1000
+    : false
+
   async function submitReport() {
     if (!bookingId) return toast.error('Select a booking.')
     if (!eligibleBookings.some((booking) => booking.id === bookingId)) {
-      return toast.error('This booking is outside the dispute window or already has a dispute.')
+      return toast.error('This booking cannot be reported right now or already has a dispute.')
     }
-    if (!reason.trim()) return toast.error('Please describe the issue.')
+    if (!issueType) return toast.error('Select a report reason.')
+    if (!selectedBooking) return toast.error('Invalid booking selection.')
+    if (issueType === 'cleaner_didnt_arrive') {
+      const canReportNoShowAt = new Date(selectedBooking.scheduled_start).getTime() + 30 * 60 * 1000
+      if (Date.now() < canReportNoShowAt) {
+        return toast.error('Cleaner no-show can be reported 30 minutes after the scheduled start time.')
+      }
+    }
+    if (explanation.trim().length < 20) {
+      return toast.error('Please provide at least 20 characters in your explanation.')
+    }
+    setConfirmOpen(true)
+  }
 
+  async function confirmSubmitReport() {
+    setConfirmOpen(false)
     const evidence = evidenceInput
       .split('\n')
       .map((value) => value.trim())
       .filter(Boolean)
 
+    const uploadedUrls: string[] = []
+    if (evidenceFiles.length > 0) {
+      setUploadingEvidence(true)
+      try {
+        for (const file of evidenceFiles) {
+          const form = new FormData()
+          form.append('file', file)
+          const res = await fetch('/api/v1/upload/dispute-evidence', {
+            method: 'POST',
+            body: form,
+          })
+          const json = await res.json().catch(() => null)
+          if (!res.ok || !json?.success || !json?.data?.url) {
+            throw new Error(json?.message ?? `Failed to upload ${file.name}`)
+          }
+          uploadedUrls.push(json.data.url)
+        }
+      } catch (err: any) {
+        setUploadingEvidence(false)
+        return toast.error(err.message ?? 'Failed to upload evidence')
+      } finally {
+        setUploadingEvidence(false)
+      }
+    }
+
     setSaving(true)
     try {
       await disputesApi.createForBooking(bookingId, {
-        reason: reason.trim(),
-        evidence: evidence.length ? evidence : undefined,
+        issue_type: issueType,
+        explanation: explanation.trim(),
+        evidence: [...evidence, ...uploadedUrls].length ? [...evidence, ...uploadedUrls] : undefined,
       })
       toast.success('Report submitted successfully.')
-      setReason('')
+      setIssueType('service_not_completed')
+      setExplanation('')
       setEvidenceInput('')
+      setEvidenceFiles([])
       await load()
     } catch (err: any) {
       toast.error(err.message ?? 'Failed to submit report.')
@@ -217,12 +286,17 @@ function ClientReportPageContent() {
               Raise a new dispute
             </h2>
             <p className="mt-1 text-sm text-slate-500">
-              Only completed bookings in the {DISPUTE_WINDOW_MINUTES}-minute dispute window can be reported.
+              Report active issues during cleaning, or report completed bookings within the {DISPUTE_WINDOW_HOURS}-hour dispute window.
             </p>
+            {queryBookingDisputeStatus === 'under_review' && (
+              <p className="mt-2 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-700">
+                This booking is currently under review by MaidHive.
+              </p>
+            )}
 
             {eligibleBookings.length === 0 ? (
               <div className="mt-4">
-                <EmptyState title="No eligible bookings" description="Complete a booking first, then raise a report within the allowed window." />
+                <EmptyState title="No eligible bookings" description="No active/completed bookings are currently eligible for reporting." />
               </div>
             ) : (
               <div className="mt-4 space-y-4">
@@ -238,14 +312,50 @@ function ClientReportPageContent() {
                 </div>
 
                 <div>
-                  <Label>Issue Description</Label>
+                  <Label>Report reason</Label>
+                  <Select value={issueType} onChange={(event) => setIssueType(event.target.value as (typeof ISSUE_OPTIONS)[number]['value'])} className="mt-1">
+                    {ISSUE_OPTIONS.filter((option) =>
+                      option.value === 'cleaner_didnt_arrive' ? canUseCleanerNoShowOption : true,
+                    ).map((option) => (
+                      <option key={option.value} value={option.value}>
+                        {option.label}
+                      </option>
+                    ))}
+                  </Select>
+                  {!canUseCleanerNoShowOption && (
+                    <p className="mt-1 text-xs text-slate-500">
+                      “Cleaner didn&apos;t arrive” becomes available 30 minutes after scheduled start.
+                    </p>
+                  )}
+                </div>
+
+                <div>
+                  <Label>Short explanation (minimum 20 characters)</Label>
                   <Textarea
-                    value={reason}
-                    onChange={(event) => setReason(event.target.value)}
+                    value={explanation}
+                    onChange={(event) => setExplanation(event.target.value)}
                     className="mt-1"
                     rows={4}
-                    placeholder="Describe what happened and how you want this resolved."
+                    placeholder="Describe what happened in clear detail."
                   />
+                  <p className="mt-1 text-xs text-slate-500">{explanation.trim().length}/20 minimum</p>
+                  {issueType === 'property_damage_safety' && (
+                    <p className="mt-1 text-xs text-amber-700">For property damage or safety reports, please upload photo evidence if available.</p>
+                  )}
+                </div>
+
+                <div>
+                  <Label>Upload evidence (optional photos/screenshots)</Label>
+                  <Input
+                    type="file"
+                    accept="image/*"
+                    multiple
+                    onChange={(event) => setEvidenceFiles(Array.from(event.target.files ?? []))}
+                    className="mt-1"
+                  />
+                  {evidenceFiles.length > 0 && (
+                    <p className="mt-1 text-xs text-slate-500">{evidenceFiles.length} file(s) selected</p>
+                  )}
                 </div>
 
                 <div>
@@ -260,7 +370,7 @@ function ClientReportPageContent() {
                 </div>
 
                 <div className="flex justify-end">
-                  <Button onClick={submitReport} loading={saving} className="rounded-full bg-[#0d4bc9] hover:bg-[#0a3ea8]">
+                  <Button onClick={submitReport} loading={saving || uploadingEvidence} className="rounded-full bg-[#0d4bc9] hover:bg-[#0a3ea8]">
                     Submit Report
                   </Button>
                 </div>
@@ -323,7 +433,7 @@ function ClientReportPageContent() {
                         </span>
                       </div>
 
-                      <p className="mt-2 text-sm text-slate-700">{dispute.reason}</p>
+                      <p className="mt-2 text-sm text-slate-700">{dispute.explanation ?? dispute.reason}</p>
 
                       {getDisputeResolutionNote(dispute) && (
                         <p className="mt-2 rounded-md bg-emerald-50 px-3 py-2 text-xs text-emerald-700">
@@ -345,6 +455,24 @@ function ClientReportPageContent() {
           </div>
         </section>
       </div>
+
+      <Dialog open={confirmOpen} onClose={() => setConfirmOpen(false)}>
+        <DialogTitle>Confirm Report Submission</DialogTitle>
+        <div className="space-y-3">
+          <p className="text-sm text-muted-foreground">
+            Please note: submitting false or misleading reports may result in account penalties or suspension.
+            Please confirm that the information you are submitting is accurate.
+          </p>
+          <div className="grid grid-cols-2 gap-2">
+            <Button variant="outline" onClick={() => setConfirmOpen(false)}>
+              Cancel
+            </Button>
+            <Button onClick={confirmSubmitReport} loading={saving || uploadingEvidence}>
+              Confirm Report
+            </Button>
+          </div>
+        </div>
+      </Dialog>
 
       <style jsx>{`
         .client-stage {

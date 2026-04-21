@@ -10,7 +10,9 @@ export const POST = requireClient(async (req: NextRequest, ctx, user) => {
   const { bookingId } = await ctx.params
   const booking = await bookingRepo.findById(bookingId)
   if (!booking) return err('Booking not found', 404)
-  if (booking.status !== 'completed') return err('Can only review completed bookings', 400)
+  if (!booking.completedAt || !['completed', 'disputed'].includes(booking.status)) {
+    return err('Can only review completed bookings', 400)
+  }
 
   const client = await clientRepo.findByUserId(user.id)
   if (!client || booking.clientId !== client.id) return err('Forbidden', 403)

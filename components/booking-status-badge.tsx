@@ -9,7 +9,7 @@ const STATUS_CONFIG: Record<BookingStatus, { label: string; variant: 'default' |
   completed:   { label: 'Completed',   variant: 'success' },
   cancelled:   { label: 'Cancelled',   variant: 'secondary' },
   expired:     { label: 'Expired',     variant: 'secondary' },
-  disputed:    { label: 'Disputed',    variant: 'destructive' },
+  disputed:    { label: 'Under Review',    variant: 'destructive' },
 }
 
 export function BookingStatusBadge({ status }: { status: BookingStatus }) {

@@ -67,7 +67,7 @@ function CleanerCard({
   const sb = STATUS_BADGE[cleaner.status]
   return (
     <Card className="rounded-2xl border-slate-200">
-      <CardContent className="p-5 pt-5">
+      <CardContent className="p-5 sm:p-6">
         {/* Header: avatar, name, badges, rate */}
         <div className="flex items-start justify-between gap-4 mb-4">
           <div className="flex items-start gap-3 min-w-0">
@@ -326,7 +326,7 @@ export default function AdminCleanersPage() {
                 }
               />
             ) : (
-              <div className="space-y-3 rounded-2xl border border-slate-200/80 bg-white/80 p-3 sm:p-4">
+              <div className="space-y-3 rounded-2xl border border-slate-200/80 bg-white/80 p-4 sm:p-5">
                 {cleaners[s].map(c => (
                   <CleanerCard
                     key={c.id}

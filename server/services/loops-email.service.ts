@@ -8,7 +8,7 @@ const ADMIN_DISPUTE_RAISED_TRANSACTIONAL_ID = 'cmo5hoydy048w0i0p3io44dlm'
 const CLIENT_ACCOUNT_CREATED_TRANSACTIONAL_ID = 'cmo2r81uz0ec30iyxo9lozvlg'
 const CLIENT_BOOKING_CONFIRMED_TRANSACTIONAL_ID = 'cmo2rcbtv2p880izkqlj9rxj9'
 const CLIENT_BOOKING_CREATED_PENDING_TRANSACTIONAL_ID =
-  process.env.LOOPS_CLIENT_BOOKING_CREATED_PENDING_TRANSACTIONAL_ID ?? 'hello@maidhive.app'
+  process.env.LOOPS_CLIENT_BOOKING_CREATED_PENDING_TRANSACTIONAL_ID ?? ''
 const CLIENT_BOOKING_REJECTED_OR_EXPIRED_TRANSACTIONAL_ID = 'cmo2rozk700gw0izg1w1rhfrf'
 const CLIENT_PAYMENT_RECEIPT_TRANSACTIONAL_ID = 'cmo2rrvdv2ppa0izkfm5zk7ov'
 const CLIENT_REVIEW_REQUEST_TRANSACTIONAL_ID = 'cmo2rtf800f500iyxs4d16x8x'
@@ -36,6 +36,13 @@ async function sendTransactionalEmail(payload: SendTransactionalPayload) {
   if (!LOOPS_API_KEY) {
     throw new Error('Missing LOOPS_API_KEY')
   }
+  const transactionalId = payload.transactionalId.trim()
+  if (!transactionalId || transactionalId.includes('@')) {
+    throw new Error('Invalid Loops transactionalId. Set a valid LOOPS_*_TRANSACTIONAL_ID value.')
+  }
+  if (!payload.email?.trim()) {
+    throw new Error('Missing recipient email address for Loops transactional send')
+  }
 
   const res = await fetch(LOOPS_TRANSACTIONAL_ENDPOINT, {
     method: 'POST',
@@ -43,7 +50,11 @@ async function sendTransactionalEmail(payload: SendTransactionalPayload) {
       Authorization: `Bearer ${LOOPS_API_KEY}`,
       'Content-Type': 'application/json',
     },
-    body: JSON.stringify(payload),
+    body: JSON.stringify({
+      ...payload,
+      transactionalId,
+      email: payload.email.trim(),
+    }),
   })
 
   if (res.ok) return

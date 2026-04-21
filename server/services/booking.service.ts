@@ -3,12 +3,20 @@ import { cleanerRepo } from '../repositories/cleaner.repo'
 import { clientRepo } from '../repositories/client.repo'
 import { notificationRepo } from '../repositories/notification.repo'
 import { availabilityRepo } from '../repositories/availability.repo'
+import { paymentRepo } from '../repositories/payment.repo'
 import { loopsEmailService } from './loops-email.service'
+import { stripe } from '../stripe'
+import { config } from '../config'
 import type { User } from '@prisma/client'
 
 const PLATFORM_FEE_PCT = Number(process.env.PLATFORM_FEE_PCT ?? 10)
-const BOOKING_ACCEPT_TTL_MINUTES = Number(process.env.BOOKING_ACCEPT_TTL_MINUTES ?? 60)
+const BOOKING_ACCEPT_TTL_MINUTES = Number(process.env.BOOKING_ACCEPT_TTL_MINUTES ?? 1440)
 const BOOKING_PAY_TTL_MINUTES = Number(process.env.BOOKING_PAY_TTL_MINUTES ?? 15)
+const RESCHEDULE_CUTOFF_HOURS = 24
+const BOOKING_PRE_BUFFER_MS = 15 * 60 * 1000
+const BOOKING_POST_BUFFER_MS = 15 * 60 * 1000
+const NO_SHOW_REPORT_DELAY_MINUTES = 30
+const COMPLETE_JOB_EARLY_MINUTES = 5
 
 export const bookingService = {
   previewPrice(hourlyRate: number, durationHours: number, platformFeePct = PLATFORM_FEE_PCT) {
@@ -91,109 +99,244 @@ export const bookingService = {
     return booking
   },
 
-  async applyAction(bookingId: string, user: User, action: 'accept' | 'start') {
+  async applyAction(
+    bookingId: string,
+    user: User,
+    payload: {
+      action:
+        | 'accept'
+        | 'start'
+        | 'propose_alternative'
+        | 'counter_proposal'
+        | 'accept_proposal'
+        | 'decline_proposal'
+      proposed_start?: string
+      start_location?: {
+        latitude: number
+        longitude: number
+        accuracy_m?: number
+      }
+    },
+  ) {
+    const booking = await bookingRepo.findById(bookingId)
+    if (!booking) throw new ServiceError('Booking not found', 404)
+
+    const cleaner = await cleanerRepo.findByUserId(user.id)
+    const client = await clientRepo.findByUserId(user.id)
+    const isCleaner = Boolean(cleaner && booking.cleanerId === cleaner.id)
+    const isClient = Boolean(client && booking.clientId === client.id)
+    if (!isCleaner && !isClient) throw new ServiceError('Forbidden', 403)
+
+    const action = payload.action
+
+    if (action === 'start') {
+      if (!isCleaner) throw new ServiceError('Only cleaner can start a booking', 403)
+      if (!['accepted', 'confirmed'].includes(booking.status)) {
+        throw new ServiceError(`Cannot start a booking in status '${booking.status}'`, 400)
+      }
+      assertPaymentAuthorized(booking.payment?.status, 'start')
+      const location = sanitizeStartLocation(payload.start_location)
+      return bookingRepo.update(bookingId, {
+        status: 'in_progress',
+        startedAt: new Date(),
+        startedLatitude: location?.latitude,
+        startedLongitude: location?.longitude,
+        startedAccuracyM: location?.accuracy_m,
+      })
+    }
+
+    if (action === 'accept') {
+      if (!isCleaner) throw new ServiceError('Only cleaner can accept a booking', 403)
+      if (booking.status !== 'pending') {
+        throw new ServiceError(`Cannot accept a booking in status '${booking.status}'`, 400)
+      }
+      assertWithinRequestWindow(booking.acceptBy)
+      assertPaymentAuthorized(booking.payment?.status, 'accept')
+      const now = new Date()
+      const updated = await bookingRepo.update(bookingId, {
+        status: 'confirmed',
+        acceptedAt: now,
+        confirmedAt: now,
+        payBy: null,
+        proposedStart: null,
+        proposedEnd: null,
+        proposalBy: null,
+      })
+      await notificationRepo.create({
+        userId: booking.client.userId,
+        type: 'booking_accepted',
+        title: 'Booking accepted',
+        body: 'Cleaner accepted your booking request.',
+        data: { booking_id: bookingId },
+      })
+      return updated
+    }
+
+    if (action === 'propose_alternative') {
+      if (!isCleaner) throw new ServiceError('Only cleaner can propose an alternative time', 403)
+      if (booking.status !== 'pending') {
+        throw new ServiceError(`Cannot propose a new time in status '${booking.status}'`, 400)
+      }
+      assertWithinRequestWindow(booking.acceptBy)
+      assertRescheduleWindow(booking.scheduledStart)
+      if (booking.cleanerProposals >= 1) {
+        throw new ServiceError('Cleaner can only propose an alternative time once', 400)
+      }
+      const proposedStart = parseProposedStart(payload.proposed_start)
+      const proposedEnd = new Date(proposedStart.getTime() + Number(booking.durationHours) * 60 * 60 * 1000)
+      await validateBookingWindow(booking.cleanerId, proposedStart, proposedEnd)
+
+      const updated = await bookingRepo.update(bookingId, {
+        proposedStart,
+        proposedEnd,
+        proposalBy: 'cleaner',
+        cleanerProposals: { increment: 1 },
+      })
+      await notificationRepo.create({
+        userId: booking.client.userId,
+        type: 'booking_proposed_new_time',
+        title: 'Cleaner proposed a new time',
+        body: 'Review and accept, decline, or counter once before the request expires.',
+        data: { booking_id: bookingId },
+      })
+      return updated
+    }
+
+    if (action === 'counter_proposal') {
+      if (!isClient) throw new ServiceError('Only client can counter a proposal', 403)
+      if (booking.status !== 'pending') {
+        throw new ServiceError(`Cannot counter a proposal in status '${booking.status}'`, 400)
+      }
+      assertWithinRequestWindow(booking.acceptBy)
+      assertRescheduleWindow(booking.scheduledStart)
+      if (booking.proposalBy !== 'cleaner' || !booking.proposedStart || !booking.proposedEnd) {
+        throw new ServiceError('No cleaner proposal available to counter', 400)
+      }
+      if (booking.clientProposals >= 1) {
+        throw new ServiceError('Client can only counter once', 400)
+      }
+      const proposedStart = parseProposedStart(payload.proposed_start)
+      const proposedEnd = new Date(proposedStart.getTime() + Number(booking.durationHours) * 60 * 60 * 1000)
+      await validateBookingWindow(booking.cleanerId, proposedStart, proposedEnd)
+
+      const updated = await bookingRepo.update(bookingId, {
+        proposedStart,
+        proposedEnd,
+        proposalBy: 'client',
+        clientProposals: { increment: 1 },
+      })
+      await notificationRepo.create({
+        userId: booking.cleaner.userId,
+        type: 'booking_counter_proposal',
+        title: 'Client sent one counter-offer',
+        body: 'Accept or decline this counter-offer before the request expires.',
+        data: { booking_id: bookingId },
+      })
+      return updated
+    }
+
+    if (action === 'accept_proposal') {
+      if (booking.status !== 'pending') {
+        throw new ServiceError(`Cannot accept a proposal in status '${booking.status}'`, 400)
+      }
+      assertWithinRequestWindow(booking.acceptBy)
+      if (!booking.proposedStart || !booking.proposedEnd || !booking.proposalBy) {
+        throw new ServiceError('No proposal available to accept', 400)
+      }
+
+      if (booking.proposalBy === 'cleaner' && !isClient) {
+        throw new ServiceError('Only client can accept cleaner proposal', 403)
+      }
+      if (booking.proposalBy === 'client' && !isCleaner) {
+        throw new ServiceError('Only cleaner can accept client counter-offer', 403)
+      }
+
+      assertPaymentAuthorized(booking.payment?.status, 'accept')
+      const now = new Date()
+      const updated = await bookingRepo.update(bookingId, {
+        status: 'confirmed',
+        scheduledStart: booking.proposedStart,
+        scheduledEnd: booking.proposedEnd,
+        acceptedAt: now,
+        confirmedAt: now,
+        payBy: null,
+        proposedStart: null,
+        proposedEnd: null,
+        proposalBy: null,
+      })
+      await notificationRepo.create({
+        userId: isClient ? booking.cleaner.userId : booking.client.userId,
+        type: 'booking_time_agreed',
+        title: 'Booking time confirmed',
+        body: 'The proposed booking time has been accepted and confirmed.',
+        data: { booking_id: bookingId },
+      })
+      return updated
+    }
+
+    if (action === 'decline_proposal') {
+      if (booking.status !== 'pending') {
+        throw new ServiceError(`Cannot decline a proposal in status '${booking.status}'`, 400)
+      }
+      assertWithinRequestWindow(booking.acceptBy)
+      if (!booking.proposalBy) throw new ServiceError('No active proposal to decline', 400)
+      if (booking.proposalBy === 'cleaner' && !isClient) {
+        throw new ServiceError('Only client can decline cleaner proposal', 403)
+      }
+      if (booking.proposalBy === 'client' && !isCleaner) {
+        throw new ServiceError('Only cleaner can decline client counter-offer', 403)
+      }
+
+      const updated = await bookingRepo.update(bookingId, {
+        status: 'expired',
+        proposedStart: null,
+        proposedEnd: null,
+        proposalBy: null,
+      })
+      await releasePaymentAuthorization(booking.payment?.id, booking.payment?.stripePaymentIntentId, booking.payment?.status)
+      await notificationRepo.create({
+        userId: isClient ? booking.cleaner.userId : booking.client.userId,
+        type: 'booking_request_expired',
+        title: 'Booking request closed',
+        body: 'No final agreement was reached for this booking request.',
+        data: { booking_id: bookingId },
+      })
+      return updated
+    }
+
+    throw new ServiceError('Unsupported booking action', 400)
+  },
+
+  async completeByCleaner(bookingId: string, user: User) {
     const booking = await bookingRepo.findById(bookingId)
     if (!booking) throw new ServiceError('Booking not found', 404)
 
     const cleaner = await cleanerRepo.findByUserId(user.id)
     if (!cleaner || booking.cleanerId !== cleaner.id) {
-      throw new ServiceError('Forbidden', 403)
+      throw new ServiceError('Only assigned cleaner can complete this booking', 403)
     }
 
-    const transitions: Record<'accept' | 'start', { from: string | string[]; to: string; field: string }> = {
-      accept: { from: 'pending', to: 'accepted', field: 'acceptedAt' },
-      start: { from: ['accepted', 'confirmed'], to: 'in_progress', field: 'startedAt' },
-    }
-
-    const t = transitions[action]
-    const validFrom = Array.isArray(t.from) ? t.from : [t.from]
-    if (!validFrom.includes(booking.status)) {
-      throw new ServiceError(`Cannot ${action} a booking in status '${booking.status}'`, 400)
-    }
-
-    const paymentStatus = booking.payment?.status
-    const isPaymentAuthorized = ['authorized', 'captured', 'transferred'].includes(String(paymentStatus ?? ''))
-    if (!isPaymentAuthorized) {
-      throw new ServiceError(
-        `Cannot ${action} booking before client card authorization is completed`,
-        400,
-      )
-    }
-
-    const now = new Date()
-    const updateData: Record<string, unknown> & { status: string } = {
-      status: t.to,
-      [t.field]: now,
-    }
-
-    if (action === 'accept') {
-      updateData.payBy = null
-    }
-
-    const updated = await bookingRepo.update(bookingId, updateData)
-
-    // Notify client
-    await notificationRepo.create({
-      userId: booking.client.userId,
-      type: `booking_${action}ed`,
-      title: `Booking ${capitalize(action)}ed`,
-      body: `Your booking has been ${action}ed by the cleaner`,
-      data: { booking_id: bookingId },
-    })
-
-    if (action === 'accept') {
-      try {
-        await loopsEmailService.sendCleanerBookingAcceptedConfirmation({
-          email: booking.cleaner.user.email,
-          fullName: booking.cleaner.user.name ?? 'Cleaner',
-          bookingId,
-        })
-      } catch (emailError) {
-        console.error('Failed to send cleaner booking accepted confirmation email via Loops:', emailError)
-      }
-    }
-
-    return updated
-  },
-
-  async completeByClient(bookingId: string, user: User) {
-    const booking = await bookingRepo.findById(bookingId)
-    if (!booking) throw new ServiceError('Booking not found', 404)
-
-    const client = await clientRepo.findByUserId(user.id)
-    if (!client || booking.clientId !== client.id) {
-      throw new ServiceError('Forbidden', 403)
-    }
-
-    if (booking.status !== 'in_progress') {
+    if (!['in_progress', 'disputed'].includes(booking.status)) {
       throw new ServiceError(`Cannot complete a booking in status '${booking.status}'`, 400)
     }
 
-    const updated = await bookingRepo.update(bookingId, {
-      status: 'completed',
-      completedAt: new Date(),
-    })
-
-    await notificationRepo.create({
-      userId: booking.cleaner.userId,
-      type: 'booking_completed',
-      title: 'Booking Completed',
-      body: 'Client marked this booking as completed',
-      data: { booking_id: bookingId },
-    })
-
-    try {
-      await loopsEmailService.sendClientReviewRequest({
-        email: booking.client.user.email,
-        fullName: booking.client.user.name ?? 'Client',
-        cleanerName: booking.cleaner.user.name ?? 'Cleaner',
-        bookingId: booking.id,
-      })
-    } catch (emailError) {
-      console.error('Failed to send client review request email via Loops:', emailError)
+    if (!booking.startedAt) {
+      throw new ServiceError('Start Cleaning is required before completing the job', 400)
     }
 
-    return updated
+    assertCompletionWindow(booking.scheduledEnd)
+    return completeBookingFlow(bookingId, {
+      completedAt: new Date(),
+      initiatedByUserId: user.id,
+      initiatedByRole: 'cleaner',
+    })
+  },
+
+  async completeBySystem(bookingId: string, completedAt: Date) {
+    return completeBookingFlow(bookingId, {
+      completedAt,
+      initiatedByRole: 'system',
+    })
   },
 
   async cancel(bookingId: string, user: User, reason?: string) {
@@ -213,6 +356,8 @@ export const bookingService = {
       (cleaner && booking.cleanerId === cleaner.id)
 
     if (!isParty && user.role !== 'admin') throw new ServiceError('Forbidden', 403)
+
+    await applyCancellationPaymentPolicy(booking)
 
     const updated = await bookingRepo.update(bookingId, {
       status: 'cancelled',
@@ -270,8 +415,200 @@ function round2(n: number) {
   return Math.round(n * 100) / 100
 }
 
-function capitalize(s: string) {
-  return s.charAt(0).toUpperCase() + s.slice(1)
+function parseProposedStart(proposedStart?: string) {
+  if (!proposedStart) {
+    throw new ServiceError('Missing proposed_start', 422)
+  }
+  const parsed = new Date(proposedStart)
+  if (Number.isNaN(parsed.getTime())) {
+    throw new ServiceError('Invalid proposed_start datetime', 422)
+  }
+  return parsed
+}
+
+function assertWithinRequestWindow(acceptBy: Date | null) {
+  if (!acceptBy) return
+  if (acceptBy.getTime() < Date.now()) {
+    throw new ServiceError('Booking request window has expired', 400)
+  }
+}
+
+function assertRescheduleWindow(scheduledStart: Date) {
+  const hoursUntilStart = (scheduledStart.getTime() - Date.now()) / (60 * 60 * 1000)
+  if (hoursUntilStart <= RESCHEDULE_CUTOFF_HOURS) {
+    throw new ServiceError('Alternative proposals are only allowed for bookings more than 24 hours away', 400)
+  }
+}
+
+function assertPaymentAuthorized(paymentStatus: string | null | undefined, action: string) {
+  const isPaymentAuthorized = ['authorized', 'captured', 'transferred'].includes(String(paymentStatus ?? ''))
+  if (!isPaymentAuthorized) {
+    throw new ServiceError(
+      `Cannot ${action} booking before client card authorization is completed`,
+      400,
+    )
+  }
+}
+
+async function releasePaymentAuthorization(
+  paymentId?: string,
+  paymentIntentId?: string,
+  paymentStatus?: string | null,
+) {
+  if (!paymentId || !paymentIntentId) return
+  if (!['pending', 'authorized'].includes(String(paymentStatus ?? ''))) return
+
+  try {
+    await stripe.paymentIntents.cancel(paymentIntentId)
+  } catch {
+    // Keep booking state deterministic even if Stripe cancellation fails.
+  }
+
+  await paymentRepo.update(paymentId, {
+    status: 'failed',
+    failedAt: new Date(),
+  })
+}
+
+function assertCompletionWindow(scheduledEnd: Date) {
+  const completionOpensAt = scheduledEnd.getTime() - COMPLETE_JOB_EARLY_MINUTES * 60 * 1000
+  if (Date.now() < completionOpensAt) {
+    throw new ServiceError(
+      `Complete Job becomes available ${COMPLETE_JOB_EARLY_MINUTES} minutes before scheduled end`,
+      400,
+    )
+  }
+}
+
+function sanitizeStartLocation(startLocation?: {
+  latitude: number
+  longitude: number
+  accuracy_m?: number
+}) {
+  if (!startLocation) return null
+  const { latitude, longitude, accuracy_m } = startLocation
+  if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) return null
+
+  return {
+    latitude: roundTo(latitude, 3),
+    longitude: roundTo(longitude, 3),
+    accuracy_m: Number.isFinite(accuracy_m) ? Math.max(1, Math.round(Number(accuracy_m))) : undefined,
+  }
+}
+
+async function completeBookingFlow(
+  bookingId: string,
+  args: {
+    completedAt: Date
+    initiatedByRole: 'cleaner' | 'system'
+    initiatedByUserId?: string
+  },
+) {
+  const booking = await bookingRepo.findById(bookingId)
+  if (!booking) throw new ServiceError('Booking not found', 404)
+
+  if (!['in_progress', 'disputed'].includes(booking.status)) {
+    throw new ServiceError(`Cannot complete a booking in status '${booking.status}'`, 400)
+  }
+
+  const unresolvedDispute = Boolean(
+    booking.dispute && !['resolved', 'closed'].includes(String(booking.dispute.status ?? '')),
+  )
+
+  const nextStatus = unresolvedDispute ? 'disputed' : 'completed'
+  const updated = await bookingRepo.update(bookingId, {
+    status: nextStatus,
+    completedAt: args.completedAt,
+  })
+
+  if (!unresolvedDispute && booking.payment?.status === 'authorized') {
+    const captured = await stripe.paymentIntents.capture(booking.payment.stripePaymentIntentId)
+    await paymentRepo.update(booking.payment.id, {
+      status: 'captured',
+      stripeChargeId: typeof captured.latest_charge === 'string' ? captured.latest_charge : undefined,
+      capturedAt: new Date(),
+      payoutScheduledAt: new Date(Date.now() + config.DISPUTE_WINDOW_HOURS * 60 * 60 * 1000),
+    })
+  }
+
+  await notificationRepo.create({
+    userId: booking.client.userId,
+    type: 'booking_completed',
+    title: 'Booking Completed',
+    body:
+      args.initiatedByRole === 'system'
+        ? 'Booking was auto-completed after the scheduled end time.'
+        : 'Cleaner marked this booking as completed.',
+    data: { booking_id: bookingId },
+  })
+
+  try {
+    await loopsEmailService.sendClientReviewRequest({
+      email: booking.client.user.email,
+      fullName: booking.client.user.name ?? 'Client',
+      cleanerName: booking.cleaner.user.name ?? 'Cleaner',
+      bookingId: booking.id,
+    })
+  } catch (emailError) {
+    console.error('Failed to send client review request email via Loops:', emailError)
+  }
+
+  return updated
+}
+
+async function applyCancellationPaymentPolicy(booking: Awaited<ReturnType<typeof bookingRepo.findById>>) {
+  if (!booking?.payment) return
+
+  const payment = booking.payment
+  if (!payment.stripePaymentIntentId) return
+
+  if (payment.status === 'pending') {
+    await stripe.paymentIntents.cancel(payment.stripePaymentIntentId)
+    await paymentRepo.update(payment.id, { status: 'failed', failedAt: new Date() })
+    return
+  }
+
+  if (payment.status !== 'authorized') return
+
+  const hoursUntilStart = (booking.scheduledStart.getTime() - Date.now()) / (60 * 60 * 1000)
+  const totalAmountCents = Math.round(Number(booking.totalAmount) * 100)
+  const subtotalCents = Math.round(Number(booking.subtotal) * 100)
+  const platformFeeCents = Math.round(Number(booking.platformFee) * 100)
+
+  if (hoursUntilStart > 24) {
+    await stripe.paymentIntents.cancel(payment.stripePaymentIntentId)
+    await paymentRepo.update(payment.id, { status: 'failed', failedAt: new Date() })
+    return
+  }
+
+  let captureCents: number
+  let applicationFeeCents: number
+
+  if (hoursUntilStart > 12) {
+    captureCents = Math.min(totalAmountCents, 500)
+    applicationFeeCents = captureCents
+  } else {
+    const cleanerShareCents = Math.round(subtotalCents * 0.5)
+    captureCents = Math.min(totalAmountCents, cleanerShareCents + platformFeeCents)
+    applicationFeeCents = Math.min(captureCents, platformFeeCents)
+  }
+
+  const captured = await stripe.paymentIntents.capture(payment.stripePaymentIntentId, {
+    amount_to_capture: Math.max(1, captureCents),
+    application_fee_amount: Math.max(0, applicationFeeCents),
+  })
+
+  await paymentRepo.update(payment.id, {
+    status: 'captured',
+    stripeChargeId: typeof captured.latest_charge === 'string' ? captured.latest_charge : undefined,
+    capturedAt: new Date(),
+    payoutScheduledAt: new Date(),
+  })
+}
+
+function roundTo(n: number, decimals: number) {
+  const factor = Math.pow(10, decimals)
+  return Math.round(n * factor) / factor
 }
 
 function isoWeekday(date: Date): number {
@@ -383,9 +720,15 @@ async function validateBookingWindow(cleanerId: string, scheduledStart: Date, sc
   }
 
   const hasBookingConflict = existingBookings.some(
-    (b) => b.scheduledStart < scheduledEnd && b.scheduledEnd > scheduledStart,
+    (b) => {
+      const existingBufferedStart = new Date(b.scheduledStart.getTime() - BOOKING_PRE_BUFFER_MS)
+      const existingBufferedEnd = new Date(b.scheduledEnd.getTime() + BOOKING_POST_BUFFER_MS)
+      const requestedBufferedStart = new Date(scheduledStart.getTime() - BOOKING_PRE_BUFFER_MS)
+      const requestedBufferedEnd = new Date(scheduledEnd.getTime() + BOOKING_POST_BUFFER_MS)
+      return existingBufferedStart < requestedBufferedEnd && existingBufferedEnd > requestedBufferedStart
+    },
   )
   if (hasBookingConflict) {
-    throw new ServiceError('Selected time is no longer available', 409)
+    throw new ServiceError('Selected time conflicts with booking buffer window (15 mins before and after each booking)', 409)
   }
 }

@@ -11,12 +11,21 @@ export const disputeRepo = {
   findByBookingId: (bookingId: string) =>
     db.dispute.findUnique({ where: { bookingId } }),
 
-  create: (data: { bookingId: string; raisedBy: string; reason: string; evidence?: string[] }) =>
+  create: (data: {
+    bookingId: string
+    raisedBy: string
+    reason: string
+    issueType?: string
+    explanation?: string
+    evidence?: string[]
+  }) =>
     db.dispute.create({
       data: {
         bookingId: data.bookingId,
         raisedBy: data.raisedBy,
         reason: data.reason,
+        issueType: data.issueType,
+        explanation: data.explanation,
         evidence: data.evidence ? data.evidence : undefined,
       },
     }),

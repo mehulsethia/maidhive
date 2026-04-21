@@ -2,8 +2,54 @@ import { db } from '../db'
 import { stripe } from '../stripe'
 import { config } from '../config'
 import { loopsEmailService } from './loops-email.service'
+import { bookingService } from './booking.service'
 
 export const paymentLifecycleService = {
+  async processAutoCompletions(limit = 200) {
+    const overdue = await db.booking.findMany({
+      where: {
+        status: { in: ['in_progress', 'disputed'] },
+        scheduledEnd: { lte: new Date() },
+        completedAt: null,
+      },
+      include: {
+        dispute: true,
+      },
+      orderBy: { scheduledEnd: 'asc' },
+      take: limit,
+    })
+
+    const summary = {
+      checked: overdue.length,
+      completed: 0,
+      paused_by_dispute: 0,
+      failed: 0,
+      errors: [] as string[],
+    }
+
+    for (const booking of overdue) {
+      try {
+        if (booking.dispute && !['resolved', 'closed'].includes(String(booking.dispute.status ?? ''))) {
+          const isNoShowIssue = ['cleaner_didnt_arrive', 'client_no_show'].includes(
+            String(booking.dispute.issueType ?? ''),
+          )
+          if (isNoShowIssue) {
+            summary.paused_by_dispute += 1
+            continue
+          }
+        }
+
+        await bookingService.completeBySystem(booking.id, booking.scheduledEnd)
+        summary.completed += 1
+      } catch (e: any) {
+        summary.failed += 1
+        summary.errors.push(`${booking.id}: ${e?.message ?? 'auto_complete_failed'}`)
+      }
+    }
+
+    return summary
+  },
+
   async processDueCaptures(limit = 200) {
     const dueBefore = new Date(Date.now() - config.CAPTURE_DELAY_HOURS * 60 * 60 * 1000)
 
@@ -76,20 +122,43 @@ export const paymentLifecycleService = {
         acceptBy: { lt: now },
       },
       include: {
+        payment: true,
         client: { include: { user: true } },
         cleaner: { include: { user: true } },
       },
     })
 
-    const pending = await db.booking.updateMany({
-      where: {
-        status: 'pending',
-        acceptBy: { lt: now },
-      },
-      data: {
-        status: 'expired',
-      },
-    })
+    let expiredPendingCount = 0
+    let cancelledPendingIntents = 0
+
+    for (const booking of expiredPendingBookings) {
+      await db.booking.update({
+        where: { id: booking.id },
+        data: {
+          status: 'expired',
+          proposedStart: null,
+          proposedEnd: null,
+          proposalBy: null,
+        },
+      })
+      expiredPendingCount += 1
+
+      if (booking.payment && ['pending', 'authorized'].includes(booking.payment.status)) {
+        try {
+          await stripe.paymentIntents.cancel(booking.payment.stripePaymentIntentId)
+          await db.payment.update({
+            where: { id: booking.payment.id },
+            data: {
+              status: 'failed',
+              failedAt: new Date(),
+            },
+          })
+          cancelledPendingIntents += 1
+        } catch {
+          // Keep booking expiry deterministic even if Stripe cancellation fails.
+        }
+      }
+    }
 
     for (const booking of expiredPendingBookings) {
       try {
@@ -150,9 +219,9 @@ export const paymentLifecycleService = {
     }
 
     return {
-      expired_pending: pending.count,
+      expired_pending: expiredPendingCount,
       expired_accepted: accepted,
-      cancelled_pending_intents: cancelledIntents,
+      cancelled_pending_intents: cancelledIntents + cancelledPendingIntents,
     }
   },
 }

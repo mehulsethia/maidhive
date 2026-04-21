@@ -6,6 +6,7 @@ const bookingInclude = {
   cleaner: { include: { user: true } },
   payment: true,
   review: true,
+  dispute: true,
 } satisfies Prisma.BookingInclude
 
 export const bookingRepo = {

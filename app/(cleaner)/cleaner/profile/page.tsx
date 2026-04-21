@@ -62,6 +62,8 @@ function CleanerProfilePageContent() {
   const [submitting, setSubmitting] = useState(false)
   const [bookings, setBookings] = useState<BookingRead[]>([])
   const [reviews, setReviews] = useState<ReviewRead[]>([])
+  const [reviewResponses, setReviewResponses] = useState<Record<string, string>>({})
+  const [respondingReviewId, setRespondingReviewId] = useState<string | null>(null)
   const [stripe, setStripe] = useState<{
     connected: boolean
     onboarded: boolean
@@ -219,6 +221,25 @@ function CleanerProfilePageContent() {
       window.location.href = url
     } catch (err: any) {
       toast.error(err.message ?? 'Failed to open Stripe.')
+    }
+  }
+
+  async function respondToReview(review: ReviewRead) {
+    const draft = (reviewResponses[review.id] ?? '').trim()
+    if (draft.length < 10) {
+      toast.error('Response must be at least 10 characters.')
+      return
+    }
+
+    setRespondingReviewId(review.id)
+    try {
+      await reviewsApi.respond(review.booking_id, draft)
+      toast.success('Response published.')
+      await loadAll()
+    } catch (err: any) {
+      toast.error(err.message ?? 'Failed to publish response')
+    } finally {
+      setRespondingReviewId(null)
     }
   }
 
@@ -429,6 +450,31 @@ function CleanerProfilePageContent() {
                       </div>
                       <p className="text-xs text-slate-500">{new Date(r.created_at).toLocaleDateString('en-IE', { timeZone: 'Europe/Nicosia' })}</p>
                       <p className="mt-2 text-sm text-slate-700">{r.comment || 'No written comment provided.'}</p>
+                      {r.cleaner_response ? (
+                        <div className="mt-3 rounded-lg border border-sky-200 bg-sky-50 p-3">
+                          <p className="text-xs font-semibold uppercase tracking-wide text-sky-700">Your response</p>
+                          <p className="mt-1 text-sm text-sky-900">{r.cleaner_response}</p>
+                        </div>
+                      ) : (
+                        <div className="mt-3 space-y-2">
+                          <Textarea
+                            value={reviewResponses[r.id] ?? ''}
+                            onChange={(event) =>
+                              setReviewResponses((prev) => ({ ...prev, [r.id]: event.target.value }))
+                            }
+                            rows={3}
+                            placeholder="Write one public response (cannot be edited)."
+                          />
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => respondToReview(r)}
+                            loading={respondingReviewId === r.id}
+                          >
+                            Post response
+                          </Button>
+                        </div>
+                      )}
                     </div>
                   ))
                 )}

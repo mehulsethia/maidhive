@@ -266,6 +266,12 @@ export default function CleanerProfilePage() {
                         <p className="text-sm leading-relaxed text-slate-600">
                           {review.comment || 'No written comment provided.'}
                         </p>
+                        {review.cleaner_response && (
+                          <div className="mt-3 rounded-lg border border-sky-200 bg-sky-50 p-3">
+                            <p className="text-xs font-semibold uppercase tracking-wide text-sky-700">Cleaner response</p>
+                            <p className="mt-1 text-sm text-sky-900">{review.cleaner_response}</p>
+                          </div>
+                        )}
                       </CardContent>
                     </Card>
                   ))
@@ -370,10 +376,10 @@ function MetricCard({
 }) {
   return (
     <Card className="border-slate-200 bg-white/90">
-      <CardContent className="flex flex-col items-center justify-center p-5 text-center">
-        {icon}
-        <p className={`${displayFont} mt-2 text-2xl font-bold tracking-[-0.02em] text-slate-900`}>{value}</p>
-        <p className="text-xs text-slate-500">{title}</p>
+      <CardContent className="flex min-h-[124px] flex-col items-center justify-center gap-2 p-6 text-center">
+        <span className="grid h-9 w-9 place-items-center rounded-full bg-slate-100">{icon}</span>
+        <p className={`${displayFont} text-2xl font-bold tracking-[-0.02em] text-slate-900`}>{value}</p>
+        <p className="text-xs font-medium text-slate-500">{title}</p>
       </CardContent>
     </Card>
   )

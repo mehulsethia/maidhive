@@ -13,6 +13,7 @@ import { Separator } from '@/components/ui/separator'
 import { Dialog, DialogTitle } from '@/components/ui/dialog'
 import { Textarea } from '@/components/ui/textarea'
 import { Label } from '@/components/ui/label'
+import { Input } from '@/components/ui/input'
 import { formatCurrency, formatDate } from '@/lib/utils'
 import { createClient } from '@/lib/supabase'
 import type { BookingRead } from '@/types'
@@ -36,6 +37,8 @@ export default function CleanerBookingDetailPage() {
   const [actionLoading, setActionLoading] = useState(false)
   const [cancelOpen, setCancelOpen] = useState(false)
   const [cancelReason, setCancelReason] = useState('')
+  const [proposalOpen, setProposalOpen] = useState(false)
+  const [proposedStart, setProposedStart] = useState('')
 
   const refresh = () =>
     bookingsApi.getById(id)
@@ -50,12 +53,51 @@ export default function CleanerBookingDetailPage() {
     })
   }, [id])
 
-  async function handleAction(action: 'accept' | 'start') {
+  async function handleAction(action: 'start') {
     setActionLoading(true)
     try {
-      await bookingsApi.action(id, action)
-      const labels = { accept: 'Booking accepted!', start: 'Job started!' }
-      toast.success(labels[action])
+      let startLocation:
+        | {
+            latitude: number
+            longitude: number
+            accuracy_m?: number
+          }
+        | undefined
+
+      if (action === 'start' && typeof navigator !== 'undefined' && navigator.geolocation) {
+        try {
+          const position = await new Promise<GeolocationPosition>((resolve, reject) => {
+            navigator.geolocation.getCurrentPosition(resolve, reject, {
+              enableHighAccuracy: true,
+              timeout: 7000,
+              maximumAge: 60000,
+            })
+          })
+          startLocation = {
+            latitude: position.coords.latitude,
+            longitude: position.coords.longitude,
+            accuracy_m: position.coords.accuracy,
+          }
+        } catch {
+          // Start Cleaning must remain available even when GPS is unavailable.
+        }
+      }
+
+      await bookingsApi.action(id, action, undefined, startLocation)
+      toast.success('Job started!')
+      await refresh()
+    } catch (err: any) {
+      toast.error(err.message)
+    } finally {
+      setActionLoading(false)
+    }
+  }
+
+  async function handleComplete() {
+    setActionLoading(true)
+    try {
+      await bookingsApi.complete(id)
+      toast.success('Job completed.')
       await refresh()
     } catch (err: any) {
       toast.error(err.message)
@@ -79,13 +121,54 @@ export default function CleanerBookingDetailPage() {
     }
   }
 
+  async function handleBookingAction(
+    action: 'accept' | 'propose_alternative' | 'accept_proposal' | 'decline_proposal',
+    customProposedStart?: string,
+  ) {
+    setActionLoading(true)
+    try {
+      await bookingsApi.action(id, action, customProposedStart)
+      const labels: Record<string, string> = {
+        accept: 'Booking accepted.',
+        propose_alternative: 'Alternative time sent to client.',
+        accept_proposal: 'Counter-offer accepted. Booking confirmed.',
+        decline_proposal: 'Counter-offer declined. Request closed.',
+      }
+      toast.success(labels[action])
+      if (action === 'propose_alternative') {
+        setProposalOpen(false)
+        setProposedStart('')
+      }
+      await refresh()
+    } catch (err: any) {
+      toast.error(err.message ?? 'Action failed')
+    } finally {
+      setActionLoading(false)
+    }
+  }
+
   if (loading) return <DetailPageSkeleton />
   if (!booking) return <div className="text-center py-16 text-muted-foreground">Booking not found.</div>
+
+  const isPending = booking.status === 'pending'
+  const hasProposal = Boolean(booking.proposed_start && booking.proposal_by)
+  const isClientCounter = booking.proposal_by === 'client'
+  const isCleanerProposal = booking.proposal_by === 'cleaner'
+  const moreThan24HoursAway = new Date(booking.scheduled_start).getTime() - Date.now() > 24 * 60 * 60 * 1000
+  const canProposeAlternative = isPending && moreThan24HoursAway && !hasProposal && (booking.cleaner_proposals ?? 0) < 1
+  const canAcceptPending = isPending && !isClientCounter
+  const canRespondToCounter = isPending && isClientCounter
 
   const chatCutoff = booking.scheduled_end
     ? new Date(booking.scheduled_end).getTime() + 30 * 60 * 1000
     : Infinity
   const showChat = CHAT_STATUSES.includes(booking.status) && Date.now() < chatCutoff
+  const completeOpensAt = booking.scheduled_end
+    ? new Date(booking.scheduled_end).getTime() - 5 * 60 * 1000
+    : Infinity
+  const canCompleteJob = ['in_progress', 'disputed'].includes(booking.status) &&
+    Boolean(booking.started_at) &&
+    Date.now() >= completeOpensAt
 
   return (
     <div className="w-full space-y-5">
@@ -136,12 +219,34 @@ export default function CleanerBookingDetailPage() {
 
       {/* Actions */}
       <div className="flex flex-col gap-2">
-        {booking.status === 'pending' && (
+        {booking.status === 'pending' && hasProposal && (
+          <p className="rounded-xl border border-blue-200 bg-blue-50 px-3 py-2 text-sm text-blue-700">
+            {isCleanerProposal
+              ? 'You proposed a new time. Waiting for client response.'
+              : `Client countered with ${formatDate(booking.proposed_start!)}. Accept or decline before request expiry.`}
+          </p>
+        )}
+        {canAcceptPending && (
           <>
-            <Button size="lg" onClick={() => handleAction('accept')} loading={actionLoading}>
+            <Button size="lg" onClick={() => handleBookingAction('accept')} loading={actionLoading}>
               Accept booking
             </Button>
             <Button variant="destructive" onClick={() => setCancelOpen(true)}>Decline</Button>
+          </>
+        )}
+        {canProposeAlternative && (
+          <Button variant="outline" onClick={() => setProposalOpen(true)} disabled={actionLoading}>
+            Propose alternative time
+          </Button>
+        )}
+        {canRespondToCounter && (
+          <>
+            <Button size="lg" onClick={() => handleBookingAction('accept_proposal')} loading={actionLoading}>
+              Accept counter-offer
+            </Button>
+            <Button variant="destructive" onClick={() => handleBookingAction('decline_proposal')} loading={actionLoading}>
+              Decline counter-offer
+            </Button>
           </>
         )}
         {(booking.status === 'accepted' || booking.status === 'confirmed') && (
@@ -149,10 +254,15 @@ export default function CleanerBookingDetailPage() {
             Start job
           </Button>
         )}
-        {booking.status === 'in_progress' && (
+        {booking.status === 'in_progress' && !canCompleteJob && (
           <p className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-600">
-            Waiting for the client to mark this booking as completed.
+            Complete Job unlocks 5 minutes before the scheduled end time.
           </p>
+        )}
+        {canCompleteJob && (
+          <Button size="lg" onClick={handleComplete} loading={actionLoading}>
+            Complete Job
+          </Button>
         )}
       </div>
 
@@ -182,6 +292,32 @@ export default function CleanerBookingDetailPage() {
           </div>
           <Button onClick={handleCancel} variant="destructive" className="w-full" loading={actionLoading}>
             Decline booking
+          </Button>
+        </div>
+      </Dialog>
+
+      <Dialog open={proposalOpen} onClose={() => setProposalOpen(false)}>
+        <DialogTitle>Propose alternative time</DialogTitle>
+        <div className="space-y-3">
+          <p className="text-sm text-muted-foreground">
+            You can propose one alternative time for bookings scheduled more than 24 hours away.
+          </p>
+          <div>
+            <Label>Proposed start time</Label>
+            <Input
+              type="datetime-local"
+              value={proposedStart}
+              onChange={(e) => setProposedStart(e.target.value)}
+              className="mt-1"
+            />
+          </div>
+          <Button
+            className="w-full"
+            onClick={() => handleBookingAction('propose_alternative', new Date(proposedStart).toISOString())}
+            disabled={!proposedStart}
+            loading={actionLoading}
+          >
+            Send proposal
           </Button>
         </div>
       </Dialog>

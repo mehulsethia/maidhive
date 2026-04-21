@@ -15,6 +15,7 @@ import { Separator } from '@/components/ui/separator'
 import { Dialog, DialogTitle } from '@/components/ui/dialog'
 import { Textarea } from '@/components/ui/textarea'
 import { Label } from '@/components/ui/label'
+import { Input } from '@/components/ui/input'
 import { formatDate } from '@/lib/utils'
 import { createClient } from '@/lib/supabase'
 import type { BookingRead } from '@/types'
@@ -45,6 +46,8 @@ export default function ClientBookingDetailPage() {
   const [reviewRating, setReviewRating] = useState(5)
   const [reviewComment, setReviewComment] = useState('')
   const [actionLoading, setActionLoading] = useState(false)
+  const [counterOpen, setCounterOpen] = useState(false)
+  const [counterStart, setCounterStart] = useState('')
 
   const refresh = () =>
     bookingsApi
@@ -103,14 +106,26 @@ export default function ClientBookingDetailPage() {
     }
   }
 
-  async function handleComplete() {
+  async function handleBookingAction(
+    action: 'accept_proposal' | 'decline_proposal' | 'counter_proposal',
+    proposedStart?: string,
+  ) {
     setActionLoading(true)
     try {
-      await bookingsApi.complete(id)
-      toast.success('Booking marked as completed.')
+      await bookingsApi.action(id, action, proposedStart)
+      const labels: Record<string, string> = {
+        accept_proposal: 'Proposed time accepted. Booking confirmed.',
+        decline_proposal: 'Proposal declined. Request closed.',
+        counter_proposal: 'Counter-offer sent to cleaner.',
+      }
+      toast.success(labels[action])
+      if (action === 'counter_proposal') {
+        setCounterOpen(false)
+        setCounterStart('')
+      }
       await refresh()
     } catch (err: any) {
-      toast.error(err.message)
+      toast.error(err.message ?? 'Action failed')
     } finally {
       setActionLoading(false)
     }
@@ -123,8 +138,12 @@ export default function ClientBookingDetailPage() {
   const paymentStatus = booking.payment?.status ?? null
   const isAuthorized = ['authorized', 'captured', 'transferred'].includes(String(paymentStatus ?? ''))
   const canAuthorize = ['pending', 'accepted'].includes(booking.status) && !isAuthorized
-  const canComplete = booking.status === 'in_progress'
-  const canReview = booking.status === 'completed'
+  const canReview = Boolean(booking.completed_at) && ['completed', 'disputed'].includes(booking.status)
+  const isPending = booking.status === 'pending'
+  const hasProposal = Boolean(booking.proposed_start && booking.proposal_by)
+  const cleanerProposed = booking.proposal_by === 'cleaner'
+  const moreThan24HoursAway = new Date(booking.scheduled_start).getTime() - Date.now() > 24 * 60 * 60 * 1000
+  const canCounterProposal = isPending && cleanerProposed && (booking.client_proposals ?? 0) < 1 && moreThan24HoursAway
   const chatCutoff = booking.scheduled_end ? new Date(booking.scheduled_end).getTime() + 30 * 60 * 1000 : Infinity
   const showChat = CHAT_STATUSES.includes(booking.status) && Date.now() < chatCutoff
 
@@ -173,7 +192,7 @@ export default function ClientBookingDetailPage() {
           </div>
         </section>
 
-        <section className="mx-auto grid max-w-5xl gap-4 lg:grid-cols-[1fr_0.9fr]">
+        <section className="grid gap-4 lg:grid-cols-[1fr_0.9fr]">
           <div className="space-y-4">
             <Card className="border-slate-200 bg-white/90">
               <CardContent className="space-y-3 p-5">
@@ -227,6 +246,11 @@ export default function ClientBookingDetailPage() {
           </div>
 
           <div className="space-y-4">
+            {isPending && hasProposal && (
+              <p className="rounded-xl border border-blue-200 bg-blue-50 px-3 py-2 text-sm text-blue-700">
+                Cleaner proposed {formatDate(booking.proposed_start!)}. Accept, decline, or counter once before expiry.
+              </p>
+            )}
             {booking.status === 'pending' && booking.accept_by && (
               <p className="rounded-xl border border-yellow-200 bg-yellow-50 px-3 py-2 text-sm text-yellow-700">
                 {canAuthorize
@@ -246,15 +270,30 @@ export default function ClientBookingDetailPage() {
                   Next actions
                 </p>
                 <div className="flex flex-col gap-2">
+                  {isPending && cleanerProposed && (
+                    <>
+                      <Button size="lg" onClick={() => handleBookingAction('accept_proposal')} loading={actionLoading}>
+                        Accept proposed time
+                      </Button>
+                      {canCounterProposal && (
+                        <Button variant="outline" onClick={() => setCounterOpen(true)}>
+                          Counter once with another time
+                        </Button>
+                      )}
+                      <Button variant="destructive" onClick={() => handleBookingAction('decline_proposal')} loading={actionLoading}>
+                        Decline proposal
+                      </Button>
+                    </>
+                  )}
                   {canAuthorize && (
                     <Button size="lg" onClick={() => router.push(`/client/checkout/${id}`)}>
                       Authorize card
                     </Button>
                   )}
-                  {canComplete && (
-                    <Button size="lg" onClick={handleComplete} loading={actionLoading}>
-                      Mark service complete
-                    </Button>
+                  {booking.status === 'in_progress' && (
+                    <p className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-600">
+                      Cleaner can complete this job from 5 minutes before scheduled end time.
+                    </p>
                   )}
                   {canReview && (
                     <Button variant="outline" onClick={() => setReviewOpen(true)}>
@@ -293,6 +332,32 @@ export default function ClientBookingDetailPage() {
           </div>
           <Button onClick={handleCancel} variant="destructive" className="w-full" loading={actionLoading}>
             Confirm cancellation
+          </Button>
+        </div>
+      </Dialog>
+
+      <Dialog open={counterOpen} onClose={() => setCounterOpen(false)}>
+        <DialogTitle>Counter with one new time</DialogTitle>
+        <div className="space-y-3">
+          <p className="text-sm text-muted-foreground">
+            You can counter once. Cleaner will then only be able to accept or decline.
+          </p>
+          <div>
+            <Label>Counter start time</Label>
+            <Input
+              type="datetime-local"
+              value={counterStart}
+              onChange={(e) => setCounterStart(e.target.value)}
+              className="mt-1"
+            />
+          </div>
+          <Button
+            className="w-full"
+            onClick={() => handleBookingAction('counter_proposal', new Date(counterStart).toISOString())}
+            disabled={!counterStart}
+            loading={actionLoading}
+          >
+            Send counter-offer
           </Button>
         </div>
       </Dialog>

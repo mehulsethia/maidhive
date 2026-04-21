@@ -11,7 +11,6 @@ import { Label } from '@/components/ui/label'
 import { Select } from '@/components/ui/select'
 import { Textarea } from '@/components/ui/textarea'
 import { Input } from '@/components/ui/input'
-import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
 import { LoadingSpinner } from '@/components/loading-spinner'
 import { EmptyState } from '@/components/empty-state'
 import { formatDate, formatCurrency } from '@/lib/utils'
@@ -30,6 +29,25 @@ const STATUS_CONFIG: Record<string, { variant: any; label: string; icon: React.E
   under_review: { variant: 'warning',     label: 'Under review', icon: Clock },
   resolved:     { variant: 'success',     label: 'Resolved',     icon: CheckCircle2 },
   closed:       { variant: 'secondary',   label: 'Closed',       icon: CheckCircle2 },
+}
+
+const ISSUE_QUEUE_LABEL: Record<string, string> = {
+  cleaner_didnt_arrive: 'No-Show',
+  client_no_show: 'No-Show',
+  service_not_completed: 'Payment / Booking',
+  property_damage_safety: 'Urgent Safety',
+  other_issue: 'Payment / Booking',
+}
+
+function classifyQueue(dispute: AdminDispute): 'urgent' | 'no_show' | 'payment' {
+  const issueType = String(dispute.issue_type ?? '')
+  if (['property_damage_safety', 'misconduct', 'aggressive_behaviour', 'theft_allegation'].includes(issueType)) {
+    return 'urgent'
+  }
+  if (['cleaner_didnt_arrive', 'client_no_show'].includes(issueType)) {
+    return 'no_show'
+  }
+  return 'payment'
 }
 
 // ── Dispute card ──────────────────────────────────────────────────────────────
@@ -62,9 +80,12 @@ function DisputeCard({
                 {cfg.label}
               </Badge>
             </div>
-            <p className="text-sm font-medium">{dispute.reason}</p>
+            <p className="text-sm font-medium">{dispute.explanation ?? dispute.reason}</p>
             <p className="text-xs text-muted-foreground mt-0.5">
               Raised {formatDate(dispute.created_at)}
+            </p>
+            <p className="text-xs text-muted-foreground mt-0.5">
+              Queue: {ISSUE_QUEUE_LABEL[String(dispute.issue_type ?? 'other_issue')] ?? 'Payment / Booking'}
             </p>
           </div>
 
@@ -214,78 +235,81 @@ export default function AdminDisputesPage() {
 
   if (loading) return <LoadingSpinner />
 
-  const open = disputes.filter(d => d.status === 'open')
-  const underReview = disputes.filter(d => d.status === 'under_review')
+  const active = disputes.filter(d => ['open', 'under_review'].includes(d.status))
+  const urgent = active.filter((d) => classifyQueue(d) === 'urgent')
+  const noShow = active.filter((d) => classifyQueue(d) === 'no_show')
+  const paymentBooking = active.filter((d) => classifyQueue(d) === 'payment')
   const resolved = disputes.filter(d => ['resolved', 'closed'].includes(d.status))
 
   return (
     <div className="space-y-6 max-w-4xl">
-      {open.length > 0 && (
+      {active.length > 0 && (
         <div className="flex items-center gap-2 bg-red-50 border border-red-200 rounded-lg px-4 py-3 text-sm text-red-700 font-medium">
           <AlertTriangle className="h-4 w-4 shrink-0" />
-          {open.length} open dispute{open.length !== 1 ? 's' : ''} require{open.length === 1 ? 's' : ''} attention
+          {active.length} active dispute{active.length !== 1 ? 's' : ''} require{active.length === 1 ? 's' : ''} attention
         </div>
       )}
+      <section className="space-y-3">
+        <h2 className="text-base font-semibold">1. Urgent Safety Issues ({urgent.length})</h2>
+        {urgent.length === 0 ? (
+          <EmptyState title="No urgent safety disputes" />
+        ) : (
+          urgent.map(d => (
+            <DisputeCard
+              key={d.id}
+              dispute={d}
+              actionLoading={actionLoading === d.id}
+              onMarkUnderReview={() => markUnderReview(d)}
+              onResolve={() => setResolveTarget(d)}
+            />
+          ))
+        )}
+      </section>
 
-      <Tabs defaultValue="open">
-        <TabsList>
-          <TabsTrigger value="open" className="gap-1.5">
-            Open
-            {open.length > 0 && (
-              <span className="h-4 w-4 rounded-full bg-red-100 text-red-700 text-[10px] flex items-center justify-center font-medium">
-                {open.length}
-              </span>
-            )}
-          </TabsTrigger>
-          <TabsTrigger value="under_review">
-            Under review ({underReview.length})
-          </TabsTrigger>
-          <TabsTrigger value="resolved">
-            Resolved ({resolved.length})
-          </TabsTrigger>
-        </TabsList>
+      <section className="space-y-3">
+        <h2 className="text-base font-semibold">2. No-Show Disputes ({noShow.length})</h2>
+        {noShow.length === 0 ? (
+          <EmptyState title="No no-show disputes" />
+        ) : (
+          noShow.map(d => (
+            <DisputeCard
+              key={d.id}
+              dispute={d}
+              actionLoading={actionLoading === d.id}
+              onMarkUnderReview={() => markUnderReview(d)}
+              onResolve={() => setResolveTarget(d)}
+            />
+          ))
+        )}
+      </section>
 
-        <TabsContent value="open" className="space-y-3 mt-4">
-          {open.length === 0 ? (
-            <EmptyState title="No open disputes" description="All disputes have been handled." />
-          ) : (
-            open.map(d => (
-              <DisputeCard
-                key={d.id}
-                dispute={d}
-                actionLoading={actionLoading === d.id}
-                onMarkUnderReview={() => markUnderReview(d)}
-                onResolve={() => setResolveTarget(d)}
-              />
-            ))
-          )}
-        </TabsContent>
+      <section className="space-y-3">
+        <h2 className="text-base font-semibold">3. Payment / Booking Disputes ({paymentBooking.length})</h2>
+        {paymentBooking.length === 0 ? (
+          <EmptyState title="No payment or booking disputes" />
+        ) : (
+          paymentBooking.map(d => (
+            <DisputeCard
+              key={d.id}
+              dispute={d}
+              actionLoading={actionLoading === d.id}
+              onMarkUnderReview={() => markUnderReview(d)}
+              onResolve={() => setResolveTarget(d)}
+            />
+          ))
+        )}
+      </section>
 
-        <TabsContent value="under_review" className="space-y-3 mt-4">
-          {underReview.length === 0 ? (
-            <EmptyState title="No disputes under review" />
-          ) : (
-            underReview.map(d => (
-              <DisputeCard
-                key={d.id}
-                dispute={d}
-                actionLoading={actionLoading === d.id}
-                onResolve={() => setResolveTarget(d)}
-              />
-            ))
-          )}
-        </TabsContent>
-
-        <TabsContent value="resolved" className="space-y-3 mt-4">
-          {resolved.length === 0 ? (
-            <EmptyState title="No resolved disputes" />
-          ) : (
-            resolved.map(d => (
-              <DisputeCard key={d.id} dispute={d} actionLoading={false} />
-            ))
-          )}
-        </TabsContent>
-      </Tabs>
+      <section className="space-y-3">
+        <h2 className="text-base font-semibold">Resolved ({resolved.length})</h2>
+        {resolved.length === 0 ? (
+          <EmptyState title="No resolved disputes" />
+        ) : (
+          resolved.map(d => (
+            <DisputeCard key={d.id} dispute={d} actionLoading={false} />
+          ))
+        )}
+      </section>
 
       {/* Resolve dialog */}
       <Dialog

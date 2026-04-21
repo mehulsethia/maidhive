@@ -284,6 +284,12 @@ CREATE TABLE public.bookings (
     accept_by               TIMESTAMPTZ,
     -- Deadline by which client must pay after acceptance
     pay_by                  TIMESTAMPTZ,
+    -- Negotiation (single cleaner proposal + single client counter)
+    proposed_start          TIMESTAMPTZ,
+    proposed_end            TIMESTAMPTZ,
+    proposal_by             TEXT CHECK (proposal_by IN ('client', 'cleaner')),
+    cleaner_proposals       INTEGER NOT NULL DEFAULT 0 CHECK (cleaner_proposals >= 0 AND cleaner_proposals <= 1),
+    client_proposals        INTEGER NOT NULL DEFAULT 0 CHECK (client_proposals >= 0 AND client_proposals <= 1),
 
     -- Google Calendar integration
     client_gcal_event_id    TEXT,
@@ -471,6 +477,8 @@ CREATE TABLE public.disputes (
     -- Who raised the dispute
     raised_by       UUID    NOT NULL REFERENCES public.users(id),
     reason          TEXT    NOT NULL,
+    issue_type      TEXT,
+    explanation     TEXT,
     -- Evidence (photo URLs, message quotes, etc. — stored as JSON array of strings)
     evidence        JSONB,
 

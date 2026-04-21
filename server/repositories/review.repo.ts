@@ -1,4 +1,5 @@
 import { db } from '../db'
+import type { Prisma } from '@prisma/client'
 
 export const reviewRepo = {
   findByBookingId: (bookingId: string) =>
@@ -25,4 +26,7 @@ export const reviewRepo = {
     isPublic?: boolean
   }) =>
     db.review.create({ data }),
+
+  update: (id: string, data: Prisma.ReviewUpdateInput) =>
+    db.review.update({ where: { id }, data }),
 }

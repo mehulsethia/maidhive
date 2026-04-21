@@ -5,7 +5,14 @@ export const BOOKING_STATUSES = [
   'pending', 'accepted', 'confirmed', 'in_progress',
   'completed', 'cancelled', 'expired', 'disputed',
 ] as const
-export const CLEANER_ACTIONS = ['accept', 'start'] as const
+export const BOOKING_ACTIONS = [
+  'accept',
+  'start',
+  'propose_alternative',
+  'counter_proposal',
+  'accept_proposal',
+  'decline_proposal',
+] as const
 
 export const previewPriceSchema = z.object({
   cleaner_id: z.string().uuid(),
@@ -25,7 +32,21 @@ export const createBookingSchema = z.object({
 })
 
 export const bookingActionSchema = z.object({
-  action: z.enum(CLEANER_ACTIONS),
+  action: z.enum(BOOKING_ACTIONS),
+  proposed_start: z.string().datetime().optional(),
+  start_location: z.object({
+    latitude: z.number().min(-90).max(90),
+    longitude: z.number().min(-180).max(180),
+    accuracy_m: z.number().positive().optional(),
+  }).optional(),
+}).superRefine((val, ctx) => {
+  if ((val.action === 'propose_alternative' || val.action === 'counter_proposal') && !val.proposed_start) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: 'proposed_start is required for proposal actions',
+      path: ['proposed_start'],
+    })
+  }
 })
 
 export const cancelBookingSchema = z.object({
