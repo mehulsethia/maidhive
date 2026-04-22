@@ -305,11 +305,6 @@ export const reviewsApi = {
       method: 'POST',
       body: JSON.stringify(body),
     }),
-  respond: (bookingId: string, response: string) =>
-    request<APIResponse<ReviewRead>>(`/reviews/${bookingId}/response`, {
-      method: 'POST',
-      body: JSON.stringify({ response }),
-    }),
   getForCleaner: async (cleanerId: string) => {
     const res = await request<APIResponse<any>>(`/reviews/cleaner/${cleanerId}`)
     return { ...res, data: (res.data?.reviews ?? res.data ?? []) as ReviewRead[] }

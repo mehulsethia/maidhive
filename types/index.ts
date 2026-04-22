@@ -169,9 +169,6 @@ export interface BookingRead {
   accepted_at?: string
   confirmed_at?: string
   started_at?: string
-  started_latitude?: number
-  started_longitude?: number
-  started_accuracy_m?: number
   completed_at?: string
   cancelled_at?: string
   cancellation_reason?: string
@@ -231,8 +228,6 @@ export interface ReviewRead {
   client_id: string
   rating: number
   comment?: string
-  cleaner_response?: string
-  cleaner_responded_at?: string
   is_public: boolean
   created_at: string
 }

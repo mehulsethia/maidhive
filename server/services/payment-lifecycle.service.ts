@@ -12,8 +12,15 @@ export const paymentLifecycleService = {
         scheduledEnd: { lte: new Date() },
         completedAt: null,
       },
-      include: {
-        dispute: true,
+      select: {
+        id: true,
+        scheduledEnd: true,
+        dispute: {
+          select: {
+            status: true,
+            reason: true,
+          },
+        },
       },
       orderBy: { scheduledEnd: 'asc' },
       take: limit,
@@ -30,9 +37,8 @@ export const paymentLifecycleService = {
     for (const booking of overdue) {
       try {
         if (booking.dispute && !['resolved', 'closed'].includes(String(booking.dispute.status ?? ''))) {
-          const isNoShowIssue = ['cleaner_didnt_arrive', 'client_no_show'].includes(
-            String(booking.dispute.issueType ?? ''),
-          )
+          const reason = String(booking.dispute.reason ?? '').toLowerCase()
+          const isNoShowIssue = reason.includes('no-show') || reason.includes("didn't arrive")
           if (isNoShowIssue) {
             summary.paused_by_dispute += 1
             continue

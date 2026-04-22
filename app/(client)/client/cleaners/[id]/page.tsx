@@ -266,12 +266,6 @@ export default function CleanerProfilePage() {
                         <p className="text-sm leading-relaxed text-slate-600">
                           {review.comment || 'No written comment provided.'}
                         </p>
-                        {review.cleaner_response && (
-                          <div className="mt-3 rounded-lg border border-sky-200 bg-sky-50 p-3">
-                            <p className="text-xs font-semibold uppercase tracking-wide text-sky-700">Cleaner response</p>
-                            <p className="mt-1 text-sm text-sky-900">{review.cleaner_response}</p>
-                          </div>
-                        )}
                       </CardContent>
                     </Card>
                   ))

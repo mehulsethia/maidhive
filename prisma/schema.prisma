@@ -175,9 +175,6 @@ model Booking {
   acceptedAt          DateTime? @map("accepted_at") @db.Timestamptz(6)
   confirmedAt         DateTime? @map("confirmed_at") @db.Timestamptz(6)
   startedAt           DateTime? @map("started_at") @db.Timestamptz(6)
-  startedLatitude     Decimal?  @map("started_latitude") @db.Decimal(9, 6)
-  startedLongitude    Decimal?  @map("started_longitude") @db.Decimal(9, 6)
-  startedAccuracyM    Int?      @map("started_accuracy_m")
   completedAt         DateTime? @map("completed_at") @db.Timestamptz(6)
   acceptBy            DateTime? @map("accept_by") @db.Timestamptz(6)
   payBy               DateTime? @map("pay_by") @db.Timestamptz(6)
@@ -241,8 +238,6 @@ model Review {
   clientId  String   @map("client_id") @db.Uuid
   rating    Int
   comment   String?
-  cleanerResponse    String?   @map("cleaner_response")
-  cleanerRespondedAt DateTime? @map("cleaner_responded_at") @db.Timestamptz(6)
   isPublic  Boolean  @default(true) @map("is_public")
   createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)

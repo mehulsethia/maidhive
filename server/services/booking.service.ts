@@ -4,6 +4,7 @@ import { clientRepo } from '../repositories/client.repo'
 import { notificationRepo } from '../repositories/notification.repo'
 import { availabilityRepo } from '../repositories/availability.repo'
 import { paymentRepo } from '../repositories/payment.repo'
+import { disputeRepo } from '../repositories/dispute.repo'
 import { loopsEmailService } from './loops-email.service'
 import { stripe } from '../stripe'
 import { config } from '../config'
@@ -135,13 +136,9 @@ export const bookingService = {
         throw new ServiceError(`Cannot start a booking in status '${booking.status}'`, 400)
       }
       assertPaymentAuthorized(booking.payment?.status, 'start')
-      const location = sanitizeStartLocation(payload.start_location)
       return bookingRepo.update(bookingId, {
         status: 'in_progress',
         startedAt: new Date(),
-        startedLatitude: location?.latitude,
-        startedLongitude: location?.longitude,
-        startedAccuracyM: location?.accuracy_m,
       })
     }
 
@@ -480,22 +477,6 @@ function assertCompletionWindow(scheduledEnd: Date) {
   }
 }
 
-function sanitizeStartLocation(startLocation?: {
-  latitude: number
-  longitude: number
-  accuracy_m?: number
-}) {
-  if (!startLocation) return null
-  const { latitude, longitude, accuracy_m } = startLocation
-  if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) return null
-
-  return {
-    latitude: roundTo(latitude, 3),
-    longitude: roundTo(longitude, 3),
-    accuracy_m: Number.isFinite(accuracy_m) ? Math.max(1, Math.round(Number(accuracy_m))) : undefined,
-  }
-}
-
 async function completeBookingFlow(
   bookingId: string,
   args: {
@@ -511,9 +492,8 @@ async function completeBookingFlow(
     throw new ServiceError(`Cannot complete a booking in status '${booking.status}'`, 400)
   }
 
-  const unresolvedDispute = Boolean(
-    booking.dispute && !['resolved', 'closed'].includes(String(booking.dispute.status ?? '')),
-  )
+  const dispute = await disputeRepo.findByBookingId(bookingId)
+  const unresolvedDispute = Boolean(dispute && !['resolved', 'closed'].includes(String(dispute.status ?? '')))
 
   const nextStatus = unresolvedDispute ? 'disputed' : 'completed'
   const updated = await bookingRepo.update(bookingId, {
@@ -604,11 +584,6 @@ async function applyCancellationPaymentPolicy(booking: Awaited<ReturnType<typeof
     capturedAt: new Date(),
     payoutScheduledAt: new Date(),
   })
-}
-
-function roundTo(n: number, decimals: number) {
-  const factor = Math.pow(10, decimals)
-  return Math.round(n * factor) / factor
 }
 
 function isoWeekday(date: Date): number {

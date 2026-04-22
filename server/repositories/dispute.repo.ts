@@ -1,15 +1,35 @@
 import { db } from '../db'
 import type { Prisma } from '@prisma/client'
 
+const disputeSelect = {
+  id: true,
+  bookingId: true,
+  raisedBy: true,
+  reason: true,
+  evidence: true,
+  status: true,
+  resolutionType: true,
+  resolutionNote: true,
+  refundAmount: true,
+  resolvedBy: true,
+  resolvedAt: true,
+  createdAt: true,
+  updatedAt: true,
+} satisfies Prisma.DisputeSelect
+
 export const disputeRepo = {
   findById: (id: string) =>
     db.dispute.findUnique({
       where: { id },
-      include: { booking: true, raisedByUser: true },
+      select: {
+        ...disputeSelect,
+        booking: true,
+        raisedByUser: true,
+      },
     }),
 
   findByBookingId: (bookingId: string) =>
-    db.dispute.findUnique({ where: { bookingId } }),
+    db.dispute.findUnique({ where: { bookingId }, select: disputeSelect }),
 
   create: (data: {
     bookingId: string
@@ -24,20 +44,23 @@ export const disputeRepo = {
         bookingId: data.bookingId,
         raisedBy: data.raisedBy,
         reason: data.reason,
-        issueType: data.issueType,
-        explanation: data.explanation,
         evidence: data.evidence ? data.evidence : undefined,
       },
+      select: disputeSelect,
     }),
 
   update: (id: string, data: Prisma.DisputeUpdateInput) =>
-    db.dispute.update({ where: { id }, data }),
+    db.dispute.update({ where: { id }, data, select: disputeSelect }),
 
   listOpen: (page: number, pageSize: number) =>
     Promise.all([
       db.dispute.findMany({
         where: { status: { not: 'closed' } },
-        include: { booking: true, raisedByUser: true },
+        select: {
+          ...disputeSelect,
+          booking: true,
+          raisedByUser: true,
+        },
         skip: (page - 1) * pageSize,
         take: pageSize,
         orderBy: { createdAt: 'desc' },
@@ -49,7 +72,10 @@ export const disputeRepo = {
     Promise.all([
       db.dispute.findMany({
         where: { raisedBy },
-        include: { booking: { include: { cleaner: { include: { user: true } } } } },
+        select: {
+          ...disputeSelect,
+          booking: { include: { cleaner: { include: { user: true } } } },
+        },
         skip: (page - 1) * pageSize,
         take: pageSize,
         orderBy: { createdAt: 'desc' },
