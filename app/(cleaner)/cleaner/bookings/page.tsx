@@ -12,7 +12,14 @@ import { Card, CardContent } from '@/components/ui/card'
 import { Dialog, DialogTitle } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { getCleanerProposalEligibility, RESCHEDULE_CUTOFF_HOURS, toIsoFromDateTimeLocal } from '@/lib/booking-proposal'
+import {
+  getCleanerProposalEligibility,
+  RESCHEDULE_CUTOFF_HOURS,
+  THIRTY_MIN_TIME_OPTIONS,
+  toDateInputValue,
+  toIsoFromDateAndTimeLocal,
+  toTimeInputValue,
+} from '@/lib/booking-proposal'
 import { formatCurrency, formatDate } from '@/lib/utils'
 import type { BookingRead, BookingStatus } from '@/types'
 import { toast } from 'sonner'
@@ -40,7 +47,8 @@ export default function CleanerBookingsPage() {
   const [filter, setFilter] = useState<'all' | BookingStatus>('all')
   const [query, setQuery] = useState('')
   const [proposalBooking, setProposalBooking] = useState<BookingRead | null>(null)
-  const [proposedStart, setProposedStart] = useState('')
+  const [proposalDate, setProposalDate] = useState('')
+  const [proposalTime, setProposalTime] = useState('')
 
   async function refresh() {
     try {
@@ -79,9 +87,9 @@ export default function CleanerBookingsPage() {
   async function submitAlternativeProposal() {
     if (!proposalBooking) return
 
-    const proposedStartIso = toIsoFromDateTimeLocal(proposedStart)
+    const proposedStartIso = toIsoFromDateAndTimeLocal(proposalDate, proposalTime)
     if (!proposedStartIso) {
-      toast.error('Select a valid proposed start time.')
+      toast.error('Select a valid date and time.')
       return
     }
 
@@ -106,7 +114,8 @@ export default function CleanerBookingsPage() {
 
     await action(proposalBooking.id, 'propose_alternative', proposedStartIso)
     setProposalBooking(null)
-    setProposedStart('')
+    setProposalDate('')
+    setProposalTime('')
   }
 
   async function decline(id: string) {
@@ -245,7 +254,8 @@ export default function CleanerBookingsPage() {
                             variant="outline"
                             onClick={() => {
                               setProposalBooking(b)
-                              setProposedStart('')
+                              setProposalDate(toDateInputValue(b.scheduled_start))
+                              setProposalTime(toTimeInputValue(b.scheduled_start))
                             }}
                           >
                             Propose alternative time
@@ -302,11 +312,12 @@ export default function CleanerBookingsPage() {
         open={Boolean(proposalBooking)}
         onClose={() => {
           setProposalBooking(null)
-          setProposedStart('')
+          setProposalDate('')
+          setProposalTime('')
         }}
       >
         <DialogTitle>Propose alternative time</DialogTitle>
-        <div className="space-y-3">
+        <div className="space-y-4">
           <p className="text-sm text-muted-foreground">
             You can propose one alternative time for bookings scheduled more than 24 hours away.
           </p>
@@ -315,19 +326,32 @@ export default function CleanerBookingsPage() {
               Current booking time: {formatDate(proposalBooking.scheduled_start)}
             </div>
           )}
-          <div>
-            <Label>Proposed start time</Label>
-            <Input
-              type="datetime-local"
-              value={proposedStart}
-              onChange={(e) => setProposedStart(e.target.value)}
-              className="mt-1"
-            />
+          <div className="rounded-xl border border-slate-200 bg-slate-50/70 p-3">
+            <Label className="text-sm font-semibold text-slate-700">Proposed start time</Label>
+            <div className="mt-2 grid gap-2 sm:grid-cols-2">
+              <Input
+                type="date"
+                value={proposalDate}
+                onChange={(e) => setProposalDate(e.target.value)}
+                className="h-10 rounded-lg border-slate-200 bg-white"
+              />
+              <select
+                value={proposalTime}
+                onChange={(e) => setProposalTime(e.target.value)}
+                className="h-10 rounded-lg border border-slate-200 bg-white px-3 text-sm text-slate-700 outline-none transition-colors hover:border-slate-300 focus:border-primary/40 focus:ring-2 focus:ring-primary/20"
+              >
+                <option value="" disabled>Select time</option>
+                {THIRTY_MIN_TIME_OPTIONS.map((o) => (
+                  <option key={o.value} value={o.value}>{o.label}</option>
+                ))}
+              </select>
+            </div>
+            <p className="mt-2 text-xs text-slate-500">Time options are in 30-minute intervals.</p>
           </div>
           <Button
             className="w-full"
             onClick={submitAlternativeProposal}
-            disabled={!proposedStart || !proposalBooking}
+            disabled={!proposalDate || !proposalTime || !proposalBooking}
             loading={proposalBooking ? actionLoading === `${proposalBooking.id}-propose_alternative` : false}
           >
             Send proposal

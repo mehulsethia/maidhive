@@ -183,6 +183,7 @@ export const bookingService = {
         throw new ServiceError('Cleaner can only propose an alternative time once', 400)
       }
       const proposedStart = parseProposedStart(payload.proposed_start)
+      assertHalfHourBoundary(proposedStart)
       if (proposedStart.getTime() === booking.scheduledStart.getTime()) {
         throw new ServiceError('Proposed time must be different from current booking time', 400)
       }
@@ -219,6 +220,7 @@ export const bookingService = {
         throw new ServiceError('Client can only counter once', 400)
       }
       const proposedStart = parseProposedStart(payload.proposed_start)
+      assertHalfHourBoundary(proposedStart)
       const proposedEnd = new Date(proposedStart.getTime() + Number(booking.durationHours) * 60 * 60 * 1000)
       await validateBookingWindow(booking.cleanerId, proposedStart, proposedEnd)
 
@@ -427,6 +429,13 @@ function parseProposedStart(proposedStart?: string) {
     throw new ServiceError('Invalid proposed_start datetime', 422)
   }
   return parsed
+}
+
+function assertHalfHourBoundary(value: Date) {
+  const minutes = value.getMinutes()
+  if (minutes !== 0 && minutes !== 30) {
+    throw new ServiceError('Proposed time must be in 30-minute intervals', 422)
+  }
 }
 
 function assertWithinRequestWindow(acceptBy: Date | null) {

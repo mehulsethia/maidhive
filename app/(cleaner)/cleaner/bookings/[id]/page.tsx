@@ -14,7 +14,13 @@ import { Dialog, DialogTitle } from '@/components/ui/dialog'
 import { Textarea } from '@/components/ui/textarea'
 import { Label } from '@/components/ui/label'
 import { Input } from '@/components/ui/input'
-import { getCleanerProposalEligibility, toIsoFromDateTimeLocal } from '@/lib/booking-proposal'
+import {
+  getCleanerProposalEligibility,
+  THIRTY_MIN_TIME_OPTIONS,
+  toDateInputValue,
+  toIsoFromDateAndTimeLocal,
+  toTimeInputValue,
+} from '@/lib/booking-proposal'
 import { formatCurrency, formatDate } from '@/lib/utils'
 import { createClient } from '@/lib/supabase'
 import type { BookingRead } from '@/types'
@@ -39,7 +45,8 @@ export default function CleanerBookingDetailPage() {
   const [cancelOpen, setCancelOpen] = useState(false)
   const [cancelReason, setCancelReason] = useState('')
   const [proposalOpen, setProposalOpen] = useState(false)
-  const [proposedStart, setProposedStart] = useState('')
+  const [proposalDate, setProposalDate] = useState('')
+  const [proposalTime, setProposalTime] = useState('')
 
   const refresh = () =>
     bookingsApi.getById(id)
@@ -138,7 +145,8 @@ export default function CleanerBookingDetailPage() {
       toast.success(labels[action])
       if (action === 'propose_alternative') {
         setProposalOpen(false)
-        setProposedStart('')
+        setProposalDate('')
+        setProposalTime('')
       }
       await refresh()
     } catch (err: any) {
@@ -248,7 +256,15 @@ export default function CleanerBookingDetailPage() {
           </>
         )}
         {canProposeAlternative && (
-          <Button variant="outline" onClick={() => setProposalOpen(true)} disabled={actionLoading}>
+          <Button
+            variant="outline"
+            onClick={() => {
+              setProposalDate(toDateInputValue(booking.scheduled_start))
+              setProposalTime(toTimeInputValue(booking.scheduled_start))
+              setProposalOpen(true)
+            }}
+            disabled={actionLoading}
+          >
             Propose alternative time
           </Button>
         )}
@@ -316,30 +332,43 @@ export default function CleanerBookingDetailPage() {
 
       <Dialog open={proposalOpen} onClose={() => setProposalOpen(false)}>
         <DialogTitle>Propose alternative time</DialogTitle>
-        <div className="space-y-3">
+        <div className="space-y-4">
           <p className="text-sm text-muted-foreground">
             You can propose one alternative time for bookings scheduled more than 24 hours away.
           </p>
-          <div>
-            <Label>Proposed start time</Label>
-            <Input
-              type="datetime-local"
-              value={proposedStart}
-              onChange={(e) => setProposedStart(e.target.value)}
-              className="mt-1"
-            />
+          <div className="rounded-xl border border-slate-200 bg-slate-50/70 p-3">
+            <Label className="text-sm font-semibold text-slate-700">Proposed start time</Label>
+            <div className="mt-2 grid gap-2 sm:grid-cols-2">
+              <Input
+                type="date"
+                value={proposalDate}
+                onChange={(e) => setProposalDate(e.target.value)}
+                className="h-10 rounded-lg border-slate-200 bg-white"
+              />
+              <select
+                value={proposalTime}
+                onChange={(e) => setProposalTime(e.target.value)}
+                className="h-10 rounded-lg border border-slate-200 bg-white px-3 text-sm text-slate-700 outline-none transition-colors hover:border-slate-300 focus:border-primary/40 focus:ring-2 focus:ring-primary/20"
+              >
+                <option value="" disabled>Select time</option>
+                {THIRTY_MIN_TIME_OPTIONS.map((o) => (
+                  <option key={o.value} value={o.value}>{o.label}</option>
+                ))}
+              </select>
+            </div>
+            <p className="mt-2 text-xs text-slate-500">Time options are in 30-minute intervals.</p>
           </div>
           <Button
             className="w-full"
             onClick={() => {
-              const proposedStartIso = toIsoFromDateTimeLocal(proposedStart)
+              const proposedStartIso = toIsoFromDateAndTimeLocal(proposalDate, proposalTime)
               if (!proposedStartIso) {
-                toast.error('Select a valid proposed start time.')
+                toast.error('Select a valid date and time.')
                 return
               }
               handleBookingAction('propose_alternative', proposedStartIso)
             }}
-            disabled={!proposedStart}
+            disabled={!proposalDate || !proposalTime}
             loading={actionLoading}
           >
             Send proposal

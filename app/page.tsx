@@ -76,7 +76,7 @@ export default function ClientLandingPage() {
         <div className="absolute inset-0 bg-[radial-gradient(circle_at_20%_80%,rgba(59,91,219,0.15),transparent_50%)]" />
         <div className="absolute inset-0 bg-[radial-gradient(circle_at_80%_20%,rgba(59,91,219,0.1),transparent_50%)]" />
 
-        <div className="relative max-w-7xl mx-auto px-6 py-20 lg:py-28">
+        <div className="relative max-w-7xl mx-auto px-4 sm:px-6 py-20 lg:py-28">
           <div className="grid lg:grid-cols-2 gap-12 items-center">
             {/* Left */}
             <div className="animate-fade-in">
@@ -131,7 +131,7 @@ export default function ClientLandingPage() {
 
       {/* ─── How it works ─── */}
       <section id="how-it-works" className="py-24 bg-gray-50">
-        <div className="max-w-7xl mx-auto px-6">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6">
           <ScrollReveal className="text-center mb-16">
             <h2 className="text-3xl sm:text-4xl font-bold text-gray-900 mb-4">
               See how MaidHive works
@@ -194,7 +194,7 @@ export default function ClientLandingPage() {
 
       {/* ─── Why MaidHive ─── */}
       <section className="py-24 bg-white">
-        <div className="max-w-7xl mx-auto px-6">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6">
           <ScrollReveal className="text-center mb-16">
             <h2 className="text-3xl sm:text-4xl font-bold text-gray-900 mb-4">
               Why MaidHive
@@ -278,7 +278,7 @@ export default function ClientLandingPage() {
 
       {/* ─── What you can book ─── */}
       <section id="services" className="py-24 bg-gray-50">
-        <div className="max-w-7xl mx-auto px-6">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6">
           <ScrollReveal className="text-center mb-16">
             <h2 className="text-3xl sm:text-4xl font-bold text-gray-900 mb-4">
               What you can book on MaidHive
@@ -328,7 +328,7 @@ export default function ClientLandingPage() {
 
       {/* ─── CTA Banner ─── */}
       <section className="bg-gradient-to-br from-gray-950 via-gray-900 to-primary/30 py-20">
-        <ScrollReveal className="max-w-3xl mx-auto px-6 text-center" animation="zoom-in">
+        <ScrollReveal className="max-w-3xl mx-auto px-4 sm:px-6 text-center" animation="zoom-in">
           <h2 className="text-3xl sm:text-4xl font-bold text-white mb-4">
             Ready to book with confidence?
           </h2>
@@ -347,7 +347,7 @@ export default function ClientLandingPage() {
 
       {/* ─── Become a cleaner cross-sell ─── */}
       <section className="py-24 bg-white">
-        <div className="max-w-7xl mx-auto px-6">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6">
           <div className="grid lg:grid-cols-2 gap-16 items-center">
             {/* Image */}
             <ScrollReveal animation="fade-right" className="relative rounded-2xl overflow-hidden aspect-[4/3] shadow-xl">

@@ -45,8 +45,8 @@ function BookingTable({ bookings }: { bookings: BookingRead[] }) {
   if (bookings.length === 0) return <EmptyState title="No bookings" />
 
   return (
-    <div className="overflow-x-auto rounded-lg border">
-      <table className="w-full text-sm">
+    <div className="-mx-4 overflow-x-auto rounded-lg border sm:mx-0">
+      <table className="w-full min-w-[860px] text-sm">
         <thead className="bg-muted/40">
           <tr className="text-left text-muted-foreground text-xs uppercase tracking-wide">
             <th className="px-4 py-3 font-medium">Booking</th>
@@ -130,7 +130,7 @@ export default function AdminBookingsPage() {
   return (
     <div className="space-y-6">
       <Tabs value={activeGroup} onValueChange={v => { setActiveGroup(v) }}>
-        <TabsList>
+        <TabsList className="h-auto w-full flex-wrap justify-start gap-1">
           {GROUPS.map(g => (
             <TabsTrigger key={g.key} value={g.key}>
               {g.label}
@@ -151,7 +151,7 @@ export default function AdminBookingsPage() {
 
       {/* Pagination */}
       {!loading && total > PAGE_SIZE && (
-        <div className="flex items-center justify-between text-sm">
+        <div className="flex flex-col gap-3 text-sm sm:flex-row sm:items-center sm:justify-between">
           <p className="text-muted-foreground">
             Page {page} · {Math.min(page * PAGE_SIZE, total)} of {total}
           </p>

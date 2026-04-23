@@ -51,7 +51,7 @@ function StepIndicator({ current }: { current: number }) {
         const active = current === s.num
         return (
           <div key={s.num} className="flex items-center">
-            <div className="flex flex-col items-center w-20 sm:w-28">
+            <div className="flex w-16 flex-col items-center sm:w-24">
               <div
                 className={`h-9 w-9 rounded-full flex items-center justify-center text-sm font-bold transition-all ${done ? 'bg-primary text-white' : active ? 'bg-primary text-white ring-4 ring-primary/20' : 'bg-slate-100 text-slate-400'
                   }`}
@@ -583,7 +583,7 @@ export default function BookingFlowPage() {
                   <div>
                     <Label className="text-sm font-semibold mb-2 block">Select time of day</Label>
                     {slotsLoading ? (
-                      <div className="grid grid-cols-3 sm:grid-cols-4 gap-2">
+                      <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 md:grid-cols-4">
                         {Array.from({ length: 8 }).map((_, i) => (
                           <div key={i} className="h-11 rounded-xl bg-slate-100 animate-pulse" />
                         ))}
@@ -591,7 +591,7 @@ export default function BookingFlowPage() {
                     ) : slots.length === 0 ? (
                       <p className="text-sm text-slate-500">No available slots on this date.</p>
                     ) : (
-                      <div className="grid grid-cols-3 sm:grid-cols-4 gap-2">
+                      <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 md:grid-cols-4">
                         {slots.map(slot => {
                           const time = new Date(slot.start).toLocaleTimeString('en-IE', { hour: 'numeric', minute: '2-digit', hour12: true, timeZone: APP_TIMEZONE })
                           const isDisabled = !!slot.disabled

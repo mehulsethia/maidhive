@@ -107,8 +107,8 @@ export default function AdminUsersPage() {
       ) : users.length === 0 ? (
         <EmptyState title="No users found" description="Try adjusting your search or filter." />
       ) : (
-        <div className="overflow-x-auto rounded-lg border">
-          <table className="w-full text-sm">
+        <div className="-mx-4 overflow-x-auto rounded-lg border sm:mx-0">
+          <table className="w-full min-w-[980px] text-sm">
             <thead className="bg-muted/40">
               <tr className="text-left text-muted-foreground text-xs uppercase tracking-wide">
                 <th className="px-4 py-3 font-medium">User</th>
@@ -176,7 +176,7 @@ export default function AdminUsersPage() {
 
       {/* Pagination */}
       {!loading && total > PAGE_SIZE && (
-        <div className="flex items-center justify-between text-sm">
+        <div className="flex flex-col gap-3 text-sm sm:flex-row sm:items-center sm:justify-between">
           <p className="text-muted-foreground">
             Page {page} · {Math.min(page * PAGE_SIZE, total)} of {total} users
           </p>

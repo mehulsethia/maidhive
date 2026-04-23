@@ -11,7 +11,7 @@ export function LandingHeader() {
 
   return (
     <header className="sticky top-0 z-50 bg-white/80 backdrop-blur-lg border-b border-gray-100">
-      <div className="max-w-7xl mx-auto px-6 h-16 flex items-center justify-between">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 h-16 flex items-center justify-between">
         {/* Logo */}
         <Link href="/" className="flex items-center gap-2.5">
           <div className="w-9 h-9 rounded-full bg-primary flex items-center justify-center">
@@ -68,7 +68,7 @@ export function LandingHeader() {
 
       {/* Mobile menu */}
       {mobileOpen && (
-        <div className="md:hidden border-t border-gray-100 bg-white px-6 py-4 space-y-3">
+        <div className="md:hidden border-t border-gray-100 bg-white px-4 py-4 sm:px-6 space-y-3">
           <Link
             href="/"
             onClick={() => setMobileOpen(false)}
