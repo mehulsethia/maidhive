@@ -176,10 +176,16 @@ export const bookingService = {
       }
       assertWithinRequestWindow(booking.acceptBy)
       assertRescheduleWindow(booking.scheduledStart)
+      if (booking.proposalBy) {
+        throw new ServiceError('A proposal is already active for this booking', 400)
+      }
       if (booking.cleanerProposals >= 1) {
         throw new ServiceError('Cleaner can only propose an alternative time once', 400)
       }
       const proposedStart = parseProposedStart(payload.proposed_start)
+      if (proposedStart.getTime() === booking.scheduledStart.getTime()) {
+        throw new ServiceError('Proposed time must be different from current booking time', 400)
+      }
       const proposedEnd = new Date(proposedStart.getTime() + Number(booking.durationHours) * 60 * 60 * 1000)
       await validateBookingWindow(booking.cleanerId, proposedStart, proposedEnd)
 

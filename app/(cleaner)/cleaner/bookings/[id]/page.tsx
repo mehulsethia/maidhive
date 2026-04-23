@@ -14,6 +14,7 @@ import { Dialog, DialogTitle } from '@/components/ui/dialog'
 import { Textarea } from '@/components/ui/textarea'
 import { Label } from '@/components/ui/label'
 import { Input } from '@/components/ui/input'
+import { getCleanerProposalEligibility, toIsoFromDateTimeLocal } from '@/lib/booking-proposal'
 import { formatCurrency, formatDate } from '@/lib/utils'
 import { createClient } from '@/lib/supabase'
 import type { BookingRead } from '@/types'
@@ -150,26 +151,15 @@ export default function CleanerBookingDetailPage() {
   if (loading) return <DetailPageSkeleton />
   if (!booking) return <div className="text-center py-16 text-muted-foreground">Booking not found.</div>
 
-  const isPending = booking.status === 'pending'
-  const hasProposal = Boolean(booking.proposed_start && booking.proposal_by)
-  const isClientCounter = booking.proposal_by === 'client'
-  const isCleanerProposal = booking.proposal_by === 'cleaner'
-  const moreThan24HoursAway = new Date(booking.scheduled_start).getTime() - Date.now() > 24 * 60 * 60 * 1000
-  const canProposeAlternative = isPending && moreThan24HoursAway && !hasProposal && (booking.cleaner_proposals ?? 0) < 1
-  const proposeAlternativeDisabledReason =
-    !isPending
-      ? null
-      : hasProposal
-        ? isCleanerProposal
-          ? 'Alternative time already sent. Waiting for client response.'
-          : 'Client already sent a counter-offer. You can accept or decline it.'
-        : (booking.cleaner_proposals ?? 0) >= 1
-          ? 'You can only suggest one alternate time per booking.'
-          : !moreThan24HoursAway
-            ? 'Alternate time can be suggested only when the booking is more than 24 hours away.'
-            : null
-  const canAcceptPending = isPending && !isClientCounter
-  const canRespondToCounter = isPending && isClientCounter
+  const {
+    isPending,
+    hasProposal,
+    isCleanerProposal,
+    canProposeAlternative,
+    proposeAlternativeDisabledReason,
+    canAcceptPending,
+    canRespondToCounter,
+  } = getCleanerProposalEligibility(booking)
 
   const chatCutoff = booking.scheduled_end
     ? new Date(booking.scheduled_end).getTime() + 30 * 60 * 1000
@@ -341,7 +331,14 @@ export default function CleanerBookingDetailPage() {
           </div>
           <Button
             className="w-full"
-            onClick={() => handleBookingAction('propose_alternative', new Date(proposedStart).toISOString())}
+            onClick={() => {
+              const proposedStartIso = toIsoFromDateTimeLocal(proposedStart)
+              if (!proposedStartIso) {
+                toast.error('Select a valid proposed start time.')
+                return
+              }
+              handleBookingAction('propose_alternative', proposedStartIso)
+            }}
             disabled={!proposedStart}
             loading={actionLoading}
           >

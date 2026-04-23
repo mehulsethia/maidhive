@@ -261,7 +261,7 @@ export default function AdminDisputesPage() {
   }
 
   return (
-    <div className="space-y-6 max-w-4xl">
+    <div className="space-y-6 w-full">
       {active.length > 0 && (
         <div className="flex items-center gap-2 bg-red-50 border border-red-200 rounded-lg px-4 py-3 text-sm text-red-700 font-medium">
           <AlertTriangle className="h-4 w-4 shrink-0" />

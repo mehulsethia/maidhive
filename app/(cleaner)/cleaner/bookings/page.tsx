@@ -9,7 +9,10 @@ import { EmptyState } from '@/components/empty-state'
 import { ListPageSkeleton } from '@/components/page-skeletons'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
+import { Dialog, DialogTitle } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
+import { getCleanerProposalEligibility, RESCHEDULE_CUTOFF_HOURS, toIsoFromDateTimeLocal } from '@/lib/booking-proposal'
 import { formatCurrency, formatDate } from '@/lib/utils'
 import type { BookingRead, BookingStatus } from '@/types'
 import { toast } from 'sonner'
@@ -36,6 +39,8 @@ export default function CleanerBookingsPage() {
   const [actionLoading, setActionLoading] = useState<string | null>(null)
   const [filter, setFilter] = useState<'all' | BookingStatus>('all')
   const [query, setQuery] = useState('')
+  const [proposalBooking, setProposalBooking] = useState<BookingRead | null>(null)
+  const [proposedStart, setProposedStart] = useState('')
 
   async function refresh() {
     try {
@@ -52,17 +57,56 @@ export default function CleanerBookingsPage() {
     refresh()
   }, [])
 
-  async function action(id: string, type: 'accept' | 'start') {
+  async function action(
+    id: string,
+    type: 'accept' | 'start' | 'propose_alternative',
+    customProposedStart?: string,
+  ) {
     setActionLoading(`${id}-${type}`)
     try {
-      await bookingsApi.action(id, type)
-      toast.success(type === 'accept' ? 'Booking accepted.' : 'Job started.')
+      await bookingsApi.action(id, type, customProposedStart)
+      if (type === 'accept') toast.success('Booking accepted.')
+      if (type === 'start') toast.success('Job started.')
+      if (type === 'propose_alternative') toast.success('Alternative time sent to client.')
       await refresh()
     } catch (err: any) {
       toast.error(err.message ?? 'Action failed.')
     } finally {
       setActionLoading(null)
     }
+  }
+
+  async function submitAlternativeProposal() {
+    if (!proposalBooking) return
+
+    const proposedStartIso = toIsoFromDateTimeLocal(proposedStart)
+    if (!proposedStartIso) {
+      toast.error('Select a valid proposed start time.')
+      return
+    }
+
+    const proposedStartDate = new Date(proposedStartIso)
+    const scheduledStartDate = new Date(proposalBooking.scheduled_start)
+    if (!Number.isFinite(proposedStartDate.getTime()) || !Number.isFinite(scheduledStartDate.getTime())) {
+      toast.error('Unable to validate proposed time. Please try again.')
+      return
+    }
+
+    const minLeadMs = Date.now() + 2 * 60 * 60 * 1000
+    if (proposedStartDate.getTime() < minLeadMs) {
+      toast.error('Proposed time must be at least 2 hours from now.')
+      return
+    }
+
+    const cutoffMs = Date.now() + RESCHEDULE_CUTOFF_HOURS * 60 * 60 * 1000
+    if (scheduledStartDate.getTime() <= cutoffMs) {
+      toast.error('Alternative proposals are only allowed for bookings more than 24 hours away.')
+      return
+    }
+
+    await action(proposalBooking.id, 'propose_alternative', proposedStartIso)
+    setProposalBooking(null)
+    setProposedStart('')
   }
 
   async function decline(id: string) {
@@ -165,8 +209,10 @@ export default function CleanerBookingsPage() {
             />
           ) : (
             <div className="space-y-4">
-              {filtered.map((b) => (
-                <div key={b.id} className="rounded-2xl border border-slate-200 bg-white p-4 transition-all duration-200 hover:-translate-y-0.5 hover:shadow-[0_10px_26px_rgba(15,23,42,0.08)] sm:p-5">
+              {filtered.map((b) => {
+                const eligibility = getCleanerProposalEligibility(b)
+                return (
+                  <div key={b.id} className="rounded-2xl border border-slate-200 bg-white p-4 transition-all duration-200 hover:-translate-y-0.5 hover:shadow-[0_10px_26px_rgba(15,23,42,0.08)] sm:p-5">
                   <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
                     <div>
                       <p className="text-base font-semibold text-slate-900">{SERVICE_LABELS[b.service_type] ?? b.service_type}</p>
@@ -193,6 +239,18 @@ export default function CleanerBookingsPage() {
 
                     {b.status === 'pending' && (
                       <>
+                        {eligibility.canProposeAlternative && (
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => {
+                              setProposalBooking(b)
+                              setProposedStart('')
+                            }}
+                          >
+                            Propose alternative time
+                          </Button>
+                        )}
                         <Button
                           size="sm"
                           variant="outline"
@@ -227,12 +285,55 @@ export default function CleanerBookingsPage() {
                       </span>
                     )}
                   </div>
-                </div>
-              ))}
+                  {b.status === 'pending' && !eligibility.canProposeAlternative && !eligibility.canRespondToCounter && eligibility.proposeAlternativeDisabledReason && (
+                    <p className="mt-2 rounded-lg border border-slate-200 bg-slate-50 px-2.5 py-1.5 text-xs text-slate-600">
+                      {eligibility.proposeAlternativeDisabledReason}
+                    </p>
+                  )}
+                  </div>
+                )
+              })}
             </div>
           )}
         </CardContent>
       </Card>
+
+      <Dialog
+        open={Boolean(proposalBooking)}
+        onClose={() => {
+          setProposalBooking(null)
+          setProposedStart('')
+        }}
+      >
+        <DialogTitle>Propose alternative time</DialogTitle>
+        <div className="space-y-3">
+          <p className="text-sm text-muted-foreground">
+            You can propose one alternative time for bookings scheduled more than 24 hours away.
+          </p>
+          {proposalBooking && (
+            <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-600">
+              Current booking time: {formatDate(proposalBooking.scheduled_start)}
+            </div>
+          )}
+          <div>
+            <Label>Proposed start time</Label>
+            <Input
+              type="datetime-local"
+              value={proposedStart}
+              onChange={(e) => setProposedStart(e.target.value)}
+              className="mt-1"
+            />
+          </div>
+          <Button
+            className="w-full"
+            onClick={submitAlternativeProposal}
+            disabled={!proposedStart || !proposalBooking}
+            loading={proposalBooking ? actionLoading === `${proposalBooking.id}-propose_alternative` : false}
+          >
+            Send proposal
+          </Button>
+        </div>
+      </Dialog>
     </div>
   )
 }
