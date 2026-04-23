@@ -8,6 +8,7 @@ import { cleanersApi } from '@/lib/api'
 import { EmptyState } from '@/components/empty-state'
 import { ListPageSkeleton } from '@/components/page-skeletons'
 import { StarRating } from '@/components/star-rating'
+import { UserAvatar } from '@/components/ui/user-avatar'
 import { Input } from '@/components/ui/input'
 import { Select } from '@/components/ui/select'
 import { formatCurrency } from '@/lib/utils'
@@ -28,10 +29,6 @@ type CleanerVM = CleanerSummary & {
 
 const displayFont = Bricolage_Grotesque({ subsets: ['latin'], weight: ['400', '500', '700', '800'] })
 const monoFont = IBM_Plex_Mono({ subsets: ['latin'], weight: ['400', '500', '600'] })
-
-function avatarLetter(name: string) {
-  return (name.trim().charAt(0) || 'C').toUpperCase()
-}
 
 function cleanerKey(cleaner: CleanerVM) {
   return cleaner.unique_key.slice(-6).toUpperCase()
@@ -195,17 +192,14 @@ export default function ClientCleanersPage() {
                 style={{ animationDelay: `${index * 65}ms` }}
               >
                 <div className="flex items-start gap-3">
-                  {cleaner.profile_image_url ? (
-                    <img
-                      src={cleaner.profile_image_url}
-                      alt={`${cleaner.name} profile`}
-                      className="h-16 w-16 rounded-full border border-slate-200 object-cover"
-                    />
-                  ) : (
-                    <div className="grid h-16 w-16 place-items-center rounded-full bg-[#0d4bc9]/10 text-xl font-bold text-[#0d4bc9]">
-                      {avatarLetter(cleaner.name)}
-                    </div>
-                  )}
+                  <UserAvatar
+                    name={cleaner.name}
+                    imageUrl={cleaner.profile_image_url}
+                    alt={`${cleaner.name} profile`}
+                    className="h-16 w-16 border border-slate-200"
+                    textClassName="text-xl font-bold"
+                    fallback="C"
+                  />
                   <div className="min-w-0 flex-1">
                     <div className="flex items-start justify-between gap-2">
                       <div>
@@ -263,17 +257,14 @@ export default function ClientCleanersPage() {
               >
                 <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
                   <div className="flex min-w-0 items-center gap-3">
-                    {cleaner.profile_image_url ? (
-                      <img
-                        src={cleaner.profile_image_url}
-                        alt={`${cleaner.name} profile`}
-                        className="h-14 w-14 rounded-full border border-slate-200 object-cover"
-                      />
-                    ) : (
-                      <div className="grid h-14 w-14 place-items-center rounded-full bg-[#0d4bc9]/10 text-lg font-bold text-[#0d4bc9]">
-                        {avatarLetter(cleaner.name)}
-                      </div>
-                    )}
+                    <UserAvatar
+                      name={cleaner.name}
+                      imageUrl={cleaner.profile_image_url}
+                      alt={`${cleaner.name} profile`}
+                      className="h-14 w-14 border border-slate-200"
+                      textClassName="text-lg font-bold"
+                      fallback="C"
+                    />
                     <div className="min-w-0">
                       <h3 className={`${displayFont.className} truncate text-xl font-semibold tracking-[-0.02em] text-slate-900`}>
                         {cleaner.name}

@@ -156,6 +156,18 @@ export default function CleanerBookingDetailPage() {
   const isCleanerProposal = booking.proposal_by === 'cleaner'
   const moreThan24HoursAway = new Date(booking.scheduled_start).getTime() - Date.now() > 24 * 60 * 60 * 1000
   const canProposeAlternative = isPending && moreThan24HoursAway && !hasProposal && (booking.cleaner_proposals ?? 0) < 1
+  const proposeAlternativeDisabledReason =
+    !isPending
+      ? null
+      : hasProposal
+        ? isCleanerProposal
+          ? 'Alternative time already sent. Waiting for client response.'
+          : 'Client already sent a counter-offer. You can accept or decline it.'
+        : (booking.cleaner_proposals ?? 0) >= 1
+          ? 'You can only suggest one alternate time per booking.'
+          : !moreThan24HoursAway
+            ? 'Alternate time can be suggested only when the booking is more than 24 hours away.'
+            : null
   const canAcceptPending = isPending && !isClientCounter
   const canRespondToCounter = isPending && isClientCounter
 
@@ -203,15 +215,26 @@ export default function CleanerBookingDetailPage() {
       {/* Earnings */}
       <Card>
         <CardContent className="px-5 pb-5 pt-6">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm text-muted-foreground">Your payout</p>
-              <p className="text-2xl font-bold text-green-700">{formatCurrency(booking.cleaner_payout)}</p>
-              <p className="text-xs text-muted-foreground mt-0.5">Released 24h after job completion</p>
+          <div className="space-y-2">
+            <div className="flex items-center justify-between text-sm">
+              <p className="text-muted-foreground">Total booking amount</p>
+              <p className="font-semibold text-slate-900">{formatCurrency(booking.total_amount)}</p>
             </div>
-            <div className="text-right text-sm text-muted-foreground">
-              <p>{formatCurrency(booking.hourly_rate)}/hr</p>
-              <p>{booking.duration_hours}h</p>
+            <div className="flex items-center justify-between text-sm">
+              <p className="text-muted-foreground">App commission deducted</p>
+              <p className="font-semibold text-amber-700">- {formatCurrency(booking.platform_fee)}</p>
+            </div>
+            <Separator />
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm text-muted-foreground">Your payout</p>
+                <p className="text-2xl font-bold text-green-700">{formatCurrency(booking.cleaner_payout)}</p>
+                <p className="text-xs text-muted-foreground mt-0.5">Released 24h after job completion</p>
+              </div>
+              <div className="text-right text-sm text-muted-foreground">
+                <p>{formatCurrency(booking.hourly_rate)}/hr</p>
+                <p>{booking.duration_hours}h</p>
+              </div>
             </div>
           </div>
         </CardContent>
@@ -238,6 +261,11 @@ export default function CleanerBookingDetailPage() {
           <Button variant="outline" onClick={() => setProposalOpen(true)} disabled={actionLoading}>
             Propose alternative time
           </Button>
+        )}
+        {isPending && !canProposeAlternative && !canRespondToCounter && proposeAlternativeDisabledReason && (
+          <p className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-600">
+            {proposeAlternativeDisabledReason}
+          </p>
         )}
         {canRespondToCounter && (
           <>
@@ -276,7 +304,7 @@ export default function CleanerBookingDetailPage() {
         </Card>
       ) : !showChat ? (
         <p className="text-xs text-center text-muted-foreground">
-          Chat becomes available once payment is confirmed.
+          Chat becomes available once booking is confirmed.
         </p>
       ) : null}
 

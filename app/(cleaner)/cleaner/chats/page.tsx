@@ -9,6 +9,7 @@ import { Chat } from '@/components/chat'
 import { SplitChatPageSkeleton } from '@/components/page-skeletons'
 import { Input } from '@/components/ui/input'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { UserAvatar } from '@/components/ui/user-avatar'
 import { formatDate } from '@/lib/utils'
 import type { BookingRead } from '@/types'
 import { toast } from 'sonner'
@@ -123,7 +124,7 @@ export default function CleanerChatsPage() {
               {filtered.map((b) => {
                 const active = b.id === selectedBookingId
                 const clientName = (b as any)?.client?.user?.name ?? 'Client'
-                const initial = clientName.charAt(0).toUpperCase()
+                const clientImage = (b as any)?.client?.user?.avatar_url as string | undefined
                 return (
                   <button
                     key={b.id}
@@ -135,9 +136,14 @@ export default function CleanerChatsPage() {
                     }`}
                   >
                     <div className="flex items-center gap-3">
-                      <div className="h-10 w-10 rounded-full bg-primary/10 flex items-center justify-center shrink-0">
-                        <span className="text-sm font-bold text-primary">{initial}</span>
-                      </div>
+                      <UserAvatar
+                        name={clientName}
+                        imageUrl={clientImage}
+                        className="h-10 w-10 shrink-0"
+                        textClassName="text-sm font-bold"
+                        fallbackClassName="bg-primary/10 text-primary"
+                        fallback="C"
+                      />
                       <div className="min-w-0 flex-1">
                         <p className="text-sm font-semibold text-slate-900 truncate">{clientName}</p>
                         <p className="text-xs text-slate-500 truncate">{formatDate(b.scheduled_start)}</p>

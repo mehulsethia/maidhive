@@ -154,6 +154,14 @@ function CleanerProfilePageContent() {
     if (reviews.length === 0) return 0
     return reviews.reduce((sum, r) => sum + r.rating, 0) / reviews.length
   }, [reviews])
+  const initials = useMemo(() => {
+    const parts = String(fullName || 'Cleaner')
+      .trim()
+      .split(/\s+/)
+      .filter(Boolean)
+      .slice(0, 2)
+    return parts.map((part) => part[0] ?? '').join('').toUpperCase() || 'C'
+  }, [fullName])
 
   const paymentHistory = useMemo(() => {
     return bookings
@@ -295,7 +303,7 @@ function CleanerProfilePageContent() {
               <div className="mx-auto mb-3">
                 <AvatarUpload
                   currentUrl={profileImageUrl}
-                  fallbackInitial={(fullName || 'M').trim().charAt(0)}
+                  fallbackInitial={initials}
                   onUploaded={(url) => setProfileImageUrl(url)}
                 />
               </div>

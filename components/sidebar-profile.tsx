@@ -8,6 +8,7 @@ import { createClient } from '@/lib/supabase'
 import { clearAuthCache } from '@/lib/auth-cache'
 import { clearApiCache, clientsApi, cleanersApi } from '@/lib/api'
 import { cn } from '@/lib/utils'
+import { UserAvatar } from '@/components/ui/user-avatar'
 
 interface SidebarProfileProps {
   /** e.g. '/cleaner/profile' or '/client/profile' */
@@ -69,15 +70,6 @@ export function SidebarProfile({ profileHref, role }: SidebarProfileProps) {
     router.refresh()
   }
 
-  const initials = user?.name
-    ? user.name
-        .split(' ')
-        .map((w) => w[0])
-        .join('')
-        .toUpperCase()
-        .slice(0, 2)
-    : '?'
-
   const roleLabel = role === 'cleaner' ? 'Cleaner' : 'Client'
 
   return (
@@ -93,13 +85,13 @@ export function SidebarProfile({ profileHref, role }: SidebarProfileProps) {
       >
         {/* User info */}
         <div className="mb-3 flex items-center gap-3">
-          {user?.avatarUrl ? (
-            <img src={user.avatarUrl} alt="" className="h-10 w-10 shrink-0 rounded-full object-cover" />
-          ) : (
-            <span className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-gradient-to-br from-primary to-indigo-600 text-sm font-bold text-white">
-              {initials}
-            </span>
-          )}
+          <UserAvatar
+            name={user?.name}
+            imageUrl={user?.avatarUrl}
+            className="h-10 w-10 shrink-0"
+            fallbackClassName="bg-gradient-to-br from-primary to-indigo-600 text-white"
+            textClassName="text-sm font-bold"
+          />
           <div className="min-w-0">
             <p className="truncate text-sm font-semibold text-slate-900">{user?.name}</p>
             <p className="truncate text-xs text-slate-500">{user?.email}</p>
@@ -140,13 +132,13 @@ export function SidebarProfile({ profileHref, role }: SidebarProfileProps) {
         onClick={() => setOpen(!open)}
         className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 transition-all duration-200 hover:bg-slate-100"
       >
-        {user?.avatarUrl ? (
-          <img src={user.avatarUrl} alt="" className="h-8 w-8 shrink-0 rounded-full object-cover" />
-        ) : (
-          <span className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-gradient-to-br from-primary to-indigo-600 text-xs font-bold text-white">
-            {initials}
-          </span>
-        )}
+        <UserAvatar
+          name={user?.name}
+          imageUrl={user?.avatarUrl}
+          className="h-8 w-8 shrink-0"
+          fallbackClassName="bg-gradient-to-br from-primary to-indigo-600 text-white"
+          textClassName="text-xs font-bold"
+        />
         <div className="min-w-0 text-left">
           <p className="truncate text-sm font-semibold text-slate-900">{user?.name ?? 'Loading...'}</p>
           <p className="text-[11px] text-slate-500">{roleLabel}</p>

@@ -11,7 +11,6 @@ import {
   Phone,
   PlayCircle,
   Star,
-  User,
   XCircle,
 } from 'lucide-react'
 import { adminApi } from '@/lib/api'
@@ -24,6 +23,7 @@ import { Label } from '@/components/ui/label'
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
 import { LoadingSpinner } from '@/components/loading-spinner'
 import { EmptyState } from '@/components/empty-state'
+import { UserAvatar } from '@/components/ui/user-avatar'
 import { formatCurrency, formatDate } from '@/lib/utils'
 import type { AdminCleaner } from '@/types'
 import { toast } from 'sonner'
@@ -75,13 +75,14 @@ function CleanerCard({
         {/* Header: avatar, name, badges, rate */}
         <div className="flex items-start justify-between gap-4 mb-4">
           <div className="flex items-start gap-3 min-w-0">
-            {cleaner.profile_image_url ? (
-              <img src={cleaner.profile_image_url} alt="" className="h-12 w-12 rounded-full object-cover shrink-0 border border-slate-200" />
-            ) : (
-              <div className="h-12 w-12 rounded-full bg-primary/10 flex items-center justify-center shrink-0">
-                <User className="h-5 w-5 text-primary" />
-              </div>
-            )}
+            <UserAvatar
+              name={cleanerName}
+              imageUrl={cleaner.profile_image_url}
+              className="h-12 w-12 shrink-0 border border-slate-200"
+              textClassName="text-sm font-semibold"
+              fallbackClassName="bg-primary/10 text-primary"
+              fallback="C"
+            />
             <div className="min-w-0">
               <div className="flex items-center gap-2 flex-wrap mb-0.5">
                 <span className="font-semibold text-lg">{cleanerName}</span>

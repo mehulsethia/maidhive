@@ -93,6 +93,13 @@ export default function ClientProfilePage() {
   if (loading) return <ProfilePageSkeleton />
 
   const fullName = `${firstName} ${lastName}`.trim() || 'Client'
+  const initials = fullName
+    .split(/\s+/)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((part) => part[0] ?? '')
+    .join('')
+    .toUpperCase()
 
   return (
     <>
@@ -136,7 +143,7 @@ export default function ClientProfilePage() {
             <div className="flex items-start gap-4">
               <AvatarUpload
                 currentUrl={avatarUrl}
-                fallbackInitial={firstName[0] ?? 'C'}
+                fallbackInitial={initials || 'C'}
                 onUploaded={(url) => setAvatarUrl(url)}
               />
               <div className="min-w-0">

@@ -16,6 +16,7 @@ import { Textarea } from '@/components/ui/textarea'
 import { Separator } from '@/components/ui/separator'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { BookableCalendar } from '@/components/ui/bookable-calendar'
+import { UserAvatar } from '@/components/ui/user-avatar'
 import { formatCurrency, cn, APP_TIMEZONE } from '@/lib/utils'
 import type { CleanerRead, PriceBreakdown, BookingRead, ClientProfileRead } from '@/types'
 import { PhoneInput } from '@/components/phone-input'
@@ -182,13 +183,14 @@ function BookingSummary({
 
         {/* Cleaner info */}
         <div className="flex items-center gap-3">
-          {cleaner.profile_image_url ? (
-            <img src={cleaner.profile_image_url} alt="" className="h-10 w-10 rounded-full object-cover" />
-          ) : (
-            <div className="h-10 w-10 rounded-full bg-primary/10 flex items-center justify-center">
-              <span className="text-primary font-bold">{cleanerName.charAt(0)}</span>
-            </div>
-          )}
+          <UserAvatar
+            name={cleanerName}
+            imageUrl={cleaner.profile_image_url}
+            className="h-10 w-10"
+            textClassName="text-sm font-bold"
+            fallbackClassName="bg-primary/10 text-primary"
+            fallback="C"
+          />
           <div className="min-w-0 flex-1">
             <p className="font-semibold text-sm text-slate-900 truncate">{cleanerName}</p>
             <div className="flex items-center gap-1">

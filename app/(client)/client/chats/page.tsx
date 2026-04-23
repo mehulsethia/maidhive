@@ -10,6 +10,7 @@ import { createClient } from '@/lib/supabase'
 import { Chat } from '@/components/chat'
 import { SplitChatPageSkeleton } from '@/components/page-skeletons'
 import { Input } from '@/components/ui/input'
+import { UserAvatar } from '@/components/ui/user-avatar'
 import { formatDate } from '@/lib/utils'
 import type { BookingRead } from '@/types'
 import { toast } from 'sonner'
@@ -169,7 +170,6 @@ function ClientChatsPageContent() {
                   const active = booking.id === selectedBookingId
                   const cleanerName = booking.cleaner?.user?.name ?? 'Cleaner'
                   const cleanerImage = booking.cleaner?.profile_image_url
-                  const initial = cleanerName.charAt(0).toUpperCase()
                   return (
                     <button
                       key={booking.id}
@@ -182,13 +182,14 @@ function ClientChatsPageContent() {
                       style={{ animationDelay: `${index * 65}ms` }}
                     >
                       <div className="flex items-center gap-3">
-                        {cleanerImage ? (
-                          <img src={cleanerImage} alt="" className="h-10 w-10 shrink-0 rounded-full object-cover" />
-                        ) : (
-                          <div className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-[#0d4bc9]/10">
-                            <span className="text-sm font-bold text-[#0d4bc9]">{initial}</span>
-                          </div>
-                        )}
+                        <UserAvatar
+                          name={cleanerName}
+                          imageUrl={cleanerImage}
+                          className="h-10 w-10 shrink-0"
+                          textClassName="text-sm font-bold text-[#0d4bc9]"
+                          fallbackClassName="bg-[#0d4bc9]/10 text-[#0d4bc9]"
+                          fallback="C"
+                        />
                         <div className="min-w-0 flex-1">
                           <p className="truncate text-sm font-semibold text-slate-900">{cleanerName}</p>
                           <p className={`${monoFont.className} truncate text-[0.7rem] tracking-wide text-slate-500`}>

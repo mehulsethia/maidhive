@@ -3,6 +3,7 @@ import { MapPin, Briefcase } from 'lucide-react'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { StarRating } from '@/components/star-rating'
+import { UserAvatar } from '@/components/ui/user-avatar'
 import { formatCurrency } from '@/lib/utils'
 import type { CleanerSummary } from '@/types'
 
@@ -16,19 +17,13 @@ export function CleanerCard({ cleaner }: CleanerCardProps) {
       <CardContent className="p-5">
         <div className="flex items-start justify-between gap-4">
           {/* Avatar */}
-          {(cleaner.profile_image_url || cleaner.user?.avatar_url) ? (
-            <img
-              src={cleaner.profile_image_url ?? cleaner.user?.avatar_url}
-              alt=""
-              className="h-14 w-14 rounded-full object-cover shrink-0"
-            />
-          ) : (
-            <div className="h-14 w-14 rounded-full bg-primary/10 flex items-center justify-center shrink-0">
-              <span className="text-primary font-semibold text-lg">
-                {cleaner.name?.[0] ?? 'C'}
-              </span>
-            </div>
-          )}
+          <UserAvatar
+            name={cleaner.name ?? cleaner.user?.name}
+            imageUrl={cleaner.profile_image_url ?? cleaner.user?.avatar_url}
+            className="h-14 w-14 shrink-0"
+            textClassName="text-lg"
+            fallback="C"
+          />
 
           <div className="flex-1 min-w-0">
             <h3 className="font-semibold truncate">{cleaner.name ?? 'Cleaner'}</h3>
