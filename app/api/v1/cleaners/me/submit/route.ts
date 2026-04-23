@@ -3,6 +3,8 @@ import { cleanerRepo } from '@/server/repositories/cleaner.repo'
 import { availabilityRepo } from '@/server/repositories/availability.repo'
 import { computeCleanerOnboardingProgress } from '@/server/services/cleaner-onboarding.service'
 import { loopsEmailService } from '@/server/services/loops-email.service'
+import { pushInAppNotification } from '@/server/services/in-app-notification.service'
+import { db } from '@/server/db'
 import { ok, err } from '@/server/response'
 
 export const POST = requireCleaner(async (_req, _ctx, user) => {
@@ -28,7 +30,31 @@ export const POST = requireCleaner(async (_req, _ctx, user) => {
     rejectionReason: null,
   })
 
+  await pushInAppNotification({
+    userId: user.id,
+    type: 'cleaner_application_submitted',
+    title: 'Application submitted',
+    body: 'Your cleaner profile has been submitted for admin review.',
+    data: { cleaner_id: cleaner.id },
+  })
+
   if (shouldNotifyAdmin) {
+    const admins = await db.user.findMany({
+      where: { role: 'admin', isActive: true },
+      select: { id: true },
+    })
+    await Promise.all(
+      admins.map((admin) =>
+        pushInAppNotification({
+          userId: admin.id,
+          type: 'cleaner_application_submitted',
+          title: 'New cleaner application',
+          body: `${cleaner.user?.name ?? 'A cleaner'} submitted onboarding for approval.`,
+          data: { cleaner_id: cleaner.id },
+        }),
+      ),
+    )
+
     try {
       await loopsEmailService.sendAdminNewCleanerApplication({
         cleanerName: cleaner.user?.name ?? 'Cleaner',

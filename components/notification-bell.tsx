@@ -36,7 +36,7 @@ export function NotificationBell({ userId }: NotificationBellProps) {
   const load = useCallback(async () => {
     try {
       const res = await notificationsApi.list()
-      setNotifications(res.data ?? [])
+      setNotifications(res.data?.notifications ?? [])
     } catch {}
   }, [])
 

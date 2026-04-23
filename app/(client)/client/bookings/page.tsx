@@ -10,6 +10,7 @@ import { EmptyState } from '@/components/empty-state'
 import { ListPageSkeleton } from '@/components/page-skeletons'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
+import { getDisputeWindowMs } from '@/lib/chat-window'
 import { formatCurrency, formatDate } from '@/lib/utils'
 import type { BookingRead, BookingStatus } from '@/types'
 import { toast } from 'sonner'
@@ -34,6 +35,8 @@ const SERVICE_LABELS: Record<string, string> = {
   end_of_tenancy: 'End of Tenancy',
   move_in: 'Move-in Clean',
 }
+
+const DISPUTE_WINDOW_MS = getDisputeWindowMs()
 
 export default function ClientBookingsPage() {
   const [loading, setLoading] = useState(true)
@@ -192,16 +195,11 @@ export default function ClientBookingsPage() {
                 {filtered.map((booking, index) => {
                   const disputeStatusForBooking = bookingDisputeStatus.get(booking.id)
                   const completedAtMs = booking.completed_at ? new Date(booking.completed_at).getTime() : 0
-                  const isWithinDisputeWindow = completedAtMs > 0 && Date.now() <= completedAtMs + 24 * 60 * 60 * 1000
+                  const isWithinDisputeWindow = completedAtMs > 0 && Date.now() <= completedAtMs + DISPUTE_WINDOW_MS
                   const canDispute = booking.status === 'completed' && isWithinDisputeWindow && !disputeStatusForBooking
                   const isActiveBooking = ['pending', 'accepted', 'confirmed', 'in_progress'].includes(booking.status)
                   const canComplete = booking.status === 'in_progress'
-                  const chatCutoff = booking.scheduled_end
-                    ? new Date(booking.scheduled_end).getTime() + 30 * 60 * 1000
-                    : Infinity
-                  const canChat =
-                    ['confirmed', 'in_progress', 'completed', 'disputed'].includes(booking.status) &&
-                    Date.now() < chatCutoff
+                  const canChat = ['confirmed', 'in_progress', 'completed', 'disputed'].includes(booking.status)
 
                   return (
                     <article

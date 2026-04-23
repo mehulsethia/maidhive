@@ -4,7 +4,7 @@ import Link from 'next/link'
 import { useEffect, useState } from 'react'
 import { usePathname, useRouter } from 'next/navigation'
 import { Bricolage_Grotesque, IBM_Plex_Mono } from 'next/font/google'
-import { LayoutGrid, CalendarDays, MessagesSquare, User } from 'lucide-react'
+import { LayoutGrid, CalendarDays, MessagesSquare, Bell, User } from 'lucide-react'
 import { createClient } from '@/lib/supabase'
 import { clearAuthCache } from '@/lib/auth-cache'
 import { clearApiCache, cleanersApi, paymentsApi } from '@/lib/api'
@@ -16,6 +16,7 @@ const NAV_ITEMS = [
   { href: '/cleaner/dashboard', label: 'Dashboard', icon: LayoutGrid },
   { href: '/cleaner/bookings', label: 'Bookings', icon: CalendarDays },
   { href: '/cleaner/chats', label: 'Chats', icon: MessagesSquare },
+  { href: '/cleaner/notifications', label: 'Notifications', icon: Bell },
   { href: '/cleaner/profile', label: 'Profile', icon: User },
 ]
 
@@ -45,6 +46,14 @@ function cleanerStageCopy(pathname: string) {
       title: 'Cleaner Chats',
       desc: 'Coordinate directly with clients and keep context tied to each job.',
       image: '/images/stage/cleaner-chats.jpg',
+    }
+  }
+  if (pathname.startsWith('/cleaner/notifications')) {
+    return {
+      tag: 'MaidHive Updates',
+      title: 'Cleaner Notifications',
+      desc: 'Track booking actions, payouts, disputes, and account alerts in one timeline.',
+      image: '/images/stage/cleaner-default.jpg',
     }
   }
   if (pathname.startsWith('/cleaner/profile')) {
@@ -132,6 +141,7 @@ export function CleanerShell({ children }: { children: React.ReactNode }) {
     if (!counts) return 0
     if (href === '/cleaner/chats') return counts.unread_chats
     if (href === '/cleaner/bookings') return counts.pending_bookings
+    if (href === '/cleaner/notifications') return counts.unread_notifications
     return 0
   }
 

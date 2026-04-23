@@ -5,6 +5,7 @@ import { bookingRepo } from '@/server/repositories/booking.repo'
 import { cleanerRepo } from '@/server/repositories/cleaner.repo'
 import { paymentAuthorizationService } from '@/server/services/payment-authorization.service'
 import { loopsEmailService } from '@/server/services/loops-email.service'
+import { pushInAppNotification } from '@/server/services/in-app-notification.service'
 import type Stripe from 'stripe'
 
 export async function POST(req: NextRequest) {
@@ -51,6 +52,13 @@ export async function POST(req: NextRequest) {
             if (!wasCaptured) {
               const booking = await bookingRepo.findById(payment.bookingId)
               if (booking) {
+                await pushInAppNotification({
+                  userId: booking.client.userId,
+                  type: 'payment_captured',
+                  title: 'Payment captured',
+                  body: 'Payment was captured successfully after booking completion.',
+                  data: { booking_id: booking.id },
+                })
                 try {
                   await loopsEmailService.sendClientPaymentReceipt({
                     email: booking.client.user.email,
@@ -106,6 +114,13 @@ export async function POST(req: NextRequest) {
             if (!wasTransferred) {
               const booking = await bookingRepo.findById(payment.bookingId)
               if (booking) {
+                await pushInAppNotification({
+                  userId: booking.cleaner.userId,
+                  type: 'payout_released',
+                  title: 'Payout released',
+                  body: 'Payout was released to your connected Stripe account.',
+                  data: { booking_id: booking.id },
+                })
                 try {
                   await loopsEmailService.sendCleanerPayoutNotification({
                     email: booking.cleaner.user.email,

@@ -4,6 +4,7 @@ import { userRepo } from '@/server/repositories/user.repo'
 import { clientRepo } from '@/server/repositories/client.repo'
 import { cleanerRepo } from '@/server/repositories/cleaner.repo'
 import { loopsEmailService } from '@/server/services/loops-email.service'
+import { pushInAppNotification } from '@/server/services/in-app-notification.service'
 import { ok } from '@/server/response'
 import { syncUserSchema } from '@/server/schemas/user.schema'
 
@@ -17,6 +18,12 @@ export const POST = requireAuth(async (req: NextRequest, _ctx, user) => {
     const existing = await clientRepo.findByUserId(user.id)
     if (!existing) {
       await clientRepo.create(user.id)
+      await pushInAppNotification({
+        userId: user.id,
+        type: 'account_created',
+        title: 'Welcome to MaidHive',
+        body: 'Your client profile is ready. Start by browsing available cleaners.',
+      })
       try {
         await loopsEmailService.sendClientAccountCreated({
           email: user.email,
@@ -30,6 +37,12 @@ export const POST = requireAuth(async (req: NextRequest, _ctx, user) => {
     const existing = await cleanerRepo.findByUserId(user.id)
     if (!existing) {
       await cleanerRepo.create(user.id)
+      await pushInAppNotification({
+        userId: user.id,
+        type: 'account_created',
+        title: 'Welcome to MaidHive',
+        body: 'Your cleaner profile is created. Complete onboarding to start receiving jobs.',
+      })
       try {
         await loopsEmailService.sendCleanerSignup({
           email: user.email,

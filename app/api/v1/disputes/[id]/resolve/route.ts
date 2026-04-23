@@ -6,6 +6,8 @@ import { paymentRepo } from '@/server/repositories/payment.repo'
 import { stripe } from '@/server/stripe'
 import { ok, err } from '@/server/response'
 import { resolveDisputeSchema } from '@/server/schemas/dispute.schema'
+import { pushInAppNotification } from '@/server/services/in-app-notification.service'
+import { db } from '@/server/db'
 
 export const POST = requireAdmin(async (req: NextRequest, ctx, user) => {
   try {
@@ -161,6 +163,47 @@ export const POST = requireAdmin(async (req: NextRequest, ctx, user) => {
     } catch (bookingUpdateError) {
       // Do not roll back a successfully resolved dispute due to a booking update side-effect.
       console.error('Resolved dispute but failed to update booking status:', bookingUpdateError)
+    }
+
+    const booking = await bookingRepo.findById(dispute.bookingId)
+    if (booking) {
+      const resolutionCopy = (() => {
+        if (parsed.data.resolution_type === 'full_refund') return 'Resolution: full refund issued.'
+        if (parsed.data.resolution_type === 'partial_refund') return 'Resolution: partial refund issued.'
+        if (parsed.data.resolution_type === 'payment_released') return 'Resolution: payment released to cleaner.'
+        return 'Resolution: no refund, payment released to cleaner.'
+      })()
+
+      await pushInAppNotification({
+        userId: booking.client.userId,
+        type: 'dispute_resolved',
+        title: 'Dispute resolved',
+        body: resolutionCopy,
+        data: { booking_id: booking.id, dispute_id: updated.id },
+      })
+      await pushInAppNotification({
+        userId: booking.cleaner.userId,
+        type: 'dispute_resolved',
+        title: 'Dispute resolved',
+        body: resolutionCopy,
+        data: { booking_id: booking.id, dispute_id: updated.id },
+      })
+
+      const admins = await db.user.findMany({
+        where: { role: 'admin', isActive: true },
+        select: { id: true },
+      })
+      await Promise.all(
+        admins.map((admin) =>
+          pushInAppNotification({
+            userId: admin.id,
+            type: 'dispute_resolved',
+            title: 'Dispute resolved',
+            body: `Dispute for booking ${booking.id.slice(0, 8)} was resolved.`,
+            data: { booking_id: booking.id, dispute_id: updated.id },
+          }),
+        ),
+      )
     }
 
     return ok(updated)

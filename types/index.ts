@@ -249,11 +249,14 @@ export interface MessageRead {
 // ---------------------------------------------------------------------------
 export interface NotificationRead {
   id: string
+  user_id?: string
   type: string
   title: string
   body: string
   data?: Record<string, any>
   is_read: boolean
+  archived?: boolean
+  archived_at?: string | null
   created_at: string
 }
 

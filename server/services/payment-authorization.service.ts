@@ -1,8 +1,8 @@
 import type Stripe from 'stripe'
 import { paymentRepo } from '../repositories/payment.repo'
 import { bookingRepo } from '../repositories/booking.repo'
-import { notificationRepo } from '../repositories/notification.repo'
 import { loopsEmailService } from './loops-email.service'
+import { pushInAppNotification } from './in-app-notification.service'
 
 export const paymentAuthorizationService = {
   async syncFromPaymentIntent(pi: Stripe.PaymentIntent) {
@@ -37,7 +37,7 @@ export const paymentAuthorizationService = {
       await bookingRepo.update(booking.id, { status: 'pending', confirmedAt: new Date() })
 
       if (!wasAuthorized) {
-        await notificationRepo.create({
+        await pushInAppNotification({
           userId: booking.cleaner.userId,
           type: 'booking_request',
           title: 'New Booking Request',
@@ -64,6 +64,13 @@ export const paymentAuthorizationService = {
 
     if (booking.status === 'accepted') {
       await bookingRepo.update(booking.id, { status: 'confirmed', confirmedAt: new Date() })
+      await pushInAppNotification({
+        userId: booking.client.userId,
+        type: 'booking_confirmed',
+        title: 'Booking confirmed',
+        body: 'Payment authorization is complete and your booking is now confirmed.',
+        data: { booking_id: booking.id },
+      })
       try {
         await loopsEmailService.sendClientBookingConfirmed({
           email: booking.client.user.email,

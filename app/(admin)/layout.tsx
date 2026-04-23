@@ -6,6 +6,7 @@ import { usePathname, useRouter } from 'next/navigation'
 import { Bricolage_Grotesque, IBM_Plex_Mono } from 'next/font/google'
 import {
   BarChart3,
+  Bell,
   BookOpen,
   Eye,
   EyeOff,
@@ -17,12 +18,14 @@ import {
 import { createClient } from '@/lib/supabase'
 import { cn } from '@/lib/utils'
 import { toast } from 'sonner'
+import { useCounts } from '@/hooks/use-counts'
 
 const NAV = [
   { href: '/admin/dashboard', label: 'Overview',  icon: BarChart3 },
   { href: '/admin/cleaners',  label: 'Cleaners',  icon: ShieldCheck },
   { href: '/admin/bookings',  label: 'Bookings',  icon: BookOpen },
   { href: '/admin/disputes',  label: 'Disputes',  icon: MessageSquareWarning },
+  { href: '/admin/notifications', label: 'Notifications', icon: Bell },
   { href: '/admin/users',     label: 'Users',     icon: Users },
 ]
 
@@ -70,6 +73,14 @@ function adminStageCopy(pathname: string) {
       image: '/images/stage/admin-users.jpg',
     }
   }
+  if (pathname.startsWith('/admin/notifications')) {
+    return {
+      tag: 'MaidHive Admin Console',
+      title: 'Notifications',
+      desc: 'Monitor system alerts, disputes, payouts, and operational events in real time.',
+      image: '/images/stage/admin-default.jpg',
+    }
+  }
   return {
     tag: 'MaidHive Admin Console',
     title: 'Administration',
@@ -89,6 +100,13 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
   const [password, setPassword] = useState('')
   const [showPassword, setShowPassword] = useState(false)
   const [loginLoading, setLoginLoading] = useState(false)
+  const { data: counts } = useCounts()
+
+  function getBadge(href: string): number {
+    if (!counts) return 0
+    if (href === '/admin/notifications') return counts.unread_notifications
+    return 0
+  }
 
   useEffect(() => {
     checkAdmin()
@@ -262,20 +280,28 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
           {NAV.map(({ href, label, icon: Icon }) => {
             const active = pathname === href || pathname.startsWith(href + '/')
             return (
-              <Link
-                key={href}
-                href={href}
-                className={cn(
-                  'flex items-center gap-3 rounded-lg px-3 py-2 text-sm transition-colors',
-                  active
-                    ? 'bg-primary text-primary-foreground font-medium'
-                    : 'text-muted-foreground hover:text-foreground hover:bg-muted',
-                )}
-              >
-                <Icon className="h-4 w-4 shrink-0" />
-                {label}
-              </Link>
-            )
+                <Link
+                  key={href}
+                  href={href}
+                  className={cn(
+                    'flex items-center gap-3 rounded-lg px-3 py-2 text-sm transition-colors',
+                    active
+                      ? 'bg-primary text-primary-foreground font-medium'
+                      : 'text-muted-foreground hover:text-foreground hover:bg-muted',
+                  )}
+                >
+                  <Icon className="h-4 w-4 shrink-0" />
+                  {label}
+                  {(() => {
+                    const badge = getBadge(href)
+                    return badge > 0 ? (
+                      <span className="ml-auto flex h-5 min-w-[1.25rem] items-center justify-center rounded-full bg-red-500 px-1.5 text-[10px] font-bold text-white">
+                        {badge > 99 ? '99+' : badge}
+                      </span>
+                    ) : null
+                  })()}
+                </Link>
+              )
           })}
         </nav>
 
@@ -310,7 +336,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
                 key={href}
                 href={href}
                 className={cn(
-                  'inline-flex shrink-0 items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-semibold transition-colors',
+                  'relative inline-flex shrink-0 items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-semibold transition-colors',
                   active
                     ? 'bg-primary text-primary-foreground'
                     : 'bg-slate-100 text-slate-700 hover:bg-slate-200',
@@ -318,6 +344,14 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
               >
                 <Icon className="h-3.5 w-3.5" />
                 {label}
+                {(() => {
+                  const badge = getBadge(href)
+                  return badge > 0 ? (
+                    <span className="absolute -top-1 -right-1 flex h-4 min-w-[1rem] items-center justify-center rounded-full bg-red-500 px-1 text-[9px] font-bold text-white">
+                      {badge > 9 ? '9+' : badge}
+                    </span>
+                  ) : null
+                })()}
               </Link>
             )
           })}

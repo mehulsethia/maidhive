@@ -1,11 +1,11 @@
 import { bookingRepo } from '../repositories/booking.repo'
 import { cleanerRepo } from '../repositories/cleaner.repo'
 import { clientRepo } from '../repositories/client.repo'
-import { notificationRepo } from '../repositories/notification.repo'
 import { availabilityRepo } from '../repositories/availability.repo'
 import { paymentRepo } from '../repositories/payment.repo'
 import { disputeRepo } from '../repositories/dispute.repo'
 import { loopsEmailService } from './loops-email.service'
+import { pushInAppNotification } from './in-app-notification.service'
 import { stripe } from '../stripe'
 import { config } from '../config'
 import type { User } from '@prisma/client'
@@ -87,6 +87,14 @@ export const bookingService = {
       acceptBy,
     })
 
+    await pushInAppNotification({
+      userId: booking.client.userId,
+      type: 'booking_created_pending',
+      title: 'Booking request created',
+      body: 'Your booking request was created and is waiting for cleaner response.',
+      data: { booking_id: booking.id },
+    })
+
     try {
       await loopsEmailService.sendClientBookingCreatedPending({
         email: booking.client.user.email,
@@ -159,7 +167,7 @@ export const bookingService = {
         proposedEnd: null,
         proposalBy: null,
       })
-      await notificationRepo.create({
+      await pushInAppNotification({
         userId: booking.client.userId,
         type: 'booking_accepted',
         title: 'Booking accepted',
@@ -196,7 +204,7 @@ export const bookingService = {
         proposalBy: 'cleaner',
         cleanerProposals: { increment: 1 },
       })
-      await notificationRepo.create({
+      await pushInAppNotification({
         userId: booking.client.userId,
         type: 'booking_proposed_new_time',
         title: 'Cleaner proposed a new time',
@@ -230,7 +238,7 @@ export const bookingService = {
         proposalBy: 'client',
         clientProposals: { increment: 1 },
       })
-      await notificationRepo.create({
+      await pushInAppNotification({
         userId: booking.cleaner.userId,
         type: 'booking_counter_proposal',
         title: 'Client sent one counter-offer',
@@ -269,7 +277,7 @@ export const bookingService = {
         proposedEnd: null,
         proposalBy: null,
       })
-      await notificationRepo.create({
+      await pushInAppNotification({
         userId: isClient ? booking.cleaner.userId : booking.client.userId,
         type: 'booking_time_agreed',
         title: 'Booking time confirmed',
@@ -299,7 +307,7 @@ export const bookingService = {
         proposalBy: null,
       })
       await releasePaymentAuthorization(booking.payment?.id, booking.payment?.stripePaymentIntentId, booking.payment?.status)
-      await notificationRepo.create({
+      await pushInAppNotification({
         userId: isClient ? booking.cleaner.userId : booking.client.userId,
         type: 'booking_request_expired',
         title: 'Booking request closed',
@@ -377,7 +385,7 @@ export const bookingService = {
         ? booking.cleaner.userId
         : booking.client.userId
 
-    await notificationRepo.create({
+    await pushInAppNotification({
       userId: notifyUserId,
       type: 'booking_cancelled',
       title: 'Booking Cancelled',
@@ -526,7 +534,7 @@ async function completeBookingFlow(
     })
   }
 
-  await notificationRepo.create({
+  await pushInAppNotification({
     userId: booking.client.userId,
     type: 'booking_completed',
     title: 'Booking Completed',
@@ -534,6 +542,17 @@ async function completeBookingFlow(
       args.initiatedByRole === 'system'
         ? 'Booking was auto-completed after the scheduled end time.'
         : 'Cleaner marked this booking as completed.',
+    data: { booking_id: bookingId },
+  })
+
+  await pushInAppNotification({
+    userId: booking.cleaner.userId,
+    type: 'booking_completed',
+    title: 'Booking completed',
+    body:
+      args.initiatedByRole === 'system'
+        ? 'This booking was auto-completed after the scheduled end time.'
+        : 'Booking marked complete. Payout will be released after the dispute window.',
     data: { booking_id: bookingId },
   })
 

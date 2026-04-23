@@ -3,6 +3,7 @@ import { cookies } from 'next/headers'
 import { NextResponse, type NextRequest } from 'next/server'
 import { db } from '@/server/db'
 import { loopsEmailService } from '@/server/services/loops-email.service'
+import { pushInAppNotification } from '@/server/services/in-app-notification.service'
 
 /**
  * Handles Supabase email confirmation redirects.
@@ -54,6 +55,12 @@ export async function GET(request: NextRequest) {
               const existing = await db.client.findFirst({ where: { userId: user.id } })
               if (!existing) {
                 await db.client.create({ data: { userId: user.id } })
+                await pushInAppNotification({
+                  userId: user.id,
+                  type: 'account_created',
+                  title: 'Welcome to MaidHive',
+                  body: 'Your client profile is ready. Start by browsing available cleaners.',
+                })
                 try {
                   await loopsEmailService.sendClientAccountCreated({
                     email: dbUser.email,
@@ -67,6 +74,12 @@ export async function GET(request: NextRequest) {
               const existing = await db.cleaner.findFirst({ where: { userId: user.id } })
               if (!existing) {
                 await db.cleaner.create({ data: { userId: user.id, hourlyRate: 15 } })
+                await pushInAppNotification({
+                  userId: user.id,
+                  type: 'account_created',
+                  title: 'Welcome to MaidHive',
+                  body: 'Your cleaner profile is created. Complete onboarding to start receiving jobs.',
+                })
                 try {
                   await loopsEmailService.sendCleanerSignup({
                     email: dbUser.email,

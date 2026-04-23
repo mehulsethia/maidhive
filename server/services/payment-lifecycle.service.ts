@@ -3,6 +3,7 @@ import { stripe } from '../stripe'
 import { config } from '../config'
 import { loopsEmailService } from './loops-email.service'
 import { bookingService } from './booking.service'
+import { pushInAppNotification } from './in-app-notification.service'
 
 export const paymentLifecycleService = {
   async processAutoCompletions(limit = 200) {
@@ -167,6 +168,20 @@ export const paymentLifecycleService = {
     }
 
     for (const booking of expiredPendingBookings) {
+      await pushInAppNotification({
+        userId: booking.client.userId,
+        type: 'booking_request_expired',
+        title: 'Booking request expired',
+        body: 'This request expired because the cleaner did not accept in time.',
+        data: { booking_id: booking.id },
+      })
+      await pushInAppNotification({
+        userId: booking.cleaner.userId,
+        type: 'booking_request_expired',
+        title: 'Booking request expired',
+        body: 'This request expired before confirmation.',
+        data: { booking_id: booking.id },
+      })
       try {
         await loopsEmailService.sendClientBookingRejectedOrExpired({
           email: booking.client.user.email,
@@ -196,6 +211,21 @@ export const paymentLifecycleService = {
     for (const booking of acceptedExpired) {
       await db.booking.update({ where: { id: booking.id }, data: { status: 'expired' } })
       accepted += 1
+
+      await pushInAppNotification({
+        userId: booking.client.userId,
+        type: 'booking_request_expired',
+        title: 'Booking payment window expired',
+        body: 'This booking was closed because payment authorization did not complete in time.',
+        data: { booking_id: booking.id },
+      })
+      await pushInAppNotification({
+        userId: booking.cleaner.userId,
+        type: 'booking_request_expired',
+        title: 'Booking payment window expired',
+        body: 'This booking was closed because client authorization did not complete in time.',
+        data: { booking_id: booking.id },
+      })
 
       try {
         await loopsEmailService.sendClientBookingRejectedOrExpired({

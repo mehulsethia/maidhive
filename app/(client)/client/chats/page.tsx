@@ -11,6 +11,7 @@ import { Chat } from '@/components/chat'
 import { SplitChatPageSkeleton } from '@/components/page-skeletons'
 import { Input } from '@/components/ui/input'
 import { UserAvatar } from '@/components/ui/user-avatar'
+import { isChatReadOnly } from '@/lib/chat-window'
 import { formatDate } from '@/lib/utils'
 import type { BookingRead } from '@/types'
 import { toast } from 'sonner'
@@ -46,15 +47,8 @@ function ClientChatsPageContent() {
           authApi.me().catch(() => null),
         ])
 
-        const now = Date.now()
-        const CHAT_CUTOFF_MS = 30 * 60 * 1000
-
         const chatBookings = (data?.items ?? []).filter((booking) => {
           if (!CHAT_AVAILABLE.includes(booking.status)) return false
-          if (['completed', 'disputed'].includes(booking.status) && booking.scheduled_end) {
-            const endTime = new Date(booking.scheduled_end).getTime()
-            if (now > endTime + CHAT_CUTOFF_MS) return false
-          }
           return true
         })
 
@@ -225,7 +219,13 @@ function ClientChatsPageContent() {
                   </Link>
                 </div>
                 <div className="min-h-0 flex-1">
-                  <Chat bookingId={selected.id} currentUserId={currentUserId} fullHeight />
+                  <Chat
+                    bookingId={selected.id}
+                    currentUserId={currentUserId}
+                    fullHeight
+                    readOnly={isChatReadOnly(selected.scheduled_end)}
+                    readOnlyMessage="Dispute window is over for this booking. Chat is now read-only."
+                  />
                 </div>
               </div>
             )}

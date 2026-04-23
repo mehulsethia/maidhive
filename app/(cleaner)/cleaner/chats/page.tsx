@@ -10,6 +10,7 @@ import { SplitChatPageSkeleton } from '@/components/page-skeletons'
 import { Input } from '@/components/ui/input'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { UserAvatar } from '@/components/ui/user-avatar'
+import { isChatReadOnly } from '@/lib/chat-window'
 import { formatDate } from '@/lib/utils'
 import type { BookingRead } from '@/types'
 import { toast } from 'sonner'
@@ -40,14 +41,8 @@ export default function CleanerChatsPage() {
         ])
 
         if (bookingsRes.status === 'fulfilled') {
-          const now = Date.now()
-          const CHAT_CUTOFF_MS = 30 * 60 * 1000
           const chatBookings = (bookingsRes.value.data?.items ?? []).filter((b) => {
             if (!CHAT_AVAILABLE.includes(b.status)) return false
-            if (['completed', 'disputed'].includes(b.status) && b.scheduled_end) {
-              const endTime = new Date(b.scheduled_end).getTime()
-              if (now > endTime + CHAT_CUTOFF_MS) return false
-            }
             return true
           })
           setBookings(chatBookings)
@@ -174,7 +169,13 @@ export default function CleanerChatsPage() {
                 </Link>
               </div>
               <div className="min-h-0 flex-1">
-                <Chat bookingId={selected.id} currentUserId={currentUserId} fullHeight />
+                <Chat
+                  bookingId={selected.id}
+                  currentUserId={currentUserId}
+                  fullHeight
+                  readOnly={isChatReadOnly(selected.scheduled_end)}
+                  readOnlyMessage="Dispute window is over for this booking. Chat is now read-only."
+                />
               </div>
             </div>
           )}

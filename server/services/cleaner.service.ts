@@ -2,6 +2,7 @@ import { cleanerRepo } from '../repositories/cleaner.repo'
 import { db } from '../db'
 import { ServiceError } from './booking.service'
 import { loopsEmailService } from './loops-email.service'
+import { pushInAppNotification } from './in-app-notification.service'
 import type { User } from '@prisma/client'
 
 const STRIKE_SUSPEND_THRESHOLD = 3
@@ -17,6 +18,17 @@ export const cleanerService = {
       rejectionReason: action === 'reject' ? (rejectionReason ?? null) : null,
       approvedAt: action === 'approve' ? new Date() : null,
       approvedBy: action === 'approve' ? adminUser.id : null,
+    })
+
+    await pushInAppNotification({
+      userId: updated.userId,
+      type: action === 'approve' ? 'cleaner_application_approved' : 'cleaner_application_rejected',
+      title: action === 'approve' ? 'Cleaner profile approved' : 'Cleaner profile rejected',
+      body:
+        action === 'approve'
+          ? 'Your cleaner profile has been approved and is now live.'
+          : `Your cleaner profile was rejected${rejectionReason ? `: ${rejectionReason}` : '.'}`,
+      data: { cleaner_id: updated.id },
     })
 
     try {

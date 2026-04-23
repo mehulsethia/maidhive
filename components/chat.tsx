@@ -13,9 +13,17 @@ interface ChatProps {
   bookingId: string
   currentUserId: string
   fullHeight?: boolean
+  readOnly?: boolean
+  readOnlyMessage?: string
 }
 
-export function Chat({ bookingId, currentUserId, fullHeight = false }: ChatProps) {
+export function Chat({
+  bookingId,
+  currentUserId,
+  fullHeight = false,
+  readOnly = false,
+  readOnlyMessage,
+}: ChatProps) {
   const [messages, setMessages] = useState<MessageRead[]>([])
   const [input, setInput] = useState('')
   const [sending, setSending] = useState(false)
@@ -100,7 +108,7 @@ export function Chat({ bookingId, currentUserId, fullHeight = false }: ChatProps
 
   async function handleSend() {
     const content = input.trim()
-    if (!content || sending) return
+    if (!content || sending || readOnly) return
 
     // Optimistic update
     const tempId = `temp-${Date.now()}`
@@ -203,25 +211,33 @@ export function Chat({ bookingId, currentUserId, fullHeight = false }: ChatProps
       </div>
 
       {/* Input */}
-      <div className="flex shrink-0 items-end gap-2 border-t bg-background p-3">
-        <textarea
-          ref={inputRef}
-          value={input}
-          onChange={e => setInput(e.target.value)}
-          onKeyDown={handleKeyDown}
-          placeholder="Type a message… (Enter to send)"
-          rows={1}
-          className="max-h-24 flex-1 resize-none overflow-y-auto rounded-xl border border-input bg-background px-3 py-2 text-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-          style={{ minHeight: 38 }}
-        />
-        <button
-          onClick={handleSend}
-          disabled={!input.trim() || sending}
-          className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-primary text-primary-foreground transition-all duration-200 hover:-translate-y-0.5 hover:opacity-95 disabled:opacity-40"
-          aria-label="Send message"
-        >
-          <Send className="h-4 w-4" />
-        </button>
+      <div className="shrink-0 border-t bg-background p-3">
+        {readOnly ? (
+          <p className="w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-600">
+            {readOnlyMessage ?? 'Chat is now read-only for this booking.'}
+          </p>
+        ) : (
+          <div className="flex items-end gap-2">
+            <textarea
+              ref={inputRef}
+              value={input}
+              onChange={e => setInput(e.target.value)}
+              onKeyDown={handleKeyDown}
+              placeholder="Type a message… (Enter to send)"
+              rows={1}
+              className="max-h-24 flex-1 resize-none overflow-y-auto rounded-xl border border-input bg-background px-3 py-2 text-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              style={{ minHeight: 38 }}
+            />
+            <button
+              onClick={handleSend}
+              disabled={!input.trim() || sending}
+              className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-primary text-primary-foreground transition-all duration-200 hover:-translate-y-0.5 hover:opacity-95 disabled:opacity-40"
+              aria-label="Send message"
+            >
+              <Send className="h-4 w-4" />
+            </button>
+          </div>
+        )}
       </div>
     </div>
   )

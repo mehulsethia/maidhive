@@ -8,6 +8,8 @@ import { ok, err } from '@/server/response'
 import { createDisputeSchema } from '@/server/schemas/dispute.schema'
 import { loopsEmailService } from '@/server/services/loops-email.service'
 import { config } from '@/server/config'
+import { pushInAppNotification } from '@/server/services/in-app-notification.service'
+import { db } from '@/server/db'
 
 const ISSUE_LABELS: Record<string, string> = {
   cleaner_didnt_arrive: "Cleaner didn't arrive",
@@ -87,6 +89,37 @@ export const POST = requireAuth(async (req: NextRequest, ctx, user) => {
   if (!['cancelled', 'expired'].includes(booking.status)) {
     await bookingRepo.update(id, { status: 'disputed' })
   }
+
+  await pushInAppNotification({
+    userId: booking.client.userId,
+    type: 'dispute_under_review',
+    title: 'Dispute under review',
+    body: 'Your dispute is now under review by MaidHive.',
+    data: { booking_id: booking.id, dispute_id: dispute.id },
+  })
+  await pushInAppNotification({
+    userId: booking.cleaner.userId,
+    type: 'dispute_under_review',
+    title: 'Dispute under review',
+    body: 'A dispute was raised for this booking and is under review.',
+    data: { booking_id: booking.id, dispute_id: dispute.id },
+  })
+
+  const admins = await db.user.findMany({
+    where: { role: 'admin', isActive: true },
+    select: { id: true },
+  })
+  await Promise.all(
+    admins.map((admin) =>
+      pushInAppNotification({
+        userId: admin.id,
+        type: 'dispute_raised',
+        title: 'New dispute raised',
+        body: `Booking ${booking.id.slice(0, 8)} has a new dispute requiring review.`,
+        data: { booking_id: booking.id, dispute_id: dispute.id },
+      }),
+    ),
+  )
 
   try {
     await loopsEmailService.sendAdminDisputeRaised({

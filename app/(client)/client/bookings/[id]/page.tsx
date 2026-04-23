@@ -18,6 +18,7 @@ import { Label } from '@/components/ui/label'
 import { Input } from '@/components/ui/input'
 import { formatDate } from '@/lib/utils'
 import { createClient } from '@/lib/supabase'
+import { isChatReadOnly } from '@/lib/chat-window'
 import type { BookingRead } from '@/types'
 import { toast } from 'sonner'
 
@@ -123,8 +124,8 @@ export default function ClientBookingDetailPage() {
   const cleanerProposed = booking.proposal_by === 'cleaner'
   const moreThan24HoursAway = new Date(booking.scheduled_start).getTime() - Date.now() > 24 * 60 * 60 * 1000
   const canCounterProposal = isPending && cleanerProposed && (booking.client_proposals ?? 0) < 1 && moreThan24HoursAway
-  const chatCutoff = booking.scheduled_end ? new Date(booking.scheduled_end).getTime() + 30 * 60 * 1000 : Infinity
-  const showChat = CHAT_STATUSES.includes(booking.status) && Date.now() < chatCutoff
+  const showChat = CHAT_STATUSES.includes(booking.status)
+  const chatIsReadOnly = isChatReadOnly(booking.scheduled_end)
 
   return (
     <>
@@ -275,7 +276,12 @@ export default function ClientBookingDetailPage() {
                   <CardTitle className="text-base">Messages</CardTitle>
                 </CardHeader>
                 <CardContent className="p-0">
-                  <Chat bookingId={id} currentUserId={currentUserId} />
+                  <Chat
+                    bookingId={id}
+                    currentUserId={currentUserId}
+                    readOnly={chatIsReadOnly}
+                    readOnlyMessage="Dispute window is over for this booking. Chat is now read-only."
+                  />
                 </CardContent>
               </Card>
             ) : !showChat ? (

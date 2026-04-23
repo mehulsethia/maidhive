@@ -6,6 +6,7 @@ import { clientRepo } from '@/server/repositories/client.repo'
 import { cleanerRepo } from '@/server/repositories/cleaner.repo'
 import { ok, err } from '@/server/response'
 import { sendMessageSchema } from '@/server/schemas/message.schema'
+import { config } from '@/server/config'
 
 async function isParty(bookingId: string, userId: string, role: string) {
   const booking = await bookingRepo.findById(bookingId)
@@ -38,12 +39,15 @@ export const POST = requireAuth(async (req: NextRequest, ctx, user) => {
     return err('Chat is only available for confirmed bookings', 400)
   }
 
-  // Chat closes 30 minutes after the scheduled end time
-  const CHAT_CUTOFF_MS = 30 * 60 * 1000
+  // Chat becomes read-only after the dispute window expires.
+  const CHAT_CUTOFF_MS = config.DISPUTE_WINDOW_HOURS * 60 * 60 * 1000
   if (booking.scheduledEnd) {
     const cutoff = new Date(booking.scheduledEnd).getTime() + CHAT_CUTOFF_MS
     if (Date.now() > cutoff) {
-      return err('Chat has closed — 30 minutes after the scheduled end time', 400)
+      return err(
+        `Chat is read-only after ${config.DISPUTE_WINDOW_HOURS} hours from the scheduled end time`,
+        400,
+      )
     }
   }
 

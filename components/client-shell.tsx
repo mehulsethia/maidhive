@@ -7,6 +7,7 @@ import {
   Users,
   CalendarDays,
   MessagesSquare,
+  Bell,
   User,
   Flag,
 } from 'lucide-react'
@@ -22,6 +23,7 @@ const NAV_ITEMS = [
   { href: '/client/cleaners', label: 'Cleaners', icon: Users },
   { href: '/client/bookings', label: 'Bookings', icon: CalendarDays },
   { href: '/client/chats', label: 'Chats', icon: MessagesSquare },
+  { href: '/client/notifications', label: 'Notifications', icon: Bell },
   { href: '/client/profile', label: 'Profile', icon: User },
   { href: '/client/report', label: 'Report', icon: Flag },
 ]
@@ -36,6 +38,7 @@ export function ClientShell({ children }: { children: React.ReactNode }) {
     if (!counts) return 0
     if (href === '/client/chats') return counts.unread_chats
     if (href === '/client/bookings') return counts.pending_bookings
+    if (href === '/client/notifications') return counts.unread_notifications
     return 0
   }
 

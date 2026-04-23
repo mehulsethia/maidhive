@@ -21,6 +21,7 @@ import {
   toIsoFromDateAndTimeLocal,
   toTimeInputValue,
 } from '@/lib/booking-proposal'
+import { isChatReadOnly } from '@/lib/chat-window'
 import { formatCurrency, formatDate } from '@/lib/utils'
 import { createClient } from '@/lib/supabase'
 import type { BookingRead } from '@/types'
@@ -169,10 +170,8 @@ export default function CleanerBookingDetailPage() {
     canRespondToCounter,
   } = getCleanerProposalEligibility(booking)
 
-  const chatCutoff = booking.scheduled_end
-    ? new Date(booking.scheduled_end).getTime() + 30 * 60 * 1000
-    : Infinity
-  const showChat = CHAT_STATUSES.includes(booking.status) && Date.now() < chatCutoff
+  const showChat = CHAT_STATUSES.includes(booking.status)
+  const chatIsReadOnly = isChatReadOnly(booking.scheduled_end)
   const completeOpensAt = booking.scheduled_end
     ? new Date(booking.scheduled_end).getTime() - 5 * 60 * 1000
     : Infinity
@@ -304,10 +303,15 @@ export default function CleanerBookingDetailPage() {
       {showChat && currentUserId ? (
         <Card>
           <CardHeader><CardTitle className="text-base">Messages</CardTitle></CardHeader>
-          <CardContent className="p-0">
-            <Chat bookingId={id} currentUserId={currentUserId} />
-          </CardContent>
-        </Card>
+        <CardContent className="p-0">
+          <Chat
+            bookingId={id}
+            currentUserId={currentUserId}
+            readOnly={chatIsReadOnly}
+            readOnlyMessage="Dispute window is over for this booking. Chat is now read-only."
+          />
+        </CardContent>
+      </Card>
       ) : !showChat ? (
         <p className="text-xs text-center text-muted-foreground">
           Chat becomes available once booking is confirmed.

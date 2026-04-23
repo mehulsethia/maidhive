@@ -337,11 +337,46 @@ export const messagesApi = {
 // Notifications
 // ---------------------------------------------------------------------------
 export const notificationsApi = {
-  list: () => request<APIResponse<NotificationRead[]>>('/notifications'),
+  list: async (params?: {
+    page?: number
+    page_size?: number
+    include_archived?: boolean
+    unread_only?: boolean
+  }) => {
+    const qs = new URLSearchParams(
+      Object.entries(params ?? {})
+        .filter(([, v]) => v !== undefined)
+        .map(([k, v]) => [k, String(v)]),
+    ).toString()
+    const res = await request<
+      APIResponse<{ notifications: NotificationRead[]; total: number; page: number; page_size: number }>
+    >(`/notifications${qs ? `?${qs}` : ''}`)
+    const payload = res.data
+    const notifications = (payload?.notifications ?? []).map((notification) => ({
+      ...notification,
+      archived: Boolean(notification?.data?._archived),
+      archived_at:
+        typeof notification?.data?._archived_at === 'string' ? notification.data._archived_at : null,
+    }))
+    return {
+      ...res,
+      data: {
+        notifications,
+        total: Number(payload?.total ?? notifications.length),
+        page: Number(payload?.page ?? params?.page ?? 1),
+        page_size: Number(payload?.page_size ?? params?.page_size ?? 20),
+      },
+    }
+  },
   markAllRead: () =>
     request<APIResponse<null>>('/notifications/read-all', { method: 'PATCH' }),
   markRead: (id: string) =>
     request<APIResponse<null>>(`/notifications/${id}/read`, { method: 'PATCH' }),
+  archive: (id: string, archived = true) =>
+    request<APIResponse<null>>(`/notifications/${id}/archive`, {
+      method: 'PATCH',
+      body: JSON.stringify({ archived }),
+    }),
 }
 
 // ---------------------------------------------------------------------------
