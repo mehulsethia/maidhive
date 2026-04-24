@@ -13,6 +13,7 @@ import { Card, CardContent } from '@/components/ui/card'
 import { FormPageSkeleton } from '@/components/page-skeletons'
 import { ScheduleEditor } from '@/components/schedule-editor'
 import { getAccessToken } from '@/lib/auth-cache'
+import { toApiV1Url } from '@/lib/api-base'
 import { cn } from '@/lib/utils'
 import type { CleanerOnboardingProgress, CleanerRead } from '@/types'
 import { toast } from 'sonner'
@@ -192,11 +193,10 @@ function CleanerOnboardingPageContent() {
     setUploadingProfileImage(true)
     try {
       const token = await getAccessToken()
-      const BASE = process.env.NEXT_PUBLIC_API_URL ?? ''
       const form = new FormData()
       form.append('file', file)
 
-      const res = await fetch(`${BASE}/api/v1/upload/profile-image`, {
+      const res = await fetch(toApiV1Url('/upload/profile-image'), {
         method: 'POST',
         headers: token ? { Authorization: `Bearer ${token}` } : {},
         body: form,
@@ -325,11 +325,10 @@ function CleanerOnboardingPageContent() {
     setUploadingKyc(true)
     try {
       const token = await getAccessToken()
-      const BASE = process.env.NEXT_PUBLIC_API_URL ?? ''
       const form = new FormData()
       form.append('file', file)
 
-      const res = await fetch(`${BASE}/api/v1/upload/kyc-document`, {
+      const res = await fetch(toApiV1Url('/upload/kyc-document'), {
         method: 'POST',
         headers: token ? { Authorization: `Bearer ${token}` } : {},
         body: form,

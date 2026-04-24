@@ -15,6 +15,7 @@ import { AvatarUpload } from '@/components/avatar-upload'
 import { PhoneInput } from '@/components/phone-input'
 import { ScheduleEditor } from '@/components/schedule-editor'
 import { getAccessToken } from '@/lib/auth-cache'
+import { toApiV1Url } from '@/lib/api-base'
 import { formatCurrency } from '@/lib/utils'
 import type { BookingRead, ReviewRead } from '@/types'
 import { toast } from 'sonner'
@@ -264,11 +265,10 @@ function CleanerProfilePageContent() {
     setUploadingKyc(true)
     try {
       const token = await getAccessToken()
-      const BASE = process.env.NEXT_PUBLIC_API_URL ?? ''
       const form = new FormData()
       form.append('file', file)
 
-      const res = await fetch(`${BASE}/api/v1/upload/kyc-document`, {
+      const res = await fetch(toApiV1Url('/upload/kyc-document'), {
         method: 'POST',
         headers: token ? { Authorization: `Bearer ${token}` } : {},
         body: form,

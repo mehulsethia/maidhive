@@ -4,6 +4,7 @@ import { useRef, useState } from 'react'
 import { Pencil } from 'lucide-react'
 import { toast } from 'sonner'
 import { getAccessToken } from '@/lib/auth-cache'
+import { toApiV1Url } from '@/lib/api-base'
 
 interface AvatarUploadProps {
   currentUrl?: string | null
@@ -30,11 +31,10 @@ export function AvatarUpload({ currentUrl, fallbackInitial, size = 'lg', onUploa
 
     try {
       const token = await getAccessToken()
-      const BASE = process.env.NEXT_PUBLIC_API_URL ?? ''
       const form = new FormData()
       form.append('file', file)
 
-      const res = await fetch(`${BASE}/api/v1/upload/profile-image`, {
+      const res = await fetch(toApiV1Url('/upload/profile-image'), {
         method: 'POST',
         headers: token ? { Authorization: `Bearer ${token}` } : {},
         body: form,

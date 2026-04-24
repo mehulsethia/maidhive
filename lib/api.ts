@@ -3,6 +3,7 @@
  * Every request attaches the Supabase JWT from the current session.
  */
 import { getAccessToken } from '@/lib/auth-cache'
+import { getApiBaseUrl } from '@/lib/api-base'
 import type {
   AdminCleaner,
   AdminDispute,
@@ -27,7 +28,7 @@ import type {
   UserUpdate,
 } from '@/types'
 
-const BASE = process.env.NEXT_PUBLIC_API_URL ?? ''
+const BASE = getApiBaseUrl()
 const GET_CACHE_TTL_MS = Number(process.env.NEXT_PUBLIC_API_CLIENT_CACHE_TTL_MS ?? 30000)
 
 type AnyObj = Record<string, any>

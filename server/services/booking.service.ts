@@ -355,6 +355,31 @@ export const bookingService = {
     })
   },
 
+  async completeByClient(bookingId: string, user: User) {
+    const booking = await bookingRepo.findById(bookingId)
+    if (!booking) throw new ServiceError('Booking not found', 404)
+
+    const client = await clientRepo.findByUserId(user.id)
+    if (!client || booking.clientId !== client.id) {
+      throw new ServiceError('Only booking client can complete this booking', 403)
+    }
+
+    if (!['in_progress', 'disputed'].includes(booking.status)) {
+      throw new ServiceError(`Cannot complete a booking in status '${booking.status}'`, 400)
+    }
+
+    if (!booking.startedAt) {
+      throw new ServiceError('Booking must be started before completion', 400)
+    }
+
+    assertCompletionWindow(booking.scheduledEnd)
+    return completeBookingFlow(bookingId, {
+      completedAt: new Date(),
+      initiatedByUserId: user.id,
+      initiatedByRole: 'client',
+    })
+  },
+
   async completeBySystem(bookingId: string, completedAt: Date) {
     return completeBookingFlow(bookingId, {
       completedAt,
@@ -517,7 +542,7 @@ async function completeBookingFlow(
   bookingId: string,
   args: {
     completedAt: Date
-    initiatedByRole: 'cleaner' | 'system'
+    initiatedByRole: 'cleaner' | 'client' | 'system'
     initiatedByUserId?: string
   },
 ) {
@@ -554,7 +579,9 @@ async function completeBookingFlow(
     body:
       args.initiatedByRole === 'system'
         ? 'Booking was auto-completed after the scheduled end time.'
-        : 'Cleaner marked this booking as completed.',
+        : args.initiatedByRole === 'client'
+          ? 'You marked this booking as completed.'
+          : 'Cleaner marked this booking as completed.',
     data: { booking_id: bookingId },
   })
 
@@ -565,6 +592,8 @@ async function completeBookingFlow(
     body:
       args.initiatedByRole === 'system'
         ? 'This booking was auto-completed after the scheduled end time.'
+        : args.initiatedByRole === 'client'
+          ? 'Client marked this booking as completed. Payout will be released after the dispute window.'
         : 'Booking marked complete. Payout will be released after the dispute window.',
     data: { booking_id: bookingId },
   })
