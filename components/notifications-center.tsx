@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
-import { Archive, ArchiveRestore, Check, CheckCheck, Inbox } from 'lucide-react'
+import { Check, CheckCheck, Inbox, Trash2 } from 'lucide-react'
 import { notificationsApi } from '@/lib/api'
 import { getNotificationHref } from '@/lib/notification-links'
 import { createClient } from '@/lib/supabase'
@@ -11,12 +11,11 @@ import type { NotificationRead } from '@/types'
 import { toast } from 'sonner'
 
 type NotificationRole = 'client' | 'cleaner' | 'admin'
-type NotificationFilter = 'all' | 'unread' | 'archived'
+type NotificationFilter = 'all' | 'unread'
 
 const FILTERS: { key: NotificationFilter; label: string }[] = [
   { key: 'all', label: 'All' },
   { key: 'unread', label: 'Unread' },
-  { key: 'archived', label: 'Archived' },
 ]
 
 export function NotificationsCenter({ role }: { role: NotificationRole }) {
@@ -25,19 +24,17 @@ export function NotificationsCenter({ role }: { role: NotificationRole }) {
   const [filter, setFilter] = useState<NotificationFilter>('all')
   const [notifications, setNotifications] = useState<NotificationRead[]>([])
 
-  const unreadCount = useMemo(() => notifications.filter((n) => !n.is_read && !n.archived).length, [notifications])
-  const archivedCount = useMemo(() => notifications.filter((n) => n.archived).length, [notifications])
+  const unreadCount = useMemo(() => notifications.filter((n) => !n.is_read).length, [notifications])
 
   const visibleNotifications = useMemo(() => {
-    if (filter === 'unread') return notifications.filter((n) => !n.archived && !n.is_read)
-    if (filter === 'archived') return notifications.filter((n) => n.archived)
-    return notifications.filter((n) => !n.archived)
+    if (filter === 'unread') return notifications.filter((n) => !n.is_read)
+    return notifications
   }, [filter, notifications])
 
   const load = useCallback(async () => {
     setLoading(true)
     try {
-      const res = await notificationsApi.list({ include_archived: true, page_size: 250 })
+      const res = await notificationsApi.list({ page_size: 250 })
       setNotifications(res.data?.notifications ?? [])
     } catch {
       toast.error('Failed to load notifications.')
@@ -101,9 +98,7 @@ export function NotificationsCenter({ role }: { role: NotificationRole }) {
     setWorkingId('ALL')
     try {
       await notificationsApi.markAllRead()
-      setNotifications((prev) => prev.map((notification) => (
-        notification.archived ? notification : { ...notification, is_read: true }
-      )))
+      setNotifications((prev) => prev.map((notification) => ({ ...notification, is_read: true })))
     } catch {
       toast.error('Failed to mark all notifications as read.')
     } finally {
@@ -111,26 +106,13 @@ export function NotificationsCenter({ role }: { role: NotificationRole }) {
     }
   }
 
-  async function setArchived(id: string, archived: boolean) {
+  async function deleteNotification(id: string) {
     setWorkingId(id)
     try {
-      await notificationsApi.archive(id, archived)
-      setNotifications((prev) => prev.map((notification) => (
-        notification.id === id
-          ? {
-              ...notification,
-              archived,
-              archived_at: archived ? new Date().toISOString() : null,
-              data: {
-                ...(notification.data ?? {}),
-                _archived: archived,
-                _archived_at: archived ? new Date().toISOString() : null,
-              },
-            }
-          : notification
-      )))
+      await notificationsApi.delete(id)
+      setNotifications((prev) => prev.filter((notification) => notification.id !== id))
     } catch {
-      toast.error(`Failed to ${archived ? 'archive' : 'restore'} notification.`)
+      toast.error('Failed to delete notification.')
     } finally {
       setWorkingId(null)
     }
@@ -157,10 +139,7 @@ export function NotificationsCenter({ role }: { role: NotificationRole }) {
 
       <div className="mt-4 flex flex-wrap gap-2">
         {FILTERS.map((item) => {
-          const count =
-            item.key === 'all' ? notifications.filter((n) => !n.archived).length
-              : item.key === 'unread' ? unreadCount
-                : archivedCount
+          const count = item.key === 'all' ? notifications.length : unreadCount
           const active = item.key === filter
           return (
             <button
@@ -240,25 +219,14 @@ export function NotificationsCenter({ role }: { role: NotificationRole }) {
                         Mark read
                       </button>
                     )}
-                    {notification.archived ? (
-                      <button
-                        onClick={() => setArchived(notification.id, false)}
-                        disabled={working}
-                        className="inline-flex h-8 items-center gap-1 rounded-full border border-slate-300 px-3 text-xs font-semibold text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
-                      >
-                        <ArchiveRestore className="h-3.5 w-3.5" />
-                        Restore
-                      </button>
-                    ) : (
-                      <button
-                        onClick={() => setArchived(notification.id, true)}
-                        disabled={working}
-                        className="inline-flex h-8 items-center gap-1 rounded-full border border-slate-300 px-3 text-xs font-semibold text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
-                      >
-                        <Archive className="h-3.5 w-3.5" />
-                        Archive
-                      </button>
-                    )}
+                    <button
+                      onClick={() => deleteNotification(notification.id)}
+                      disabled={working}
+                      className="inline-flex h-8 items-center gap-1 rounded-full border border-slate-300 px-3 text-xs font-semibold text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
+                    >
+                      <Trash2 className="h-3.5 w-3.5" />
+                      Delete
+                    </button>
                   </div>
                 </div>
               </article>

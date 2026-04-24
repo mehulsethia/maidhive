@@ -27,12 +27,18 @@ async function fetchCounts(): Promise<{ unread_chats: number; pending_bookings: 
     }),
   ])
 
-  if (!countsRes.ok) return { unread_chats: 0, pending_bookings: 0, unread_notifications: 0 }
+  if (!countsRes.ok) {
+    throw new Error(`Counts request failed: ${countsRes.status}`)
+  }
   const countsJson = await countsRes.json().catch(() => ({}))
   const countsData = countsJson?.data ?? { unread_chats: 0, pending_bookings: 0, unread_notifications: 0 }
 
   if (!notificationsRes.ok) {
-    return countsData
+    return {
+      unread_chats: Number(countsData.unread_chats ?? 0),
+      pending_bookings: Number(countsData.pending_bookings ?? 0),
+      unread_notifications: Number(countsData.unread_notifications ?? 0),
+    }
   }
 
   const notificationsJson = await notificationsRes.json().catch(() => ({}))
@@ -53,6 +59,8 @@ export function useCounts() {
     queryFn: fetchCounts,
     staleTime: 10 * 1000,
     refetchInterval: 15 * 1000,
+    refetchIntervalInBackground: true,
     refetchOnWindowFocus: true,
+    retry: 2,
   })
 }

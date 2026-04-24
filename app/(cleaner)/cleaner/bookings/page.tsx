@@ -67,13 +67,14 @@ export default function CleanerBookingsPage() {
 
   async function action(
     id: string,
-    type: 'accept' | 'start' | 'propose_alternative',
+    type: 'accept' | 'decline' | 'start' | 'propose_alternative',
     customProposedStart?: string,
   ) {
     setActionLoading(`${id}-${type}`)
     try {
       await bookingsApi.action(id, type, customProposedStart)
       if (type === 'accept') toast.success('Booking accepted.')
+      if (type === 'decline') toast.success('Booking request declined.')
       if (type === 'start') toast.success('Job started.')
       if (type === 'propose_alternative') toast.success('Alternative time sent to client.')
       await refresh()
@@ -119,16 +120,7 @@ export default function CleanerBookingsPage() {
   }
 
   async function decline(id: string) {
-    setActionLoading(`${id}-decline`)
-    try {
-      await bookingsApi.cancel(id, 'Cleaner declined')
-      toast.success('Booking declined.')
-      await refresh()
-    } catch (err: any) {
-      toast.error(err.message ?? 'Unable to decline booking.')
-    } finally {
-      setActionLoading(null)
-    }
+    await action(id, 'decline')
   }
 
   const filtered = useMemo(() => {

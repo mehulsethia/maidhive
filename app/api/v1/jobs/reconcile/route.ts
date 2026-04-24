@@ -7,12 +7,19 @@ import { timingSafeEqual } from 'crypto'
 // POST /api/v1/jobs/reconcile
 // Intended for cron/scheduler usage.
 export async function POST(req: NextRequest) {
-  if (!config.JOBS_SECRET) {
-    return err('JOBS_SECRET is not configured', 500)
+  const expectedSecrets = [config.JOBS_SECRET, config.CRON_SECRET].filter(Boolean)
+  if (expectedSecrets.length === 0) {
+    return err('JOBS_SECRET or CRON_SECRET is not configured', 500)
   }
 
-  const provided = req.headers.get('x-jobs-secret')
-  if (!provided || !safeSecretEqual(provided, config.JOBS_SECRET)) {
+  const provided =
+    req.headers.get('x-jobs-secret') ??
+    extractBearerToken(req.headers.get('authorization'))
+  const authorized = Boolean(
+    provided && expectedSecrets.some((secret) => safeSecretEqual(provided, secret)),
+  )
+
+  if (!authorized) {
     return err('Unauthorized', 401)
   }
 
@@ -34,4 +41,11 @@ function safeSecretEqual(a: string, b: string) {
   const bBuf = Buffer.from(b)
   if (aBuf.length !== bBuf.length) return false
   return timingSafeEqual(aBuf, bBuf)
+}
+
+function extractBearerToken(value: string | null) {
+  if (!value) return null
+  const [scheme, token] = value.split(' ')
+  if (scheme?.toLowerCase() !== 'bearer' || !token) return null
+  return token
 }

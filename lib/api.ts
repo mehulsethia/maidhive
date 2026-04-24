@@ -251,6 +251,7 @@ export const bookingsApi = {
     id: string,
     action:
       | 'accept'
+      | 'decline'
       | 'start'
       | 'propose_alternative'
       | 'counter_proposal'
@@ -354,7 +355,6 @@ export const notificationsApi = {
   list: async (params?: {
     page?: number
     page_size?: number
-    include_archived?: boolean
     unread_only?: boolean
   }) => {
     const qs = new URLSearchParams(
@@ -386,11 +386,8 @@ export const notificationsApi = {
     request<APIResponse<null>>('/notifications/read-all', { method: 'PATCH' }),
   markRead: (id: string) =>
     request<APIResponse<null>>(`/notifications/${id}/read`, { method: 'PATCH' }),
-  archive: (id: string, archived = true) =>
-    request<APIResponse<null>>(`/notifications/${id}/archive`, {
-      method: 'PATCH',
-      body: JSON.stringify({ archived }),
-    }),
+  delete: (id: string) =>
+    request<APIResponse<null>>(`/notifications/${id}`, { method: 'DELETE' }),
 }
 
 // ---------------------------------------------------------------------------

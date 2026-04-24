@@ -7,6 +7,7 @@ export const BOOKING_STATUSES = [
 ] as const
 export const BOOKING_ACTIONS = [
   'accept',
+  'decline',
   'start',
   'propose_alternative',
   'counter_proposal',

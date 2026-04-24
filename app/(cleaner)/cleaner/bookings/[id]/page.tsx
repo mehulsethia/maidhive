@@ -11,7 +11,6 @@ import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Separator } from '@/components/ui/separator'
 import { Dialog, DialogTitle } from '@/components/ui/dialog'
-import { Textarea } from '@/components/ui/textarea'
 import { Label } from '@/components/ui/label'
 import { Input } from '@/components/ui/input'
 import {
@@ -44,7 +43,6 @@ export default function CleanerBookingDetailPage() {
   const [loading, setLoading] = useState(true)
   const [actionLoading, setActionLoading] = useState(false)
   const [cancelOpen, setCancelOpen] = useState(false)
-  const [cancelReason, setCancelReason] = useState('')
   const [proposalOpen, setProposalOpen] = useState(false)
   const [proposalDate, setProposalDate] = useState('')
   const [proposalTime, setProposalTime] = useState('')
@@ -116,11 +114,10 @@ export default function CleanerBookingDetailPage() {
   }
 
   async function handleCancel() {
-    if (!cancelReason.trim()) { toast.error('Please provide a reason.'); return }
     setActionLoading(true)
     try {
-      await bookingsApi.cancel(id, cancelReason)
-      toast.success('Booking declined.')
+      await bookingsApi.action(id, 'decline')
+      toast.success('Booking request declined.')
       setCancelOpen(false)
       router.push('/cleaner/dashboard')
     } catch (err: any) {
@@ -324,11 +321,7 @@ export default function CleanerBookingDetailPage() {
         <DialogTitle>Decline booking</DialogTitle>
         <div className="space-y-3">
           <p className="text-sm text-muted-foreground">Declining a booking may result in a strike if done close to the scheduled time.</p>
-          <div>
-            <Label>Reason</Label>
-            <Textarea value={cancelReason} onChange={e => setCancelReason(e.target.value)}
-              placeholder="Why can't you take this job?" className="mt-1" rows={3} />
-          </div>
+          <p className="text-sm text-muted-foreground">This will close the pending request for the client.</p>
           <Button onClick={handleCancel} variant="destructive" className="w-full" loading={actionLoading}>
             Decline booking
           </Button>

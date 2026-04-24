@@ -55,6 +55,11 @@ export const notificationRepo = {
       data: { isRead: true },
     }),
 
+  delete: (id: string, userId: string) =>
+    db.notification.deleteMany({
+      where: { id, userId },
+    }),
+
   countUnread: (userId: string) =>
     db.notification.count({
       where: {
@@ -132,6 +137,11 @@ export const notificationRepo = {
     db.notification.updateMany({
       where: { id, userId: { in: userIds } },
       data: { isRead: true },
+    }),
+
+  deleteForUsers: (id: string, userIds: string[]) =>
+    db.notification.deleteMany({
+      where: { id, userId: { in: userIds } },
     }),
 
   async setArchivedForUsers(id: string, userIds: string[], archived: boolean) {

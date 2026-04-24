@@ -60,7 +60,8 @@ export const bookingService = {
 
     await validateBookingWindow(cleaner.id, scheduledStart, scheduledEnd)
 
-    const acceptBy = new Date(Date.now() + BOOKING_ACCEPT_TTL_MINUTES * 60 * 1000)
+    const requestWindowEndsAt = new Date(Date.now() + BOOKING_ACCEPT_TTL_MINUTES * 60 * 1000)
+    const acceptBy = new Date(Math.min(requestWindowEndsAt.getTime(), scheduledStart.getTime()))
 
     const pricing = bookingService.previewPrice(
       Number(cleaner.hourlyRate),
@@ -115,6 +116,7 @@ export const bookingService = {
     payload: {
       action:
         | 'accept'
+        | 'decline'
         | 'start'
         | 'propose_alternative'
         | 'counter_proposal'
@@ -178,6 +180,46 @@ export const bookingService = {
       void googleCalendarService.upsertCleanerBookingEvent(updated.id).catch((e) => {
         console.error('Failed to sync cleaner Google Calendar event:', e)
       })
+      return updated
+    }
+
+    if (action === 'decline') {
+      if (!isCleaner) throw new ServiceError('Only cleaner can decline a booking request', 403)
+      if (booking.status !== 'pending') {
+        throw new ServiceError(`Cannot decline a booking in status '${booking.status}'`, 400)
+      }
+      assertWithinRequestWindow(booking.acceptBy)
+
+      const updated = await bookingRepo.update(bookingId, {
+        status: 'expired',
+        proposedStart: null,
+        proposedEnd: null,
+        proposalBy: null,
+      })
+      await releasePaymentAuthorization(
+        booking.payment?.id,
+        booking.payment?.stripePaymentIntentId,
+        booking.payment?.status,
+      )
+      await pushInAppNotification({
+        userId: booking.client.userId,
+        type: 'booking_request_expired',
+        title: 'Booking request declined',
+        body: 'Cleaner declined this booking request.',
+        data: { booking_id: bookingId },
+      })
+      void googleCalendarService.removeCleanerBookingEvent(updated.id).catch((e) => {
+        console.error('Failed to remove cleaner Google Calendar event:', e)
+      })
+      try {
+        await loopsEmailService.sendClientBookingRejectedOrExpired({
+          email: booking.client.user.email,
+          fullName: booking.client.user.name ?? 'Client',
+          cleanerName: booking.cleaner.user.name ?? 'Cleaner',
+        })
+      } catch (emailError) {
+        console.error('Failed to send client booking declined email via Loops:', emailError)
+      }
       return updated
     }
 

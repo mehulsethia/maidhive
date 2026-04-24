@@ -14,9 +14,10 @@ const schema = z.object({
   CAPTURE_DELAY_HOURS: z.coerce.number().default(0.5),
   PAYOUT_DELAY_HOURS: z.coerce.number().default(0.5),
   DISPUTE_WINDOW_HOURS: z.coerce.number().default(24),
-  BOOKING_ACCEPT_TTL_MINUTES: z.coerce.number().default(60),
+  BOOKING_ACCEPT_TTL_MINUTES: z.coerce.number().default(1440),
   BOOKING_PAY_TTL_MINUTES: z.coerce.number().default(15),
   JOBS_SECRET: z.string().optional().default(''),
+  CRON_SECRET: z.string().optional().default(''),
 })
 
 export const config = schema.parse(process.env)

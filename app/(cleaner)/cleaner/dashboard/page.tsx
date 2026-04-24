@@ -84,8 +84,8 @@ export default function CleanerDashboardPage() {
   async function declineBooking(bookingId: string) {
     setActionLoading(`${bookingId}-decline`)
     try {
-      await bookingsApi.cancel(bookingId, 'Cleaner declined')
-      toast.success('Booking declined.')
+      await bookingsApi.action(bookingId, 'decline')
+      toast.success('Booking request declined.')
       await refresh()
     } catch (err: any) {
       toast.error(err.message ?? 'Unable to decline booking.')

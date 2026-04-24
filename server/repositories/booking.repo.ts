@@ -13,7 +13,17 @@ export const bookingRepo = {
     db.booking.findUnique({ where: { id }, include: bookingInclude }),
 
   findByClient: (clientId: string, params: { page: number; pageSize: number; status?: string }) => {
-    const where = { clientId, ...(params.status ? { status: params.status } : {}) }
+    const where: Prisma.BookingWhereInput = {
+      clientId,
+      ...(params.status ? { status: params.status } : {}),
+      NOT: [
+        {
+          status: 'expired',
+          acceptedAt: null,
+          confirmedAt: null,
+        },
+      ],
+    }
     return Promise.all([
       db.booking.findMany({
         where,
@@ -30,6 +40,13 @@ export const bookingRepo = {
     const where: Prisma.BookingWhereInput = {
       cleanerId,
       ...(params.status ? { status: params.status } : {}),
+      NOT: [
+        {
+          status: 'expired',
+          acceptedAt: null,
+          confirmedAt: null,
+        },
+      ],
       OR: [
         { status: { not: 'pending' } },
         {
