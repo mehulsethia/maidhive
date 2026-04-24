@@ -50,7 +50,29 @@ export const GET = requireAuth(async (_req, _ctx, user) => {
     })
   }
 
-  const unreadNotifications = await notificationRepo.countUnread(userId)
+  const unreadNotifications =
+    role === 'admin'
+      ? await (async () => {
+          const adminUsers = await db.user.findMany({
+            where: { role: 'admin', isActive: true },
+            select: { id: true },
+          })
+          const adminIds = adminUsers.map((u) => u.id)
+          if (adminIds.length === 0) return 0
+          return db.notification.count({
+            where: {
+              userId: { in: adminIds },
+              isRead: false,
+              NOT: {
+                data: {
+                  path: ['_archived'],
+                  equals: true,
+                },
+              },
+            },
+          })
+        })()
+      : await notificationRepo.countUnread(userId)
 
   return ok({
     unread_chats: unreadChats,
