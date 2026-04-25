@@ -14,7 +14,7 @@ function getPostLoginPath(user: { user_metadata?: Record<string, unknown> }) {
   return '/client/dashboard'
 }
 
-export async function middleware(request: NextRequest) {
+export async function proxy(request: NextRequest) {
   let response = NextResponse.next({ request })
 
   const supabase = createServerClient(
