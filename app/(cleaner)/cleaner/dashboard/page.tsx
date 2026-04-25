@@ -36,6 +36,7 @@ export default function CleanerDashboardPage() {
   const [avgRating, setAvgRating] = useState<number | null>(null)
   const [loading, setLoading] = useState(true)
   const [actionLoading, setActionLoading] = useState<string | null>(null)
+  const [submittingApproval, setSubmittingApproval] = useState(false)
 
   async function refresh() {
     try {
@@ -95,6 +96,20 @@ export default function CleanerDashboardPage() {
       toast.error(err.message ?? 'Unable to decline booking.')
     } finally {
       setActionLoading(null)
+    }
+  }
+
+  async function submitForApproval() {
+    if (submittingApproval) return
+    setSubmittingApproval(true)
+    try {
+      await cleanersApi.submitForApproval()
+      toast.success('Profile submitted for approval!')
+      await refresh()
+    } catch (err: any) {
+      toast.error(err.message ?? 'Failed to submit profile.')
+    } finally {
+      setSubmittingApproval(false)
     }
   }
 
@@ -180,9 +195,14 @@ export default function CleanerDashboardPage() {
               <p className="text-sm font-semibold text-blue-900">Your profile is ready!</p>
               <p className="text-xs text-blue-700">Submit your profile for admin review to start receiving bookings.</p>
             </div>
-            <Link href="/cleaner/profile" className="inline-flex h-8 items-center rounded-xl bg-primary px-3 text-xs font-semibold text-white transition-all duration-200 hover:-translate-y-0.5 hover:opacity-95 shrink-0">
+            <Button
+              size="sm"
+              onClick={submitForApproval}
+              loading={submittingApproval}
+              className="shrink-0"
+            >
               Submit for approval
-            </Link>
+            </Button>
           </div>
         </div>
       ) : cleanerStatus === 'pending' && profileComplete ? (
