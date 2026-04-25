@@ -17,7 +17,7 @@ import { ScheduleEditor } from '@/components/schedule-editor'
 import { getAccessToken } from '@/lib/auth-cache'
 import { toApiV1Url } from '@/lib/api-base'
 import { formatCurrency } from '@/lib/utils'
-import type { BookingRead, ReviewRead } from '@/types'
+import type { BookingRead, ReviewRead, CleanerOnboardingProgress } from '@/types'
 import { toast } from 'sonner'
 
 type TabKey = 'overview' | 'availability' | 'reviews' | 'payments'
@@ -76,6 +76,7 @@ function CleanerProfilePageContent() {
   const [profileImageUrl, setProfileImageUrl] = useState<string | null>(null)
 
   const [completionPct, setCompletionPct] = useState<number>(100)
+  const [onboardingSteps, setOnboardingSteps] = useState<CleanerOnboardingProgress['steps'] | null>(null)
   const [cleanerStatus, setCleanerStatus] = useState<string>('pending')
   const [rejectionReason, setRejectionReason] = useState<string>('')
   const [profileComplete, setProfileComplete] = useState(false)
@@ -110,6 +111,7 @@ function CleanerProfilePageContent() {
       const user = c.user ?? {}
 
       setCompletionPct(onboarding?.completion_pct ?? 0)
+      setOnboardingSteps(onboarding?.steps ?? null)
       setCleanerStatus(c.status ?? 'pending')
       setRejectionReason(c.rejection_reason ?? '')
       setProfileComplete(c.profile_complete ?? false)
@@ -203,11 +205,17 @@ function CleanerProfilePageContent() {
       .sort((a, b) => new Date(b.scheduled_start).getTime() - new Date(a.scheduled_start).getTime())
   }, [bookings])
 
-  const profileLifecycleStatus = useMemo(() => {
-    if (cleanerStatus !== 'approved') return 'Pending approval'
-    if (!stripe.connected) return 'Approved — connect Stripe to go live'
-    return 'Live'
-  }, [cleanerStatus, stripe.connected])
+  const missingOnboardingParts = useMemo(() => {
+    if (!onboardingSteps) return []
+    const labels: Array<[keyof CleanerOnboardingProgress['steps'], string]> = [
+      ['step1_basic_details', 'Basic details'],
+      ['step2_kyc', 'KYC and legal details'],
+      ['step3_availability', 'Availability schedule'],
+      ['step4_stripe_setup', 'Stripe step'],
+      ['step5_training', 'Cleaning standards quiz'],
+    ]
+    return labels.filter(([key]) => !onboardingSteps[key]).map(([, label]) => label)
+  }, [onboardingSteps])
 
   function toggleSkill(skill: string) {
     setSkills((prev) => (prev.includes(skill) ? prev.filter((s) => s !== skill) : [...prev, skill]))
@@ -316,7 +324,7 @@ function CleanerProfilePageContent() {
         </Button>
       </div>
 
-      {cleanerStatus === 'rejected' && (
+      {cleanerStatus === 'rejected' ? (
         <div className="rounded-2xl border border-red-200 bg-gradient-to-r from-red-50 to-rose-50 px-4 py-3">
           <div className="flex items-center justify-between gap-3">
             <div>
@@ -331,9 +339,25 @@ function CleanerProfilePageContent() {
             </Button>
           </div>
         </div>
-      )}
-
-      {cleanerStatus === 'pending' && completionPct === 100 && !profileComplete && (
+      ) : cleanerStatus === 'pending' && completionPct < 100 ? (
+        <div className="rounded-2xl border border-amber-200 bg-gradient-to-r from-amber-50 to-yellow-50 px-4 py-3">
+          <div className="flex items-center justify-between gap-3">
+            <div>
+              <p className="text-sm font-semibold text-amber-900">Profile incomplete ({completionPct}%). Complete these sections:</p>
+              {missingOnboardingParts.length > 0 ? (
+                <p className="mt-1 text-xs text-amber-700">
+                  {missingOnboardingParts.join(' • ')}
+                </p>
+              ) : (
+                <p className="mt-1 text-xs text-amber-700">Complete all steps so your profile can be submitted for review.</p>
+              )}
+            </div>
+            <div className="h-2 w-32 overflow-hidden rounded-full bg-amber-200 shrink-0">
+              <div className="h-full rounded-full bg-amber-500 transition-all" style={{ width: `${completionPct}%` }} />
+            </div>
+          </div>
+        </div>
+      ) : cleanerStatus === 'pending' && completionPct === 100 && !profileComplete ? (
         <div className="rounded-2xl border border-blue-200 bg-gradient-to-r from-blue-50 to-indigo-50 px-4 py-3">
           <div className="flex items-center justify-between gap-3">
             <div>
@@ -345,9 +369,7 @@ function CleanerProfilePageContent() {
             </Button>
           </div>
         </div>
-      )}
-
-      {cleanerStatus === 'pending' && profileComplete && (
+      ) : cleanerStatus === 'pending' && profileComplete ? (
         <div className="rounded-2xl border border-amber-200 bg-gradient-to-r from-amber-50 to-yellow-50 px-4 py-3">
           <div className="flex items-center gap-2">
             <div>
@@ -356,26 +378,15 @@ function CleanerProfilePageContent() {
             </div>
           </div>
         </div>
-      )}
-
-      {cleanerStatus !== 'rejected' && completionPct < 100 && (
-        <div className="rounded-2xl border border-amber-200 bg-gradient-to-r from-amber-50 to-yellow-50 px-4 py-3">
-          <div className="flex items-center justify-between gap-3">
-            <div>
-              <p className="text-sm font-semibold text-amber-900">Profile completion: {completionPct}%</p>
-              <p className="text-xs text-amber-700">Complete all steps so your profile can be submitted for review.</p>
-            </div>
-            <div className="h-2 w-32 overflow-hidden rounded-full bg-amber-200 shrink-0">
-              <div className="h-full rounded-full bg-amber-500 transition-all" style={{ width: `${completionPct}%` }} />
-            </div>
-          </div>
+      ) : cleanerStatus === 'approved' && !stripe.connected ? (
+        <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3">
+          <p className="text-sm font-semibold text-amber-900">Approved — connect Stripe to go live. You must connect Stripe to receive payouts and accept bookings.</p>
+        </div>
+      ) : (
+        <div className="rounded-2xl border border-emerald-200 bg-gradient-to-r from-emerald-50 to-green-50 px-4 py-3">
+          <p className="text-sm font-semibold text-emerald-900">Live — your profile is approved and visible to clients.</p>
         </div>
       )}
-
-      <div className="rounded-2xl border border-slate-200 bg-white px-4 py-3">
-        <p className="text-xs uppercase tracking-wide text-slate-500">Profile status</p>
-        <p className="text-sm font-semibold text-slate-900">{profileLifecycleStatus}</p>
-      </div>
 
       <div className="grid gap-4 lg:grid-cols-[320px_1fr]">
         <div className="space-y-4">

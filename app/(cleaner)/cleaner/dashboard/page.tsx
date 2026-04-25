@@ -10,7 +10,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { DashboardPageSkeleton } from '@/components/page-skeletons'
 import { EmptyState } from '@/components/empty-state'
 import { formatCurrency, formatDate } from '@/lib/utils'
-import type { BookingRead, BookingStatus } from '@/types'
+import type { BookingRead, BookingStatus, CleanerOnboardingProgress } from '@/types'
 import { toast } from 'sonner'
 
 const REQUEST_STATUSES: BookingStatus[] = ['pending']
@@ -28,6 +28,7 @@ const SERVICE_LABELS: Record<string, string> = {
 export default function CleanerDashboardPage() {
   const [bookings, setBookings] = useState<BookingRead[]>([])
   const [completionPct, setCompletionPct] = useState<number>(0)
+  const [onboardingSteps, setOnboardingSteps] = useState<CleanerOnboardingProgress['steps'] | null>(null)
   const [cleanerStatus, setCleanerStatus] = useState<string>('pending')
   const [stripeConnected, setStripeConnected] = useState(false)
   const [rejectionReason, setRejectionReason] = useState<string>('')
@@ -43,6 +44,7 @@ export default function CleanerDashboardPage() {
       try {
         const cleanerRes = await cleanersApi.me()
         setCompletionPct(cleanerRes.data?.onboarding?.completion_pct ?? 0)
+        setOnboardingSteps(cleanerRes.data?.onboarding?.steps ?? null)
         const cleaner = cleanerRes.data?.cleaner as any
         setCleanerStatus(cleaner?.status ?? 'pending')
         setStripeConnected(Boolean(cleaner?.stripe_onboarding_complete ?? cleaner?.stripeOnboardingComplete))
@@ -111,11 +113,17 @@ export default function CleanerDashboardPage() {
     }
   }, [bookings])
 
-  const profileLifecycleStatus = useMemo(() => {
-    if (cleanerStatus !== 'approved') return 'Pending approval'
-    if (!stripeConnected) return 'Approved — connect Stripe to go live'
-    return 'Live'
-  }, [cleanerStatus, stripeConnected])
+  const missingOnboardingParts = useMemo(() => {
+    if (!onboardingSteps) return []
+    const labels: Array<[keyof CleanerOnboardingProgress['steps'], string]> = [
+      ['step1_basic_details', 'Basic details'],
+      ['step2_kyc', 'KYC and legal details'],
+      ['step3_availability', 'Availability schedule'],
+      ['step4_stripe_setup', 'Stripe step'],
+      ['step5_training', 'Cleaning standards quiz'],
+    ]
+    return labels.filter(([key]) => !onboardingSteps[key]).map(([, label]) => label)
+  }, [onboardingSteps])
 
   if (loading) return <DashboardPageSkeleton />
 
@@ -132,33 +140,7 @@ export default function CleanerDashboardPage() {
         </div>
       </div>
 
-      {cleanerStatus !== 'approved' && (
-        <div className="rounded-2xl border border-amber-200 bg-gradient-to-r from-amber-50 to-yellow-50 px-4 py-3">
-          <p className="text-sm font-semibold text-amber-900">Complete your profile and submit for approval to start receiving bookings.</p>
-        </div>
-      )}
-
-      {cleanerStatus === 'approved' && (
-        <div className="rounded-2xl border border-emerald-200 bg-gradient-to-r from-emerald-50 to-green-50 px-4 py-3">
-          <div className="flex items-center gap-2">
-            <CircleCheck className="h-5 w-5 text-emerald-600 shrink-0" />
-            <p className="text-sm font-semibold text-emerald-900">Your profile is approved and visible to clients.</p>
-          </div>
-        </div>
-      )}
-
-      <div className="rounded-2xl border border-slate-200 bg-white px-4 py-3">
-        <p className="text-xs uppercase tracking-wide text-slate-500">Profile status</p>
-        <p className="text-sm font-semibold text-slate-900">{profileLifecycleStatus}</p>
-      </div>
-
-      {cleanerStatus === 'approved' && !stripeConnected && (
-        <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3">
-          <p className="text-sm font-semibold text-amber-900">You must connect Stripe to receive payouts.</p>
-        </div>
-      )}
-
-      {cleanerStatus === 'rejected' && (
+      {cleanerStatus === 'rejected' ? (
         <div className="rounded-2xl border border-red-200 bg-gradient-to-r from-red-50 to-rose-50 px-4 py-3">
           <div className="flex items-center justify-between gap-3">
             <div>
@@ -173,23 +155,25 @@ export default function CleanerDashboardPage() {
             </Link>
           </div>
         </div>
-      )}
-
-      {cleanerStatus === 'pending' && completionPct < 100 && (
+      ) : cleanerStatus === 'pending' && completionPct < 100 ? (
         <div className="rounded-2xl border border-amber-200 bg-gradient-to-r from-amber-50 to-yellow-50 px-4 py-3">
           <div className="flex items-center justify-between gap-3">
             <div>
-              <p className="text-sm font-semibold text-amber-900">Profile completion: {completionPct}%</p>
-              <p className="text-xs text-amber-700">Complete your profile to submit it for admin approval.</p>
+              <p className="text-sm font-semibold text-amber-900">Profile incomplete ({completionPct}%). Complete these sections:</p>
+              {missingOnboardingParts.length > 0 ? (
+                <p className="mt-1 text-xs text-amber-700">
+                  {missingOnboardingParts.join(' • ')}
+                </p>
+              ) : (
+                <p className="mt-1 text-xs text-amber-700">Complete your profile to submit it for admin approval.</p>
+              )}
             </div>
             <Link href="/cleaner/profile" className="inline-flex h-8 items-center rounded-xl bg-primary px-3 text-xs font-semibold text-white transition-all duration-200 hover:-translate-y-0.5 hover:opacity-95 shrink-0">
               Complete now
             </Link>
           </div>
         </div>
-      )}
-
-      {cleanerStatus === 'pending' && completionPct === 100 && !profileComplete && (
+      ) : cleanerStatus === 'pending' && completionPct === 100 && !profileComplete ? (
         <div className="rounded-2xl border border-blue-200 bg-gradient-to-r from-blue-50 to-indigo-50 px-4 py-3">
           <div className="flex items-center justify-between gap-3">
             <div>
@@ -201,9 +185,7 @@ export default function CleanerDashboardPage() {
             </Link>
           </div>
         </div>
-      )}
-
-      {cleanerStatus === 'pending' && profileComplete && (
+      ) : cleanerStatus === 'pending' && profileComplete ? (
         <div className="rounded-2xl border border-amber-200 bg-gradient-to-r from-amber-50 to-yellow-50 px-4 py-3">
           <div className="flex items-center gap-2">
             <Clock3 className="h-5 w-5 text-amber-600 shrink-0" />
@@ -211,6 +193,17 @@ export default function CleanerDashboardPage() {
               <p className="text-sm font-semibold text-amber-900">Profile submitted — awaiting admin approval.</p>
               <p className="text-xs text-amber-700">You'll be notified once your profile is reviewed.</p>
             </div>
+          </div>
+        </div>
+      ) : cleanerStatus === 'approved' && !stripeConnected ? (
+        <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3">
+          <p className="text-sm font-semibold text-amber-900">Approved — connect Stripe to go live. You must connect Stripe to receive payouts and accept bookings.</p>
+        </div>
+      ) : (
+        <div className="rounded-2xl border border-emerald-200 bg-gradient-to-r from-emerald-50 to-green-50 px-4 py-3">
+          <div className="flex items-center gap-2">
+            <CircleCheck className="h-5 w-5 text-emerald-600 shrink-0" />
+            <p className="text-sm font-semibold text-emerald-900">Live — your profile is approved and visible to clients.</p>
           </div>
         </div>
       )}
