@@ -1,2 +1,2 @@
 # maidhive
-Two-sided marketplace for cleaners
+Two-sided Marketplace for Cleaners of Cyprus!
