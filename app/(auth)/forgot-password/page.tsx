@@ -2,6 +2,7 @@
 
 import { useState } from 'react'
 import Link from 'next/link'
+import Image from 'next/image'
 import { ArrowLeft, Mail } from 'lucide-react'
 import { createClient } from '@/lib/supabase'
 import { toast } from 'sonner'
@@ -16,9 +17,11 @@ export default function ForgotPasswordPage() {
     e.preventDefault()
     if (!email.trim()) { toast.error('Please enter your email.'); return }
 
+    const appUrl = (process.env.NEXT_PUBLIC_APP_URL ?? window.location.origin).replace(/\/+$/, '')
+
     setLoading(true)
     const { error } = await supabase.auth.resetPasswordForEmail(email, {
-      redirectTo: `${window.location.origin}/reset-password`,
+      redirectTo: `${appUrl}/reset-password`,
     })
 
     if (error) {
@@ -32,10 +35,20 @@ export default function ForgotPasswordPage() {
   return (
     <div className="grid lg:grid-cols-2 min-h-[620px]">
       {/* Left — Branding panel */}
-      <div className="hidden lg:flex flex-col bg-slate-50 p-5 lg:p-6">
-        <div className="flex flex-1 min-h-[360px] flex-col justify-end rounded-xl border border-slate-200/70 bg-[linear-gradient(130deg,#04162f_5%,#0f3b76_55%,#0e5698_100%)] p-7 shadow-lg">
-          <p className="text-xs uppercase tracking-[0.22em] text-cyan-100/85">MaidHive</p>
-          <p className="mt-2 text-xl font-bold text-white">Securely reset access and get back to your schedule.</p>
+      <div className="hidden lg:flex flex-col bg-gray-50 p-5 lg:p-6">
+        <div className="relative overflow-hidden rounded-xl shadow-lg flex-1 min-h-[360px]">
+          <Image
+            src="/images/join-maidhive.avif"
+            alt="Professional cleaning team"
+            fill
+            className="object-cover"
+            sizes="400px"
+          />
+          <div className="absolute inset-0 bg-[linear-gradient(135deg,rgba(2,15,36,0.66),rgba(8,38,85,0.24)_48%,rgba(11,43,87,0.78))]" />
+          <div className="absolute inset-x-0 bottom-0 p-7">
+            <p className="text-xs uppercase tracking-[0.22em] text-cyan-100/85">MaidHive</p>
+            <p className="mt-2 text-xl font-bold text-white">Securely reset access and get back to your schedule.</p>
+          </div>
         </div>
       </div>
 

@@ -30,6 +30,7 @@ function SignupForm() {
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
     setLoading(true)
+    const appUrl = (process.env.NEXT_PUBLIC_APP_URL ?? window.location.origin).replace(/\/+$/, '')
 
     const name = `${firstName} ${lastName}`.trim()
 
@@ -37,7 +38,7 @@ function SignupForm() {
       email,
       password,
       options: {
-        emailRedirectTo: `${window.location.origin}/auth/callback`,
+        emailRedirectTo: `${appUrl}/auth/callback`,
         data: { name, role, phone, address, experience: role === 'cleaner' ? experience : undefined },
       },
     })
