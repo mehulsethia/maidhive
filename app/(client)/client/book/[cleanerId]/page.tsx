@@ -34,6 +34,29 @@ const SERVICE_LABELS: Record<string, string> = {
 }
 
 const DURATION_OPTIONS = [1, 1.5, 2, 2.5, 3, 3.5, 4, 4.5, 5, 5.5, 6, 6.5, 7, 7.5, 8]
+const NOTES_MIN_CHARS = 12
+
+const JOB_TYPE_OPTIONS = [
+  { value: 'regular_clean', label: 'Regular clean', serviceType: 'standard' as const },
+  { value: 'one_off_clean', label: 'One-off clean', serviceType: 'standard' as const },
+  { value: 'deep_clean', label: 'Deep clean', serviceType: 'deep_clean' as const },
+  { value: 'move_out_end_of_tenancy', label: 'Move-out / End of tenancy', serviceType: 'end_of_tenancy' as const },
+] as const
+
+const BEDROOM_OPTIONS = ['Studio', '1', '2', '3', '4', '5+'] as const
+const BATHROOM_OPTIONS = ['1', '2', '3', '4+'] as const
+
+const PROPERTY_CONDITION_OPTIONS = [
+  { value: 'light_well_maintained', label: 'Light / well maintained' },
+  { value: 'normal', label: 'Normal' },
+  { value: 'needs_extra_attention', label: 'Needs extra attention' },
+  { value: 'very_dirty_heavy_clean', label: 'Very dirty / heavy clean' },
+] as const
+
+const SUPPLIES_OPTIONS = [
+  { value: 'client_provides', label: 'I will provide cleaning supplies' },
+  { value: 'cleaner_brings', label: 'Cleaner should bring supplies' },
+] as const
 
 const STEP_INFO = [
   { num: 1, title: 'Your\nDetails', desc: 'Choose duration and date' },
@@ -448,9 +471,14 @@ export default function BookingFlowPage() {
   const [postcode, setPostcode] = useState('')
   const [apartmentDetails, setApartmentDetails] = useState('')
   const [accessNotes, setAccessNotes] = useState('')
-  const [jobSize, setJobSize] = useState('')
-  const [jobFocus, setJobFocus] = useState('')
+  const [jobType, setJobType] = useState<(typeof JOB_TYPE_OPTIONS)[number]['value'] | ''>('')
+  const [bedrooms, setBedrooms] = useState('')
+  const [bathrooms, setBathrooms] = useState('')
+  const [propertyCondition, setPropertyCondition] = useState<(typeof PROPERTY_CONDITION_OPTIONS)[number]['value'] | ''>('')
+  const [suppliesProvider, setSuppliesProvider] = useState<(typeof SUPPLIES_OPTIONS)[number]['value'] | ''>('')
   const [notes, setNotes] = useState('')
+  const [notesValidationWarning, setNotesValidationWarning] = useState(false)
+  const [jobPhotos, setJobPhotos] = useState<File[]>([])
   const [saveAddressForLater, setSaveAddressForLater] = useState(false)
 
   // Step 3: Payment
@@ -548,6 +576,43 @@ export default function BookingFlowPage() {
     setAccessNotes(selected.access_notes ?? '')
   }
 
+  async function uploadJobPhotos(files: File[]) {
+    const uploadedUrls: string[] = []
+    for (const file of files) {
+      const formData = new FormData()
+      formData.append('file', file)
+      const response = await fetch('/api/v1/upload/booking-photos', {
+        method: 'POST',
+        body: formData,
+        credentials: 'include',
+      })
+      const json = await response.json().catch(() => ({ success: false, message: 'Failed to upload photo' }))
+      if (!response.ok || !json?.success || !json?.data?.url) {
+        throw new Error(json?.message ?? `Failed to upload ${file.name}`)
+      }
+      uploadedUrls.push(json.data.url)
+    }
+    return uploadedUrls
+  }
+
+  function buildSpecialInstructions(photoUrls: string[]) {
+    const jobTypeMeta = JOB_TYPE_OPTIONS.find((option) => option.value === jobType)
+    const conditionMeta = PROPERTY_CONDITION_OPTIONS.find((option) => option.value === propertyCondition)
+    const suppliesMeta = SUPPLIES_OPTIONS.find((option) => option.value === suppliesProvider)
+    const lines = [
+      `Job type: ${jobTypeMeta?.label ?? 'Not provided'}`,
+      `Bedrooms: ${bedrooms}`,
+      `Bathrooms: ${bathrooms}`,
+      `Property condition: ${conditionMeta?.label ?? 'Not provided'}`,
+      `Cleaning supplies: ${suppliesMeta?.label ?? 'Not provided'}`,
+      `What needs to be cleaned: ${notes.trim()}`,
+    ]
+    if (photoUrls.length > 0) {
+      lines.push(`Job photos: ${photoUrls.join(', ')}`)
+    }
+    return lines.join('\n')
+  }
+
   // Navigation
   function goNext() {
     if (step === 1) {
@@ -564,9 +629,29 @@ export default function BookingFlowPage() {
       if (!city.trim()) { toast.error('City is required.'); return }
       if (!postcode.trim()) { toast.error('ZIP code is required.'); return }
       if (!accessNotes.trim()) { toast.error('Access notes are required.'); return }
-      if (!jobSize) { toast.error('Select property size for job details.'); return }
-      if (!jobFocus) { toast.error('Select job focus area.'); return }
-      if (notes.trim().length < 20) { toast.error('Please describe the job in at least 20 characters.'); return }
+      if (!jobType) { toast.error('Please select what type of clean this is.'); return }
+      if (!bedrooms) { toast.error('Please select bedrooms.'); return }
+      if (!bathrooms) { toast.error('Please select bathrooms.'); return }
+      if (!propertyCondition) { toast.error('Please select the current condition of the property.'); return }
+      if (!suppliesProvider) { toast.error('Please select who will provide cleaning supplies.'); return }
+      if (!notes.trim()) {
+        setNotesValidationWarning(true)
+        toast.error('Please add a short description of what needs to be cleaned')
+        return
+      }
+      setNotesValidationWarning(false)
+      if (notes.trim().length < NOTES_MIN_CHARS) {
+        toast.error(`Please describe what needs to be cleaned in at least ${NOTES_MIN_CHARS} characters.`)
+        return
+      }
+      if (jobPhotos.length === 1) {
+        toast.error('Please upload at least 2 photos if you want to add photos.')
+        return
+      }
+      if (jobPhotos.length > 5) {
+        toast.error('You can upload up to 5 photos.')
+        return
+      }
       createBookingAndProceed()
     }
   }
@@ -574,9 +659,19 @@ export default function BookingFlowPage() {
   async function createBookingAndProceed() {
     setSubmitting(true)
     try {
+      const selectedJobType = JOB_TYPE_OPTIONS.find((option) => option.value === jobType)
+      if (!selectedJobType) {
+        throw new Error('Please select what type of clean this is.')
+      }
+
+      let uploadedPhotoUrls: string[] = []
+      if (jobPhotos.length > 0) {
+        uploadedPhotoUrls = await uploadJobPhotos(jobPhotos)
+      }
+
       const res = await bookingsApi.create({
         cleaner_id: cleanerId,
-        service_type: 'standard',
+        service_type: selectedJobType.serviceType,
         address: address.trim(),
         city: city.trim(),
         postcode: postcode.trim(),
@@ -584,7 +679,7 @@ export default function BookingFlowPage() {
         access_notes: accessNotes.trim(),
         scheduled_start: selectedSlot,
         duration_hours: duration,
-        special_instructions: `Property size: ${jobSize}\nFocus area: ${jobFocus}\nClient notes: ${notes.trim()}`,
+        special_instructions: buildSpecialInstructions(uploadedPhotoUrls),
       })
       const b = res.data
       if (!b) throw new Error('Failed to create booking')
@@ -633,6 +728,7 @@ export default function BookingFlowPage() {
   if (!cleaner) return <div className="text-center py-16 text-muted-foreground">Cleaner not found.</div>
 
   const cleanerName = cleaner.user?.name ?? 'Professional Cleaner'
+  const showDeepCleanAdvisory = jobType === 'deep_clean' || jobType === 'move_out_end_of_tenancy'
 
   return (
     <>
@@ -896,39 +992,142 @@ export default function BookingFlowPage() {
                   )}
                 </div>
 
-                <div>
-                  <Label className="text-sm font-semibold">Describe the job <span className="text-red-500">*</span></Label>
-                  <div className="mt-2 grid gap-3 sm:grid-cols-2">
-                    <div>
-                      <Label className="text-xs font-semibold text-slate-600">Property size</Label>
-                      <Select value={jobSize} onChange={(event) => setJobSize(event.target.value)} className="mt-1">
-                        <option value="">Select property size</option>
-                        <option value="Studio / 1 bed">Studio / 1 bed</option>
-                        <option value="2 bed">2 bed</option>
-                        <option value="3 bed">3 bed</option>
-                        <option value="4+ bed">4+ bed</option>
-                      </Select>
-                    </div>
-                    <div>
-                      <Label className="text-xs font-semibold text-slate-600">Main focus</Label>
-                      <Select value={jobFocus} onChange={(event) => setJobFocus(event.target.value)} className="mt-1">
-                        <option value="">Select focus area</option>
-                        <option value="General full-home clean">General full-home clean</option>
-                        <option value="Kitchen and bathrooms">Kitchen and bathrooms</option>
-                        <option value="Move-in / move-out prep">Move-in / move-out prep</option>
-                        <option value="Deep clean priority">Deep clean priority</option>
-                      </Select>
+                <section className="space-y-5 rounded-xl border border-slate-200 p-4">
+                  <div>
+                    <h3 className="text-base font-semibold text-slate-900">Describe the job</h3>
+                    <p className="mt-1 text-sm text-slate-500">Help the cleaner understand the job clearly before accepting</p>
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label className="text-sm font-semibold">What type of clean is this? <span className="text-red-500">*</span></Label>
+                    <div className="grid gap-2 sm:grid-cols-2">
+                      {JOB_TYPE_OPTIONS.map((option) => (
+                        <label key={option.value} className="flex items-start gap-2 rounded-lg border border-slate-200 p-2 text-sm text-slate-700">
+                          <input
+                            type="radio"
+                            name="job-type"
+                            value={option.value}
+                            checked={jobType === option.value}
+                            onChange={(event) => setJobType(event.target.value as (typeof JOB_TYPE_OPTIONS)[number]['value'])}
+                            className="mt-1"
+                          />
+                          {option.label}
+                        </label>
+                      ))}
                     </div>
                   </div>
-                  <Textarea
-                    value={notes}
-                    onChange={e => setNotes(e.target.value)}
-                    placeholder="Please include room count, cleaning priorities, and any specific requirements."
-                    className="mt-1"
-                    rows={4}
-                  />
-                  <p className="mt-1 text-xs text-slate-500">Structured cancellation policy applies. Minimum 20 characters.</p>
-                </div>
+
+                  {showDeepCleanAdvisory && (
+                    <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800">
+                      Deep and move-out cleans often take significantly longer than regular cleaning. Underestimating time may result in incomplete tasks or cleaners declining the request.
+                    </div>
+                  )}
+
+                  <div className="space-y-2">
+                    <Label className="text-sm font-semibold">Property details <span className="text-red-500">*</span></Label>
+                    <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                      <div>
+                        <Label className="text-xs font-semibold text-slate-600">Bedrooms</Label>
+                        <Select value={bedrooms} onChange={(event) => setBedrooms(event.target.value)} className="mt-1">
+                          <option value="">Bedrooms</option>
+                          {BEDROOM_OPTIONS.map((option) => (
+                            <option key={option} value={option}>{option}</option>
+                          ))}
+                        </Select>
+                      </div>
+                      <div>
+                        <Label className="text-xs font-semibold text-slate-600">Bathrooms</Label>
+                        <Select value={bathrooms} onChange={(event) => setBathrooms(event.target.value)} className="mt-1">
+                          <option value="">Bathrooms</option>
+                          {BATHROOM_OPTIONS.map((option) => (
+                            <option key={option} value={option}>{option}</option>
+                          ))}
+                        </Select>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label className="text-sm font-semibold">What is the current condition of the property? <span className="text-red-500">*</span></Label>
+                    <div className="grid gap-2 sm:grid-cols-2">
+                      {PROPERTY_CONDITION_OPTIONS.map((option) => (
+                        <label key={option.value} className="flex items-start gap-2 rounded-lg border border-slate-200 p-2 text-sm text-slate-700">
+                          <input
+                            type="radio"
+                            name="property-condition"
+                            value={option.value}
+                            checked={propertyCondition === option.value}
+                            onChange={(event) => setPropertyCondition(event.target.value as (typeof PROPERTY_CONDITION_OPTIONS)[number]['value'])}
+                            className="mt-1"
+                          />
+                          {option.label}
+                        </label>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label className="text-sm font-semibold">Who will provide cleaning supplies? <span className="text-red-500">*</span></Label>
+                    <div className="grid gap-2">
+                      {SUPPLIES_OPTIONS.map((option) => (
+                        <label key={option.value} className="flex items-start gap-2 rounded-lg border border-slate-200 p-2 text-sm text-slate-700">
+                          <input
+                            type="radio"
+                            name="supplies-provider"
+                            value={option.value}
+                            checked={suppliesProvider === option.value}
+                            onChange={(event) => setSuppliesProvider(event.target.value as (typeof SUPPLIES_OPTIONS)[number]['value'])}
+                            className="mt-1"
+                          />
+                          {option.label}
+                        </label>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label className="text-sm font-semibold">What needs to be cleaned? <span className="text-red-500">*</span></Label>
+                    <Textarea
+                      value={notes}
+                      onChange={(event) => {
+                        setNotes(event.target.value)
+                        if (event.target.value.trim()) {
+                          setNotesValidationWarning(false)
+                        }
+                      }}
+                      placeholder="Please list the key areas and tasks clearly (e.g. kitchen deep clean, oven, windows, bathrooms, floors, balcony, etc.)"
+                      className="mt-1"
+                      rows={4}
+                    />
+                    <p className="text-xs text-slate-500">
+                      If specific tasks are not listed, the cleaner may prioritise based on time available. You can also confirm details with the cleaner when they arrive.
+                    </p>
+                    {notesValidationWarning && (
+                      <p className="text-xs font-medium text-amber-700">Please add a short description of what needs to be cleaned</p>
+                    )}
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label className="text-sm font-semibold">Upload photos</Label>
+                    <p className="text-xs text-slate-500">Recommended for deep or detailed jobs.</p>
+                    {showDeepCleanAdvisory && (
+                      <p className="text-xs font-medium text-amber-700">Uploading photos is strongly recommended for these types of jobs.</p>
+                    )}
+                    <Input
+                      type="file"
+                      accept="image/jpeg,image/png,image/webp"
+                      multiple
+                      onChange={(event) => {
+                        const selectedFiles = Array.from(event.target.files ?? [])
+                        setJobPhotos(selectedFiles.slice(0, 5))
+                      }}
+                      className="mt-1"
+                    />
+                    {jobPhotos.length > 0 && (
+                      <p className="text-xs text-slate-500">{jobPhotos.length} photo(s) selected. Upload between 2 and 5 photos.</p>
+                    )}
+                  </div>
+                </section>
 
                 {/* Navigation */}
                 <div className="flex items-center justify-between pt-2">

@@ -24,7 +24,7 @@ export const previewPriceSchema = z.object({
 export const createBookingSchema = z.object({
   cleaner_id: z.string().uuid(),
   service_type: z.enum(SERVICE_TYPES),
-  special_instructions: z.string().trim().min(20, 'Job description must be at least 20 characters').max(1000),
+  special_instructions: z.string().trim().min(12, 'Job description must be at least 12 characters').max(1000),
   address: z.string().min(1),
   city: z.string().min(1),
   postcode: z.string().min(1),
