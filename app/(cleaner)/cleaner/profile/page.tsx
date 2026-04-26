@@ -18,6 +18,7 @@ import { getAccessToken } from '@/lib/auth-cache'
 import { toApiV1Url } from '@/lib/api-base'
 import { formatCurrency } from '@/lib/utils'
 import type { BookingRead, ReviewRead, CleanerOnboardingProgress } from '@/types'
+import { cleanerLifecycleLabel, deriveCleanerLifecycleStatus } from '@/lib/cleaner-status'
 import { toast } from 'sonner'
 
 type TabKey = 'overview' | 'availability' | 'reviews' | 'payments'
@@ -77,12 +78,16 @@ function CleanerProfilePageContent() {
 
   const [completionPct, setCompletionPct] = useState<number>(100)
   const [onboardingSteps, setOnboardingSteps] = useState<CleanerOnboardingProgress['steps'] | null>(null)
-  const [cleanerStatus, setCleanerStatus] = useState<string>('pending')
+  const [lifecycleStatus, setLifecycleStatus] = useState<
+    'pending_approval' | 'approved' | 'live' | 'rejected' | 'suspended'
+  >('pending_approval')
   const [rejectionReason, setRejectionReason] = useState<string>('')
   const [profileComplete, setProfileComplete] = useState(false)
   const [submitting, setSubmitting] = useState(false)
   const [bookings, setBookings] = useState<BookingRead[]>([])
   const [reviews, setReviews] = useState<ReviewRead[]>([])
+  const [reviewReplyDrafts, setReviewReplyDrafts] = useState<Record<string, string>>({})
+  const [replySubmittingId, setReplySubmittingId] = useState<string | null>(null)
   const [stripe, setStripe] = useState<{
     connected: boolean
     onboarded: boolean
@@ -112,7 +117,13 @@ function CleanerProfilePageContent() {
 
       setCompletionPct(onboarding?.completion_pct ?? 0)
       setOnboardingSteps(onboarding?.steps ?? null)
-      setCleanerStatus(c.status ?? 'pending')
+      setLifecycleStatus(
+        (c.lifecycle_status as any) ??
+          deriveCleanerLifecycleStatus({
+            status: c.status,
+            stripeOnboardingComplete: c.stripe_onboarding_complete ?? c.stripeOnboardingComplete,
+          }),
+      )
       setRejectionReason(c.rejection_reason ?? '')
       setProfileComplete(c.profile_complete ?? false)
 
@@ -270,6 +281,25 @@ function CleanerProfilePageContent() {
     }
   }
 
+  async function submitReviewReply(reviewId: string) {
+    const draft = (reviewReplyDrafts[reviewId] ?? '').trim()
+    if (!draft) {
+      toast.error('Reply cannot be empty.')
+      return
+    }
+    setReplySubmittingId(reviewId)
+    try {
+      await reviewsApi.replyToReview(reviewId, draft)
+      toast.success('Reply posted. It cannot be edited after posting.')
+      await loadAll()
+      setReviewReplyDrafts((prev) => ({ ...prev, [reviewId]: '' }))
+    } catch (err: any) {
+      toast.error(err.message ?? 'Failed to post reply.')
+    } finally {
+      setReplySubmittingId(null)
+    }
+  }
+
   async function connectStripe() {
     if (saving || submitting) return
     try {
@@ -324,7 +354,12 @@ function CleanerProfilePageContent() {
         </Button>
       </div>
 
-      {cleanerStatus === 'rejected' ? (
+      <div className="rounded-xl border border-slate-200 bg-white px-4 py-2">
+        <p className="text-xs text-slate-500">Cleaner lifecycle status</p>
+        <p className="text-sm font-semibold text-slate-900">{cleanerLifecycleLabel(lifecycleStatus)}</p>
+      </div>
+
+      {lifecycleStatus === 'rejected' ? (
         <div className="rounded-2xl border border-red-200 bg-gradient-to-r from-red-50 to-rose-50 px-4 py-3">
           <div className="flex items-center justify-between gap-3">
             <div>
@@ -339,7 +374,12 @@ function CleanerProfilePageContent() {
             </Button>
           </div>
         </div>
-      ) : cleanerStatus === 'pending' && completionPct < 100 ? (
+      ) : lifecycleStatus === 'suspended' ? (
+        <div className="rounded-2xl border border-red-200 bg-red-50 px-4 py-3">
+          <p className="text-sm font-semibold text-red-900">Your account is suspended.</p>
+          <p className="text-xs text-red-700">Contact support or admin to reactivate your account.</p>
+        </div>
+      ) : lifecycleStatus === 'pending_approval' && completionPct < 100 ? (
         <div className="rounded-2xl border border-amber-200 bg-gradient-to-r from-amber-50 to-yellow-50 px-4 py-3">
           <div className="flex items-center justify-between gap-3">
             <div>
@@ -357,7 +397,7 @@ function CleanerProfilePageContent() {
             </div>
           </div>
         </div>
-      ) : cleanerStatus === 'pending' && completionPct === 100 && !profileComplete ? (
+      ) : lifecycleStatus === 'pending_approval' && completionPct === 100 && !profileComplete ? (
         <div className="rounded-2xl border border-blue-200 bg-gradient-to-r from-blue-50 to-indigo-50 px-4 py-3">
           <div className="flex items-center justify-between gap-3">
             <div>
@@ -369,7 +409,7 @@ function CleanerProfilePageContent() {
             </Button>
           </div>
         </div>
-      ) : cleanerStatus === 'pending' && profileComplete ? (
+      ) : lifecycleStatus === 'pending_approval' && profileComplete ? (
         <div className="rounded-2xl border border-amber-200 bg-gradient-to-r from-amber-50 to-yellow-50 px-4 py-3">
           <div className="flex items-center gap-2">
             <div>
@@ -378,15 +418,15 @@ function CleanerProfilePageContent() {
             </div>
           </div>
         </div>
-      ) : cleanerStatus === 'approved' && !stripe.connected ? (
+      ) : lifecycleStatus === 'approved' && !stripe.connected ? (
         <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3">
           <p className="text-sm font-semibold text-amber-900">Approved — connect Stripe to go live. You must connect Stripe to receive payouts and accept bookings.</p>
         </div>
-      ) : (
+      ) : lifecycleStatus === 'live' ? (
         <div className="rounded-2xl border border-emerald-200 bg-gradient-to-r from-emerald-50 to-green-50 px-4 py-3">
           <p className="text-sm font-semibold text-emerald-900">Live — your profile is approved and visible to clients.</p>
         </div>
-      )}
+      ) : null}
 
       <div className="grid gap-4 lg:grid-cols-[320px_1fr]">
         <div className="space-y-4">
@@ -560,7 +600,7 @@ function CleanerProfilePageContent() {
               <div className="space-y-3">
                 {reviews.length === 0 ? (
                   <div className="rounded-xl border border-dashed border-slate-300 p-8 text-center text-sm text-slate-500">
-                    No reviews yet. Completed bookings will generate reviews here.
+                    No reviews yet
                   </div>
                 ) : (
                   reviews.map((r) => (
@@ -575,6 +615,38 @@ function CleanerProfilePageContent() {
                       </div>
                       <p className="text-xs text-slate-500">{new Date(r.created_at).toLocaleDateString('en-IE', { timeZone: 'Europe/Nicosia' })}</p>
                       <p className="mt-2 text-sm text-slate-700">{r.comment || 'No written comment provided.'}</p>
+                      {r.cleaner_reply ? (
+                        <div className="mt-3 rounded-lg border border-blue-100 bg-blue-50 px-3 py-2">
+                          <p className="text-xs font-semibold text-blue-900">Your public reply</p>
+                          <p className="mt-1 text-sm text-blue-900">{r.cleaner_reply}</p>
+                          {r.cleaner_reply_at && (
+                            <p className="mt-1 text-xs text-blue-700">
+                              Posted {new Date(r.cleaner_reply_at).toLocaleDateString('en-IE', { timeZone: 'Europe/Nicosia' })}
+                            </p>
+                          )}
+                        </div>
+                      ) : (
+                        <div className="mt-3 space-y-2 rounded-lg border border-slate-200 bg-slate-50 p-3">
+                          <Label className="text-xs">Public reply (one-time, cannot be edited)</Label>
+                          <Textarea
+                            value={reviewReplyDrafts[r.id] ?? ''}
+                            onChange={(event) =>
+                              setReviewReplyDrafts((prev) => ({ ...prev, [r.id]: event.target.value }))
+                            }
+                            rows={3}
+                            placeholder="Thank the client and provide a short professional response."
+                          />
+                          <div className="flex justify-end">
+                            <Button
+                              size="sm"
+                              onClick={() => submitReviewReply(r.id)}
+                              loading={replySubmittingId === r.id}
+                            >
+                              Post Reply
+                            </Button>
+                          </div>
+                        </div>
+                      )}
                     </div>
                   ))
                 )}

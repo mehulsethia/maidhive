@@ -14,7 +14,7 @@ import {
   Star,
   TrendingUp,
 } from 'lucide-react'
-import { availabilityApi, cleanersApi, reviewsApi } from '@/lib/api'
+import { availabilityApi, bookingsApi, cleanersApi, reviewsApi } from '@/lib/api'
 import { StarRating } from '@/components/star-rating'
 import { DetailPageSkeleton } from '@/components/page-skeletons'
 import { Button } from '@/components/ui/button'
@@ -32,6 +32,8 @@ export default function CleanerProfilePage() {
   const [cleaner, setCleaner] = useState<CleanerRead | null>(null)
   const [reviews, setReviews] = useState<ReviewRead[]>([])
   const [bookableDates, setBookableDates] = useState<string[]>([])
+  const [closestSlots, setClosestSlots] = useState<string[]>([])
+  const [canMessageCleaner, setCanMessageCleaner] = useState(false)
   const [loading, setLoading] = useState(true)
   const [tab, setTab] = useState<'overview' | 'reviews' | 'availability'>('overview')
 
@@ -40,13 +42,26 @@ export default function CleanerProfilePage() {
       cleanersApi.getById(id),
       reviewsApi.getForCleaner(id),
       availabilityApi.getBookableDates(id, 2, 30),
+      bookingsApi.my(),
     ])
-      .then(([cleanerRes, reviewsRes, availabilityRes]) => {
+      .then(([cleanerRes, reviewsRes, availabilityRes, bookingsRes]) => {
         if (cleanerRes.status !== 'fulfilled') throw new Error('Failed to load cleaner profile')
         startTransition(() => {
           setCleaner(cleanerRes.value.data ?? null)
           setReviews(reviewsRes.status === 'fulfilled' ? (reviewsRes.value.data ?? []) : [])
-          setBookableDates(availabilityRes.status === 'fulfilled' ? (availabilityRes.value.data ?? []) : [])
+          const dates = availabilityRes.status === 'fulfilled' ? (availabilityRes.value.data ?? []) : []
+          setBookableDates(dates)
+          if (bookingsRes.status === 'fulfilled') {
+            const clientBookings = bookingsRes.value.data?.items ?? []
+            const canMessage = clientBookings.some(
+              (booking) =>
+                booking.cleaner_id === id &&
+                ['confirmed', 'in_progress', 'completed', 'disputed'].includes(booking.status),
+            )
+            setCanMessageCleaner(canMessage)
+          } else {
+            setCanMessageCleaner(false)
+          }
           setLoading(false)
         })
       })
@@ -57,6 +72,35 @@ export default function CleanerProfilePage() {
   }, [id])
 
   const deferredReviews = useDeferredValue(reviews)
+
+  useEffect(() => {
+    let active = true
+    async function loadSlots() {
+      if (bookableDates.length === 0) {
+        setClosestSlots([])
+        return
+      }
+      const nearest: string[] = []
+      const candidateDates = bookableDates.slice(0, 3)
+      for (const date of candidateDates) {
+        if (!active) return
+        try {
+          const slotsRes = await availabilityApi.getSlots(id, date, 2)
+          const firstEnabled = (slotsRes.data ?? []).find((slot) => !slot.disabled)
+          if (firstEnabled?.start) {
+            nearest.push(firstEnabled.start)
+          }
+        } catch {
+          continue
+        }
+      }
+      if (active) setClosestSlots(nearest.slice(0, 3))
+    }
+    loadSlots()
+    return () => {
+      active = false
+    }
+  }, [bookableDates, id])
 
   const avgRating =
     deferredReviews.length === 0
@@ -83,6 +127,20 @@ export default function CleanerProfilePage() {
       })
     : ''
   const location = cleaner.service_areas?.[0]?.city ?? ''
+  const nextAvailable = closestSlots[0]
+
+  function suppliesText(value?: string) {
+    if (value === 'own_supplies') return 'Brings own supplies'
+    if (value === 'client_supplies') return 'Uses client supplies'
+    return 'Supplies not specified'
+  }
+
+  function responseTimeText(minutes?: number) {
+    if (!minutes || minutes <= 0) return 'Not enough data yet'
+    if (minutes < 60) return `${minutes} min average`
+    const hours = Math.round((minutes / 60) * 10) / 10
+    return `${hours}h average`
+  }
 
   return (
     <>
@@ -124,8 +182,13 @@ export default function CleanerProfilePage() {
                   <Button onClick={() => router.push(`/client/book/${id}`)} className="h-9 rounded-full bg-[#f4b400] px-4 text-slate-950 hover:bg-[#ffca3a]">
                     Book Service
                   </Button>
-                  <Button variant="outline" className="h-9 rounded-full border-white/35 bg-white/10 text-white hover:bg-white/20 hover:text-white">
-                    Send Message
+                  <Button
+                    variant="outline"
+                    disabled={!canMessageCleaner}
+                    className="h-9 rounded-full border-white/35 bg-white/10 text-white hover:bg-white/20 hover:text-white disabled:cursor-not-allowed disabled:opacity-65"
+                    title={!canMessageCleaner ? 'Messaging available after booking is confirmed.' : 'Open messaging'}
+                  >
+                    {canMessageCleaner ? 'Send Message' : 'Messaging available after booking is confirmed.'}
                   </Button>
                 </div>
               </div>
@@ -218,12 +281,64 @@ export default function CleanerProfilePage() {
                       }
                     />
                   )}
-                  <InfoLine icon={<CalendarCheck className="h-4 w-4 text-slate-400" />} title="Availability" value="Available this week" />
+                  {nextAvailable ? (
+                    <InfoLine
+                      icon={<CalendarCheck className="h-4 w-4 text-slate-400" />}
+                      title="Availability"
+                      value={`Next available: ${new Date(nextAvailable).toLocaleString(undefined, {
+                        weekday: 'short',
+                        month: 'short',
+                        day: 'numeric',
+                        hour: 'numeric',
+                        minute: '2-digit',
+                      })}`}
+                    />
+                  ) : (
+                    <InfoLine icon={<CalendarCheck className="h-4 w-4 text-slate-400" />} title="Availability" value="No upcoming availability right now" />
+                  )}
+                  {closestSlots.length > 0 && (
+                    <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2">
+                      <p className="text-xs text-slate-500">Closest slots</p>
+                      <div className="mt-1 space-y-1">
+                        {closestSlots.map((slot) => (
+                          <p key={slot} className="text-xs font-medium text-slate-700">
+                            {new Date(slot).toLocaleString(undefined, {
+                              weekday: 'short',
+                              month: 'short',
+                              day: 'numeric',
+                              hour: 'numeric',
+                              minute: '2-digit',
+                            })}
+                          </p>
+                        ))}
+                      </div>
+                    </div>
+                  )}
                   {location && <InfoLine icon={<MapPin className="h-4 w-4 text-slate-400" />} title="City" value={location} />}
                   <InfoLine
                     icon={<Briefcase className="h-4 w-4 text-slate-400" />}
                     title="Experience"
                     value={`${cleaner.years_experience} year${cleaner.years_experience !== 1 ? 's' : ''}`}
+                  />
+                  <InfoLine
+                    icon={<Briefcase className="h-4 w-4 text-slate-400" />}
+                    title="Completed Jobs"
+                    value={`${cleaner.total_jobs}`}
+                  />
+                  <InfoLine
+                    icon={<TrendingUp className="h-4 w-4 text-slate-400" />}
+                    title="On-time Percentage"
+                    value={`${(cleaner as any).on_time_percentage ?? 0}%`}
+                  />
+                  <InfoLine
+                    icon={<Clock className="h-4 w-4 text-slate-400" />}
+                    title="Average Response Time"
+                    value={responseTimeText((cleaner as any).avg_response_minutes)}
+                  />
+                  <InfoLine
+                    icon={<Clock className="h-4 w-4 text-slate-400" />}
+                    title="Supplies"
+                    value={suppliesText((cleaner as any).cleaning_supplies)}
                   />
                   <InfoLine icon={<CalendarCheck className="h-4 w-4 text-slate-400" />} title="Member Since" value={memberSince} />
                 </CardContent>
@@ -265,7 +380,7 @@ export default function CleanerProfilePage() {
               <div className="space-y-3">
                 {deferredReviews.length === 0 ? (
                   <Card className="border-slate-200">
-                    <CardContent className="px-8 pb-8 pt-6 text-center text-sm text-slate-500">No reviews yet.</CardContent>
+                    <CardContent className="px-8 pb-8 pt-6 text-center text-sm text-slate-500">No reviews yet</CardContent>
                   </Card>
                 ) : (
                   deferredReviews.map((review, index) => (
@@ -283,6 +398,17 @@ export default function CleanerProfilePage() {
                         <p className="text-sm leading-relaxed text-slate-600">
                           {review.comment || 'No written comment provided.'}
                         </p>
+                        {review.cleaner_reply && (
+                          <div className="mt-3 rounded-lg border border-blue-100 bg-blue-50 px-3 py-2">
+                            <p className="text-xs font-semibold text-blue-900">Cleaner reply</p>
+                            <p className="mt-1 text-sm text-blue-900">{review.cleaner_reply}</p>
+                            {review.cleaner_reply_at && (
+                              <p className="mt-1 text-xs text-blue-700">
+                                {formatDate(review.cleaner_reply_at)}
+                              </p>
+                            )}
+                          </div>
+                        )}
                       </CardContent>
                     </Card>
                   ))

@@ -21,7 +21,7 @@ export function PriceBreakdownCard({
       </div>
       {showPlatformFee && (
         <div className="flex justify-between text-muted-foreground">
-          <span>Platform fee ({breakdown.platform_fee_pct}%)</span>
+          <span>Secure booking &amp; support fee ({breakdown.platform_fee_pct}%)</span>
           <span>{formatCurrency(breakdown.platform_fee)}</span>
         </div>
       )}

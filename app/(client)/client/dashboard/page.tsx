@@ -99,12 +99,14 @@ export default function ClientDashboardPage() {
                   MaidHive
                 </p>
                 <h1 className={`${displayFont.className} text-lg font-medium tracking-[-0.01em] text-white/90 sm:text-xl`}>
-                  {firstName ? `${firstName}, your bookings are in motion.` : 'Your bookings are in motion.'}
+                  {firstName
+                    ? `${firstName}, manage your bookings and upcoming cleans.`
+                    : 'Manage your bookings and upcoming cleans.'}
                 </h1>
               </div>
 
               <p className="max-w-xl text-sm leading-relaxed text-slate-100/90 sm:text-base">
-                Keep control of your cleaning schedule, confirm upcoming jobs, and move from request to completion without friction.
+                View and manage your scheduled cleaning services, confirm upcoming jobs, and track progress from request to completion.
               </p>
 
               <div className="flex flex-wrap gap-3 pt-1">

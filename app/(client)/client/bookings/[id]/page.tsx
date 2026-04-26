@@ -198,11 +198,10 @@ export default function ClientBookingDetailPage() {
             </Card>
 
             <PriceBreakdownCard
-              showPlatformFee={false}
               breakdown={{
                 hourly_rate: booking.hourly_rate,
                 duration_hours: booking.duration_hours,
-                subtotal: booking.total_amount,
+                subtotal: booking.subtotal ?? booking.total_amount - booking.platform_fee,
                 platform_fee_pct: 10,
                 platform_fee: booking.platform_fee,
                 cleaner_payout: booking.cleaner_payout,
@@ -222,7 +221,7 @@ export default function ClientBookingDetailPage() {
               <p className="rounded-xl border border-yellow-200 bg-yellow-50 px-3 py-2 text-sm text-yellow-700">
                 {canAuthorize
                   ? 'Authorize your card to send this booking request to the cleaner.'
-                  : `Waiting for cleaner to accept. Expires: ${formatDate(booking.accept_by)}`}
+                  : 'This request is valid for 24 hours. If not accepted, it will expire automatically and your card authorisation will be released.'}
               </p>
             )}
             {booking.status === 'accepted' && canAuthorize && (

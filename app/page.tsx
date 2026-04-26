@@ -26,7 +26,7 @@ import {
 const HOW_IT_WORKS_STEPS = [
   {
     step: '01',
-    title: 'Choose a vetted cleaner',
+    title: 'Choose an approved cleaner',
     desc: 'Browse verified profiles with real reviews and transparent pricing.',
     icon: UserCheck,
     image: '/images/Property%201=Variant.jpg',
@@ -84,7 +84,7 @@ export default function ClientLandingPage() {
                 A better way to book a cleaner
               </h1>
               <p className="text-lg text-gray-300 leading-relaxed mb-8 max-w-lg">
-                MaidHive connects you to vetted local cleaners with transparent
+                MaidHive connects you to trusted local cleaners with transparent
                 pricing and secure payments, all managed directly on the platform.
               </p>
 
@@ -98,7 +98,7 @@ export default function ClientLandingPage() {
 
               <div className="mt-10 flex flex-col gap-3">
                 {[
-                  'Vetted cleaners with background checks',
+                  'Approved cleaners with background checks',
                   'Clear pricing, no hidden fees',
                   'Secure payment after completion',
                 ].map((item) => (
@@ -210,7 +210,7 @@ export default function ClientLandingPage() {
               {
                 icon: UserCheck,
                 title: 'Choose an approved cleaner',
-                desc: 'Browse ID-verified profiles with real reviews and transparent hourly rates. Every cleaner is vetted before joining MaidHive.',
+                desc: 'Browse ID-verified profiles with real reviews and transparent hourly rates. Every cleaner is approved before joining MaidHive.',
                 color: 'bg-primary/10 text-primary',
               },
               {
@@ -373,9 +373,9 @@ export default function ClientLandingPage() {
 
               <div className="space-y-5 mb-10">
                 {[
-                  { title: 'Choose a vetted cleaner', desc: 'Choose when and where you work.' },
+                  { title: 'Choose an approved cleaner', desc: 'Choose when and where you work.' },
                   { title: 'Fair pay, weekly deposits', desc: 'Reliable income with transparent rates.' },
-                  { title: 'Join a trusted network', desc: 'Be part of a vetted professional community.' },
+                  { title: 'Join a trusted network', desc: 'Be part of an approved professional community.' },
                 ].map((item) => (
                   <div key={item.title} className="flex items-start gap-3">
                     <CheckCircle2 className="h-5 w-5 text-primary mt-0.5 shrink-0" />

@@ -20,7 +20,7 @@ const monoFont = IBM_Plex_Mono({ subsets: ['latin'], weight: ['400', '500', '600
 
 const STATUS_FILTERS: Array<{ key: 'all' | BookingStatus; label: string }> = [
   { key: 'all', label: 'All' },
-  { key: 'pending', label: 'Pending' },
+  { key: 'pending', label: 'Pending Cleaner Acceptance' },
   { key: 'accepted', label: 'Accepted' },
   { key: 'confirmed', label: 'Confirmed' },
   { key: 'in_progress', label: 'In Progress' },

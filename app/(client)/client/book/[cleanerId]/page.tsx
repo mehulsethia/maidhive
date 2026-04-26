@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import { Bricolage_Grotesque, IBM_Plex_Mono } from 'next/font/google'
-import { ArrowLeft, ArrowRight, Check, CheckCircle2, ChevronLeft, ChevronRight, Clock, Lock, Shield, Star } from 'lucide-react'
+import { ArrowLeft, ArrowRight, Check, ChevronLeft, ChevronRight, Clock, Lock, Shield, Star } from 'lucide-react'
 import { loadStripe } from '@stripe/stripe-js'
 import { Elements, PaymentElement, useStripe, useElements } from '@stripe/react-stripe-js'
 import { cleanersApi, bookingsApi, availabilityApi, clientsApi, paymentsApi } from '@/lib/api'
@@ -18,7 +18,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { BookableCalendar } from '@/components/ui/bookable-calendar'
 import { UserAvatar } from '@/components/ui/user-avatar'
 import { formatCurrency, cn, APP_TIMEZONE } from '@/lib/utils'
-import type { CleanerRead, PriceBreakdown, BookingRead, ClientProfileRead } from '@/types'
+import type { CleanerRead, PriceBreakdown, BookingRead, ClientProfileRead, ClientAddressRead } from '@/types'
 import { PhoneInput } from '@/components/phone-input'
 import { toast } from 'sonner'
 
@@ -36,9 +36,9 @@ const SERVICE_LABELS: Record<string, string> = {
 const DURATION_OPTIONS = [1, 1.5, 2, 2.5, 3, 3.5, 4, 4.5, 5, 5.5, 6, 6.5, 7, 7.5, 8]
 
 const STEP_INFO = [
-  { num: 1, title: 'Schedule', desc: 'Choose duration and date' },
-  { num: 2, title: 'Your\nDetails', desc: 'Contact and location info' },
-  { num: 3, title: 'Payment', desc: 'Secure payment processing' },
+  { num: 1, title: 'Your\nDetails', desc: 'Choose duration and date' },
+  { num: 2, title: 'Service\nAddress', desc: 'Contact and location info' },
+  { num: 3, title: 'Job\nDetails', desc: 'Card authorization' },
   { num: 4, title: 'Confirmation', desc: 'Booking confirmation' },
 ]
 
@@ -228,7 +228,7 @@ function BookingSummary({
               <span className="font-semibold text-slate-900">{formatCurrency(breakdown.subtotal)}</span>
             </div>
             <div className="flex justify-between items-center">
-              <span className="text-slate-500">Service fee</span>
+              <span className="text-slate-500">Secure booking &amp; support fee (10%)</span>
               <span className="font-semibold text-slate-900">{formatCurrency(breakdown.platform_fee)}</span>
             </div>
             <Separator className="my-2" />
@@ -245,10 +245,10 @@ function BookingSummary({
             <Shield className="h-3.5 w-3.5 text-slate-400" /> Secure payment processing
           </div>
           <div className="flex items-center gap-2 text-xs text-slate-500">
-            <CheckCircle2 className="h-3.5 w-3.5 text-slate-400" /> Satisfaction guaranteed
+            <Clock className="h-3.5 w-3.5 text-slate-400" /> Structured cancellation policy applies
           </div>
           <div className="flex items-center gap-2 text-xs text-slate-500">
-            <Clock className="h-3.5 w-3.5 text-slate-400" /> Free cancellation up to 24h
+            <Clock className="h-3.5 w-3.5 text-slate-400" /> 24h issue reporting window after completion
           </div>
         </div>
       </CardContent>
@@ -257,12 +257,63 @@ function BookingSummary({
 }
 
 // ── Stripe Payment Form (inner) ──────────────────────────────────────────
-function StripePaymentForm({ onSuccess, totalAmount }: { onSuccess: () => Promise<void>; totalAmount: number }) {
+function StripePaymentForm({
+  booking,
+  onSuccess,
+}: {
+  booking: BookingRead
+  onSuccess: () => Promise<void>
+}) {
   const stripe = useStripe()
   const elements = useElements()
   const [submitting, setSubmitting] = useState(false)
+  const [mode, setMode] = useState<'saved' | 'new'>('new')
+  const [savedCards, setSavedCards] = useState<Array<{
+    id: string
+    brand: string
+    last4: string
+    exp_month: number | null
+    exp_year: number | null
+  }>>([])
+  const [selectedSavedCardId, setSelectedSavedCardId] = useState<string>('')
+
+  useEffect(() => {
+    paymentsApi.listMethods()
+      .then((res) => {
+        const cards = res.data ?? []
+        setSavedCards(cards)
+        if (cards.length > 0) {
+          setMode('saved')
+          setSelectedSavedCardId(cards[0].id)
+        } else {
+          setMode('new')
+        }
+      })
+      .catch(() => {
+        setSavedCards([])
+        setMode('new')
+      })
+  }, [])
 
   async function handleSubmit() {
+    if (mode === 'saved') {
+      if (!selectedSavedCardId) {
+        toast.error('Select a saved card or choose to add a new card.')
+        return
+      }
+      setSubmitting(true)
+      try {
+        await paymentsApi.confirmWithSavedMethod(booking.id, selectedSavedCardId)
+        await onSuccess()
+        toast.success('Saved card authorized. Booking request sent to the cleaner.')
+      } catch (err: any) {
+        toast.error(err.message ?? 'Failed to authorize saved card.')
+      } finally {
+        setSubmitting(false)
+      }
+      return
+    }
+
     if (!stripe || !elements) return
     setSubmitting(true)
     try {
@@ -293,16 +344,70 @@ function StripePaymentForm({ onSuccess, totalAmount }: { onSuccess: () => Promis
         <p className="text-sm text-emerald-700">Your payment information is secure and encrypted</p>
       </div>
 
-      <PaymentElement />
+      <div className="space-y-2 rounded-xl border border-slate-200 p-3">
+        <p className="text-sm font-semibold text-slate-900">Payment option</p>
+        {savedCards.length > 0 && (
+          <label className="flex cursor-pointer items-start gap-2 rounded-lg border border-slate-200 p-2">
+            <input
+              type="radio"
+              name="payment-option"
+              checked={mode === 'saved'}
+              onChange={() => setMode('saved')}
+              className="mt-1"
+            />
+            <span className="text-sm text-slate-700">Use a previously saved card</span>
+          </label>
+        )}
+        <label className="flex cursor-pointer items-start gap-2 rounded-lg border border-slate-200 p-2">
+          <input
+            type="radio"
+            name="payment-option"
+            checked={mode === 'new'}
+            onChange={() => setMode('new')}
+            className="mt-1"
+          />
+          <span className="text-sm text-slate-700">Add and use a new card</span>
+        </label>
+      </div>
+
+      {mode === 'saved' && savedCards.length > 0 && (
+        <div className="space-y-2 rounded-xl border border-slate-200 p-3">
+          {savedCards.map((card) => (
+            <label key={card.id} className="flex cursor-pointer items-center gap-2 rounded-lg border border-slate-200 p-2">
+              <input
+                type="radio"
+                name="saved-card"
+                checked={selectedSavedCardId === card.id}
+                onChange={() => setSelectedSavedCardId(card.id)}
+              />
+              <span className="text-sm text-slate-700">
+                {card.brand.toUpperCase()} •••• {card.last4}
+                {card.exp_month && card.exp_year ? ` (exp ${card.exp_month}/${card.exp_year})` : ''}
+              </span>
+            </label>
+          ))}
+        </div>
+      )}
+
+      {mode === 'new' && <PaymentElement />}
 
       <p className="text-xs text-slate-500">
         I agree to the Terms of Service and Privacy Policy. I understand that payment will be processed securely.
-        Your card is authorised now. Stripe only captures payment after your job is completed.
+      </p>
+      <p className="text-sm font-medium text-slate-700">
+        Your card will NOT be charged now. Payment is only captured after the job is completed.
+      </p>
+      <p className="text-xs text-slate-500">
+        This request is valid for 24 hours. If not accepted, it will expire automatically and your card authorisation will be released.
       </p>
 
       <div className="flex items-center justify-between pt-2">
-        <span className="text-sm text-slate-500">Total: <strong className="text-slate-900">{formatCurrency(totalAmount)}</strong></span>
-        <Button onClick={handleSubmit} loading={submitting} disabled={!stripe || !elements}>
+        <span className="text-sm text-slate-500">Total: <strong className="text-slate-900">{formatCurrency(booking.total_amount)}</strong></span>
+        <Button
+          onClick={handleSubmit}
+          loading={submitting}
+          disabled={mode === 'new' ? (!stripe || !elements) : !selectedSavedCardId}
+        >
           Authorize Card & Send Request
         </Button>
       </div>
@@ -317,6 +422,7 @@ export default function BookingFlowPage() {
 
   const [cleaner, setCleaner] = useState<CleanerRead | null>(null)
   const [clientProfile, setClientProfile] = useState<ClientProfileRead | null>(null)
+  const [savedAddresses, setSavedAddresses] = useState<ClientAddressRead[]>([])
   const [loading, setLoading] = useState(true)
   const [step, setStep] = useState(1)
 
@@ -335,10 +441,17 @@ export default function BookingFlowPage() {
   const [lastName, setLastName] = useState('')
   const [email, setEmail] = useState('')
   const [phone, setPhone] = useState('')
+  const [addressMode, setAddressMode] = useState<'saved' | 'new'>('new')
+  const [selectedAddressId, setSelectedAddressId] = useState('')
   const [address, setAddress] = useState('')
   const [city, setCity] = useState('')
   const [postcode, setPostcode] = useState('')
+  const [apartmentDetails, setApartmentDetails] = useState('')
+  const [accessNotes, setAccessNotes] = useState('')
+  const [jobSize, setJobSize] = useState('')
+  const [jobFocus, setJobFocus] = useState('')
   const [notes, setNotes] = useState('')
+  const [saveAddressForLater, setSaveAddressForLater] = useState(false)
 
   // Step 3: Payment
   const [booking, setBooking] = useState<BookingRead | null>(null)
@@ -350,13 +463,16 @@ export default function BookingFlowPage() {
     Promise.all([
       cleanersApi.getById(cleanerId),
       clientsApi.me().catch(() => null),
+      clientsApi.listAddresses().catch(() => null),
     ])
-      .then(([cleanerRes, clientRes]) => {
+      .then(([cleanerRes, clientRes, addressRes]) => {
         setCleaner(cleanerRes.data ?? null)
         const cp = (clientRes as any)?.data ?? null
         const cpAny = (cp ?? {}) as any
         const user = cpAny.user ?? {}
+        const addresses = (addressRes as any)?.data ?? []
         setClientProfile(cp)
+        setSavedAddresses(addresses)
 
         // Autofill from client profile
         if (cp) {
@@ -370,6 +486,16 @@ export default function BookingFlowPage() {
           if (cpAny.default_address ?? cpAny.defaultAddress) setAddress(cpAny.default_address ?? cpAny.defaultAddress)
           if (cpAny.default_city ?? cpAny.defaultCity) setCity(cpAny.default_city ?? cpAny.defaultCity)
           if (cpAny.default_postcode ?? cpAny.defaultPostcode) setPostcode(cpAny.default_postcode ?? cpAny.defaultPostcode)
+        }
+        if (addresses.length > 0) {
+          const defaultAddress = addresses.find((entry: ClientAddressRead) => entry.is_default) ?? addresses[0]
+          setAddressMode('saved')
+          setSelectedAddressId(defaultAddress.id)
+          setAddress(defaultAddress.address_line1)
+          setCity(defaultAddress.city)
+          setPostcode(defaultAddress.postcode)
+          setApartmentDetails(defaultAddress.apartment_details ?? '')
+          setAccessNotes(defaultAddress.access_notes ?? '')
         }
       })
       .catch(() => toast.error('Failed to load data'))
@@ -411,6 +537,17 @@ export default function BookingFlowPage() {
     return cleaner.hourly_rate * duration
   }, [cleaner, duration])
 
+  function applySavedAddress(addressId: string) {
+    const selected = savedAddresses.find((entry) => entry.id === addressId)
+    if (!selected) return
+    setSelectedAddressId(addressId)
+    setAddress(selected.address_line1)
+    setCity(selected.city)
+    setPostcode(selected.postcode)
+    setApartmentDetails(selected.apartment_details ?? '')
+    setAccessNotes(selected.access_notes ?? '')
+  }
+
   // Navigation
   function goNext() {
     if (step === 1) {
@@ -422,9 +559,14 @@ export default function BookingFlowPage() {
       if (!lastName.trim()) { toast.error('Last name is required.'); return }
       if (!email.trim()) { toast.error('Email is required.'); return }
       if (!phone.trim()) { toast.error('Phone number is required.'); return }
+      if (addressMode === 'saved' && !selectedAddressId) { toast.error('Select a saved address or add a new one.'); return }
       if (!address.trim()) { toast.error('Service address is required.'); return }
       if (!city.trim()) { toast.error('City is required.'); return }
       if (!postcode.trim()) { toast.error('ZIP code is required.'); return }
+      if (!accessNotes.trim()) { toast.error('Access notes are required.'); return }
+      if (!jobSize) { toast.error('Select property size for job details.'); return }
+      if (!jobFocus) { toast.error('Select job focus area.'); return }
+      if (notes.trim().length < 20) { toast.error('Please describe the job in at least 20 characters.'); return }
       createBookingAndProceed()
     }
   }
@@ -438,9 +580,11 @@ export default function BookingFlowPage() {
         address: address.trim(),
         city: city.trim(),
         postcode: postcode.trim(),
+        apartment_details: apartmentDetails.trim() || undefined,
+        access_notes: accessNotes.trim(),
         scheduled_start: selectedSlot,
         duration_hours: duration,
-        special_instructions: notes || undefined,
+        special_instructions: `Property size: ${jobSize}\nFocus area: ${jobFocus}\nClient notes: ${notes.trim()}`,
       })
       const b = res.data
       if (!b) throw new Error('Failed to create booking')
@@ -452,6 +596,20 @@ export default function BookingFlowPage() {
         throw new Error('Unable to initialize card authorization for this booking')
       }
       setClientSecret(nextClientSecret)
+      if (addressMode === 'new' && saveAddressForLater) {
+        try {
+          await clientsApi.addAddress({
+            address_line1: address.trim(),
+            city: city.trim(),
+            postcode: postcode.trim(),
+            apartment_details: apartmentDetails.trim() || undefined,
+            access_notes: accessNotes.trim(),
+            is_default: savedAddresses.length === 0,
+          })
+        } catch {
+          // Booking should still proceed even if address save fails.
+        }
+      }
       setStep(3)
     } catch (err: any) {
       toast.error(err.message ?? 'Failed to create booking')
@@ -511,7 +669,7 @@ export default function BookingFlowPage() {
                   {step} / 4
                 </p>
                 <p className="mt-1 text-sm text-white/80">
-                  {step === 1 ? 'Schedule' : step === 2 ? 'Your Details' : step === 3 ? 'Payment' : 'Confirmation'}
+                  {step === 1 ? 'Your Details' : step === 2 ? 'Service Address' : step === 3 ? 'Job Details' : 'Confirmation'}
                 </p>
               </div>
             </div>
@@ -528,7 +686,7 @@ export default function BookingFlowPage() {
           {step === 1 && (
             <Card className="rounded-2xl border-slate-200">
               <CardHeader>
-                <CardTitle>Select Schedule</CardTitle>
+                <CardTitle>Your Details</CardTitle>
               </CardHeader>
               <CardContent className="space-y-6">
 
@@ -544,7 +702,7 @@ export default function BookingFlowPage() {
                     <p className="mt-1 text-lg font-bold text-slate-900">{formatCurrency(cleaner.hourly_rate)}<span className="text-sm font-normal text-slate-500">/hr</span></p>
                   </div>
                   <div>
-                    <Label className="text-sm font-semibold text-slate-700">Estimated Cost</Label>
+                    <Label className="text-sm font-semibold text-slate-700">Service Cost</Label>
                     <p className="mt-1 text-lg font-bold text-primary">{formatCurrency(estimatedCost)}</p>
                   </div>
                 </div>
@@ -582,6 +740,9 @@ export default function BookingFlowPage() {
                 {date && (
                   <div>
                     <Label className="text-sm font-semibold mb-2 block">Select time of day</Label>
+                    <p className="mb-2 text-xs text-slate-500">
+                      Only available time slots that fit your selected duration are shown.
+                    </p>
                     {slotsLoading ? (
                       <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 md:grid-cols-4">
                         {Array.from({ length: 8 }).map((_, i) => (
@@ -632,7 +793,7 @@ export default function BookingFlowPage() {
           {step === 2 && (
             <Card className="rounded-2xl border-slate-200">
               <CardHeader>
-                <CardTitle>Your Information</CardTitle>
+                <CardTitle>Service Address</CardTitle>
               </CardHeader>
               <CardContent className="space-y-6">
 
@@ -655,10 +816,46 @@ export default function BookingFlowPage() {
                   </div>
                 </div>
 
-                <div>
-                  <Label className="text-sm font-semibold">Service Address <span className="text-red-500">*</span></Label>
-                  <Input required value={address} onChange={e => setAddress(e.target.value)} className="mt-1" placeholder="Street address" />
-                </div>
+                <div className="space-y-3 rounded-xl border border-slate-200 p-4">
+                  <Label className="text-sm font-semibold">Address selection</Label>
+                  <div className="grid gap-2 sm:grid-cols-2">
+                    <label className="flex items-center gap-2 rounded-lg border border-slate-200 p-2 text-sm text-slate-700">
+                      <input
+                        type="radio"
+                        checked={addressMode === 'saved'}
+                        onChange={() => setAddressMode('saved')}
+                        disabled={savedAddresses.length === 0}
+                      />
+                      Saved Addresses
+                    </label>
+                    <label className="flex items-center gap-2 rounded-lg border border-slate-200 p-2 text-sm text-slate-700">
+                      <input
+                        type="radio"
+                        checked={addressMode === 'new'}
+                        onChange={() => setAddressMode('new')}
+                      />
+                      Add a new address
+                    </label>
+                  </div>
+
+                  {addressMode === 'saved' && savedAddresses.length > 0 && (
+                    <div>
+                      <Label className="text-sm font-semibold">Saved Addresses</Label>
+                      <Select value={selectedAddressId} onChange={(e) => applySavedAddress(e.target.value)} className="mt-1">
+                        <option value="">Select saved address</option>
+                        {savedAddresses.map((entry) => (
+                          <option key={entry.id} value={entry.id}>
+                            {(entry.label?.trim() || 'Saved address')} - {entry.address_line1}, {entry.city}
+                          </option>
+                        ))}
+                      </Select>
+                    </div>
+                  )}
+
+                  <div>
+                    <Label className="text-sm font-semibold">Service Address <span className="text-red-500">*</span></Label>
+                    <Input required value={address} onChange={e => setAddress(e.target.value)} className="mt-1" placeholder="Street address" />
+                  </div>
 
                 <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                   <div>
@@ -671,15 +868,66 @@ export default function BookingFlowPage() {
                   </div>
                 </div>
 
+                  <div>
+                    <Label className="text-sm font-semibold">Apartment details</Label>
+                    <Input value={apartmentDetails} onChange={e => setApartmentDetails(e.target.value)} className="mt-1" placeholder="Apartment / unit / floor (optional)" />
+                  </div>
+
+                  <div>
+                    <Label className="text-sm font-semibold">Access notes <span className="text-red-500">*</span></Label>
+                    <Textarea
+                      required
+                      value={accessNotes}
+                      onChange={e => setAccessNotes(e.target.value)}
+                      placeholder="Doorbell details, gate code, parking, or entry instructions"
+                      className="mt-1"
+                      rows={3}
+                    />
+                  </div>
+                  {addressMode === 'new' && (
+                    <label className="flex items-center gap-2 text-xs text-slate-600">
+                      <input
+                        type="checkbox"
+                        checked={saveAddressForLater}
+                        onChange={(event) => setSaveAddressForLater(event.target.checked)}
+                      />
+                      Save this address for future bookings
+                    </label>
+                  )}
+                </div>
+
                 <div>
-                  <Label className="text-sm font-semibold">Project Description</Label>
+                  <Label className="text-sm font-semibold">Describe the job <span className="text-red-500">*</span></Label>
+                  <div className="mt-2 grid gap-3 sm:grid-cols-2">
+                    <div>
+                      <Label className="text-xs font-semibold text-slate-600">Property size</Label>
+                      <Select value={jobSize} onChange={(event) => setJobSize(event.target.value)} className="mt-1">
+                        <option value="">Select property size</option>
+                        <option value="Studio / 1 bed">Studio / 1 bed</option>
+                        <option value="2 bed">2 bed</option>
+                        <option value="3 bed">3 bed</option>
+                        <option value="4+ bed">4+ bed</option>
+                      </Select>
+                    </div>
+                    <div>
+                      <Label className="text-xs font-semibold text-slate-600">Main focus</Label>
+                      <Select value={jobFocus} onChange={(event) => setJobFocus(event.target.value)} className="mt-1">
+                        <option value="">Select focus area</option>
+                        <option value="General full-home clean">General full-home clean</option>
+                        <option value="Kitchen and bathrooms">Kitchen and bathrooms</option>
+                        <option value="Move-in / move-out prep">Move-in / move-out prep</option>
+                        <option value="Deep clean priority">Deep clean priority</option>
+                      </Select>
+                    </div>
+                  </div>
                   <Textarea
                     value={notes}
                     onChange={e => setNotes(e.target.value)}
-                    placeholder="Describe your project in detail..."
+                    placeholder="Please include room count, cleaning priorities, and any specific requirements."
                     className="mt-1"
-                    rows={3}
+                    rows={4}
                   />
+                  <p className="mt-1 text-xs text-slate-500">Structured cancellation policy applies. Minimum 20 characters.</p>
                 </div>
 
                 {/* Navigation */}
@@ -702,14 +950,14 @@ export default function BookingFlowPage() {
           {step === 3 && clientSecret && booking && (
             <Card className="rounded-2xl border-slate-200">
               <CardHeader>
-                <CardTitle>Payment Information</CardTitle>
+                <CardTitle>Job Details</CardTitle>
               </CardHeader>
               <CardContent className="space-y-5">
 
                 <Elements stripe={stripePromise} options={{ clientSecret, appearance: { theme: 'stripe' } }}>
                   <StripePaymentForm
+                    booking={booking}
                     onSuccess={handlePaymentSuccess}
-                    totalAmount={booking.total_amount}
                   />
                 </Elements>
               </CardContent>
@@ -733,6 +981,11 @@ export default function BookingFlowPage() {
                       ? `Your service has been successfully booked with ${cleanerName}`
                       : `Your card is authorized and your request has been sent to ${cleanerName}`}
                   </p>
+                  {booking.status === 'pending' && (
+                    <p className="mt-1 text-xs text-slate-500">
+                      This request is valid for 24 hours. If not accepted, it will expire automatically and your card authorisation will be released.
+                    </p>
+                  )}
                 </div>
 
                 {/* Booking details */}

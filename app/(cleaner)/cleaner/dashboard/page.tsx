@@ -11,6 +11,7 @@ import { DashboardPageSkeleton } from '@/components/page-skeletons'
 import { EmptyState } from '@/components/empty-state'
 import { formatCurrency, formatDate } from '@/lib/utils'
 import type { BookingRead, BookingStatus, CleanerOnboardingProgress } from '@/types'
+import { cleanerLifecycleLabel, deriveCleanerLifecycleStatus } from '@/lib/cleaner-status'
 import { toast } from 'sonner'
 
 const REQUEST_STATUSES: BookingStatus[] = ['pending']
@@ -29,7 +30,9 @@ export default function CleanerDashboardPage() {
   const [bookings, setBookings] = useState<BookingRead[]>([])
   const [completionPct, setCompletionPct] = useState<number>(0)
   const [onboardingSteps, setOnboardingSteps] = useState<CleanerOnboardingProgress['steps'] | null>(null)
-  const [cleanerStatus, setCleanerStatus] = useState<string>('pending')
+  const [lifecycleStatus, setLifecycleStatus] = useState<
+    'pending_approval' | 'approved' | 'live' | 'rejected' | 'suspended'
+  >('pending_approval')
   const [stripeConnected, setStripeConnected] = useState(false)
   const [rejectionReason, setRejectionReason] = useState<string>('')
   const [profileComplete, setProfileComplete] = useState(false)
@@ -47,7 +50,13 @@ export default function CleanerDashboardPage() {
         setCompletionPct(cleanerRes.data?.onboarding?.completion_pct ?? 0)
         setOnboardingSteps(cleanerRes.data?.onboarding?.steps ?? null)
         const cleaner = cleanerRes.data?.cleaner as any
-        setCleanerStatus(cleaner?.status ?? 'pending')
+        setLifecycleStatus(
+          (cleaner?.lifecycle_status as any) ??
+            deriveCleanerLifecycleStatus({
+              status: cleaner?.status,
+              stripeOnboardingComplete: cleaner?.stripe_onboarding_complete ?? cleaner?.stripeOnboardingComplete,
+            }),
+        )
         setStripeConnected(Boolean(cleaner?.stripe_onboarding_complete ?? cleaner?.stripeOnboardingComplete))
         setRejectionReason(cleaner?.rejection_reason ?? '')
         setProfileComplete(cleaner?.profile_complete ?? false)
@@ -155,7 +164,12 @@ export default function CleanerDashboardPage() {
         </div>
       </div>
 
-      {cleanerStatus === 'rejected' ? (
+      <div className="rounded-xl border border-slate-200 bg-white px-4 py-2">
+        <p className="text-xs text-slate-500">Cleaner lifecycle status</p>
+        <p className="text-sm font-semibold text-slate-900">{cleanerLifecycleLabel(lifecycleStatus)}</p>
+      </div>
+
+      {lifecycleStatus === 'rejected' ? (
         <div className="rounded-2xl border border-red-200 bg-gradient-to-r from-red-50 to-rose-50 px-4 py-3">
           <div className="flex items-center justify-between gap-3">
             <div>
@@ -170,7 +184,12 @@ export default function CleanerDashboardPage() {
             </Link>
           </div>
         </div>
-      ) : cleanerStatus === 'pending' && completionPct < 100 ? (
+      ) : lifecycleStatus === 'suspended' ? (
+        <div className="rounded-2xl border border-red-200 bg-red-50 px-4 py-3">
+          <p className="text-sm font-semibold text-red-900">Your account is suspended.</p>
+          <p className="text-xs text-red-700">Contact support or admin for reactivation guidance.</p>
+        </div>
+      ) : lifecycleStatus === 'pending_approval' && completionPct < 100 ? (
         <div className="rounded-2xl border border-amber-200 bg-gradient-to-r from-amber-50 to-yellow-50 px-4 py-3">
           <div className="flex items-center justify-between gap-3">
             <div>
@@ -188,7 +207,7 @@ export default function CleanerDashboardPage() {
             </Link>
           </div>
         </div>
-      ) : cleanerStatus === 'pending' && completionPct === 100 && !profileComplete ? (
+      ) : lifecycleStatus === 'pending_approval' && completionPct === 100 && !profileComplete ? (
         <div className="rounded-2xl border border-blue-200 bg-gradient-to-r from-blue-50 to-indigo-50 px-4 py-3">
           <div className="flex items-center justify-between gap-3">
             <div>
@@ -205,7 +224,7 @@ export default function CleanerDashboardPage() {
             </Button>
           </div>
         </div>
-      ) : cleanerStatus === 'pending' && profileComplete ? (
+      ) : lifecycleStatus === 'pending_approval' && profileComplete ? (
         <div className="rounded-2xl border border-amber-200 bg-gradient-to-r from-amber-50 to-yellow-50 px-4 py-3">
           <div className="flex items-center gap-2">
             <Clock3 className="h-5 w-5 text-amber-600 shrink-0" />
@@ -215,18 +234,18 @@ export default function CleanerDashboardPage() {
             </div>
           </div>
         </div>
-      ) : cleanerStatus === 'approved' && !stripeConnected ? (
+      ) : lifecycleStatus === 'approved' && !stripeConnected ? (
         <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3">
           <p className="text-sm font-semibold text-amber-900">Approved — connect Stripe to go live. You must connect Stripe to receive payouts and accept bookings.</p>
         </div>
-      ) : (
+      ) : lifecycleStatus === 'live' ? (
         <div className="rounded-2xl border border-emerald-200 bg-gradient-to-r from-emerald-50 to-green-50 px-4 py-3">
           <div className="flex items-center gap-2">
             <CircleCheck className="h-5 w-5 text-emerald-600 shrink-0" />
             <p className="text-sm font-semibold text-emerald-900">Live — your profile is approved and visible to clients.</p>
           </div>
         </div>
-      )}
+      ) : null}
 
       <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
         <Card className="border-slate-200">

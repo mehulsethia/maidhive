@@ -4,6 +4,7 @@ import { cleanerService } from '@/server/services/cleaner.service'
 import { ok, err } from '@/server/response'
 import { approveCleanerSchema } from '@/server/schemas/cleaner.schema'
 import { ServiceError } from '@/server/services/booking.service'
+import type { CleanerRejectionReasonCode } from '@/lib/cleaner-status'
 
 export const POST = requireAdmin(async (req: NextRequest, ctx, user) => {
   const { id } = await ctx.params
@@ -17,6 +18,8 @@ export const POST = requireAdmin(async (req: NextRequest, ctx, user) => {
       user,
       parsed.data.action,
       parsed.data.rejection_reason,
+      parsed.data.rejection_reason_code as CleanerRejectionReasonCode | undefined,
+      parsed.data.rejection_custom_message,
     )
     return ok(cleaner)
   } catch (e) {

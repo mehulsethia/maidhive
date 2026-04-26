@@ -23,11 +23,13 @@ export const previewPriceSchema = z.object({
 export const createBookingSchema = z.object({
   cleaner_id: z.string().uuid(),
   service_type: z.enum(SERVICE_TYPES),
-  special_instructions: z.string().max(1000).optional(),
+  special_instructions: z.string().trim().min(20, 'Job description must be at least 20 characters').max(1000),
   address: z.string().min(1),
   city: z.string().min(1),
   postcode: z.string().min(1),
   country: z.string().default('IE'),
+  apartment_details: z.string().max(255).optional(),
+  access_notes: z.string().trim().min(5, 'Access notes are required').max(1000),
   scheduled_start: z.string().datetime(),
   duration_hours: z.number().min(1).max(8),
 })

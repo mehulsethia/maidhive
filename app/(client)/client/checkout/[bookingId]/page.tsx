@@ -24,9 +24,49 @@ function CheckoutForm({ booking, onSuccess }: { booking: BookingRead; onSuccess:
   const stripe = useStripe()
   const elements = useElements()
   const [submitting, setSubmitting] = useState(false)
+  const [mode, setMode] = useState<'saved' | 'new'>('new')
+  const [savedCards, setSavedCards] = useState<Array<{
+    id: string
+    brand: string
+    last4: string
+    exp_month: number | null
+    exp_year: number | null
+  }>>([])
+  const [selectedSavedCardId, setSelectedSavedCardId] = useState<string>('')
+
+  useEffect(() => {
+    paymentsApi.listMethods()
+      .then((res) => {
+        const cards = res.data ?? []
+        setSavedCards(cards)
+        if (cards.length > 0) {
+          setMode('saved')
+          setSelectedSavedCardId(cards[0].id)
+        }
+      })
+      .catch(() => null)
+  }, [])
 
   async function handleSubmit(event: React.FormEvent) {
     event.preventDefault()
+    if (mode === 'saved') {
+      if (!selectedSavedCardId) {
+        toast.error('Select a saved card or switch to add a new card.')
+        return
+      }
+      setSubmitting(true)
+      try {
+        await paymentsApi.confirmWithSavedMethod(booking.id, selectedSavedCardId)
+        toast.success('Saved card authorized. Your booking request is now sent to the cleaner.')
+        onSuccess()
+      } catch (err: any) {
+        toast.error(err.message ?? 'Failed to authorize saved card.')
+      } finally {
+        setSubmitting(false)
+      }
+      return
+    }
+
     if (!stripe || !elements) return
 
     setSubmitting(true)
@@ -54,8 +94,53 @@ function CheckoutForm({ booking, onSuccess }: { booking: BookingRead; onSuccess:
 
   return (
     <form onSubmit={handleSubmit} className="space-y-4">
-      <PaymentElement />
-      <Button type="submit" size="lg" className="w-full" loading={submitting} disabled={!stripe || !elements}>
+      <div className="space-y-2 rounded-xl border border-slate-200 p-3">
+        <p className="text-sm font-semibold text-slate-900">Payment option</p>
+        {savedCards.length > 0 && (
+          <label className="flex cursor-pointer items-start gap-2 rounded-lg border border-slate-200 p-2">
+            <input type="radio" name="pm-mode" checked={mode === 'saved'} onChange={() => setMode('saved')} className="mt-1" />
+            <span className="text-sm text-slate-700">Use a previously saved card</span>
+          </label>
+        )}
+        <label className="flex cursor-pointer items-start gap-2 rounded-lg border border-slate-200 p-2">
+          <input type="radio" name="pm-mode" checked={mode === 'new'} onChange={() => setMode('new')} className="mt-1" />
+          <span className="text-sm text-slate-700">Add and use a new card</span>
+        </label>
+      </div>
+
+      {mode === 'saved' && savedCards.length > 0 && (
+        <div className="space-y-2 rounded-xl border border-slate-200 p-3">
+          {savedCards.map((card) => (
+            <label key={card.id} className="flex cursor-pointer items-center gap-2 rounded-lg border border-slate-200 p-2">
+              <input
+                type="radio"
+                name="saved-card"
+                checked={selectedSavedCardId === card.id}
+                onChange={() => setSelectedSavedCardId(card.id)}
+              />
+              <span className="text-sm text-slate-700">
+                {card.brand.toUpperCase()} •••• {card.last4}
+                {card.exp_month && card.exp_year ? ` (exp ${card.exp_month}/${card.exp_year})` : ''}
+              </span>
+            </label>
+          ))}
+        </div>
+      )}
+
+      {mode === 'new' && <PaymentElement />}
+      <p className="text-sm font-medium text-slate-700">
+        Your card will NOT be charged now. Payment is only captured after the job is completed.
+      </p>
+      <p className="text-xs text-slate-500">
+        This request is valid for 24 hours. If not accepted, it will expire automatically and your card authorisation will be released.
+      </p>
+      <Button
+        type="submit"
+        size="lg"
+        className="w-full"
+        loading={submitting}
+        disabled={mode === 'new' ? (!stripe || !elements) : !selectedSavedCardId}
+      >
         Authorize {new Intl.NumberFormat('en-IE', { style: 'currency', currency: 'EUR' }).format(booking.total_amount)}
       </Button>
     </form>
@@ -166,7 +251,7 @@ export default function CheckoutPage() {
               breakdown={{
                 hourly_rate: booking.hourly_rate,
                 duration_hours: booking.duration_hours,
-                subtotal: booking.total_amount,
+                subtotal: booking.subtotal ?? booking.total_amount - booking.platform_fee,
                 platform_fee_pct: 10,
                 platform_fee: booking.platform_fee,
                 cleaner_payout: booking.cleaner_payout,
@@ -188,7 +273,7 @@ export default function CheckoutPage() {
         </section>
 
         <p className="text-center text-xs text-muted-foreground">
-          Your card is authorized now. Stripe captures it after the post-completion window unless a dispute is raised.
+          Your card will NOT be charged now. Payment is only captured after the job is completed.
         </p>
       </div>
 

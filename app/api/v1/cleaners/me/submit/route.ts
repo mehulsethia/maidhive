@@ -1,7 +1,10 @@
 import { requireCleaner } from '@/server/auth'
 import { cleanerRepo } from '@/server/repositories/cleaner.repo'
 import { availabilityRepo } from '@/server/repositories/availability.repo'
-import { computeCleanerOnboardingProgress } from '@/server/services/cleaner-onboarding.service'
+import {
+  computeCleanerOnboardingProgress,
+  validateCleanerSubmissionRequirements,
+} from '@/server/services/cleaner-onboarding.service'
 import { loopsEmailService } from '@/server/services/loops-email.service'
 import { pushInAppNotification } from '@/server/services/in-app-notification.service'
 import { db } from '@/server/db'
@@ -15,9 +18,15 @@ export const POST = requireCleaner(async (_req, _ctx, user) => {
   const schedules = await availabilityRepo.getSchedule(cleaner.id)
   const hasAvailabilitySlots = schedules.some((s) => s.isActive)
   const onboarding = computeCleanerOnboardingProgress({ cleaner, hasAvailabilitySlots })
+  const submissionValidation = validateCleanerSubmissionRequirements({ cleaner, hasAvailabilitySlots })
 
-  if (onboarding.completion_pct < 100) {
-    return err('Profile is not yet complete. Please finish all onboarding steps first.', 400)
+  if (!submissionValidation.valid || onboarding.completion_pct < 100) {
+    const missing = submissionValidation.missingFields
+    const guidance =
+      missing.length > 0
+        ? ` Missing: ${missing.join(', ')}.`
+        : ''
+    return err(`Profile is not yet complete. Please finish all onboarding requirements first.${guidance}`, 400)
   }
 
   if (cleaner.status === 'approved') {

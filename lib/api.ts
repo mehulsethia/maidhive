@@ -7,6 +7,7 @@ import { getApiBaseUrl } from '@/lib/api-base'
 import type {
   AdminCleaner,
   AdminDispute,
+  AdminOpsQueues,
   AdminStats,
   AdminUser,
   APIResponse,
@@ -15,6 +16,8 @@ import type {
   CleanerRead,
   CleanerOnboardingProgress,
   CleanerSummary,
+  ClientAddressCreate,
+  ClientAddressRead,
   ClientProfileRead,
   ClientDispute,
   MessageRead,
@@ -169,13 +172,29 @@ export const clientsApi = {
       method: 'PATCH',
       body: JSON.stringify(body),
     }),
+  listAddresses: () =>
+    request<APIResponse<ClientAddressRead[]>>('/clients/addresses'),
+  addAddress: (body: ClientAddressCreate) =>
+    request<APIResponse<ClientAddressRead>>('/clients/addresses', {
+      method: 'POST',
+      body: JSON.stringify(body),
+    }),
 }
 
 // ---------------------------------------------------------------------------
 // Cleaners
 // ---------------------------------------------------------------------------
 export const cleanersApi = {
-  search: async (params: { city?: string; page?: number }) => {
+  search: async (params: {
+    city?: string
+    availability?: 'any' | 'next_7_days'
+    transport_mode?: 'own_car' | 'bus_walk' | 'requires_pickup'
+    services_offered?: string
+    min_rating?: number
+    min_price?: number
+    max_price?: number
+    page?: number
+  }) => {
     const qs = new URLSearchParams(
       Object.entries(params)
         .filter(([, v]) => v !== undefined)
@@ -314,6 +333,25 @@ export const paymentsApi = {
       `/payments/sync/${bookingId}`,
       { method: 'POST' },
     ),
+  listMethods: () =>
+    request<APIResponse<Array<{
+      id: string
+      brand: string
+      last4: string
+      exp_month: number | null
+      exp_year: number | null
+    }>>>('/payments/methods'),
+  confirmWithSavedMethod: (bookingId: string, paymentMethodId: string) =>
+    request<APIResponse<{ payment_intent_id: string; payment_intent_status: string; sync: any }>>(
+      '/payments/confirm-existing',
+      {
+        method: 'POST',
+        body: JSON.stringify({
+          booking_id: bookingId,
+          payment_method_id: paymentMethodId,
+        }),
+      },
+    ),
 }
 
 // ---------------------------------------------------------------------------
@@ -333,6 +371,11 @@ export const reviewsApi = {
     request<APIResponse<{ reviews: ReviewRead[]; total: number; page: number; page_size: number }>>(
       `/reviews/cleaner/${cleanerId}?page=${page}&page_size=${pageSize}`,
     ),
+  replyToReview: (reviewId: string, response: string) =>
+    request<APIResponse<ReviewRead>>(`/reviews/${reviewId}/reply`, {
+      method: 'POST',
+      body: JSON.stringify({ response }),
+    }),
 }
 
 // ---------------------------------------------------------------------------
@@ -396,6 +439,8 @@ export const notificationsApi = {
 export const adminApi = {
   getStats: () =>
     request<APIResponse<AdminStats>>('/admin/stats'),
+  getOpsQueues: () =>
+    request<APIResponse<AdminOpsQueues>>('/admin/ops-queues'),
 
   listUsers: async (params: { page?: number; role?: string; search?: string } = {}) => {
     const qs = new URLSearchParams(
@@ -424,13 +469,18 @@ export const adminApi = {
     request<APIResponse<{ id: string; status: string }>>(`/admin/cleaners/${id}/suspend`, {
       method: 'POST',
     }),
-  approveCleaner: (id: string, action: 'approve' | 'reject', rejection_reason?: string) =>
+  approveCleaner: (
+    id: string,
+    action: 'approve' | 'reject',
+    rejection_reason?: string,
+    extras?: { rejection_reason_code?: string; rejection_custom_message?: string },
+  ) =>
     request<APIResponse<CleanerRead>>(`/cleaners/${id}/approve`, {
       method: 'POST',
-      body: JSON.stringify({ action, rejection_reason }),
+      body: JSON.stringify({ action, rejection_reason, ...extras }),
     }),
 
-  listBookings: async (params: { page?: number; status?: string } = {}) => {
+  listBookings: async (params: { page?: number; page_size?: number; status?: string } = {}) => {
     const qs = new URLSearchParams(
       Object.entries(params)
         .filter(([, v]) => v !== undefined && v !== '')

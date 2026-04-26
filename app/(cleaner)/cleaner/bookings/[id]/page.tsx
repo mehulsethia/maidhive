@@ -47,6 +47,7 @@ export default function CleanerBookingDetailPage() {
   const [proposalOpen, setProposalOpen] = useState(false)
   const [proposalDate, setProposalDate] = useState('')
   const [proposalTime, setProposalTime] = useState('')
+  const [, setNowTick] = useState(() => Date.now())
 
   const refresh = () =>
     bookingsApi.getById(id)
@@ -66,6 +67,11 @@ export default function CleanerBookingDetailPage() {
       })
       .catch(() => null)
   }, [id])
+
+  useEffect(() => {
+    const timer = setInterval(() => setNowTick(Date.now()), 60_000)
+    return () => clearInterval(timer)
+  }, [])
 
   async function handleAction(action: 'start') {
     setActionLoading(true)
@@ -176,6 +182,13 @@ export default function CleanerBookingDetailPage() {
 
   const showChat = CHAT_STATUSES.includes(booking.status)
   const chatIsReadOnly = isChatReadOnly(booking.scheduled_end)
+  const acceptByMs = booking.accept_by ? new Date(booking.accept_by).getTime() : 0
+  const requestMsLeft = acceptByMs ? acceptByMs - Date.now() : 0
+  const requestExpiryText = requestMsLeft <= 0
+    ? 'This request has expired.'
+    : requestMsLeft >= 60 * 60 * 1000
+      ? `This request expires in ${Math.ceil(requestMsLeft / (60 * 60 * 1000))} hour${Math.ceil(requestMsLeft / (60 * 60 * 1000)) === 1 ? '' : 's'}.`
+      : `This request expires in ${Math.max(1, Math.ceil(requestMsLeft / (60 * 1000)))} minute${Math.max(1, Math.ceil(requestMsLeft / (60 * 1000))) === 1 ? '' : 's'}.`
   const completeOpensAt = booking.scheduled_end
     ? new Date(booking.scheduled_end).getTime() - 5 * 60 * 1000
     : Infinity
@@ -202,6 +215,18 @@ export default function CleanerBookingDetailPage() {
             <p className="flex items-center gap-2"><Calendar className="h-4 w-4" />{formatDate(booking.scheduled_start)}</p>
             <p className="flex items-center gap-2"><Clock className="h-4 w-4" />{booking.duration_hours} hours</p>
             <p className="flex items-center gap-2"><MapPin className="h-4 w-4" />{booking.address}, {booking.city}, {booking.postcode}</p>
+            {booking.status === 'pending' && (
+              <p className="text-xs text-slate-500">Approximate map location shown with 50-100m privacy offset until acceptance.</p>
+            )}
+            {booking.apartment_details && (
+              <p className="text-xs text-slate-500">Apartment details: {booking.apartment_details}</p>
+            )}
+            {booking.access_notes && (
+              <p className="text-xs text-slate-500">Access notes: {booking.access_notes}</p>
+            )}
+            {booking.client?.user?.phone && (
+              <p className="text-xs text-slate-500">Phone: {booking.client.user.phone}</p>
+            )}
           </div>
           {booking.special_instructions && (
             <>
@@ -217,18 +242,9 @@ export default function CleanerBookingDetailPage() {
       <Card>
         <CardContent className="px-5 pb-5 pt-6">
           <div className="space-y-2">
-            <div className="flex items-center justify-between text-sm">
-              <p className="text-muted-foreground">Total booking amount</p>
-              <p className="font-semibold text-slate-900">{formatCurrency(booking.total_amount)}</p>
-            </div>
-            <div className="flex items-center justify-between text-sm">
-              <p className="text-muted-foreground">App commission deducted</p>
-              <p className="font-semibold text-amber-700">- {formatCurrency(booking.platform_fee)}</p>
-            </div>
-            <Separator />
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm text-muted-foreground">Your payout</p>
+                <p className="text-sm text-muted-foreground">You will earn</p>
                 <p className="text-2xl font-bold text-green-700">{formatCurrency(booking.cleaner_payout)}</p>
                 <p className="text-xs text-muted-foreground mt-0.5">Released 24h after job completion</p>
               </div>
@@ -255,26 +271,31 @@ export default function CleanerBookingDetailPage() {
               : `Client countered with ${formatDate(booking.proposed_start!)}. Accept or decline before request expiry.`}
           </p>
         )}
+        {booking.status === 'pending' && (
+          <p className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-700">
+            {requestExpiryText} This request is valid for 24 hours. If not accepted, it will expire automatically and your card authorisation will be released.
+          </p>
+        )}
         {canAcceptPending && (
           <>
             <Button size="lg" onClick={() => handleBookingAction('accept')} loading={actionLoading} disabled={!stripeConnected}>
               Accept booking
             </Button>
+            {canProposeAlternative && (
+              <Button
+                variant="outline"
+                onClick={() => {
+                  setProposalDate(toDateInputValue(booking.scheduled_start))
+                  setProposalTime(toTimeInputValue(booking.scheduled_start))
+                  setProposalOpen(true)
+                }}
+                disabled={actionLoading}
+              >
+                Propose alternative time
+              </Button>
+            )}
             <Button variant="destructive" onClick={() => setCancelOpen(true)}>Decline</Button>
           </>
-        )}
-        {canProposeAlternative && (
-          <Button
-            variant="outline"
-            onClick={() => {
-              setProposalDate(toDateInputValue(booking.scheduled_start))
-              setProposalTime(toTimeInputValue(booking.scheduled_start))
-              setProposalOpen(true)
-            }}
-            disabled={actionLoading}
-          >
-            Propose alternative time
-          </Button>
         )}
         {isPending && !canProposeAlternative && !canRespondToCounter && proposeAlternativeDisabledReason && (
           <p className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-600">
@@ -332,7 +353,7 @@ export default function CleanerBookingDetailPage() {
       <Dialog open={cancelOpen} onClose={() => setCancelOpen(false)}>
         <DialogTitle>Decline booking</DialogTitle>
         <div className="space-y-3">
-          <p className="text-sm text-muted-foreground">Declining a booking may result in a strike if done close to the scheduled time.</p>
+          <p className="text-sm text-muted-foreground">You can decline this request freely. Strikes only apply to late cancellations after accepting a booking.</p>
           <p className="text-sm text-muted-foreground">This will close the pending request for the client.</p>
           <Button onClick={handleCancel} variant="destructive" className="w-full" loading={actionLoading}>
             Decline booking

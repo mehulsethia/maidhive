@@ -1,6 +1,7 @@
 import { NextRequest } from 'next/server'
 import { requireAuth } from '@/server/auth'
 import { bookingService, ServiceError } from '@/server/services/booking.service'
+import { sanitizeBookingForRole } from '@/server/services/booking-visibility.service'
 import { ok, err } from '@/server/response'
 import { cancelBookingSchema } from '@/server/schemas/booking.schema'
 
@@ -12,7 +13,7 @@ export const POST = requireAuth(async (req: NextRequest, ctx, user) => {
 
   try {
     const booking = await bookingService.cancel(id, user, parsed.data.reason)
-    return ok(booking)
+    return ok(sanitizeBookingForRole(booking as any, user.role as 'client' | 'cleaner' | 'admin'))
   } catch (e) {
     if (e instanceof ServiceError) return err(e.message, e.status)
     throw e

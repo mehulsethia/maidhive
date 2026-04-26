@@ -34,6 +34,29 @@ export function ensureDbSchema(): Promise<void> {
         ADD COLUMN IF NOT EXISTS cleaning_quiz_score INTEGER,
         ADD COLUMN IF NOT EXISTS cleaning_quiz_passed_at TIMESTAMPTZ
       `)
+      await db.$executeRawUnsafe(`
+        ALTER TABLE public.bookings
+        ADD COLUMN IF NOT EXISTS apartment_details TEXT,
+        ADD COLUMN IF NOT EXISTS access_notes TEXT NOT NULL DEFAULT ''
+      `)
+      await db.$executeRawUnsafe(`
+        CREATE TABLE IF NOT EXISTS public.client_addresses (
+          id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+          client_id UUID NOT NULL REFERENCES public.clients(id) ON DELETE CASCADE,
+          label TEXT,
+          address_line1 TEXT NOT NULL,
+          city TEXT NOT NULL,
+          postcode TEXT NOT NULL,
+          country TEXT NOT NULL DEFAULT 'IE',
+          apartment_details TEXT,
+          access_notes TEXT NOT NULL,
+          latitude NUMERIC(9, 6),
+          longitude NUMERIC(9, 6),
+          is_default BOOLEAN NOT NULL DEFAULT FALSE,
+          created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+          updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+        )
+      `)
     })().catch((error) => {
       schemaReadyPromise = null
       throw error

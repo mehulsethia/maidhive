@@ -55,7 +55,7 @@ function BookingTable({ bookings }: { bookings: BookingRead[] }) {
             <th className="px-4 py-3 font-medium">Scheduled</th>
             <th className="px-4 py-3 font-medium">Status</th>
             <th className="px-4 py-3 font-medium text-right">Amount</th>
-            <th className="px-4 py-3 font-medium text-right">Fee</th>
+            <th className="px-4 py-3 font-medium text-right">Platform Fee (10%)</th>
           </tr>
         </thead>
         <tbody className="divide-y">

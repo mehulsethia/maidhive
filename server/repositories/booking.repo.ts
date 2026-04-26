@@ -80,6 +80,8 @@ export const bookingRepo = {
     city: string
     postcode: string
     country: string
+    apartmentDetails?: string
+    accessNotes: string
     scheduledStart: Date
     scheduledEnd: Date
     durationHours: number

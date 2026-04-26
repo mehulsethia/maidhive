@@ -1,9 +1,9 @@
 'use client'
 
 import Link from 'next/link'
-import { useDeferredValue, useEffect, useState, startTransition } from 'react'
+import { useDeferredValue, useEffect, useMemo, useState, startTransition } from 'react'
 import { Bricolage_Grotesque, IBM_Plex_Mono } from 'next/font/google'
-import { Grid3x3, List, Search, MapPin, Briefcase } from 'lucide-react'
+import { Grid3x3, List, MapPin, Briefcase, Car, Package, Clock3 } from 'lucide-react'
 import { cleanersApi } from '@/lib/api'
 import { EmptyState } from '@/components/empty-state'
 import { ListPageSkeleton } from '@/components/page-skeletons'
@@ -16,6 +16,7 @@ import type { CleanerSummary } from '@/types'
 import { toast } from 'sonner'
 
 type ViewMode = 'card' | 'list'
+type AvailabilityFilter = 'any' | 'next_7_days'
 
 type CleanerVM = CleanerSummary & {
   name: string
@@ -25,6 +26,8 @@ type CleanerVM = CleanerSummary & {
   created_at?: string
   unique_key: string
   skills: string[]
+  transport_mode?: 'own_car' | 'bus_walk' | 'requires_pickup'
+  cleaning_supplies?: 'own_supplies' | 'client_supplies'
 }
 
 const displayFont = Bricolage_Grotesque({ subsets: ['latin'], weight: ['400', '500', '700', '800'] })
@@ -41,19 +44,62 @@ function joinedLabel(createdAt?: string) {
   return date.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })
 }
 
+function transportLabel(value?: string) {
+  if (value === 'own_car') return 'Own car'
+  if (value === 'bus_walk') return 'Bus / walk'
+  if (value === 'requires_pickup') return 'Requires pick-up'
+  return 'Transport not set'
+}
+
+function suppliesLabel(value?: string) {
+  if (value === 'own_supplies') return 'Brings supplies'
+  if (value === 'client_supplies') return 'Uses client supplies'
+  return 'Supplies not set'
+}
+
+const SERVICE_FILTER_OPTIONS = [
+  'Regular home cleaning',
+  'One-off cleaning',
+  'Airbnb / short-term rental cleaning',
+  'Laundry / folding clothes',
+  'Kitchen deep clean',
+  'Bathroom deep clean',
+  'Ironing',
+  'Windows',
+  'Deep cleaning',
+  'Move in/out',
+]
+
 export default function ClientCleanersPage() {
   const [loading, setLoading] = useState(true)
   const [searchQuery, setSearchQuery] = useState('')
+  const [city, setCity] = useState('')
   const [minRating, setMinRating] = useState('0')
   const [minRate, setMinRate] = useState('')
   const [maxRate, setMaxRate] = useState('')
+  const [availability, setAvailability] = useState<AvailabilityFilter>('any')
+  const [transport, setTransport] = useState('')
+  const [service, setService] = useState('')
   const [view, setView] = useState<ViewMode>('card')
   const [cleaners, setCleaners] = useState<CleanerVM[]>([])
 
   async function load() {
     setLoading(true)
     try {
-      const res = await cleanersApi.search({})
+      const minRateValue = minRate ? Number(minRate) : undefined
+      const maxRateValue = maxRate ? Number(maxRate) : undefined
+      const minRatingValue = Number(minRating || 0)
+
+      const res = await cleanersApi.search({
+        city: city.trim() || undefined,
+        availability,
+        transport_mode: transport ? (transport as any) : undefined,
+        services_offered: service || undefined,
+        min_rating: minRatingValue > 0 ? minRatingValue : undefined,
+        min_price: minRateValue,
+        max_price: maxRateValue,
+      })
+
       const items = (res.data?.items ?? []) as any[]
       startTransition(() => {
         setCleaners(
@@ -62,10 +108,13 @@ export default function ClientCleanersPage() {
             name: cleaner?.user?.name ?? 'Cleaner',
             city: cleaner?.service_areas?.[0]?.city,
             years_experience: cleaner?.years_experience ?? cleaner?.yearsExperience,
-            profile_image_url: cleaner?.profile_image_url ?? cleaner?.profileImageUrl ?? cleaner?.user?.avatar_url,
-            created_at: cleaner?.created_at ?? cleaner?.user?.created_at,
+            profile_image_url:
+              cleaner?.profile_image_url ?? cleaner?.profileImageUrl ?? cleaner?.user?.avatar_url,
+            created_at: cleaner?.created_at ?? cleaner?.createdAt ?? cleaner?.user?.created_at,
             unique_key: cleaner?.user_id ?? cleaner?.id ?? '',
             skills: cleaner?.skills ?? [],
+            transport_mode: cleaner?.transport_mode ?? cleaner?.transportMode,
+            cleaning_supplies: cleaner?.cleaning_supplies ?? cleaner?.cleaningSupplies,
           })),
         )
         setLoading(false)
@@ -79,30 +128,22 @@ export default function ClientCleanersPage() {
 
   useEffect(() => {
     load()
-  }, [])
+  }, [city, minRating, minRate, maxRate, availability, transport, service])
 
   const deferredCleaners = useDeferredValue(cleaners)
 
-  const minRatingValue = Number(minRating || 0)
-  const minRateValue = minRate ? Number(minRate) : null
-  const maxRateValue = maxRate ? Number(maxRate) : null
-
-  const filtered = deferredCleaners.filter((cleaner) => {
-    const rate = Number(cleaner.hourly_rate ?? 0)
-    const rating = Number(cleaner.average_rating ?? 0)
-    if (rating < minRatingValue) return false
-    if (minRateValue !== null && rate < minRateValue) return false
-    if (maxRateValue !== null && rate > maxRateValue) return false
-
-    if (!searchQuery.trim()) return true
-    const q = searchQuery.toLowerCase()
-    return (
-      cleaner.name.toLowerCase().includes(q) ||
-      (cleaner.bio ?? '').toLowerCase().includes(q) ||
-      (cleaner.city ?? '').toLowerCase().includes(q) ||
-      cleaner.skills.join(' ').toLowerCase().includes(q)
-    )
-  })
+  const filtered = useMemo(() => {
+    const q = searchQuery.trim().toLowerCase()
+    return deferredCleaners.filter((cleaner) => {
+      if (!q) return true
+      return (
+        cleaner.name.toLowerCase().includes(q) ||
+        (cleaner.bio ?? '').toLowerCase().includes(q) ||
+        (cleaner.city ?? '').toLowerCase().includes(q) ||
+        cleaner.skills.join(' ').toLowerCase().includes(q)
+      )
+    })
+  }, [deferredCleaners, searchQuery])
 
   return (
     <>
@@ -116,11 +157,13 @@ export default function ClientCleanersPage() {
               <p className={`${monoFont.className} text-[0.7rem] uppercase tracking-[0.24em] text-white/75`}>
                 MaidHive Talent Directory
               </p>
-              <h1 className={`${displayFont.className} text-2xl font-extrabold tracking-[-0.03em] text-white sm:text-3xl lg:text-4xl`}>
+              <h1
+                className={`${displayFont.className} text-2xl font-extrabold tracking-[-0.03em] text-white sm:text-3xl lg:text-4xl`}
+              >
                 Find Your Cleaner
               </h1>
               <p className="max-w-xl text-sm text-slate-100/90 sm:text-base">
-                Discover vetted professionals, compare rates and ratings, then book with confidence.
+                Discover trusted professionals, compare rates and ratings, then book with confidence.
               </p>
             </div>
 
@@ -132,57 +175,70 @@ export default function ClientCleanersPage() {
                 <p className={`${displayFont.className} mt-1 text-4xl font-bold tracking-[-0.02em] text-white`}>
                   {filtered.length}
                 </p>
-                <p className="mt-1 text-sm text-white/80">Cleaners matching your current query and filters.</p>
+                <p className="mt-1 text-sm text-white/80">Approved cleaner profiles matching your filters.</p>
               </div>
             </div>
           </div>
         </section>
 
         <section className="rounded-[1.5rem] border border-slate-200/80 bg-white/90 p-4 shadow-[0_18px_45px_rgba(11,33,78,0.08)] backdrop-blur-sm sm:p-6">
-          <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-[minmax(0,1fr)_170px_130px_130px_auto]">
-            <Input
-              value={searchQuery}
-              onChange={(event) => setSearchQuery(event.target.value)}
-              placeholder="Search name, bio, skills"
-            />
+          <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
+            <Input value={searchQuery} onChange={(event) => setSearchQuery(event.target.value)} placeholder="Search name, bio, skills" />
+            <Input value={city} onChange={(event) => setCity(event.target.value)} placeholder="City" />
+            <Select value={availability} onChange={(event) => setAvailability(event.target.value as AvailabilityFilter)}>
+              <option value="any">Availability: Any</option>
+              <option value="next_7_days">Availability: Next 7 days</option>
+            </Select>
+            <Select value={transport} onChange={(event) => setTransport(event.target.value)}>
+              <option value="">Transport: Any</option>
+              <option value="own_car">Own car</option>
+              <option value="bus_walk">Bus / walk</option>
+              <option value="requires_pickup">Requires pick-up</option>
+            </Select>
+            <Select value={service} onChange={(event) => setService(event.target.value)}>
+              <option value="">Services: Any</option>
+              {SERVICE_FILTER_OPTIONS.map((option) => (
+                <option key={option} value={option}>
+                  {option}
+                </option>
+              ))}
+            </Select>
             <Select value={minRating} onChange={(event) => setMinRating(event.target.value)}>
-              <option value="0">Minimum rating</option>
+              <option value="0">User rating: Any</option>
               <option value="3">3.0+</option>
               <option value="4">4.0+</option>
               <option value="4.5">4.5+</option>
             </Select>
             <Input type="number" min="0" value={minRate} onChange={(event) => setMinRate(event.target.value)} placeholder="Min €/hr" />
             <Input type="number" min="0" value={maxRate} onChange={(event) => setMaxRate(event.target.value)} placeholder="Max €/hr" />
-            <div className="inline-flex h-10 w-full rounded-full border border-slate-200 p-0.5 sm:w-auto">
-              <button
-                type="button"
-                onClick={() => setView('list')}
-                className={`inline-flex items-center gap-1 rounded-full px-2.5 text-sm font-semibold ${
-                  view === 'list' ? 'bg-[#0d4bc9] text-white' : 'text-slate-600'
-                }`}
-              >
-                <List className="h-4 w-4" /> List
-              </button>
-              <button
-                type="button"
-                onClick={() => setView('card')}
-                className={`inline-flex items-center gap-1 rounded-full px-2.5 text-sm font-semibold ${
-                  view === 'card' ? 'bg-[#0d4bc9] text-white' : 'text-slate-600'
-                }`}
-              >
-                <Grid3x3 className="h-4 w-4" /> Card
-              </button>
-            </div>
+          </div>
+
+          <div className="mt-3 inline-flex h-10 w-full rounded-full border border-slate-200 p-0.5 sm:w-auto">
+            <button
+              type="button"
+              onClick={() => setView('list')}
+              className={`inline-flex items-center gap-1 rounded-full px-2.5 text-sm font-semibold ${
+                view === 'list' ? 'bg-[#0d4bc9] text-white' : 'text-slate-600'
+              }`}
+            >
+              <List className="h-4 w-4" /> List
+            </button>
+            <button
+              type="button"
+              onClick={() => setView('card')}
+              className={`inline-flex items-center gap-1 rounded-full px-2.5 text-sm font-semibold ${
+                view === 'card' ? 'bg-[#0d4bc9] text-white' : 'text-slate-600'
+              }`}
+            >
+              <Grid3x3 className="h-4 w-4" /> Card
+            </button>
           </div>
         </section>
 
         {loading ? (
           <ListPageSkeleton />
         ) : filtered.length === 0 ? (
-          <EmptyState
-            title="No cleaners found"
-            description="Try adjusting your filters or searching in a different city."
-          />
+          <EmptyState title="No cleaners available right now" description="Try adjusting your filters and search criteria." />
         ) : view === 'card' ? (
           <section className="grid gap-4 lg:grid-cols-2">
             {filtered.map((cleaner, index) => (
@@ -203,13 +259,18 @@ export default function ClientCleanersPage() {
                   <div className="min-w-0 flex-1">
                     <div className="flex items-start justify-between gap-2">
                       <div>
-                        <h3 className={`${displayFont.className} truncate text-2xl font-semibold tracking-[-0.02em] text-slate-900`}>
+                        <h3
+                          className={`${displayFont.className} truncate text-2xl font-semibold tracking-[-0.02em] text-slate-900`}
+                        >
                           {cleaner.name}
                         </h3>
                         <p className={`${monoFont.className} mt-0.5 text-[0.68rem] uppercase tracking-[0.14em] text-slate-500`}>
-                          ID {cleanerKey(cleaner)}{joinedLabel(cleaner.created_at) ? ` • Joined ${joinedLabel(cleaner.created_at)}` : ''}
+                          ID {cleanerKey(cleaner)}
+                          {joinedLabel(cleaner.created_at) ? ` • Joined ${joinedLabel(cleaner.created_at)}` : ''}
                         </p>
-                        <div className="mt-1"><StarRating rating={Number(cleaner.average_rating ?? 0)} /></div>
+                        <div className="mt-1">
+                          <StarRating rating={Number(cleaner.average_rating ?? 0)} />
+                        </div>
                       </div>
                       <p className={`${displayFont.className} text-2xl font-bold tracking-[-0.02em] text-slate-900`}>
                         {formatCurrency(Number(cleaner.hourly_rate ?? 0))}
@@ -218,10 +279,26 @@ export default function ClientCleanersPage() {
                     </div>
 
                     <div className="mt-2 flex flex-wrap items-center gap-3 text-sm text-slate-500">
-                      {cleaner.city && <span className="inline-flex items-center gap-1"><MapPin className="h-4 w-4" />{cleaner.city}</span>}
-                      {cleaner.years_experience !== undefined && (
-                        <span className="inline-flex items-center gap-1"><Briefcase className="h-4 w-4" />{cleaner.years_experience} years</span>
+                      {cleaner.city && (
+                        <span className="inline-flex items-center gap-1">
+                          <MapPin className="h-4 w-4" />
+                          {cleaner.city}
+                        </span>
                       )}
+                      {cleaner.years_experience !== undefined && (
+                        <span className="inline-flex items-center gap-1">
+                          <Briefcase className="h-4 w-4" />
+                          {cleaner.years_experience} years
+                        </span>
+                      )}
+                      <span className="inline-flex items-center gap-1">
+                        <Car className="h-4 w-4" />
+                        {transportLabel(cleaner.transport_mode)}
+                      </span>
+                      <span className="inline-flex items-center gap-1">
+                        <Package className="h-4 w-4" />
+                        {suppliesLabel(cleaner.cleaning_supplies)}
+                      </span>
                     </div>
 
                     {cleaner.bio && <p className="mt-2 line-clamp-2 text-sm text-slate-600">{cleaner.bio}</p>}
@@ -235,10 +312,16 @@ export default function ClientCleanersPage() {
                     </div>
 
                     <div className="mt-4 flex items-center justify-end gap-2">
-                      <Link href={`/client/cleaners/${cleaner.id}`} className="inline-flex h-9 items-center rounded-full border border-slate-300 px-3 text-sm font-semibold text-slate-700 hover:bg-slate-50">
+                      <Link
+                        href={`/client/cleaners/${cleaner.id}`}
+                        className="inline-flex h-9 items-center rounded-full border border-slate-300 px-3 text-sm font-semibold text-slate-700 hover:bg-slate-50"
+                      >
                         View Profile
                       </Link>
-                      <Link href={`/client/book/${cleaner.id}`} className="inline-flex h-9 items-center rounded-full bg-[#0d4bc9] px-3 text-sm font-semibold text-white hover:bg-[#0a3ea8]">
+                      <Link
+                        href={`/client/book/${cleaner.id}`}
+                        className="inline-flex h-9 items-center rounded-full bg-[#0d4bc9] px-3 text-sm font-semibold text-white hover:bg-[#0a3ea8]"
+                      >
                         Book Now
                       </Link>
                     </div>
@@ -266,14 +349,22 @@ export default function ClientCleanersPage() {
                       fallback="C"
                     />
                     <div className="min-w-0">
-                      <h3 className={`${displayFont.className} truncate text-xl font-semibold tracking-[-0.02em] text-slate-900`}>
+                      <h3
+                        className={`${displayFont.className} truncate text-xl font-semibold tracking-[-0.02em] text-slate-900`}
+                      >
                         {cleaner.name}
                       </h3>
                       <p className={`${monoFont.className} mt-0.5 text-[0.68rem] uppercase tracking-[0.14em] text-slate-500`}>
-                        ID {cleanerKey(cleaner)}{joinedLabel(cleaner.created_at) ? ` • Joined ${joinedLabel(cleaner.created_at)}` : ''}
+                        ID {cleanerKey(cleaner)}
+                        {joinedLabel(cleaner.created_at) ? ` • Joined ${joinedLabel(cleaner.created_at)}` : ''}
                       </p>
-                      <div className="mt-1"><StarRating rating={Number(cleaner.average_rating ?? 0)} /></div>
-                      <p className="mt-1 line-clamp-1 text-sm text-slate-600">{cleaner.bio || 'Professional cleaner available for bookings.'}</p>
+                      <div className="mt-1">
+                        <StarRating rating={Number(cleaner.average_rating ?? 0)} />
+                      </div>
+                      <div className="mt-1 flex flex-wrap items-center gap-3 text-xs text-slate-500">
+                        <span className="inline-flex items-center gap-1"><Clock3 className="h-3.5 w-3.5" />{transportLabel(cleaner.transport_mode)}</span>
+                        <span className="inline-flex items-center gap-1"><Package className="h-3.5 w-3.5" />{suppliesLabel(cleaner.cleaning_supplies)}</span>
+                      </div>
                     </div>
                   </div>
 
@@ -283,10 +374,16 @@ export default function ClientCleanersPage() {
                       <span className="text-sm font-medium text-slate-500">/hr</span>
                     </p>
                     <div className="flex items-center gap-2">
-                      <Link href={`/client/cleaners/${cleaner.id}`} className="inline-flex h-9 items-center rounded-full border border-slate-300 px-3 text-sm font-semibold text-slate-700 hover:bg-slate-50">
+                      <Link
+                        href={`/client/cleaners/${cleaner.id}`}
+                        className="inline-flex h-9 items-center rounded-full border border-slate-300 px-3 text-sm font-semibold text-slate-700 hover:bg-slate-50"
+                      >
                         View Profile
                       </Link>
-                      <Link href={`/client/book/${cleaner.id}`} className="inline-flex h-9 items-center rounded-full bg-[#0d4bc9] px-3 text-sm font-semibold text-white hover:bg-[#0a3ea8]">
+                      <Link
+                        href={`/client/book/${cleaner.id}`}
+                        className="inline-flex h-9 items-center rounded-full bg-[#0d4bc9] px-3 text-sm font-semibold text-white hover:bg-[#0a3ea8]"
+                      >
                         Book Now
                       </Link>
                     </div>
@@ -308,8 +405,7 @@ export default function ClientCleanersPage() {
         .client-stage__media {
           position: absolute;
           inset: 0;
-          background-image:
-            linear-gradient(105deg, rgba(2, 11, 27, 0.82) 10%, rgba(2, 11, 27, 0.5) 55%, rgba(8, 22, 44, 0.72) 100%),
+          background-image: linear-gradient(105deg, rgba(2, 11, 27, 0.82) 10%, rgba(2, 11, 27, 0.5) 55%, rgba(8, 22, 44, 0.72) 100%),
             radial-gradient(circle at 82% 18%, rgba(56, 220, 255, 0.24), transparent 34%),
             repeating-linear-gradient(135deg, rgba(255, 255, 255, 0.08) 0 2px, rgba(255, 255, 255, 0) 2px 12px);
           background-size: cover;
@@ -321,8 +417,7 @@ export default function ClientCleanersPage() {
         .client-stage__grain {
           position: absolute;
           inset: 0;
-          background-image:
-            linear-gradient(90deg, rgba(255, 255, 255, 0.11) 0%, rgba(255, 255, 255, 0) 45%),
+          background-image: linear-gradient(90deg, rgba(255, 255, 255, 0.11) 0%, rgba(255, 255, 255, 0) 45%),
             radial-gradient(circle at 18% 22%, rgba(56, 220, 255, 0.22), transparent 28%),
             radial-gradient(circle at 82% 12%, rgba(244, 180, 0, 0.2), transparent 22%);
           animation: hero-sweep 11s ease-in-out infinite;

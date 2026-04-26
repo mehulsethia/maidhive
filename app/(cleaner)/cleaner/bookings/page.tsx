@@ -50,6 +50,7 @@ export default function CleanerBookingsPage() {
   const [proposalBooking, setProposalBooking] = useState<BookingRead | null>(null)
   const [proposalDate, setProposalDate] = useState('')
   const [proposalTime, setProposalTime] = useState('')
+  const [, setNowTick] = useState(() => Date.now())
 
   async function refresh() {
     try {
@@ -71,6 +72,11 @@ export default function CleanerBookingsPage() {
 
   useEffect(() => {
     refresh()
+  }, [])
+
+  useEffect(() => {
+    const timer = setInterval(() => setNowTick(Date.now()), 60_000)
+    return () => clearInterval(timer)
   }, [])
 
   async function action(
@@ -153,6 +159,16 @@ export default function CleanerBookingsPage() {
 
   if (loading) return <ListPageSkeleton />
 
+  function pendingExpiryLabel(acceptBy?: string) {
+    if (!acceptBy) return 'This request expires soon.'
+    const ms = new Date(acceptBy).getTime() - Date.now()
+    if (ms <= 0) return 'This request has expired.'
+    const hours = ms / (60 * 60 * 1000)
+    if (hours >= 1) return `This request expires in ${Math.ceil(hours)} hour${Math.ceil(hours) === 1 ? '' : 's'}.`
+    const mins = Math.max(1, Math.ceil(ms / (60 * 1000)))
+    return `This request expires in ${mins} minute${mins === 1 ? '' : 's'}.`
+  }
+
   return (
     <div className="space-y-6">
       {!stripeConnected && (
@@ -231,12 +247,16 @@ export default function CleanerBookingsPage() {
                   <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
                     <div>
                       <p className="text-base font-semibold text-slate-900">{SERVICE_LABELS[b.service_type] ?? b.service_type}</p>
+                      <p className="text-sm text-slate-600">Client: {b.client?.user?.name ?? 'Client'}</p>
                       <p className="text-sm text-slate-500">{formatDate(b.scheduled_start)}</p>
                       <p className="text-sm text-slate-500">{b.address}, {b.city}, {b.postcode}</p>
+                      {b.status === 'pending' && (
+                        <p className="mt-1 text-xs text-slate-500">Approximate map location shown with 50-100m privacy offset until acceptance.</p>
+                      )}
                     </div>
                     <div className="text-left sm:text-right">
                       <BookingStatusBadge status={b.status} />
-                      <p className="mt-2 text-sm font-semibold text-emerald-700">{formatCurrency(b.cleaner_payout)}</p>
+                      <p className="mt-2 text-sm font-semibold text-emerald-700">You will earn {formatCurrency(b.cleaner_payout)}</p>
                     </div>
                   </div>
 
@@ -254,6 +274,14 @@ export default function CleanerBookingsPage() {
 
                     {b.status === 'pending' && (
                       <>
+                        <Button
+                          size="sm"
+                          onClick={() => action(b.id, 'accept')}
+                          disabled={!stripeConnected}
+                          loading={actionLoading === `${b.id}-accept`}
+                        >
+                          Accept
+                        </Button>
                         {eligibility.canProposeAlternative && (
                           <Button
                             size="sm"
@@ -274,14 +302,6 @@ export default function CleanerBookingsPage() {
                           loading={actionLoading === `${b.id}-decline`}
                         >
                           Decline
-                        </Button>
-                        <Button
-                          size="sm"
-                          onClick={() => action(b.id, 'accept')}
-                          disabled={!stripeConnected}
-                          loading={actionLoading === `${b.id}-accept`}
-                        >
-                          Accept
                         </Button>
                       </>
                     )}
@@ -305,6 +325,11 @@ export default function CleanerBookingsPage() {
                   {b.status === 'pending' && !eligibility.canProposeAlternative && !eligibility.canRespondToCounter && eligibility.proposeAlternativeDisabledReason && (
                     <p className="mt-2 rounded-lg border border-slate-200 bg-slate-50 px-2.5 py-1.5 text-xs text-slate-600">
                       {eligibility.proposeAlternativeDisabledReason}
+                    </p>
+                  )}
+                  {b.status === 'pending' && (
+                    <p className="mt-2 rounded-lg border border-amber-200 bg-amber-50 px-2.5 py-1.5 text-xs text-amber-700">
+                      {pendingExpiryLabel(b.accept_by)} This request is valid for 24 hours. If not accepted, it will expire automatically and your card authorisation will be released.
                     </p>
                   )}
                   </div>

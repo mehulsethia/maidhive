@@ -35,6 +35,27 @@ export const POST = requireClient(async (req: NextRequest, _ctx, user) => {
     return err('Cleaner Stripe account is not fully ready to receive payments', 400)
   }
 
+  let stripeCustomerId = client.stripeCustomerId ?? null
+  if (stripeCustomerId) {
+    try {
+      await stripe.customers.retrieve(stripeCustomerId)
+    } catch {
+      stripeCustomerId = null
+    }
+  }
+  if (!stripeCustomerId) {
+    const customer = await stripe.customers.create({
+      email: booking.client.user.email,
+      name: booking.client.user.name ?? undefined,
+      metadata: {
+        app_client_id: client.id,
+        app_user_id: booking.client.userId,
+      },
+    })
+    stripeCustomerId = customer.id
+    await clientRepo.update(client.id, { stripeCustomerId })
+  }
+
   const existing = await paymentRepo.findByBookingId(booking.id)
   if (existing) {
     const pi = await stripe.paymentIntents.retrieve(existing.stripePaymentIntentId)
@@ -61,7 +82,9 @@ export const POST = requireClient(async (req: NextRequest, _ctx, user) => {
   const intent = await stripe.paymentIntents.create({
     amount: amountCents,
     currency: 'eur',
+    customer: stripeCustomerId,
     capture_method: 'manual',
+    setup_future_usage: 'off_session',
     application_fee_amount: feeCents,
     transfer_data: { destination: cleaner.stripeAccountId },
     metadata: {

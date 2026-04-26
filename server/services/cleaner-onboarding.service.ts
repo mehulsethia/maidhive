@@ -17,6 +17,11 @@ function hasValue(v?: string | null) {
   return typeof v === 'string' && v.trim().length > 0
 }
 
+export type CleanerSubmissionValidation = {
+  valid: boolean
+  missingFields: string[]
+}
+
 export function computeCleanerOnboardingProgress(args: {
   cleaner: Cleaner
   hasAvailabilitySlots: boolean
@@ -81,5 +86,40 @@ export function computeCleanerOnboardingProgress(args: {
       step4_stripe_setup: step4StripeSetup,
       step5_training: step5Training,
     },
+  }
+}
+
+export function validateCleanerSubmissionRequirements(args: {
+  cleaner: Cleaner
+  hasAvailabilitySlots: boolean
+}): CleanerSubmissionValidation {
+  const { cleaner, hasAvailabilitySlots } = args
+  const missingFields: string[] = []
+
+  if (!hasValue(cleaner.bio)) missingFields.push('Professional bio')
+  if (!Array.isArray(cleaner.skills) || cleaner.skills.length === 0) missingFields.push('Services offered')
+  if (Number(cleaner.hourlyRate) < 6) missingFields.push('Hourly rate')
+  if (!hasValue(cleaner.cleaningSupplies)) missingFields.push('Supplies preference')
+  if (!hasValue(cleaner.transportMode)) missingFields.push('Transport mode')
+  if (cleaner.transportMode === 'requires_pickup' && !hasValue(cleaner.transportPickupLocation)) {
+    missingFields.push('Pickup location')
+  }
+  if (!hasValue(cleaner.idType)) missingFields.push('ID document type')
+  if (!hasValue(cleaner.idFileName) || !hasValue(cleaner.idFileUrl)) {
+    missingFields.push('Uploaded ID document')
+  }
+  if (cleaner.workEligibilityAnswer !== true || !cleaner.workEligibilityConfirmed) {
+    missingFields.push('Work eligibility confirmation')
+  }
+  if (!cleaner.termsAccepted) missingFields.push('Terms acceptance')
+  if (!hasAvailabilitySlots) missingFields.push('Availability schedule')
+  if (!cleaner.cleaningStandardsAccepted) missingFields.push('Cleaning standards confirmation')
+  if ((cleaner.cleaningQuizScore ?? 0) < 80 || cleaner.cleaningQuizPassedAt === null) {
+    missingFields.push('Quiz pass (80%+)')
+  }
+
+  return {
+    valid: missingFields.length === 0,
+    missingFields,
   }
 }

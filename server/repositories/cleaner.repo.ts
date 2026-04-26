@@ -58,10 +58,31 @@ export const cleanerRepo = {
       include: { user: true, serviceAreas: true },
     }),
 
-  search: (params: { city?: string; page: number; pageSize: number }) => {
+  search: (params: {
+    city?: string
+    availability?: 'any' | 'next_7_days'
+    transportMode?: 'own_car' | 'bus_walk' | 'requires_pickup'
+    servicesOffered?: string[]
+    minRating?: number
+    minPrice?: number
+    maxPrice?: number
+    page: number
+    pageSize: number
+  }) => {
     const where = {
       status: 'approved' as const,
       profileComplete: true,
+      stripeOnboardingComplete: true,
+      ...(params.transportMode ? { transportMode: params.transportMode } : {}),
+      ...(params.availability === 'next_7_days'
+        ? { availabilitySchedules: { some: { isActive: true } } }
+        : {}),
+      ...(params.servicesOffered && params.servicesOffered.length > 0
+        ? { skills: { hasSome: params.servicesOffered } }
+        : {}),
+      ...(params.minRating !== undefined ? { averageRating: { gte: params.minRating } } : {}),
+      ...(params.minPrice !== undefined ? { hourlyRate: { gte: params.minPrice } } : {}),
+      ...(params.maxPrice !== undefined ? { hourlyRate: { lte: params.maxPrice } } : {}),
       ...(params.city
         ? { serviceAreas: { some: { city: { contains: params.city, mode: 'insensitive' as const } } } }
         : {}),
@@ -86,7 +107,16 @@ export const cleanerRepo = {
     }),
 
   listAll: (params: { status?: string; page: number; pageSize: number }) => {
-    const where = params.status ? { status: params.status } : {}
+    const where =
+      !params.status
+        ? {}
+        : params.status === 'pending_approval'
+          ? { status: 'pending' }
+          : params.status === 'live'
+            ? { status: 'approved', stripeOnboardingComplete: true }
+            : params.status === 'approved'
+              ? { status: 'approved', stripeOnboardingComplete: false }
+              : { status: params.status }
     return Promise.all([
       db.cleaner.findMany({
         where,

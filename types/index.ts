@@ -75,6 +75,7 @@ export interface CleanerRead {
   onboarding_skipped_step3?: boolean
   onboarding_skipped_step4?: boolean
   status: 'pending' | 'approved' | 'rejected' | 'suspended'
+  lifecycle_status?: 'pending_approval' | 'approved' | 'live' | 'rejected' | 'suspended'
   rejection_reason?: string
   profile_complete: boolean
   identity_verified: boolean
@@ -93,6 +94,12 @@ export interface CleanerSummary {
   hourly_rate: number
   total_jobs: number
   average_rating?: number
+  years_experience?: number
+  transport_mode?: 'own_car' | 'bus_walk' | 'requires_pickup'
+  cleaning_supplies?: 'own_supplies' | 'client_supplies'
+  on_time_percentage?: number
+  avg_response_minutes?: number
+  created_at?: string
   bio?: string
   skills?: string[]
   profile_image_url?: string
@@ -145,6 +152,8 @@ export interface BookingCreate {
   city: string
   postcode: string
   country?: string
+  apartment_details?: string
+  access_notes: string
   scheduled_start: string  // ISO8601
   duration_hours: number
   special_instructions?: string
@@ -157,12 +166,16 @@ export interface BookingRead {
   status: BookingStatus
   service_type: ServiceType
   address: string
+  apartment_details?: string
+  access_notes?: string
   city: string
   postcode: string
   scheduled_start: string
   scheduled_end: string
   duration_hours: number
   hourly_rate: number
+  subtotal?: number
+  platform_fee_pct?: number
   total_amount: number
   cleaner_payout: number
   platform_fee: number
@@ -211,6 +224,35 @@ export interface PriceBreakdown {
   total_amount: number
 }
 
+export interface ClientAddressRead {
+  id: string
+  label?: string | null
+  address_line1: string
+  city: string
+  postcode: string
+  country: string
+  apartment_details?: string | null
+  access_notes: string
+  latitude?: number | null
+  longitude?: number | null
+  is_default: boolean
+  created_at: string
+  updated_at: string
+}
+
+export interface ClientAddressCreate {
+  label?: string
+  address_line1: string
+  city: string
+  postcode: string
+  country?: string
+  apartment_details?: string
+  access_notes: string
+  latitude?: number
+  longitude?: number
+  is_default?: boolean
+}
+
 // ---------------------------------------------------------------------------
 // Payments
 // ---------------------------------------------------------------------------
@@ -236,8 +278,14 @@ export interface ReviewRead {
   client_id: string
   rating: number
   comment?: string
+  cleaner_reply?: string | null
+  cleaner_reply_at?: string | null
   is_public: boolean
   created_at: string
+  client?: {
+    id: string
+    user?: UserRead
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -277,6 +325,8 @@ export interface AdminStats {
   total_clients: number
   pending_cleaners: number
   approved_cleaners: number
+  live_cleaners?: number
+  rejected_cleaners?: number
   suspended_cleaners: number
   total_bookings: number
   active_bookings: number
@@ -312,13 +362,91 @@ export interface AdminCleaner {
   id_file_url?: string
   profile_image_url?: string
   status: 'pending' | 'approved' | 'rejected' | 'suspended'
+  lifecycle_status?: 'pending_approval' | 'approved' | 'live' | 'rejected' | 'suspended'
   rejection_reason?: string
   profile_complete: boolean
   identity_verified: boolean
+  cleaning_supplies?: 'own_supplies' | 'client_supplies'
+  cleaning_standards_accepted?: boolean
+  quiz_passed?: boolean
   stripe_onboarding_complete: boolean
+  trial_period_flag?: boolean
   total_jobs: number
   average_rating?: number
   created_at: string
+}
+
+export interface AdminOpsQueueItemCleanerApproval {
+  id: string
+  profile_photo?: string | null
+  full_name: string
+  years_experience: number
+  transport_method?: string | null
+  supplies_status?: string | null
+  cleaning_standards_completed: boolean
+  quiz_passed: boolean
+  trial_period_flag: boolean
+  submitted_at: string
+}
+
+export interface AdminOpsQueueItemDispute {
+  id: string
+  booking_id: string
+  status: string
+  reason: string
+  created_at: string
+}
+
+export interface AdminOpsQueueItemBooking {
+  id: string
+  status: string
+  city: string
+  scheduled_start: string
+  cleaner_name: string
+  client_name: string
+}
+
+export interface AdminOpsQueueItemPaymentIssue {
+  id: string
+  booking_id: string
+  payment_status: string
+  failed_at?: string | null
+  client_name: string
+}
+
+export interface AdminOpsQueueItemCancellationNoShow {
+  id: string
+  category: 'cancellation' | 'no_show'
+  booking_id: string
+  status: string
+  reason: string
+  occurred_at: string
+}
+
+export interface AdminOpsQueues {
+  pending_cleaner_approvals: {
+    count: number
+    items: AdminOpsQueueItemCleanerApproval[]
+  }
+  active_disputes: {
+    count: number
+    items: AdminOpsQueueItemDispute[]
+  }
+  upcoming_jobs: {
+    today_count: number
+    tomorrow_count: number
+    today_items: AdminOpsQueueItemBooking[]
+    tomorrow_items: AdminOpsQueueItemBooking[]
+  }
+  payment_issues: {
+    count: number
+    items: AdminOpsQueueItemPaymentIssue[]
+  }
+  cancellations_no_shows: {
+    count: number
+    items: AdminOpsQueueItemCancellationNoShow[]
+  }
+  generated_at: string
 }
 
 export interface AdminDispute {

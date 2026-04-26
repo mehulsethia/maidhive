@@ -1,5 +1,4 @@
 import { db } from '../db'
-import type { Prisma } from '@prisma/client'
 
 const reviewSelect = {
   id: true,
@@ -8,10 +7,12 @@ const reviewSelect = {
   clientId: true,
   rating: true,
   comment: true,
+  cleanerReply: true,
+  cleanerReplyAt: true,
   isPublic: true,
   createdAt: true,
   updatedAt: true,
-} satisfies Prisma.ReviewSelect
+} as any
 
 export const reviewRepo = {
   findByBookingId: (bookingId: string) =>
@@ -42,6 +43,15 @@ export const reviewRepo = {
   }) =>
     db.review.create({ data, select: reviewSelect }),
 
-  update: (id: string, data: Prisma.ReviewUpdateInput) =>
+  update: (id: string, data: any) =>
     db.review.update({ where: { id }, data, select: reviewSelect }),
+
+  findById: (id: string) =>
+    db.review.findUnique({
+      where: { id },
+      select: {
+        ...reviewSelect,
+        cleaner: { select: { id: true, userId: true } },
+      },
+    }),
 }

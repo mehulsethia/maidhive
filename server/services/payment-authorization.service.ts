@@ -35,7 +35,7 @@ export const paymentAuthorizationService = {
     }
 
     if (booking.status === 'pending') {
-      await bookingRepo.update(booking.id, { status: 'pending', confirmedAt: new Date() })
+      await bookingRepo.update(booking.id, { status: 'pending' })
 
       if (!wasAuthorized) {
         await pushInAppNotification({

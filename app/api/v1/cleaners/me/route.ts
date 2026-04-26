@@ -5,6 +5,7 @@ import { availabilityRepo } from '@/server/repositories/availability.repo'
 import { computeCleanerOnboardingProgress } from '@/server/services/cleaner-onboarding.service'
 import { ok, err } from '@/server/response'
 import { updateCleanerSchema } from '@/server/schemas/cleaner.schema'
+import { deriveCleanerLifecycleStatus } from '@/lib/cleaner-status'
 
 export const GET = requireCleaner(async (_req, _ctx, user) => {
   let cleaner = await cleanerRepo.findByUserId(user.id)
@@ -18,7 +19,16 @@ export const GET = requireCleaner(async (_req, _ctx, user) => {
   const hasAvailabilitySlots = schedules.some((s) => s.isActive)
   const onboarding = computeCleanerOnboardingProgress({ cleaner, hasAvailabilitySlots })
 
-  return ok({ cleaner, onboarding })
+  return ok({
+    cleaner: {
+      ...cleaner,
+      lifecycle_status: deriveCleanerLifecycleStatus({
+        status: cleaner.status,
+        stripeOnboardingComplete: cleaner.stripeOnboardingComplete,
+      }),
+    },
+    onboarding,
+  })
 })
 
 export const PATCH = requireCleaner(async (req: NextRequest, _ctx, user) => {
@@ -83,5 +93,14 @@ export const PATCH = requireCleaner(async (req: NextRequest, _ctx, user) => {
     onboardingCompletedAt: onboarding.can_be_listed ? interim.onboardingCompletedAt ?? new Date() : null,
   })
 
-  return ok({ cleaner: updated, onboarding })
+  return ok({
+    cleaner: {
+      ...updated,
+      lifecycle_status: deriveCleanerLifecycleStatus({
+        status: updated.status,
+        stripeOnboardingComplete: updated.stripeOnboardingComplete,
+      }),
+    },
+    onboarding,
+  })
 })

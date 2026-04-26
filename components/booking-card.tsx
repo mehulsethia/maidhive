@@ -51,7 +51,7 @@ export function BookingCard({ booking, viewAs = 'client' }: BookingCardProps) {
             <p className="font-bold text-lg">{formatCurrency(booking.total_amount)}</p>
             {viewAs === 'cleaner' && (
               <p className="text-xs text-muted-foreground">
-                You earn {formatCurrency(booking.cleaner_payout)}
+                You will earn {formatCurrency(booking.cleaner_payout)}
               </p>
             )}
           </div>

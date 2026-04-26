@@ -11,7 +11,7 @@ import { stripe } from '../stripe'
 import { config } from '../config'
 import type { User } from '@prisma/client'
 
-const PLATFORM_FEE_PCT = Number(process.env.PLATFORM_FEE_PCT ?? 10)
+const PLATFORM_FEE_PCT = 10
 const BOOKING_ACCEPT_TTL_MINUTES = Number(process.env.BOOKING_ACCEPT_TTL_MINUTES ?? 1440)
 const BOOKING_PAY_TTL_MINUTES = Number(process.env.BOOKING_PAY_TTL_MINUTES ?? 15)
 const RESCHEDULE_CUTOFF_HOURS = 24
@@ -24,8 +24,8 @@ export const bookingService = {
   previewPrice(hourlyRate: number, durationHours: number, platformFeePct = PLATFORM_FEE_PCT) {
     const subtotal = hourlyRate * durationHours
     const platformFee = (subtotal * platformFeePct) / 100
-    const cleanerPayout = subtotal - platformFee
-    const totalAmount = subtotal
+    const cleanerPayout = subtotal
+    const totalAmount = subtotal + platformFee
     return {
       hourly_rate: hourlyRate,
       duration_hours: durationHours,
@@ -45,6 +45,8 @@ export const bookingService = {
     city: string
     postcode: string
     country: string
+    apartment_details?: string
+    access_notes: string
     scheduled_start: string
     duration_hours: number
   }) {
@@ -53,7 +55,7 @@ export const bookingService = {
 
     const cleaner = await cleanerRepo.findById(data.cleaner_id)
     if (!cleaner) throw new ServiceError('Cleaner not found', 404)
-    if (cleaner.status !== 'approved' || !cleaner.profileComplete) {
+    if (cleaner.status !== 'approved' || !cleaner.profileComplete || !cleaner.stripeOnboardingComplete) {
       throw new ServiceError('Cleaner is not available', 400)
     }
 
@@ -79,6 +81,8 @@ export const bookingService = {
       city: data.city,
       postcode: data.postcode,
       country: data.country,
+      apartmentDetails: data.apartment_details,
+      accessNotes: data.access_notes,
       scheduledStart,
       scheduledEnd,
       durationHours: data.duration_hours,
@@ -162,12 +166,12 @@ export const bookingService = {
         throw new ServiceError(`Cannot accept a booking in status '${booking.status}'`, 400)
       }
       assertWithinRequestWindow(booking.acceptBy)
-      assertPaymentAuthorized(booking.payment?.status, 'accept')
+      const isPaymentAuthorized = ['authorized', 'captured', 'transferred'].includes(String(booking.payment?.status ?? ''))
       const now = new Date()
       const updated = await bookingRepo.update(bookingId, {
-        status: 'confirmed',
+        status: isPaymentAuthorized ? 'confirmed' : 'accepted',
         acceptedAt: now,
-        confirmedAt: now,
+        confirmedAt: isPaymentAuthorized ? now : null,
         payBy: null,
         proposedStart: null,
         proposedEnd: null,
@@ -316,14 +320,14 @@ export const bookingService = {
         assertCleanerStripeReady(cleaner)
       }
 
-      assertPaymentAuthorized(booking.payment?.status, 'accept')
+      const isPaymentAuthorized = ['authorized', 'captured', 'transferred'].includes(String(booking.payment?.status ?? ''))
       const now = new Date()
       const updated = await bookingRepo.update(bookingId, {
-        status: 'confirmed',
+        status: isPaymentAuthorized ? 'confirmed' : 'accepted',
         scheduledStart: booking.proposedStart,
         scheduledEnd: booking.proposedEnd,
         acceptedAt: now,
-        confirmedAt: now,
+        confirmedAt: isPaymentAuthorized ? now : null,
         payBy: null,
         proposedStart: null,
         proposedEnd: null,

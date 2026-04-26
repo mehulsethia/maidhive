@@ -6,6 +6,7 @@ import { availabilityApi, googleCalendarApi } from '@/lib/api'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { cn } from '@/lib/utils'
+import { dateOnlyLabel, endOfUtcDate, startOfUtcDate, todayUtcDateOnly, toUtcDateOnly } from '@/lib/datetime'
 import { toast } from 'sonner'
 
 // ─── Constants ───────────────────────────────────────────────────────────────
@@ -48,25 +49,8 @@ function formatTime12(t: string): string {
   return `${h12}:${mm.toString().padStart(2, '0')} ${suffix}`
 }
 
-function dateInputTodayLocal(): string {
-  const now = new Date()
-  const y = now.getFullYear()
-  const m = String(now.getMonth() + 1).padStart(2, '0')
-  const d = String(now.getDate()).padStart(2, '0')
-  return `${y}-${m}-${d}`
-}
-
-function parseDateInputLocal(dateInput: string): Date {
-  const [year, month, day] = dateInput.split('-').map(Number)
-  return new Date(year, month - 1, day, 0, 0, 0, 0)
-}
-
 function blockedDateLabel(isoDateTime: string): string {
-  return new Date(isoDateTime).toLocaleDateString(undefined, {
-    weekday: 'short',
-    month: 'short',
-    day: 'numeric',
-  })
+  return dateOnlyLabel(toUtcDateOnly(isoDateTime))
 }
 
 /** Generate time options in 30-min intervals (00:00 to 23:30) */
@@ -417,19 +401,17 @@ export function ScheduleEditor({ compact, onSave, onSaveExternal, saveRef }: Sch
       toast.error('Select a date to block.')
       return
     }
-    const date = parseDateInputLocal(blockInput)
-    const todayLocal = parseDateInputLocal(dateInputTodayLocal())
-    if (date < todayLocal) {
+    const selectedDate = blockInput
+    const todayUtc = todayUtcDateOnly()
+    if (selectedDate < todayUtc) {
       toast.error('Cannot block past dates.')
       return
     }
 
     setAddingBlocked(true)
     try {
-      const startOfDay = new Date(date)
-      startOfDay.setHours(0, 0, 0, 0)
-      const endOfDay = new Date(date)
-      endOfDay.setHours(23, 59, 59, 999)
+      const startOfDay = startOfUtcDate(selectedDate)
+      const endOfDay = endOfUtcDate(selectedDate)
 
       const res = await availabilityApi.addBlocked({
         start_datetime: startOfDay.toISOString(),
@@ -656,7 +638,7 @@ export function ScheduleEditor({ compact, onSave, onSaveExternal, saveRef }: Sch
               <Input
                 type="date"
                 value={blockInput}
-                min={dateInputTodayLocal()}
+                min={todayUtcDateOnly()}
                 disabled={addingBlocked}
                 onChange={(e) => setBlockInput(e.target.value)}
                 placeholder="Select days when you are unavailable"
@@ -736,7 +718,7 @@ export function ScheduleEditor({ compact, onSave, onSaveExternal, saveRef }: Sch
             <Input
               type="date"
               value={blockInput}
-              min={dateInputTodayLocal()}
+              min={todayUtcDateOnly()}
               disabled={addingBlocked}
               onChange={(e) => setBlockInput(e.target.value)}
               className="flex-1"

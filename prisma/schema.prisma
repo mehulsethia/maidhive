@@ -103,8 +103,31 @@ model Client {
   user     User      @relation(fields: [userId], references: [id], onDelete: Cascade)
   bookings Booking[] @relation("BookingClient")
   reviews  Review[]
+  addresses ClientAddress[]
 
   @@map("clients")
+  @@schema("public")
+}
+
+model ClientAddress {
+  id               String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  clientId         String    @map("client_id") @db.Uuid
+  label            String?
+  addressLine1     String    @map("address_line1")
+  city             String
+  postcode         String
+  country          String    @default("IE")
+  apartmentDetails String?   @map("apartment_details")
+  accessNotes      String    @map("access_notes")
+  latitude         Decimal?  @db.Decimal(9, 6)
+  longitude        Decimal?  @db.Decimal(9, 6)
+  isDefault        Boolean   @default(false) @map("is_default")
+  createdAt        DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt        DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  client Client @relation(fields: [clientId], references: [id], onDelete: Cascade)
+
+  @@map("client_addresses")
   @@schema("public")
 }
 
@@ -167,6 +190,8 @@ model Booking {
   city                String
   postcode            String
   country             String    @default("IE")
+  apartmentDetails    String?   @map("apartment_details")
+  accessNotes         String    @default("") @map("access_notes")
   scheduledStart      DateTime  @map("scheduled_start") @db.Timestamptz(6)
   scheduledEnd        DateTime  @map("scheduled_end") @db.Timestamptz(6)
   durationHours       Decimal   @map("duration_hours") @db.Decimal(4, 2)
@@ -245,6 +270,8 @@ model Review {
   clientId  String   @map("client_id") @db.Uuid
   rating    Int
   comment   String?
+  cleanerReply   String?   @map("cleaner_reply")
+  cleanerReplyAt DateTime? @map("cleaner_reply_at") @db.Timestamptz(6)
   isPublic  Boolean  @default(true) @map("is_public")
   createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)

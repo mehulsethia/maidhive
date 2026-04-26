@@ -4,6 +4,7 @@ import { bookingRepo } from '@/server/repositories/booking.repo'
 import { clientRepo } from '@/server/repositories/client.repo'
 import { cleanerRepo } from '@/server/repositories/cleaner.repo'
 import { bookingService, ServiceError } from '@/server/services/booking.service'
+import { sanitizeBookingsForRole } from '@/server/services/booking-visibility.service'
 import { ok, err } from '@/server/response'
 import { createBookingSchema, myBookingsQuerySchema } from '@/server/schemas/booking.schema'
 
@@ -26,7 +27,7 @@ export const GET = requireAuth(async (req: NextRequest, _ctx, user) => {
     let cleaner = await cleanerRepo.findByUserId(user.id)
     if (!cleaner) cleaner = await cleanerRepo.create(user.id)
     const [bookings, total] = await bookingRepo.findByCleaner(cleaner.id, { page, pageSize: page_size, status })
-    return ok({ bookings, total, page, page_size })
+    return ok({ bookings: sanitizeBookingsForRole(bookings as any[], 'cleaner'), total, page, page_size })
   }
 
   return err('Forbidden', 403)
