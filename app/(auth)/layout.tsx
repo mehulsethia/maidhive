@@ -1,10 +1,40 @@
 import { LandingHeader } from '@/components/landing-header'
 import { Bricolage_Grotesque, IBM_Plex_Mono } from 'next/font/google'
+import { createServerClient } from '@supabase/ssr'
+import { cookies } from 'next/headers'
+import { redirect } from 'next/navigation'
 
 const displayFont = Bricolage_Grotesque({ subsets: ['latin'], weight: ['400', '500', '700', '800'] })
 const monoFont = IBM_Plex_Mono({ subsets: ['latin'], weight: ['400', '500', '600'] })
 
-export default function AuthLayout({ children }: { children: React.ReactNode }) {
+function getPostLoginPath(user: { user_metadata?: Record<string, unknown> }) {
+  const role = typeof user.user_metadata?.role === 'string' ? user.user_metadata.role : 'client'
+  if (role === 'cleaner') return '/cleaner/dashboard'
+  if (role === 'admin') return '/admin/dashboard'
+  return '/client/dashboard'
+}
+
+export default async function AuthLayout({ children }: { children: React.ReactNode }) {
+  const cookieStore = await cookies()
+  const supabase = createServerClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+    {
+      cookies: {
+        getAll() {
+          return cookieStore.getAll()
+        },
+        setAll() {
+          // Read-only in layout
+        },
+      },
+    },
+  )
+  const { data } = await supabase.auth.getUser()
+  if (data.user) {
+    redirect(getPostLoginPath(data.user))
+  }
+
   return (
     <div className="relative min-h-screen flex flex-col">
       <div

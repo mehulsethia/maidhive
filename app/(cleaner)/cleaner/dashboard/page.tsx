@@ -11,7 +11,7 @@ import { DashboardPageSkeleton } from '@/components/page-skeletons'
 import { EmptyState } from '@/components/empty-state'
 import { formatCurrency, formatDate } from '@/lib/utils'
 import type { BookingRead, BookingStatus, CleanerOnboardingProgress } from '@/types'
-import { cleanerLifecycleLabel, deriveCleanerLifecycleStatus } from '@/lib/cleaner-status'
+import { deriveCleanerLifecycleStatus } from '@/lib/cleaner-status'
 import { toast } from 'sonner'
 
 const REQUEST_STATUSES: BookingStatus[] = ['pending']
@@ -162,11 +162,6 @@ export default function CleanerDashboardPage() {
             View bookings
           </Link>
         </div>
-      </div>
-
-      <div className="rounded-xl border border-slate-200 bg-white px-4 py-2">
-        <p className="text-xs text-slate-500">Cleaner lifecycle status</p>
-        <p className="text-sm font-semibold text-slate-900">{cleanerLifecycleLabel(lifecycleStatus)}</p>
       </div>
 
       {lifecycleStatus === 'rejected' ? (

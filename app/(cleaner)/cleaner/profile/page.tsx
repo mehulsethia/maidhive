@@ -48,6 +48,11 @@ const SERVICE_OPTIONS = [
 const BIO_MAX_CHARS = 1000
 const MIN_HOURLY_RATE = 6
 const MAX_HOURLY_RATE = 20
+const IMAGE_FILE_EXT_REGEX = /\.(png|jpe?g|webp|gif|bmp|svg)(?:[?#].*)?$/i
+
+function isImageDocumentUrl(url: string) {
+  return IMAGE_FILE_EXT_REGEX.test(url)
+}
 
 function CleanerProfilePageContent() {
   const params = useSearchParams()
@@ -227,6 +232,7 @@ function CleanerProfilePageContent() {
     ]
     return labels.filter(([key]) => !onboardingSteps[key]).map(([, label]) => label)
   }, [onboardingSteps])
+  const canEditKyc = lifecycleStatus === 'rejected' || !profileComplete
 
   function toggleSkill(skill: string) {
     setSkills((prev) => (prev.includes(skill) ? prev.filter((s) => s !== skill) : [...prev, skill]))
@@ -308,8 +314,7 @@ function CleanerProfilePageContent() {
         : await paymentsApi.createConnectOnboardLink()
       const url = res.data?.url
       if (!url) throw new Error('Could not generate Stripe link.')
-      const opened = window.open(url, '_blank', 'noopener,noreferrer')
-      if (!opened) throw new Error('Please allow popups to open Stripe.')
+      window.location.assign(url)
     } catch (err: any) {
       toast.error(err.message ?? 'Failed to open Stripe.')
     }
@@ -518,10 +523,15 @@ function CleanerProfilePageContent() {
                   <p className="mt-1 text-xs text-slate-500">
                     Upload your latest KYC file. If your application was rejected for document issues, upload the corrected document here and resubmit.
                   </p>
+                  {!canEditKyc && (
+                    <p className="mt-2 rounded-lg border border-amber-200 bg-amber-50 px-2 py-1 text-xs text-amber-800">
+                      KYC is locked while your application is under review or approved. You can upload again only if your application is rejected.
+                    </p>
+                  )}
                   <div className="mt-3 grid gap-3 md:grid-cols-2">
                     <div>
                       <Label>ID Type</Label>
-                      <Select value={idType} onChange={(e) => setIdType(e.target.value)} className="mt-1">
+                      <Select value={idType} onChange={(e) => setIdType(e.target.value)} className="mt-1" disabled={!canEditKyc}>
                         <option value="">Choose an option...</option>
                         <option value="passport">Passport</option>
                         <option value="national_id">National ID card</option>
@@ -534,7 +544,7 @@ function CleanerProfilePageContent() {
                         type="file"
                         className="mt-1"
                         accept=".pdf,image/*"
-                        disabled={uploadingKyc}
+                        disabled={uploadingKyc || !canEditKyc}
                         onChange={async (e) => {
                           const file = e.target.files?.[0]
                           if (!file) return
@@ -544,16 +554,31 @@ function CleanerProfilePageContent() {
                     </div>
                   </div>
                   {(idFileName || idFileUrl) && (
-                    <p className="mt-2 text-xs text-slate-600">
-                      Current file:{' '}
+                    <div className="mt-2 rounded-lg border border-slate-200 bg-white p-2">
+                      <p className="text-xs font-medium text-slate-700">Current file</p>
                       {idFileUrl ? (
-                        <a href={idFileUrl} target="_blank" rel="noreferrer" className="font-medium text-primary hover:underline">
-                          {idFileName || 'View document'}
-                        </a>
+                        <div className="mt-2 flex items-center gap-3">
+                          {isImageDocumentUrl(idFileUrl) ? (
+                            <a href={idFileUrl} target="_blank" rel="noreferrer" className="block">
+                              <img
+                                src={idFileUrl}
+                                alt={idFileName || 'KYC file'}
+                                className="h-14 w-14 rounded-md border border-slate-200 object-cover"
+                              />
+                            </a>
+                          ) : (
+                            <div className="grid h-14 w-14 place-items-center rounded-md border border-slate-200 bg-slate-50 text-[10px] font-semibold text-slate-500">
+                              FILE
+                            </div>
+                          )}
+                          <a href={idFileUrl} target="_blank" rel="noreferrer" className="text-xs font-medium text-primary hover:underline">
+                            {idFileName || 'Open uploaded document'}
+                          </a>
+                        </div>
                       ) : (
-                        <span className="font-medium">{idFileName}</span>
+                        <p className="mt-1 text-xs text-slate-600">{idFileName}</p>
                       )}
-                    </p>
+                    </div>
                   )}
                 </div>
 

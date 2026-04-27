@@ -52,7 +52,12 @@ function SignupForm() {
     if (data.session) {
       // Session created immediately (email confirmation disabled in Supabase)
       try {
-        await authApi.sync({ name, role, phone })
+        await authApi.sync({
+          name,
+          role,
+          phone,
+          ...(role === 'cleaner' && experience !== '' ? { experience: Number(experience) } : {}),
+        })
       } catch {
         // Non-fatal — the DB trigger already created the row
       }

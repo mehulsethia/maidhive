@@ -77,6 +77,11 @@ const STANDARDS_QUIZ = [
 const BIO_MAX_CHARS = 1000
 const MIN_HOURLY_RATE = 6
 const MAX_HOURLY_RATE = 20
+const IMAGE_FILE_EXT_REGEX = /\.(png|jpe?g|webp|gif|bmp|svg)(?:[?#].*)?$/i
+
+function isImageDocumentUrl(url: string) {
+  return IMAGE_FILE_EXT_REGEX.test(url)
+}
 
 type ValidationIssue = {
   code?: string
@@ -420,8 +425,7 @@ function CleanerOnboardingPageContent() {
         : await paymentsApi.createConnectOnboardLink()
       const url = res.data?.url
       if (!url) throw new Error('Could not open Stripe.')
-      const opened = window.open(url, '_blank', 'noopener,noreferrer')
-      if (!opened) throw new Error('Please allow popups to open Stripe.')
+      window.location.assign(url)
     } catch (err: any) {
       toast.error(err.message ?? 'Failed to open Stripe.')
     }
@@ -627,11 +631,6 @@ function CleanerOnboardingPageContent() {
                 <Label className="text-sm font-medium">Valid ID <span className="text-red-500">*</span></Label>
                 <p className="mt-1 text-xs text-gray-500">Upload a valid government-issued ID (required for approval).</p>
                 <div className="mt-2 space-y-2">
-                  <Input
-                    value={idFileName}
-                    readOnly
-                    placeholder="Upload a file below"
-                  />
                   <input
                     type="file"
                     className="text-xs"
@@ -643,10 +642,32 @@ function CleanerOnboardingPageContent() {
                       await handleKycUpload(file)
                     }}
                   />
-                  {idFileUrl && (
-                    <a href={idFileUrl} target="_blank" rel="noreferrer" className="block text-xs font-medium text-primary hover:underline">
-                      View uploaded KYC document
-                    </a>
+                  {(idFileName || idFileUrl) && (
+                    <div className="rounded-lg border border-slate-200 bg-white p-2">
+                      <p className="text-xs font-medium text-slate-700">Current file</p>
+                      {idFileUrl ? (
+                        <div className="mt-2 flex items-center gap-3">
+                          {isImageDocumentUrl(idFileUrl) ? (
+                            <a href={idFileUrl} target="_blank" rel="noreferrer" className="block">
+                              <img
+                                src={idFileUrl}
+                                alt={idFileName || 'KYC file'}
+                                className="h-14 w-14 rounded-md border border-slate-200 object-cover"
+                              />
+                            </a>
+                          ) : (
+                            <div className="grid h-14 w-14 place-items-center rounded-md border border-slate-200 bg-slate-50 text-[10px] font-semibold text-slate-500">
+                              FILE
+                            </div>
+                          )}
+                          <a href={idFileUrl} target="_blank" rel="noreferrer" className="text-xs font-medium text-primary hover:underline">
+                            {idFileName || 'View uploaded KYC document'}
+                          </a>
+                        </div>
+                      ) : (
+                        <p className="mt-1 text-xs text-slate-600">{idFileName}</p>
+                      )}
+                    </div>
                   )}
                 </div>
               </div>

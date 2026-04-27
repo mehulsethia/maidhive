@@ -130,7 +130,7 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
 // ---------------------------------------------------------------------------
 export const authApi = {
   me: () => request<APIResponse<UserRead>>('/auth/me'),
-  sync: (body: { name: string; phone?: string; role: 'client' | 'cleaner' }) =>
+  sync: (body: { name?: string; phone?: string; role?: 'client' | 'cleaner'; experience?: number }) =>
     request<APIResponse<UserRead>>('/auth/sync', { method: 'POST', body: JSON.stringify(body) }),
 }
 

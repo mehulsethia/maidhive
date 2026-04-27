@@ -44,6 +44,15 @@ export const PATCH = requireCleaner(async (req: NextRequest, _ctx, user) => {
     cleaner = await cleanerRepo.create(user.id)
   }
 
+  const kycMutationRequested =
+    parsed.data.id_type !== undefined ||
+    parsed.data.id_file_name !== undefined ||
+    parsed.data.id_file_url !== undefined
+  const kycLocked = cleaner.profileComplete && cleaner.status !== 'rejected'
+  if (kycMutationRequested && kycLocked) {
+    return err('KYC document cannot be changed after submission unless your application is rejected.', 409)
+  }
+
   const interim = await cleanerRepo.update(cleaner.id, {
     ...(parsed.data.bio !== undefined ? { bio: parsed.data.bio } : {}),
     ...(parsed.data.profile_image_url !== undefined ? { profileImageUrl: parsed.data.profile_image_url } : {}),

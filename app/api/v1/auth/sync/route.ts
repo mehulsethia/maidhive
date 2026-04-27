@@ -13,6 +13,14 @@ export const POST = requireAuth(async (req: NextRequest, _ctx, user) => {
   const parsed = syncUserSchema.safeParse(body)
   const data = parsed.success ? parsed.data : {}
 
+  // Keep user profile fields in sync for newly-created sessions.
+  if (data.name || data.phone) {
+    await userRepo.update(user.id, {
+      ...(data.name ? { name: data.name } : {}),
+      ...(data.phone ? { phone: data.phone } : {}),
+    })
+  }
+
   // Ensure role-specific profile exists
   if (user.role === 'client') {
     const existing = await clientRepo.findByUserId(user.id)
@@ -34,9 +42,10 @@ export const POST = requireAuth(async (req: NextRequest, _ctx, user) => {
       }
     }
   } else if (user.role === 'cleaner') {
-    const existing = await cleanerRepo.findByUserId(user.id)
+    let existing = await cleanerRepo.findByUserId(user.id)
     if (!existing) {
       await cleanerRepo.create(user.id)
+      existing = await cleanerRepo.findByUserId(user.id)
       await pushInAppNotification({
         userId: user.id,
         type: 'account_created',
@@ -51,6 +60,10 @@ export const POST = requireAuth(async (req: NextRequest, _ctx, user) => {
       } catch (emailError) {
         console.error('Failed to send cleaner signup email via Loops:', emailError)
       }
+    }
+
+    if (existing && data.experience !== undefined) {
+      await cleanerRepo.update(existing.id, { yearsExperience: data.experience })
     }
   }
 

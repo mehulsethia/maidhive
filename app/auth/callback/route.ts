@@ -40,15 +40,30 @@ export async function GET(request: NextRequest) {
       const { data: { user } } = await supabase.auth.getUser()
       const role = user?.user_metadata?.role as string | undefined
       const phone = user?.user_metadata?.phone as string | undefined
+      const rawExperience = user?.user_metadata?.experience
+      const experience =
+        typeof rawExperience === 'number'
+          ? Math.max(0, Math.trunc(rawExperience))
+          : typeof rawExperience === 'string' && rawExperience.trim() !== ''
+            ? Math.max(0, Math.trunc(Number(rawExperience)))
+            : null
 
       // Ensure role-specific profile exists (same as authApi.sync)
       if (user) {
         try {
           const dbUser = await db.user.findUnique({ where: { id: user.id } })
           if (dbUser) {
-            // Update phone if provided in metadata
-            if (phone && !dbUser.phone) {
-              await db.user.update({ where: { id: user.id }, data: { phone } })
+            // Keep profile fields synced from signup metadata.
+            if ((phone && phone !== dbUser.phone) || ((user.user_metadata?.name as string | undefined) && (user.user_metadata?.name as string) !== dbUser.name)) {
+              await db.user.update({
+                where: { id: user.id },
+                data: {
+                  ...(phone ? { phone } : {}),
+                  ...(typeof user.user_metadata?.name === 'string' && user.user_metadata.name.trim()
+                    ? { name: user.user_metadata.name.trim() }
+                    : {}),
+                },
+              })
             }
 
             if (dbUser.role === 'client') {
@@ -71,9 +86,9 @@ export async function GET(request: NextRequest) {
                 }
               }
             } else if (dbUser.role === 'cleaner') {
-              const existing = await db.cleaner.findFirst({ where: { userId: user.id } })
+              let existing = await db.cleaner.findFirst({ where: { userId: user.id } })
               if (!existing) {
-                await db.cleaner.create({ data: { userId: user.id, hourlyRate: 15 } })
+                existing = await db.cleaner.create({ data: { userId: user.id, hourlyRate: 15 } })
                 await pushInAppNotification({
                   userId: user.id,
                   type: 'account_created',
@@ -88,6 +103,12 @@ export async function GET(request: NextRequest) {
                 } catch (emailError) {
                   console.error('Failed to send cleaner signup email via Loops:', emailError)
                 }
+              }
+              if (existing && experience !== null && Number.isFinite(experience)) {
+                await db.cleaner.update({
+                  where: { id: existing.id },
+                  data: { yearsExperience: experience },
+                })
               }
             }
           }

@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import { Bricolage_Grotesque, IBM_Plex_Mono } from 'next/font/google'
-import { ArrowLeft, ArrowRight, Check, ChevronLeft, ChevronRight, Clock, Lock, Shield, Star } from 'lucide-react'
+import { ArrowLeft, ArrowRight, Check, ChevronLeft, ChevronRight, Clock, ExternalLink, Lock, Shield, Star, X } from 'lucide-react'
 import { loadStripe } from '@stripe/stripe-js'
 import { Elements, PaymentElement, useStripe, useElements } from '@stripe/react-stripe-js'
 import { cleanersApi, bookingsApi, availabilityApi, clientsApi, paymentsApi } from '@/lib/api'
@@ -35,6 +35,7 @@ const SERVICE_LABELS: Record<string, string> = {
 
 const DURATION_OPTIONS = [1, 1.5, 2, 2.5, 3, 3.5, 4, 4.5, 5, 5.5, 6, 6.5, 7, 7.5, 8]
 const NOTES_MIN_CHARS = 12
+const MAX_JOB_PHOTOS = 5
 
 const JOB_TYPE_OPTIONS = [
   { value: 'regular_clean', label: 'Regular clean', serviceType: 'standard' as const },
@@ -480,6 +481,7 @@ export default function BookingFlowPage() {
   const [notesValidationWarning, setNotesValidationWarning] = useState(false)
   const [jobPhotos, setJobPhotos] = useState<File[]>([])
   const [saveAddressForLater, setSaveAddressForLater] = useState(false)
+  const [jobPhotoPreviewUrls, setJobPhotoPreviewUrls] = useState<string[]>([])
 
   // Step 3: Payment
   const [booking, setBooking] = useState<BookingRead | null>(null)
@@ -560,6 +562,14 @@ export default function BookingFlowPage() {
       .catch(() => { })
   }, [duration, cleanerId])
 
+  useEffect(() => {
+    const nextPreviewUrls = jobPhotos.map((file) => URL.createObjectURL(file))
+    setJobPhotoPreviewUrls(nextPreviewUrls)
+    return () => {
+      nextPreviewUrls.forEach((url) => URL.revokeObjectURL(url))
+    }
+  }, [jobPhotos])
+
   const estimatedCost = useMemo(() => {
     if (!cleaner) return 0
     return cleaner.hourly_rate * duration
@@ -574,6 +584,28 @@ export default function BookingFlowPage() {
     setPostcode(selected.postcode)
     setApartmentDetails(selected.apartment_details ?? '')
     setAccessNotes(selected.access_notes ?? '')
+  }
+
+  function mergeJobPhotos(selectedFiles: File[]) {
+    setJobPhotos((prev) => {
+      const merged = [...prev]
+      for (const file of selectedFiles) {
+        const exists = merged.some(
+          (item) =>
+            item.name === file.name &&
+            item.size === file.size &&
+            item.lastModified === file.lastModified,
+        )
+        if (exists) continue
+        if (merged.length >= MAX_JOB_PHOTOS) break
+        merged.push(file)
+      }
+      return merged
+    })
+  }
+
+  function removeJobPhoto(index: number) {
+    setJobPhotos((prev) => prev.filter((_, i) => i !== index))
   }
 
   async function uploadJobPhotos(files: File[]) {
@@ -648,8 +680,8 @@ export default function BookingFlowPage() {
         toast.error('Please upload at least 2 photos if you want to add photos.')
         return
       }
-      if (jobPhotos.length > 5) {
-        toast.error('You can upload up to 5 photos.')
+      if (jobPhotos.length > MAX_JOB_PHOTOS) {
+        toast.error(`You can upload up to ${MAX_JOB_PHOTOS} photos.`)
         return
       }
       createBookingAndProceed()
@@ -1119,12 +1151,64 @@ export default function BookingFlowPage() {
                       multiple
                       onChange={(event) => {
                         const selectedFiles = Array.from(event.target.files ?? [])
-                        setJobPhotos(selectedFiles.slice(0, 5))
+                        mergeJobPhotos(selectedFiles)
+                        event.currentTarget.value = ''
                       }}
                       className="mt-1"
                     />
                     {jobPhotos.length > 0 && (
-                      <p className="text-xs text-slate-500">{jobPhotos.length} photo(s) selected. Upload between 2 and 5 photos.</p>
+                      <>
+                        <p className="text-xs text-slate-500">{jobPhotos.length} photo(s) selected. Upload between 2 and 5 photos.</p>
+                        <div className="grid gap-2 sm:grid-cols-3 md:grid-cols-4">
+                          {jobPhotos.map((file, idx) => (
+                            <div key={`${file.name}-${file.lastModified}-${idx}`} className="overflow-hidden rounded-lg border border-slate-200 bg-white">
+                              {jobPhotoPreviewUrls[idx] ? (
+                                <a
+                                  href={jobPhotoPreviewUrls[idx]}
+                                  target="_blank"
+                                  rel="noreferrer"
+                                  className="block"
+                                  title={file.name}
+                                >
+                                  <img
+                                    src={jobPhotoPreviewUrls[idx]}
+                                    alt={file.name}
+                                    className="h-20 w-full object-cover"
+                                  />
+                                </a>
+                              ) : (
+                                <div className="h-20 w-full bg-slate-100" />
+                              )}
+                              <div className="flex items-center justify-between gap-2 px-2 py-1.5">
+                                {jobPhotoPreviewUrls[idx] ? (
+                                  <a
+                                    href={jobPhotoPreviewUrls[idx]}
+                                    target="_blank"
+                                    rel="noreferrer"
+                                    className="inline-flex min-w-0 items-center gap-1 text-xs font-medium text-primary hover:underline"
+                                    title={file.name}
+                                  >
+                                    <ExternalLink className="h-3 w-3 shrink-0" />
+                                    <span className="truncate">{file.name}</span>
+                                  </a>
+                                ) : (
+                                  <span className="truncate text-xs text-slate-500" title={file.name}>
+                                    {file.name}
+                                  </span>
+                                )}
+                                <button
+                                  type="button"
+                                  onClick={() => removeJobPhoto(idx)}
+                                  className="rounded p-1 text-slate-500 hover:bg-slate-100 hover:text-slate-700"
+                                  aria-label={`Remove ${file.name}`}
+                                >
+                                  <X className="h-3.5 w-3.5" />
+                                </button>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </>
                     )}
                   </div>
                 </section>

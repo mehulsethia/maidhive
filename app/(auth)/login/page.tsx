@@ -5,7 +5,7 @@ import Link from 'next/link'
 import Image from 'next/image'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { Eye, EyeOff } from 'lucide-react'
-import { cleanersApi } from '@/lib/api'
+import { authApi, cleanersApi } from '@/lib/api'
 import { createClient } from '@/lib/supabase'
 import { toast } from 'sonner'
 
@@ -26,6 +26,29 @@ function LoginForm() {
     if (error) {
       toast.error(error.message)
     } else {
+      const metadata = data.user?.user_metadata as Record<string, unknown> | undefined
+      const metaPhone = typeof metadata?.phone === 'string' ? metadata.phone : undefined
+      const metaExperienceRaw = metadata?.experience
+      const metaExperience =
+        typeof metaExperienceRaw === 'number'
+          ? Math.max(0, Math.trunc(metaExperienceRaw))
+          : typeof metaExperienceRaw === 'string' && metaExperienceRaw.trim() !== ''
+            ? Math.max(0, Math.trunc(Number(metaExperienceRaw)))
+            : undefined
+
+      try {
+        const role = (data.user?.user_metadata?.role as string | undefined)
+        const name = (data.user?.user_metadata?.name as string | undefined)?.trim()
+        await authApi.sync({
+          ...(name ? { name } : {}),
+          ...(role === 'cleaner' || role === 'client' ? { role } : {}),
+          ...(metaPhone ? { phone: metaPhone } : {}),
+          ...(metaExperience !== undefined && Number.isFinite(metaExperience) ? { experience: metaExperience } : {}),
+        })
+      } catch {
+        // Non-fatal.
+      }
+
       const nextParam = params.get('next')
       const safeNext = nextParam && nextParam.startsWith('/') ? nextParam : null
       const role = (data.user?.user_metadata?.role as string | undefined) ?? 'client'

@@ -47,6 +47,15 @@ export const POST = requireCleaner(async (req: NextRequest, _ctx, user) => {
   if (!cleaner) {
     return NextResponse.json({ success: false, message: 'Cleaner profile not found' }, { status: 404 })
   }
+  if (cleaner.profileComplete && cleaner.status !== 'rejected') {
+    return NextResponse.json(
+      {
+        success: false,
+        message: 'KYC document cannot be changed after submission unless your application is rejected.',
+      },
+      { status: 409 },
+    )
+  }
 
   const formData = await req.formData()
   const file = formData.get('file') as File | null
