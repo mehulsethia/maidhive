@@ -18,7 +18,7 @@ import { getAccessToken } from '@/lib/auth-cache'
 import { toApiV1Url } from '@/lib/api-base'
 import { formatCurrency } from '@/lib/utils'
 import type { BookingRead, ReviewRead, CleanerOnboardingProgress } from '@/types'
-import { cleanerLifecycleLabel, deriveCleanerLifecycleStatus } from '@/lib/cleaner-status'
+import { deriveCleanerLifecycleStatus } from '@/lib/cleaner-status'
 import { toast } from 'sonner'
 
 type TabKey = 'overview' | 'availability' | 'reviews' | 'payments'
@@ -50,8 +50,8 @@ const MIN_HOURLY_RATE = 6
 const MAX_HOURLY_RATE = 20
 const IMAGE_FILE_EXT_REGEX = /\.(png|jpe?g|webp|gif|bmp|svg)(?:[?#].*)?$/i
 
-function isImageDocumentUrl(url: string) {
-  return IMAGE_FILE_EXT_REGEX.test(url)
+function isImageDocumentRef(url: string, fileName?: string) {
+  return IMAGE_FILE_EXT_REGEX.test(url) || Boolean(fileName && IMAGE_FILE_EXT_REGEX.test(fileName))
 }
 
 function CleanerProfilePageContent() {
@@ -359,11 +359,6 @@ function CleanerProfilePageContent() {
         </Button>
       </div>
 
-      <div className="rounded-xl border border-slate-200 bg-white px-4 py-2">
-        <p className="text-xs text-slate-500">Cleaner lifecycle status</p>
-        <p className="text-sm font-semibold text-slate-900">{cleanerLifecycleLabel(lifecycleStatus)}</p>
-      </div>
-
       {lifecycleStatus === 'rejected' ? (
         <div className="rounded-2xl border border-red-200 bg-gradient-to-r from-red-50 to-rose-50 px-4 py-3">
           <div className="flex items-center justify-between gap-3">
@@ -558,7 +553,7 @@ function CleanerProfilePageContent() {
                       <p className="text-xs font-medium text-slate-700">Current file</p>
                       {idFileUrl ? (
                         <div className="mt-2 flex items-center gap-3">
-                          {isImageDocumentUrl(idFileUrl) ? (
+                          {isImageDocumentRef(idFileUrl, idFileName) ? (
                             <a href={idFileUrl} target="_blank" rel="noreferrer" className="block">
                               <img
                                 src={idFileUrl}
