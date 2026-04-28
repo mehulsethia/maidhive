@@ -44,11 +44,11 @@ export const PATCH = requireCleaner(async (req: NextRequest, _ctx, user) => {
   const body = await req.json()
   const parsed = updateCleanerSchema.safeParse(body)
   if (!parsed.success) return err(parsed.error.message, 422)
-  if (
-    (parsed.data.quiz_passed === true || parsed.data.cleaning_standards_accepted === true) &&
-    ((parsed.data.cleaning_quiz_score ?? parsed.data.quiz_score ?? 0) < 80)
-  ) {
-    return err('Quiz pass score is required before confirming standards.', 422)
+  if (parsed.data.quiz_passed === true) {
+    const score = parsed.data.quiz_score ?? parsed.data.cleaning_quiz_score
+    if (score === null || score === undefined || score < 80) {
+      return err('Quiz pass score (80%+) is required when marking quiz as passed.', 422)
+    }
   }
 
   let cleaner = await cleanerRepo.findByUserId(user.id)

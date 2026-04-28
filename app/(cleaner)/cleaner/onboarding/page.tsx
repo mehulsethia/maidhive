@@ -2,7 +2,7 @@
 
 import { Suspense, useEffect, useRef, useState } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
-import { ArrowLeft, Check, ChevronRight, CircleCheck } from 'lucide-react'
+import { ArrowLeft, Check, ChevronRight } from 'lucide-react'
 import { cleanersApi, availabilityApi, paymentsApi } from '@/lib/api'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -253,9 +253,6 @@ function StepDots({ current }: { current: number }) {
           </div>
         )
       })}
-      <div className="h-9 w-9 rounded-full bg-gray-100 text-gray-800 border border-gray-200 flex items-center justify-center ml-2">
-        <CircleCheck className="h-4 w-4" />
-      </div>
     </div>
   )
 }
