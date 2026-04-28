@@ -52,10 +52,10 @@ export function computeCleanerOnboardingProgress(args: {
     cleaner.onboardingSkippedStep4 ||
     cleaner.onboardingStep >= 5
   const step5Training =
-    cleaner.cleaningStandardsAccepted &&
-    cleaner.cleaningQuizScore !== null &&
-    cleaner.cleaningQuizScore >= 80 &&
-    cleaner.cleaningQuizPassedAt !== null
+    cleaner.standardsCompleted &&
+    cleaner.quizPassed &&
+    cleaner.quizScore !== null &&
+    cleaner.quizScore >= 80
 
   const completedSteps = [
     step1BasicDetails,
@@ -113,8 +113,8 @@ export function validateCleanerSubmissionRequirements(args: {
   }
   if (!cleaner.termsAccepted) missingFields.push('Terms acceptance')
   if (!hasAvailabilitySlots) missingFields.push('Availability schedule')
-  if (!cleaner.cleaningStandardsAccepted) missingFields.push('Cleaning standards confirmation')
-  if ((cleaner.cleaningQuizScore ?? 0) < 80 || cleaner.cleaningQuizPassedAt === null) {
+  if (!cleaner.standardsCompleted) missingFields.push('Cleaning standards confirmation')
+  if (!cleaner.quizPassed || (cleaner.quizScore ?? 0) < 80) {
     missingFields.push('Quiz pass (80%+)')
   }
 

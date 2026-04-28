@@ -39,6 +39,9 @@ export const cleanerRepo = {
     cleaningStandardsAccepted: boolean
     cleaningQuizScore: number | null
     cleaningQuizPassedAt: Date | null
+    standardsCompleted: boolean
+    quizPassed: boolean
+    quizScore: number | null
     onboardingStep: number
     onboardingSkippedStep3: boolean
     onboardingSkippedStep4: boolean

@@ -32,7 +32,23 @@ export function ensureDbSchema(): Promise<void> {
         ADD COLUMN IF NOT EXISTS work_eligibility_answer BOOLEAN,
         ADD COLUMN IF NOT EXISTS cleaning_standards_accepted BOOLEAN NOT NULL DEFAULT FALSE,
         ADD COLUMN IF NOT EXISTS cleaning_quiz_score INTEGER,
-        ADD COLUMN IF NOT EXISTS cleaning_quiz_passed_at TIMESTAMPTZ
+        ADD COLUMN IF NOT EXISTS cleaning_quiz_passed_at TIMESTAMPTZ,
+        ADD COLUMN IF NOT EXISTS standards_completed BOOLEAN NOT NULL DEFAULT FALSE,
+        ADD COLUMN IF NOT EXISTS quiz_passed BOOLEAN NOT NULL DEFAULT FALSE,
+        ADD COLUMN IF NOT EXISTS quiz_score INTEGER
+      `)
+      await db.$executeRawUnsafe(`
+        UPDATE public.cleaners
+        SET
+          standards_completed = COALESCE(standards_completed, cleaning_standards_accepted, FALSE),
+          quiz_score = COALESCE(quiz_score, cleaning_quiz_score),
+          quiz_passed = COALESCE(
+            quiz_passed,
+            CASE
+              WHEN cleaning_quiz_score IS NOT NULL AND cleaning_quiz_score >= 80 AND cleaning_quiz_passed_at IS NOT NULL THEN TRUE
+              ELSE FALSE
+            END
+          )
       `)
       await db.$executeRawUnsafe(`
         ALTER TABLE public.bookings

@@ -7,6 +7,15 @@ import { ok, err } from '@/server/response'
 import { updateCleanerSchema } from '@/server/schemas/cleaner.schema'
 import { deriveCleanerLifecycleStatus } from '@/lib/cleaner-status'
 
+function withCleanerAliases(cleaner: any) {
+  return {
+    ...cleaner,
+    standards_completed: cleaner.standardsCompleted,
+    quiz_passed: cleaner.quizPassed,
+    quiz_score: cleaner.quizScore,
+  }
+}
+
 export const GET = requireCleaner(async (_req, _ctx, user) => {
   let cleaner = await cleanerRepo.findByUserId(user.id)
 
@@ -21,7 +30,7 @@ export const GET = requireCleaner(async (_req, _ctx, user) => {
 
   return ok({
     cleaner: {
-      ...cleaner,
+      ...withCleanerAliases(cleaner),
       lifecycle_status: deriveCleanerLifecycleStatus({
         status: cleaner.status,
         stripeOnboardingComplete: cleaner.stripeOnboardingComplete,
@@ -35,7 +44,10 @@ export const PATCH = requireCleaner(async (req: NextRequest, _ctx, user) => {
   const body = await req.json()
   const parsed = updateCleanerSchema.safeParse(body)
   if (!parsed.success) return err(parsed.error.message, 422)
-  if (parsed.data.cleaning_standards_accepted && (parsed.data.cleaning_quiz_score ?? 0) < 80) {
+  if (
+    (parsed.data.cleaning_standards_accepted || parsed.data.standards_completed) &&
+    ((parsed.data.cleaning_quiz_score ?? parsed.data.quiz_score ?? 0) < 80)
+  ) {
     return err('Quiz pass score is required before confirming standards.', 422)
   }
 
@@ -80,6 +92,9 @@ export const PATCH = requireCleaner(async (req: NextRequest, _ctx, user) => {
       ? { cleaningStandardsAccepted: parsed.data.cleaning_standards_accepted }
       : {}),
     ...(parsed.data.cleaning_quiz_score !== undefined ? { cleaningQuizScore: parsed.data.cleaning_quiz_score } : {}),
+    ...(parsed.data.standards_completed !== undefined ? { standardsCompleted: parsed.data.standards_completed } : {}),
+    ...(parsed.data.quiz_passed !== undefined ? { quizPassed: parsed.data.quiz_passed } : {}),
+    ...(parsed.data.quiz_score !== undefined ? { quizScore: parsed.data.quiz_score } : {}),
     ...(parsed.data.cleaning_standards_accepted
       ? { cleaningQuizPassedAt: new Date() }
       : {}),
@@ -104,7 +119,7 @@ export const PATCH = requireCleaner(async (req: NextRequest, _ctx, user) => {
 
   return ok({
     cleaner: {
-      ...updated,
+      ...withCleanerAliases(updated),
       lifecycle_status: deriveCleanerLifecycleStatus({
         status: updated.status,
         stripeOnboardingComplete: updated.stripeOnboardingComplete,

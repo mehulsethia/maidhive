@@ -146,11 +146,8 @@ export const GET = requireAdmin(async () => {
         years_experience: cleaner.yearsExperience,
         transport_method: cleaner.transportMode,
         supplies_status: cleaner.cleaningSupplies,
-        cleaning_standards_completed: cleaner.cleaningStandardsAccepted,
-        quiz_passed:
-          cleaner.cleaningQuizScore !== null &&
-          cleaner.cleaningQuizScore >= 80 &&
-          cleaner.cleaningQuizPassedAt !== null,
+        cleaning_standards_completed: cleaner.standardsCompleted,
+        quiz_passed: cleaner.quizPassed,
         trial_period_flag: cleaner.totalJobs < 10,
         submitted_at: cleaner.createdAt.toISOString(),
       })),

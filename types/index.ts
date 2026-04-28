@@ -71,6 +71,9 @@ export interface CleanerRead {
   cleaning_standards_accepted?: boolean
   cleaning_quiz_score?: number | null
   cleaning_quiz_passed_at?: string | null
+  standards_completed?: boolean
+  quiz_passed?: boolean
+  quiz_score?: number | null
   onboarding_step?: number
   onboarding_skipped_step3?: boolean
   onboarding_skipped_step4?: boolean
@@ -375,7 +378,9 @@ export interface AdminCleaner {
   identity_verified: boolean
   cleaning_supplies?: 'own_supplies' | 'client_supplies'
   cleaning_standards_accepted?: boolean
+  standards_completed?: boolean
   quiz_passed?: boolean
+  quiz_score?: number | null
   stripe_onboarding_complete: boolean
   trial_period_flag?: boolean
   total_jobs: number

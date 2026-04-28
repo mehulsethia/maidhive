@@ -2,7 +2,7 @@
 
 import { Suspense, useEffect, useRef, useState } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
-import { ArrowLeft, Check, CircleCheck } from 'lucide-react'
+import { ArrowLeft, Check, ChevronRight, CircleCheck } from 'lucide-react'
 import { cleanersApi, availabilityApi, paymentsApi } from '@/lib/api'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -32,52 +32,163 @@ const SERVICE_OPTIONS = [
   'Move in/out',
 ]
 const QUIZ_PASS_PERCENT = 80
-const STANDARDS_QUIZ = [
+type StandardsCard = {
+  title: string
+  subtitle?: string
+  body: string[]
+}
+
+const STANDARDS_CARDS: StandardsCard[] = [
   {
-    id: 'quality_checklist',
-    question: 'Before marking a job complete, what should you always do?',
-    options: [
-      'Quickly leave once the time is up',
-      'Review against checklist and confirm agreed tasks are finished',
-      'Ask client to finish remaining tasks',
+    title: 'MaidHive Cleaning Standards',
+    subtitle: 'This takes about 1 minute to complete.',
+    body: [
+      'These standards help you:',
+      'Get better reviews',
+      'Avoid problems',
+      'Get more bookings',
+      'Cleaners who follow these standards usually get better ratings and more bookings.',
     ],
-    answer: 1,
   },
   {
-    id: 'client_comms',
-    question: 'If you are running late, what is the correct behaviour?',
-    options: [
-      'Inform the client in chat as early as possible',
-      'Arrive whenever possible without updating anyone',
-      'Cancel at the last minute',
+    title: 'Be on time',
+    body: [
+      'Arrive at the scheduled time',
+      'You can arrive up to 15 minutes early',
+      'You have a 15-minute grace period',
+      'If you are late or don’t arrive, it may affect your account and future bookings.',
     ],
-    answer: 0,
   },
   {
-    id: 'property_care',
-    question: 'How should you handle items in the client home?',
-    options: [
-      'Move anything freely if it helps speed',
-      'Handle items carefully and avoid moving valuables unless necessary',
-      'Ignore care instructions',
+    title: 'Work to a good standard',
+    body: [
+      'Clean properly and carefully',
+      'Focus on the areas the client listed',
+      'Do not rush or leave obvious areas dirty',
+      'If work is incomplete, it may lead to complaints or lower ratings.',
     ],
-    answer: 1,
   },
   {
-    id: 'platform_rules',
-    question: 'Which is required by MaidHive policy?',
-    options: [
-      'Keep all booking agreements and updates inside the platform',
-      'Move communication to private channels only',
-      'Skip status updates in-app',
+    title: 'Follow the job notes',
+    body: [
+      'Always read the job description before starting',
+      'Focus on the tasks listed by the client',
+      'If something is not listed:',
+      'Use your judgment',
+      'Prioritise important areas (kitchen, bathrooms, floors)',
     ],
-    answer: 0,
+  },
+  {
+    title: 'If you run out of time',
+    body: [
+      'Complete the most important tasks first',
+      'Focus on doing a good job rather than rushing',
+      'It is better to:',
+      'Do fewer things properly',
+      'Than everything poorly',
+    ],
+  },
+  {
+    title: 'Communication',
+    body: [
+      'Be polite and respectful',
+      'Keep communication simple and clear',
+      'Use chat only for booking-related communication',
+    ],
+  },
+  {
+    title: 'Cancellations and reliability',
+    body: [
+      'Only accept bookings you can attend',
+      'Avoid last-minute cancellations',
+      'Important:',
+      'Repeated cancellations or no-shows may affect your account',
+      'Serious issues can lead to removal from the platform',
+    ],
+  },
+  {
+    title: 'Respect the client’s home',
+    body: [
+      'Treat the home with care',
+      'Do not use items without permission',
+      'Do not bring extra people',
+      'Serious issues may lead to account suspension.',
+    ],
+  },
+  {
+    title: 'Cleaning supplies',
+    body: [
+      'Be clear if you bring your own supplies',
+      'Or if the client needs to provide them',
+    ],
+  },
+  {
+    title: 'Using the app',
+    body: [
+      'Start and complete jobs in the app when possible',
+      'This helps track your performance',
+      'If you do not have internet access, you can still complete the job and update the status later.',
+    ],
   },
 ]
+
+const STANDARDS_QUIZ = [
+  {
+    id: 'q1',
+    question: 'What should you do if you are running out of time?',
+    options: [
+      'Try to rush everything quickly',
+      'Focus on the most important tasks and do them properly',
+      'Leave early',
+    ],
+    answer: 1, // B
+  },
+  {
+    id: 'q2',
+    question: 'If the client did not list specific tasks, what should you do?',
+    options: [
+      'Do nothing',
+      'Decide yourself and focus on important areas',
+      'Cancel the job',
+    ],
+    answer: 1, // B
+  },
+  {
+    id: 'q3',
+    question: 'When should you arrive for a booking?',
+    options: [
+      'Anytime during the day',
+      'At the scheduled time (up to 15 minutes early or within 15 minutes)',
+      '1 hour late is fine',
+    ],
+    answer: 1, // B
+  },
+  {
+    id: 'q4',
+    question: 'When can you cancel a booking?',
+    options: [
+      'Anytime, it doesn’t matter',
+      'Only if necessary, and avoid last-minute cancellations',
+      'After arriving',
+    ],
+    answer: 1, // B
+  },
+  {
+    id: 'q5',
+    question: 'What happens if you repeatedly cancel or don’t show up?',
+    options: [
+      'Nothing',
+      'It may affect your account or remove you from the platform',
+      'You get more jobs',
+    ],
+    answer: 1, // B
+  },
+] as const
 const BIO_MAX_CHARS = 1000
 const MIN_HOURLY_RATE = 6
 const MAX_HOURLY_RATE = 20
 const IMAGE_FILE_EXT_REGEX = /\.(png|jpe?g|webp|gif|bmp|svg)(?:[?#].*)?$/i
+const STANDARDS_TOTAL_STEPS = 9
 
 function isImageDocumentUrl(url: string) {
   return IMAGE_FILE_EXT_REGEX.test(url)
@@ -181,6 +292,12 @@ function CleanerOnboardingPageContent() {
   const [quizAnswers, setQuizAnswers] = useState<Record<string, number>>({})
   const [quizScore, setQuizScore] = useState<number | null>(null)
   const [quizPassed, setQuizPassed] = useState(false)
+  const [standardsCompleted, setStandardsCompleted] = useState(false)
+  const [step5Mode, setStep5Mode] = useState<'standards' | 'confirmation' | 'quiz' | 'success'>('standards')
+  const [standardsCardIndex, setStandardsCardIndex] = useState(0)
+  const [standardsConfirmChecked, setStandardsConfirmChecked] = useState(false)
+  const [quizQuestionIndex, setQuizQuestionIndex] = useState(0)
+  const [quizFailNotice, setQuizFailNotice] = useState('')
 
   const [stripeConnected, setStripeConnected] = useState(false)
   const scheduleSaveRef = useRef<(() => Promise<void>) | null>(null)
@@ -229,7 +346,20 @@ function CleanerOnboardingPageContent() {
       setTermsAccepted(Boolean(c.terms_accepted ?? c.termsAccepted))
       const existingScore = c.cleaning_quiz_score ?? c.cleaningQuizScore ?? null
       setQuizScore(existingScore)
-      setQuizPassed(Boolean(existingScore !== null && Number(existingScore) >= QUIZ_PASS_PERCENT))
+      const existingPassed = Boolean(c.quiz_passed ?? c.quizPassed ?? (existingScore !== null && Number(existingScore) >= QUIZ_PASS_PERCENT))
+      setQuizPassed(existingPassed)
+      const existingStandardsCompleted = Boolean(c.standards_completed ?? c.standardsCompleted ?? c.cleaning_standards_accepted ?? c.cleaningStandardsAccepted)
+      setStandardsCompleted(existingStandardsCompleted)
+
+      if (onboarding.current_step === 5) {
+        if (existingPassed) {
+          setStep5Mode('success')
+        } else if (existingStandardsCompleted) {
+          setStep5Mode('quiz')
+        } else {
+          setStep5Mode('standards')
+        }
+      }
 
       setStripeConnected(Boolean(stripeRes.data?.connected))
     } catch (err: any) {
@@ -384,20 +514,58 @@ function CleanerOnboardingPageContent() {
     }
   }
 
-  async function finishStep5() {
-    if (saving) return
-    const answeredAll = STANDARDS_QUIZ.every((q) => typeof quizAnswers[q.id] === 'number')
-    if (!answeredAll) {
-      toast.error('Please answer all quiz questions.')
+  function handleStandardsContinue() {
+    if (standardsCardIndex < STANDARDS_CARDS.length - 1) {
+      setStandardsCardIndex((prev) => prev + 1)
       return
     }
+    setStep5Mode('confirmation')
+  }
+
+  async function continueToQuiz() {
+    if (saving || !standardsConfirmChecked) return
+    setSaving(true)
+    try {
+      await cleanersApi.updateMyOnboarding({
+        onboarding_step: 5,
+        onboarding_skipped_step4: false,
+        cleaning_standards_accepted: true,
+        standards_completed: true,
+      })
+      setStandardsCompleted(true)
+      setStep5Mode('quiz')
+      setQuizFailNotice('')
+    } catch (err: any) {
+      toast.error(err.message ?? 'Failed to save standards confirmation.')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  function answerQuizQuestion(optionIndex: number) {
+    const current = STANDARDS_QUIZ[quizQuestionIndex]
+    setQuizAnswers((prev) => ({ ...prev, [current.id]: optionIndex }))
+  }
+
+  async function continueQuiz() {
+    const current = STANDARDS_QUIZ[quizQuestionIndex]
+    if (typeof quizAnswers[current.id] !== 'number') return
+    if (quizQuestionIndex < STANDARDS_QUIZ.length - 1) {
+      setQuizQuestionIndex((prev) => prev + 1)
+      return
+    }
+
     const correct = STANDARDS_QUIZ.reduce((count, q) => (quizAnswers[q.id] === q.answer ? count + 1 : count), 0)
     const score = Math.round((correct / STANDARDS_QUIZ.length) * 100)
-    const passed = score >= QUIZ_PASS_PERCENT
+    const passed = correct >= 4
     setQuizScore(score)
     setQuizPassed(passed)
+
     if (!passed) {
-      toast.error(`Quiz score ${score}%. You need at least ${QUIZ_PASS_PERCENT}% to continue.`)
+      setQuizFailNotice('Please review the standards and try again.')
+      setQuizQuestionIndex(0)
+      setQuizAnswers({})
+      toast.error('Please review the standards and try again.')
       return
     }
 
@@ -406,12 +574,17 @@ function CleanerOnboardingPageContent() {
       await cleanersApi.updateMyOnboarding({
         onboarding_step: 5,
         onboarding_skipped_step4: false,
+        standards_completed: true,
+        quiz_passed: true,
+        quiz_score: score,
         cleaning_standards_accepted: true,
         cleaning_quiz_score: score,
       })
-      router.push('/cleaner/dashboard')
+      setStep5Mode('success')
+      setQuizFailNotice('')
+      toast.success('You’re all set. You can now submit your profile for review.')
     } catch (err: any) {
-      toast.error(err.message ?? 'Failed to complete onboarding.')
+      toast.error(err.message ?? 'Failed to save quiz results.')
     } finally {
       setSaving(false)
     }
@@ -785,51 +958,123 @@ function CleanerOnboardingPageContent() {
           {step === 5 && (
             <div className="space-y-4">
               <div className="rounded-xl border border-slate-200 bg-white p-3">
-                <p className="text-sm font-semibold text-slate-900">MaidHive Cleaning Standards</p>
-                <p className="mt-2 text-sm text-slate-600">
-                  Deliver consistent quality, be punctual, follow in-app communication, respect the client property, and complete all agreed tasks before marking a job complete.
+                <p className="text-xs font-semibold uppercase tracking-[0.08em] text-slate-500">
+                  {step5Mode === 'quiz' || step5Mode === 'success'
+                    ? 'Step 2 of 2: Quiz'
+                    : 'Step 1 of 2: Cleaning Standards'}
                 </p>
-                <ul className="mt-2 list-disc space-y-1 pl-5 text-xs text-slate-600">
-                  <li>Arrive on time and message early if delayed.</li>
-                  <li>Use careful handling for client belongings and valuables.</li>
-                  <li>Follow the agreed checklist and special instructions.</li>
-                  <li>Keep communication and booking changes inside MaidHive.</li>
-                </ul>
               </div>
 
-              <div className="rounded-xl border border-slate-200 bg-white p-3 space-y-3">
-                <p className="text-sm font-semibold text-slate-900">Quick standards quiz (required)</p>
-                {STANDARDS_QUIZ.map((q) => (
-                  <div key={q.id} className="rounded-lg border border-slate-200 p-3">
-                    <p className="text-sm font-medium text-slate-800">{q.question}</p>
-                    <div className="mt-2 space-y-2">
-                      {q.options.map((opt, idx) => (
-                        <label key={`${q.id}-${idx}`} className="flex items-center gap-2 text-sm text-slate-700">
-                          <input
-                            type="radio"
-                            name={q.id}
-                            checked={quizAnswers[q.id] === idx}
-                            onChange={() => setQuizAnswers((prev) => ({ ...prev, [q.id]: idx }))}
-                          />
-                          {opt}
-                        </label>
-                      ))}
-                    </div>
+              {step5Mode === 'standards' && (
+                <div className="rounded-xl border border-slate-200 bg-white p-4 space-y-3">
+                  {standardsCardIndex > 0 && (
+                    <p className="text-xs font-semibold uppercase tracking-[0.08em] text-slate-500">
+                      Step {standardsCardIndex} of {STANDARDS_TOTAL_STEPS}
+                    </p>
+                  )}
+                  <p className="text-lg font-semibold text-slate-900">{STANDARDS_CARDS[standardsCardIndex].title}</p>
+                  {STANDARDS_CARDS[standardsCardIndex].subtitle && (
+                    <p className="text-sm text-slate-600">{STANDARDS_CARDS[standardsCardIndex].subtitle}</p>
+                  )}
+                  <div className="space-y-2 text-sm text-slate-700">
+                    {STANDARDS_CARDS[standardsCardIndex].body.map((line, idx) => (
+                      <p key={`${standardsCardIndex}-${idx}`}>{line}</p>
+                    ))}
                   </div>
-                ))}
-                {quizScore !== null && (
-                  <p className={`text-sm font-medium ${quizPassed ? 'text-emerald-700' : 'text-rose-700'}`}>
-                    Quiz score: {quizScore}% {quizPassed ? '— passed' : `— minimum ${QUIZ_PASS_PERCENT}% required`}
-                  </p>
-                )}
-              </div>
+                  <div className="flex justify-end pt-2">
+                    <Button onClick={handleStandardsContinue} className="gap-1.5">
+                      Continue <ChevronRight className="h-4 w-4" />
+                    </Button>
+                  </div>
+                </div>
+              )}
 
-              <div className="flex items-center justify-between pt-1">
-                <Button variant="outline" onClick={() => setStep(4)}>
-                  <ArrowLeft className="h-4 w-4 mr-1" /> Back
-                </Button>
-                <Button onClick={finishStep5} loading={saving}>Complete onboarding</Button>
-              </div>
+              {step5Mode === 'confirmation' && (
+                <div className="rounded-xl border border-slate-200 bg-white p-4 space-y-3">
+                  <p className="text-lg font-semibold text-slate-900">Confirmation</p>
+                  <p className="text-sm text-slate-700">
+                    I confirm that I have read and understand the MaidHive Cleaning Standards and agree to follow them when accepting bookings.
+                  </p>
+                  <p className="text-sm text-slate-700">MaidHive is a marketplace.</p>
+                  <ul className="list-disc pl-5 text-sm text-slate-700 space-y-1">
+                    <li>You are an independent cleaner</li>
+                    <li>You are responsible for your work and behaviour</li>
+                  </ul>
+                  <p className="text-sm text-slate-700">Failure to follow these standards may affect:</p>
+                  <ul className="list-disc pl-5 text-sm text-slate-700 space-y-1">
+                    <li>Your ratings</li>
+                    <li>Your ability to receive bookings</li>
+                    <li>Your account status</li>
+                  </ul>
+                  <label className="flex items-center gap-2 text-sm font-medium text-slate-800">
+                    <input
+                      type="checkbox"
+                      checked={standardsConfirmChecked}
+                      onChange={(event) => setStandardsConfirmChecked(event.target.checked)}
+                    />
+                    I understand and agree
+                  </label>
+                  <div className="flex justify-end pt-2">
+                    <Button onClick={continueToQuiz} disabled={!standardsConfirmChecked} loading={saving}>
+                      Continue to quiz
+                    </Button>
+                  </div>
+                </div>
+              )}
+
+              {step5Mode === 'quiz' && (
+                <div className="rounded-xl border border-slate-200 bg-white p-4 space-y-3">
+                  {quizFailNotice && (
+                    <p className="rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-sm font-medium text-rose-700">
+                      {quizFailNotice}
+                    </p>
+                  )}
+                  <p className="text-xs font-semibold uppercase tracking-[0.08em] text-slate-500">
+                    Question {quizQuestionIndex + 1} of {STANDARDS_QUIZ.length}
+                  </p>
+                  <p className="text-base font-semibold text-slate-900">{STANDARDS_QUIZ[quizQuestionIndex].question}</p>
+                  <div className="space-y-2">
+                    {STANDARDS_QUIZ[quizQuestionIndex].options.map((opt, idx) => (
+                      <label
+                        key={`${STANDARDS_QUIZ[quizQuestionIndex].id}-${idx}`}
+                        className="flex items-start gap-2 rounded-lg border border-slate-200 p-2 text-sm text-slate-700"
+                      >
+                        <input
+                          type="radio"
+                          name={STANDARDS_QUIZ[quizQuestionIndex].id}
+                          checked={quizAnswers[STANDARDS_QUIZ[quizQuestionIndex].id] === idx}
+                          onChange={() => answerQuizQuestion(idx)}
+                          className="mt-1"
+                        />
+                        <span>{opt}</span>
+                      </label>
+                    ))}
+                  </div>
+                  <div className="flex justify-end pt-2">
+                    <Button
+                      onClick={continueQuiz}
+                      disabled={typeof quizAnswers[STANDARDS_QUIZ[quizQuestionIndex].id] !== 'number'}
+                      loading={saving}
+                    >
+                      {quizQuestionIndex === STANDARDS_QUIZ.length - 1 ? 'Finish quiz' : 'Continue'}
+                    </Button>
+                  </div>
+                </div>
+              )}
+
+              {step5Mode === 'success' && (
+                <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-4 space-y-2">
+                  <p className="text-sm font-semibold text-emerald-900">
+                    You’re all set. You can now submit your profile for review.
+                  </p>
+                  <p className="text-xs text-emerald-800">
+                    Quiz score: {quizScore ?? 0}% {quizPassed ? '— passed' : ''}
+                  </p>
+                  <div className="flex justify-end pt-2">
+                    <Button onClick={() => router.push('/cleaner/dashboard')}>Go to dashboard</Button>
+                  </div>
+                </div>
+              )}
             </div>
           )}
         </CardContent>

@@ -42,10 +42,9 @@ export const GET = requireAdmin(async (req: NextRequest) => {
       profile_complete: cleaner.profileComplete,
       identity_verified: cleaner.identityVerified,
       cleaning_standards_accepted: cleaner.cleaningStandardsAccepted,
-      quiz_passed:
-        cleaner.cleaningQuizScore !== null &&
-        cleaner.cleaningQuizScore >= 80 &&
-        cleaner.cleaningQuizPassedAt !== null,
+      standards_completed: cleaner.standardsCompleted,
+      quiz_passed: cleaner.quizPassed,
+      quiz_score: cleaner.quizScore,
       stripe_onboarding_complete: cleaner.stripeOnboardingComplete,
       trial_period_flag: cleaner.totalJobs < 10,
       total_jobs: cleaner.totalJobs,
