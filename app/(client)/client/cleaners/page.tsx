@@ -176,7 +176,7 @@ export default function ClientCleanersPage() {
               value={searchQuery}
               onChange={(event) => setSearchQuery(event.target.value)}
               placeholder="Search name, bio, skills"
-              className="w-full"
+              className="w-full lg:col-span-2"
             />
             <Input
               value={city}
@@ -198,7 +198,7 @@ export default function ClientCleanersPage() {
               <option value="bus_walk">Bus / walk</option>
               <option value="requires_pickup">Requires pick-up</option>
             </Select>
-            <Select value={service} onChange={(event) => setService(event.target.value)} className="w-full">
+            <Select value={service} onChange={(event) => setService(event.target.value)} className="w-full lg:col-start-1">
               <option value="">Services: Any</option>
               {SERVICE_FILTER_OPTIONS.map((option) => (
                 <option key={option} value={option}>
