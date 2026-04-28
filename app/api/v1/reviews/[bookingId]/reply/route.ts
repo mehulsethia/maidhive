@@ -6,7 +6,7 @@ import { cleanerReviewResponseSchema } from '@/server/schemas/review.schema'
 import { ok, err } from '@/server/response'
 
 export const POST = requireCleaner(async (req: NextRequest, ctx, user) => {
-  const { reviewId } = await ctx.params
+  const { bookingId: reviewId } = await ctx.params
   const cleaner = await cleanerRepo.findByUserId(user.id)
   if (!cleaner) return err('Cleaner profile not found', 404)
 

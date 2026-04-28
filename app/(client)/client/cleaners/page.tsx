@@ -171,34 +171,34 @@ export default function ClientCleanersPage() {
         </section>
 
         <section className="w-full rounded-[1.5rem] border border-slate-200/80 bg-white/90 px-4 py-4 shadow-[0_18px_45px_rgba(11,33,78,0.08)] backdrop-blur-sm sm:px-6 sm:py-6">
-          <div className="grid w-full gap-2 sm:grid-cols-2 lg:grid-cols-12">
+          <div className="grid w-full gap-2 sm:grid-cols-2 lg:grid-cols-5">
             <Input
               value={searchQuery}
               onChange={(event) => setSearchQuery(event.target.value)}
               placeholder="Search name, bio, skills"
-              className="lg:col-span-4"
+              className="w-full"
             />
             <Input
               value={city}
               onChange={(event) => setCity(event.target.value)}
               placeholder="City"
-              className="lg:col-span-2"
+              className="w-full"
             />
             <Select
               value={availability}
               onChange={(event) => setAvailability(event.target.value as AvailabilityFilter)}
-              className="lg:col-span-2"
+              className="w-full"
             >
               <option value="any">Availability: Any</option>
               <option value="next_7_days">Availability: Next 7 days</option>
             </Select>
-            <Select value={transport} onChange={(event) => setTransport(event.target.value)} className="lg:col-span-2">
+            <Select value={transport} onChange={(event) => setTransport(event.target.value)} className="w-full">
               <option value="">Transport: Any</option>
               <option value="own_car">Own car</option>
               <option value="bus_walk">Bus / walk</option>
               <option value="requires_pickup">Requires pick-up</option>
             </Select>
-            <Select value={service} onChange={(event) => setService(event.target.value)} className="lg:col-span-2 lg:col-start-1">
+            <Select value={service} onChange={(event) => setService(event.target.value)} className="w-full">
               <option value="">Services: Any</option>
               {SERVICE_FILTER_OPTIONS.map((option) => (
                 <option key={option} value={option}>
@@ -206,7 +206,7 @@ export default function ClientCleanersPage() {
                 </option>
               ))}
             </Select>
-            <Select value={minRating} onChange={(event) => setMinRating(event.target.value)} className="lg:col-span-2">
+            <Select value={minRating} onChange={(event) => setMinRating(event.target.value)} className="w-full">
               <option value="0">User rating: Any</option>
               <option value="3">3.0+</option>
               <option value="4">4.0+</option>
@@ -218,7 +218,7 @@ export default function ClientCleanersPage() {
               value={minRate}
               onChange={(event) => setMinRate(event.target.value)}
               placeholder="Min €/hr"
-              className="lg:col-span-2"
+              className="w-full"
             />
             <Input
               type="number"
@@ -226,9 +226,9 @@ export default function ClientCleanersPage() {
               value={maxRate}
               onChange={(event) => setMaxRate(event.target.value)}
               placeholder="Max €/hr"
-              className="lg:col-span-2"
+              className="w-full"
             />
-            <div className="inline-flex h-10 w-full rounded-full border border-slate-200 p-0.5 sm:col-span-2 lg:col-span-2">
+            <div className="inline-flex h-10 w-full rounded-full border border-slate-200 p-0.5 sm:col-span-2 lg:col-span-1">
               <button
                 type="button"
                 onClick={() => setView('list')}
