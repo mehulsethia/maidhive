@@ -36,6 +36,7 @@ const SERVICE_LABELS: Record<string, string> = {
 const DURATION_OPTIONS = [1, 1.5, 2, 2.5, 3, 3.5, 4, 4.5, 5, 5.5, 6, 6.5, 7, 7.5, 8]
 const NOTES_MIN_CHARS = 12
 const MAX_JOB_PHOTOS = 5
+const MAX_SPECIAL_INSTRUCTIONS_CHARS = 5000
 
 const JOB_TYPE_OPTIONS = [
   { value: 'regular_clean', label: 'Regular clean', serviceType: 'standard' as const },
@@ -640,9 +641,24 @@ export default function BookingFlowPage() {
       `What needs to be cleaned: ${notes.trim()}`,
     ]
     if (photoUrls.length > 0) {
-      lines.push(`Job photos: ${photoUrls.join(', ')}`)
+      lines.push(`Job photos (${photoUrls.length}): ${photoUrls.join(', ')}`)
     }
-    return lines.join('\n')
+    let payload = lines.join('\n')
+    if (payload.length <= MAX_SPECIAL_INSTRUCTIONS_CHARS) return payload
+
+    // Keep payload within API limits by compacting photo metadata first.
+    if (photoUrls.length > 0) {
+      const compactLines = [
+        ...lines.filter((line) => !line.startsWith('Job photos')),
+        `Job photos uploaded: ${photoUrls.length}.`,
+      ]
+      payload = compactLines.join('\n')
+    }
+
+    if (payload.length > MAX_SPECIAL_INSTRUCTIONS_CHARS) {
+      payload = payload.slice(0, MAX_SPECIAL_INSTRUCTIONS_CHARS)
+    }
+    return payload
   }
 
   // Navigation

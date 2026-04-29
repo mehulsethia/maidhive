@@ -57,13 +57,15 @@ export function AvatarUpload({ currentUrl, fallbackInitial, size = 'lg', onUploa
 
   return (
     <div className="relative inline-block">
-      {displayUrl ? (
-        <img src={displayUrl} alt="Profile" className={`${px} rounded-full object-cover`} />
-      ) : (
-        <div className={`${px} grid place-items-center rounded-full bg-primary ${textSize} font-bold text-white`}>
-          {fallbackInitial.toUpperCase()}
-        </div>
-      )}
+      <div className={`${px} overflow-hidden rounded-full`}>
+        {displayUrl ? (
+          <img src={displayUrl} alt="Profile" className="h-full w-full object-cover" />
+        ) : (
+          <div className={`grid h-full w-full place-items-center bg-primary ${textSize} font-bold text-white`}>
+            {fallbackInitial.toUpperCase()}
+          </div>
+        )}
+      </div>
 
       <button
         type="button"
