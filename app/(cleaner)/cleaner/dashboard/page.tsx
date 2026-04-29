@@ -247,7 +247,9 @@ export default function CleanerDashboardPage() {
           <CardContent className="flex items-center justify-between p-4 !pt-6">
             <div>
               <p className="text-xs uppercase tracking-wide text-slate-500">Total Revenue</p>
-              <p className="mt-1 text-2xl font-bold text-slate-900">{stats.totalRevenue > 0 ? formatCurrency(stats.totalRevenue) : 'No earnings yet'}</p>
+              <p className="mt-1 text-2xl font-bold text-slate-900">
+                {stats.totalRevenue > 0 ? formatCurrency(stats.totalRevenue) : <span className="text-xl">No earnings yet</span>}
+              </p>
             </div>
             <div className="rounded-xl bg-emerald-50 p-2 text-emerald-600"><Euro className="h-5 w-5" /></div>
           </CardContent>
@@ -257,7 +259,9 @@ export default function CleanerDashboardPage() {
           <CardContent className="flex items-center justify-between p-4 !pt-6">
             <div>
               <p className="text-xs uppercase tracking-wide text-slate-500">Jobs Completed</p>
-              <p className="mt-1 text-2xl font-bold text-slate-900">{stats.completed.length > 0 ? stats.completed.length : 'No jobs yet'}</p>
+              <p className="mt-1 text-2xl font-bold text-slate-900">
+                {stats.completed.length > 0 ? stats.completed.length : <span className="text-xl">No jobs yet</span>}
+              </p>
             </div>
             <div className="rounded-xl bg-blue-50 p-2 text-blue-600"><CircleCheck className="h-5 w-5" /></div>
           </CardContent>
@@ -277,7 +281,9 @@ export default function CleanerDashboardPage() {
           <CardContent className="flex items-center justify-between p-4 !pt-6">
             <div>
               <p className="text-xs uppercase tracking-wide text-slate-500">Average Rating</p>
-              <p className="mt-1 text-2xl font-bold text-slate-900">{avgRating ? Number(avgRating).toFixed(1) : 'No rating yet'}</p>
+              <p className="mt-1 text-2xl font-bold text-slate-900">
+                {avgRating ? Number(avgRating).toFixed(1) : <span className="text-xl">No rating yet</span>}
+              </p>
             </div>
             <div className="rounded-xl bg-amber-50 p-2 text-amber-600"><Star className="h-5 w-5" /></div>
           </CardContent>

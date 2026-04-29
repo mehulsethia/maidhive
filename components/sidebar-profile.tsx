@@ -76,8 +76,6 @@ export function SidebarProfile({ profileHref, role }: SidebarProfileProps) {
   }
 
   const roleLabel = role === 'cleaner' ? 'Cleaner' : 'Client'
-  const triggerLabel = user?.name ? `${user.name} - ${roleLabel}` : roleLabel
-
   return (
     <div ref={ref} className="relative mt-auto border-t border-slate-200 pt-2">
       {/* Popover — rises up above trigger */}
@@ -149,7 +147,10 @@ export function SidebarProfile({ profileHref, role }: SidebarProfileProps) {
           {loading ? (
             <span className="block h-4 w-36 animate-pulse rounded bg-slate-200" />
           ) : (
-            <p className="truncate text-sm font-semibold text-slate-900">{triggerLabel}</p>
+            <>
+              <p className="truncate text-sm font-semibold text-slate-900">{user?.name ?? 'User'}</p>
+              <p className="text-[11px] text-slate-500">{roleLabel}</p>
+            </>
           )}
         </div>
         <ChevronUp
