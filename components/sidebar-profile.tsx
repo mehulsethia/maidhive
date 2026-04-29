@@ -20,34 +20,39 @@ interface SidebarProfileProps {
 export function SidebarProfile({ profileHref, role }: SidebarProfileProps) {
   const router = useRouter()
   const [open, setOpen] = useState(false)
+  const [loading, setLoading] = useState(true)
   const [user, setUser] = useState<{ name: string; email: string; avatarUrl: string | null } | null>(null)
   const ref = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
     const supabase = createClient()
-    supabase.auth.getUser().then(({ data }) => {
-      if (data.user) {
-        const meta = data.user.user_metadata ?? {}
-        setUser({
-          name: (meta.name as string) || data.user.email?.split('@')[0] || 'User',
-          email: data.user.email || '',
-          avatarUrl: null,
-        })
-      }
-    })
+    const fetchUser = async () => {
+      try {
+        const [{ data: authData }, profileRes] = await Promise.all([
+          supabase.auth.getUser(),
+          (role === 'cleaner' ? cleanersApi.me() : clientsApi.me()).catch(() => null),
+        ])
 
-    // Fetch avatar from app DB
-    ;(role === 'cleaner' ? cleanersApi.me() : clientsApi.me())
-      .then((res: any) => {
-        const u = role === 'cleaner'
-          ? res.data?.cleaner?.user
-          : res.data?.user
-        const url = u?.avatar_url ?? res.data?.cleaner?.profile_image_url ?? null
-        if (url) {
-          setUser(prev => prev ? { ...prev, avatarUrl: url } : prev)
-        }
-      })
-      .catch(() => {})
+        const authUser = authData.user
+        const profileData = (profileRes?.data ?? null) as any
+        const profileUser = role === 'cleaner'
+          ? profileData?.cleaner?.user
+          : profileData?.user
+        const dbName = String(profileUser?.name ?? '').trim()
+        const metaName = String(authUser?.user_metadata?.name ?? '').trim()
+        const fallbackName = authUser?.email?.split('@')[0] || 'User'
+
+        setUser({
+          name: dbName || metaName || fallbackName,
+          email: profileUser?.email ?? authUser?.email ?? '',
+          avatarUrl: profileUser?.avatar_url ?? profileData?.cleaner?.profile_image_url ?? null,
+        })
+      } finally {
+        setLoading(false)
+      }
+    }
+
+    fetchUser()
   }, [role])
 
   // Close on outside click
@@ -71,6 +76,7 @@ export function SidebarProfile({ profileHref, role }: SidebarProfileProps) {
   }
 
   const roleLabel = role === 'cleaner' ? 'Cleaner' : 'Client'
+  const triggerLabel = user?.name ? `${user.name} - ${roleLabel}` : roleLabel
 
   return (
     <div ref={ref} className="relative mt-auto border-t border-slate-200 pt-2">
@@ -140,8 +146,11 @@ export function SidebarProfile({ profileHref, role }: SidebarProfileProps) {
           textClassName="text-xs font-bold"
         />
         <div className="min-w-0 text-left">
-          <p className="truncate text-sm font-semibold text-slate-900">{user?.name ?? 'Loading...'}</p>
-          <p className="text-[11px] text-slate-500">{roleLabel}</p>
+          {loading ? (
+            <span className="block h-4 w-36 animate-pulse rounded bg-slate-200" />
+          ) : (
+            <p className="truncate text-sm font-semibold text-slate-900">{triggerLabel}</p>
+          )}
         </div>
         <ChevronUp
           className={cn(

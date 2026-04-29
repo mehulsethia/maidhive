@@ -401,7 +401,7 @@ function CleanerProfilePageContent() {
         <div className="rounded-2xl border border-blue-200 bg-gradient-to-r from-blue-50 to-indigo-50 px-4 py-3">
           <div className="flex items-center justify-between gap-3">
             <div>
-              <p className="text-sm font-semibold text-blue-900">Your profile is ready!</p>
+              <p className="text-sm font-semibold text-blue-900">Your profile is complete.</p>
               <p className="text-xs text-blue-700">Submit your profile for admin review to start receiving bookings.</p>
             </div>
             <Button size="sm" onClick={submitForApproval} loading={submitting} className="shrink-0">
@@ -414,13 +414,13 @@ function CleanerProfilePageContent() {
           <div className="flex items-center gap-2">
             <div>
               <p className="text-sm font-semibold text-amber-900">Profile submitted — awaiting admin approval.</p>
-              <p className="text-xs text-amber-700">You'll be notified once your profile is reviewed.</p>
+              <p className="text-xs text-amber-700">You'll be notified once your profile is reviewed. Once approved, you'll start receiving booking requests.</p>
             </div>
           </div>
         </div>
       ) : lifecycleStatus === 'approved' && !stripe.connected ? (
         <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3">
-          <p className="text-sm font-semibold text-amber-900">Approved — connect Stripe to go live. You must connect Stripe to receive payouts and accept bookings.</p>
+          <p className="text-sm font-semibold text-amber-900">Approved — connect Stripe to go live. You must connect Stripe to accept bookings and receive payouts.</p>
         </div>
       ) : lifecycleStatus === 'live' ? (
         <div className="rounded-2xl border border-emerald-200 bg-gradient-to-r from-emerald-50 to-green-50 px-4 py-3">
@@ -520,7 +520,7 @@ function CleanerProfilePageContent() {
                   </p>
                   {!canEditKyc && (
                     <p className="mt-2 rounded-lg border border-amber-200 bg-amber-50 px-2 py-1 text-xs text-amber-800">
-                      KYC is locked while your application is under review or approved. You can upload again only if your application is rejected.
+                      KYC is locked while your application is under review or approved. You can update your document if your application is rejected.
                     </p>
                   )}
                   <div className="mt-3 grid gap-3 md:grid-cols-2">
@@ -680,7 +680,7 @@ function CleanerProfilePageContent() {
                     <div>
                       <p className="text-2xl font-semibold leading-none text-[#635BFF]">stripe</p>
                       <p className="mt-2 text-sm text-slate-500">Manage earnings and payouts securely with Stripe Connect.</p>
-                      <p className="mt-1 text-sm font-medium text-amber-700">You must connect Stripe to receive payouts.</p>
+                      <p className="mt-1 text-sm font-medium text-amber-700">You must connect Stripe to accept bookings and receive payouts.</p>
                     </div>
                     <Button onClick={connectStripe} variant="outline">{stripe.connected ? 'Manage Stripe' : 'Connect Stripe'}</Button>
                   </div>
@@ -715,7 +715,7 @@ function CleanerProfilePageContent() {
 
                 {!stripe.connected && (
                   <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800">
-                    Connect Stripe to receive payouts for completed jobs.
+                    Connect Stripe to accept bookings and receive payouts.
                   </div>
                 )}
 

@@ -206,7 +206,7 @@ export default function CleanerDashboardPage() {
         <div className="rounded-2xl border border-blue-200 bg-gradient-to-r from-blue-50 to-indigo-50 px-4 py-3">
           <div className="flex items-center justify-between gap-3">
             <div>
-              <p className="text-sm font-semibold text-blue-900">Your profile is ready!</p>
+              <p className="text-sm font-semibold text-blue-900">Your profile is complete.</p>
               <p className="text-xs text-blue-700">Submit your profile for admin review to start receiving bookings.</p>
             </div>
             <Button
@@ -225,13 +225,13 @@ export default function CleanerDashboardPage() {
             <Clock3 className="h-5 w-5 text-amber-600 shrink-0" />
             <div>
               <p className="text-sm font-semibold text-amber-900">Profile submitted — awaiting admin approval.</p>
-              <p className="text-xs text-amber-700">You'll be notified once your profile is reviewed.</p>
+              <p className="text-xs text-amber-700">You'll be notified once your profile is reviewed. Once approved, you'll start receiving booking requests.</p>
             </div>
           </div>
         </div>
       ) : lifecycleStatus === 'approved' && !stripeConnected ? (
         <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3">
-          <p className="text-sm font-semibold text-amber-900">Approved — connect Stripe to go live. You must connect Stripe to receive payouts and accept bookings.</p>
+          <p className="text-sm font-semibold text-amber-900">Approved — connect Stripe to go live. You must connect Stripe to accept bookings and receive payouts.</p>
         </div>
       ) : lifecycleStatus === 'live' ? (
         <div className="rounded-2xl border border-emerald-200 bg-gradient-to-r from-emerald-50 to-green-50 px-4 py-3">
@@ -247,7 +247,7 @@ export default function CleanerDashboardPage() {
           <CardContent className="flex items-center justify-between p-4 !pt-6">
             <div>
               <p className="text-xs uppercase tracking-wide text-slate-500">Total Revenue</p>
-              <p className="mt-1 text-2xl font-bold text-slate-900">{formatCurrency(stats.totalRevenue)}</p>
+              <p className="mt-1 text-2xl font-bold text-slate-900">{stats.totalRevenue > 0 ? formatCurrency(stats.totalRevenue) : 'No earnings yet'}</p>
             </div>
             <div className="rounded-xl bg-emerald-50 p-2 text-emerald-600"><Euro className="h-5 w-5" /></div>
           </CardContent>
@@ -257,7 +257,7 @@ export default function CleanerDashboardPage() {
           <CardContent className="flex items-center justify-between p-4 !pt-6">
             <div>
               <p className="text-xs uppercase tracking-wide text-slate-500">Jobs Completed</p>
-              <p className="mt-1 text-2xl font-bold text-slate-900">{stats.completed.length}</p>
+              <p className="mt-1 text-2xl font-bold text-slate-900">{stats.completed.length > 0 ? stats.completed.length : 'No jobs yet'}</p>
             </div>
             <div className="rounded-xl bg-blue-50 p-2 text-blue-600"><CircleCheck className="h-5 w-5" /></div>
           </CardContent>
@@ -277,7 +277,7 @@ export default function CleanerDashboardPage() {
           <CardContent className="flex items-center justify-between p-4 !pt-6">
             <div>
               <p className="text-xs uppercase tracking-wide text-slate-500">Average Rating</p>
-              <p className="mt-1 text-2xl font-bold text-slate-900">{avgRating ? Number(avgRating).toFixed(1) : '—'}</p>
+              <p className="mt-1 text-2xl font-bold text-slate-900">{avgRating ? Number(avgRating).toFixed(1) : 'No rating yet'}</p>
             </div>
             <div className="rounded-xl bg-amber-50 p-2 text-amber-600"><Star className="h-5 w-5" /></div>
           </CardContent>
@@ -315,7 +315,11 @@ export default function CleanerDashboardPage() {
                   )}
                   <div className="mt-3 flex items-center justify-between gap-3">
                     <p className="text-sm font-semibold text-emerald-700">{formatCurrency(b.cleaner_payout)}</p>
-                    <div className="flex gap-2">
+                    <div className="flex flex-col items-end gap-1">
+                      {!stripeConnected && (
+                        <p className="text-xs font-medium text-amber-700">Connect Stripe to accept bookings and receive payouts.</p>
+                      )}
+                      <div className="flex gap-2">
                       <Button
                         size="sm"
                         variant="outline"
@@ -331,7 +335,8 @@ export default function CleanerDashboardPage() {
                           loading={actionLoading === `${b.id}-accept`}
                         >
                           Accept
-                      </Button>
+                        </Button>
+                      </div>
                     </div>
                   </div>
                 </div>

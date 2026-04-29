@@ -893,7 +893,7 @@ function assertCompletionWindow(scheduledEnd: Date) {
 
 function assertCleanerStripeReady(cleaner: Awaited<ReturnType<typeof cleanerRepo.findByUserId>> | null) {
   if (!cleaner?.stripeOnboardingComplete) {
-    throw new ServiceError('You must connect Stripe to receive payouts', 403)
+    throw new ServiceError('You must connect Stripe to accept bookings and receive payouts', 403)
   }
 }
 

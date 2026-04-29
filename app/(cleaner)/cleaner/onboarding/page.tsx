@@ -926,7 +926,7 @@ function CleanerOnboardingPageContent() {
                 <div>
                   <p className="text-2xl font-semibold text-[#635BFF] leading-none">stripe</p>
                   <p className="text-sm text-gray-500 mt-2">Manage your earnings and payouts seamlessly.</p>
-                  <p className="text-sm font-medium text-amber-700 mt-1">You must connect Stripe to receive payouts.</p>
+                  <p className="text-sm font-medium text-amber-700 mt-1">You must connect Stripe to accept bookings and receive payouts.</p>
                   <a href="https://stripe.com/connect" target="_blank" rel="noreferrer" className="text-sm font-semibold text-primary hover:underline">Click here to learn more.</a>
                 </div>
                 <Button onClick={connectStripe} variant="outline">{stripeConnected ? 'Manage Stripe' : 'Connect with Stripe'}</Button>

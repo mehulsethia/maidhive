@@ -326,7 +326,7 @@ export default function CleanerBookingDetailPage() {
       <div className="flex flex-col gap-2">
         {!stripeConnected && (
           <p className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">
-            You must connect Stripe to receive payouts.
+            Connect Stripe to accept bookings and receive payouts.
           </p>
         )}
         {booking.status === 'pending' && hasProposal && (
