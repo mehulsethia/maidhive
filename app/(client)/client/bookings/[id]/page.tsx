@@ -6,6 +6,7 @@ import { Bricolage_Grotesque, IBM_Plex_Mono } from 'next/font/google'
 import { ArrowLeft, Calendar, Clock, MapPin } from 'lucide-react'
 import { authApi, availabilityApi, bookingsApi, paymentsApi, reviewsApi } from '@/lib/api'
 import { BookingStatusBadge } from '@/components/booking-status-badge'
+import { BookingInstructions } from '@/components/booking-instructions'
 import { PriceBreakdownCard } from '@/components/price-breakdown-card'
 import { Chat } from '@/components/chat'
 import { DetailPageSkeleton } from '@/components/page-skeletons'
@@ -225,7 +226,7 @@ export default function ClientBookingDetailPage() {
                     <Separator />
                     <div>
                       <p className="mb-1 text-xs font-medium uppercase tracking-wide text-muted-foreground">Special instructions</p>
-                      <p className="text-sm">{booking.special_instructions}</p>
+                      <BookingInstructions value={booking.special_instructions} />
                     </div>
                   </>
                 )}

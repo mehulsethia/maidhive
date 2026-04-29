@@ -83,6 +83,7 @@ export const POST = requireClient(async (req: NextRequest, _ctx, user) => {
     amount: amountCents,
     currency: 'eur',
     customer: stripeCustomerId,
+    payment_method_types: ['card', 'link'],
     capture_method: 'manual',
     setup_future_usage: 'off_session',
     application_fee_amount: feeCents,

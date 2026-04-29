@@ -5,6 +5,7 @@ import { useParams, useRouter } from 'next/navigation'
 import { Calendar, Clock, MapPin, ArrowLeft } from 'lucide-react'
 import { authApi, availabilityApi, bookingsApi, cleanersApi, disputesApi } from '@/lib/api'
 import { BookingStatusBadge } from '@/components/booking-status-badge'
+import { BookingInstructions } from '@/components/booking-instructions'
 import { Chat } from '@/components/chat'
 import { DetailPageSkeleton } from '@/components/page-skeletons'
 import { Button } from '@/components/ui/button'
@@ -300,7 +301,7 @@ export default function CleanerBookingDetailPage() {
             <>
               <Separator />
               <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Special instructions</p>
-              <p className="text-sm">{booking.special_instructions}</p>
+              <BookingInstructions value={booking.special_instructions} />
             </>
           )}
         </CardContent>

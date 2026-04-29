@@ -5,6 +5,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { CalendarCheck2, ClipboardList, Clock3, Search } from 'lucide-react'
 import { availabilityApi, bookingsApi, cleanersApi } from '@/lib/api'
 import { BookingStatusBadge } from '@/components/booking-status-badge'
+import { BookingInstructions } from '@/components/booking-instructions'
 import { EmptyState } from '@/components/empty-state'
 import { ListPageSkeleton } from '@/components/page-skeletons'
 import { Button } from '@/components/ui/button'
@@ -297,7 +298,7 @@ export default function CleanerBookingsPage() {
                   </div>
 
                   {b.special_instructions && (
-                    <p className="mt-3 rounded-lg bg-slate-50 px-3 py-2 text-xs text-slate-600">{b.special_instructions}</p>
+                    <BookingInstructions value={b.special_instructions} compact />
                   )}
 
                   <div className="mt-4 flex flex-wrap items-center gap-2">
