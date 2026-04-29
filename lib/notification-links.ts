@@ -38,7 +38,7 @@ export function getNotificationHref(role: UserRole, notification: NotificationRe
     case 'cleaner_application_rejected':
       return role === 'admin' ? '/admin/cleaners' : '/cleaner/profile'
     case 'account_created':
-      return role === 'admin' ? '/admin/users' : role === 'cleaner' ? '/cleaner/profile' : '/client/profile'
+      return role === 'admin' ? '/admin/users' : role === 'cleaner' ? '/cleaner/profile' : '/client/cleaners'
     default:
       if (role === 'admin') return '/admin/dashboard'
       if (role === 'cleaner') return '/cleaner/dashboard'

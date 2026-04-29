@@ -10,7 +10,6 @@ import {
   CheckCircle,
   Clock,
   MapPin,
-  Phone,
   Star,
   TrendingUp,
 } from 'lucide-react'
@@ -113,7 +112,9 @@ export default function CleanerProfilePage() {
     if (review.rating >= 1 && review.rating <= 5) ratingDistribution[review.rating - 1]++
   })
 
-  const completionRate = !cleaner || cleaner.total_jobs === 0 ? 0 : 98
+  const completionRate = typeof (cleaner as any)?.on_time_percentage === 'number' && (cleaner as any).on_time_percentage > 0
+    ? (cleaner as any).on_time_percentage
+    : null
 
   if (loading) return <DetailPageSkeleton />
   if (!cleaner) return <div className="py-16 text-center text-muted-foreground">Cleaner not found.</div>
@@ -133,7 +134,7 @@ export default function CleanerProfilePage() {
   function suppliesText(value?: string) {
     if (value === 'own_supplies') return 'Brings own supplies'
     if (value === 'client_supplies') return 'Uses client supplies'
-    return 'Supplies not specified'
+    return null
   }
 
   function responseTimeText(minutes?: number) {
@@ -199,8 +200,10 @@ export default function CleanerProfilePage() {
 
         <section className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
           <MetricCard title="Jobs Completed" value={cleaner.total_jobs} icon={<CheckCircle className="h-6 w-6 text-[#0d4bc9]" />} displayFont={displayFont.className} />
-          <MetricCard title="Average Rating" value={avgRating > 0 ? `${avgRating.toFixed(1)}/5` : '—'} icon={<Star className="h-6 w-6 text-amber-400" />} displayFont={displayFont.className} />
-          <MetricCard title="Completion Rate" value={`${completionRate}%`} icon={<TrendingUp className="h-6 w-6 text-emerald-500" />} displayFont={displayFont.className} />
+          <MetricCard title="Average Rating" value={avgRating > 0 ? `${avgRating.toFixed(1)}/5` : 'No reviews yet'} icon={<Star className="h-6 w-6 text-amber-400" />} displayFont={displayFont.className} />
+          {completionRate !== null && (
+            <MetricCard title="On-time Rate" value={`${completionRate}%`} icon={<TrendingUp className="h-6 w-6 text-emerald-500" />} displayFont={displayFont.className} />
+          )}
         </section>
 
         <section className="rounded-[1.5rem] border border-slate-200/80 bg-white/90 p-5 shadow-[0_18px_45px_rgba(11,33,78,0.08)] backdrop-blur-sm sm:p-6">
@@ -265,10 +268,7 @@ export default function CleanerProfilePage() {
 
               <Card className="h-fit border-slate-200">
                 <CardContent className="space-y-4 px-5 pb-5 pt-6 sm:px-6 sm:pb-6 sm:pt-6">
-                  <h3 className="font-semibold text-slate-900">Contact Information</h3>
-                  {cleaner.user?.phone && (
-                    <InfoLine icon={<Phone className="h-4 w-4 text-slate-400" />} title="Phone Number" value={cleaner.user.phone} />
-                  )}
+                  <h3 className="font-semibold text-slate-900">Cleaner Details</h3>
                   {cleaner.transport_mode && (
                     <InfoLine
                       icon={<Clock className="h-4 w-4 text-slate-400" />}
@@ -326,21 +326,27 @@ export default function CleanerProfilePage() {
                     title="Completed Jobs"
                     value={`${cleaner.total_jobs}`}
                   />
-                  <InfoLine
-                    icon={<TrendingUp className="h-4 w-4 text-slate-400" />}
-                    title="On-time Percentage"
-                    value={`${(cleaner as any).on_time_percentage ?? 0}%`}
-                  />
-                  <InfoLine
-                    icon={<Clock className="h-4 w-4 text-slate-400" />}
-                    title="Average Response Time"
-                    value={responseTimeText((cleaner as any).avg_response_minutes)}
-                  />
-                  <InfoLine
-                    icon={<Clock className="h-4 w-4 text-slate-400" />}
-                    title="Supplies"
-                    value={suppliesText((cleaner as any).cleaning_supplies)}
-                  />
+                  {(cleaner as any).on_time_percentage > 0 && (
+                    <InfoLine
+                      icon={<TrendingUp className="h-4 w-4 text-slate-400" />}
+                      title="On-time Percentage"
+                      value={`${(cleaner as any).on_time_percentage}%`}
+                    />
+                  )}
+                  {(cleaner as any).avg_response_minutes > 0 && (
+                    <InfoLine
+                      icon={<Clock className="h-4 w-4 text-slate-400" />}
+                      title="Average Response Time"
+                      value={responseTimeText((cleaner as any).avg_response_minutes)}
+                    />
+                  )}
+                  {suppliesText((cleaner as any).cleaning_supplies) && (
+                    <InfoLine
+                      icon={<Clock className="h-4 w-4 text-slate-400" />}
+                      title="Supplies"
+                      value={suppliesText((cleaner as any).cleaning_supplies) as string}
+                    />
+                  )}
                   <InfoLine icon={<CalendarCheck className="h-4 w-4 text-slate-400" />} title="Member Since" value={memberSince} />
                 </CardContent>
               </Card>

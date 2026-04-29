@@ -43,6 +43,10 @@ export interface ClientProfileRead {
   default_city?: string
   default_postcode?: string
   default_country?: string
+  id_file_name?: string | null
+  id_file_url?: string | null
+  id_submitted_at?: string | null
+  created_at?: string
   user?: UserRead
 }
 
@@ -206,6 +210,9 @@ export interface BookingRead {
   created_at: string
   client?: {
     id: string
+    id_file_url?: string | null
+    id_file_name?: string | null
+    id_submitted_at?: string | null
     user?: UserRead
   }
   cleaner?: {

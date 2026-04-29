@@ -342,6 +342,10 @@ export const paymentsApi = {
       exp_month: number | null
       exp_year: number | null
     }>>>('/payments/methods'),
+  createSetupIntent: () =>
+    request<APIResponse<{ setup_intent_id: string; client_secret: string | null }>>('/payments/setup-intent', {
+      method: 'POST',
+    }),
   confirmWithSavedMethod: (bookingId: string, paymentMethodId: string) =>
     request<APIResponse<{ payment_intent_id: string; payment_intent_status: string; sync: any }>>(
       '/payments/confirm-existing',

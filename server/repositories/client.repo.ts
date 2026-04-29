@@ -16,6 +16,9 @@ export const clientRepo = {
     defaultCity: string | null
     defaultPostcode: string | null
     defaultCountry: string
+    idFileName: string | null
+    idFileUrl: string | null
+    idSubmittedAt: Date | null
   }>) =>
     db.client.update({ where: { id }, data }),
 }

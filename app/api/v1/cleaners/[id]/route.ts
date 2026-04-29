@@ -53,8 +53,16 @@ export async function GET(_req: Request, ctx: { params: Promise<{ id: string }> 
   const avgResponseMinutes =
     respondedBookings.length > 0 ? Math.round(totalResponseMinutes / respondedBookings.length) : 0
 
+  const sanitizedUser = cleaner.user
+    ? {
+        ...cleaner.user,
+        phone: null,
+      }
+    : cleaner.user
+
   return ok({
     ...cleaner,
+    user: sanitizedUser,
     on_time_percentage: onTimePercentage,
     avg_response_minutes: avgResponseMinutes,
   })

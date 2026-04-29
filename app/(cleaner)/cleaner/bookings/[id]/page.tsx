@@ -280,6 +280,9 @@ export default function CleanerBookingDetailPage() {
             <p className="flex items-center gap-2"><Calendar className="h-4 w-4" />{formatDate(booking.scheduled_start)}</p>
             <p className="flex items-center gap-2"><Clock className="h-4 w-4" />{booking.duration_hours} hours</p>
             <p className="flex items-center gap-2"><MapPin className="h-4 w-4" />{booking.address}, {booking.city}, {booking.postcode}</p>
+            {(booking.client as any)?.idFileUrl && (
+              <p className="text-xs font-medium text-emerald-700">Client trust badge: ID submitted</p>
+            )}
             {booking.status === 'pending' && (
               <p className="text-xs text-slate-500">Approximate map location shown with 50-100m privacy offset until acceptance.</p>
             )}

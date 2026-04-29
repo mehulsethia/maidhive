@@ -60,7 +60,7 @@ const SUPPLIES_OPTIONS = [
 ] as const
 
 const STEP_INFO = [
-  { num: 1, title: 'Your\nDetails', desc: 'Choose duration and date' },
+  { num: 1, title: 'Select Date\n& Time', desc: 'Choose duration, date, and time' },
   { num: 2, title: 'Service\nAddress', desc: 'Contact and location info' },
   { num: 3, title: 'Job\nDetails', desc: 'Card authorization' },
   { num: 4, title: 'Confirmation', desc: 'Booking confirmation' },
@@ -797,7 +797,7 @@ export default function BookingFlowPage() {
                   {step} / 4
                 </p>
                 <p className="mt-1 text-sm text-white/80">
-                  {step === 1 ? 'Your Details' : step === 2 ? 'Service Address' : step === 3 ? 'Job Details' : 'Confirmation'}
+                  {step === 1 ? 'Select Date & Time' : step === 2 ? 'Service Address' : step === 3 ? 'Job Details' : 'Confirmation'}
                 </p>
               </div>
             </div>
@@ -814,7 +814,7 @@ export default function BookingFlowPage() {
           {step === 1 && (
             <Card className="rounded-2xl border-slate-200">
               <CardHeader>
-                <CardTitle>Your Details</CardTitle>
+                <CardTitle>Select Date &amp; Time</CardTitle>
               </CardHeader>
               <CardContent className="space-y-6">
 
@@ -824,6 +824,7 @@ export default function BookingFlowPage() {
                     <Select value={String(duration)} onChange={e => setDuration(Number(e.target.value))} className="mt-1">
                       {DURATION_OPTIONS.map(d => <option key={d} value={d}>{d} hour{d !== 1 ? 's' : ''}</option>)}
                     </Select>
+                    <p className="mt-1 text-xs text-slate-500">Most standard cleans require 2-3 hours.</p>
                   </div>
                   <div>
                     <Label className="text-sm font-semibold text-slate-700">Hourly Rate</Label>
@@ -832,12 +833,13 @@ export default function BookingFlowPage() {
                   <div>
                     <Label className="text-sm font-semibold text-slate-700">Service Cost</Label>
                     <p className="mt-1 text-lg font-bold text-primary">{formatCurrency(estimatedCost)}</p>
+                    <p className="mt-1 text-xs text-slate-500">Total price based on selected duration. Final amount will be confirmed before payment.</p>
                   </div>
                 </div>
 
                 {/* Date picker */}
                 <div>
-                  <Label className="text-sm font-semibold mb-2 block">Preferred Date</Label>
+                  <Label className="text-sm font-semibold mb-2 block">Select Date</Label>
                   <BookableCalendar
                     className="mt-2"
                     availableDates={bookableDates}
@@ -863,6 +865,10 @@ export default function BookingFlowPage() {
                     <p className="mt-2 text-xs text-muted-foreground">No available dates found for this duration.</p>
                   )}
                 </div>
+
+                {!date && (
+                  <p className="text-sm text-slate-500">Select a date to view available time slots.</p>
+                )}
 
                 {/* Time slots */}
                 {date && (

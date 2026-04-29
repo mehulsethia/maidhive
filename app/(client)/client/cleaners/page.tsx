@@ -43,7 +43,7 @@ function transportLabel(value?: string) {
 function suppliesLabel(value?: string) {
   if (value === 'own_supplies') return 'Brings supplies'
   if (value === 'client_supplies') return 'Uses client supplies'
-  return 'Supplies not set'
+  return null
 }
 
 const SERVICE_FILTER_OPTIONS = [
@@ -307,10 +307,12 @@ export default function ClientCleanersPage() {
                         <Car className="h-3.5 w-3.5" />
                         {transportLabel(cleaner.transport_mode)}
                       </span>
-                      <span className="inline-flex items-center gap-1">
-                        <Package className="h-3.5 w-3.5" />
-                        {suppliesLabel(cleaner.cleaning_supplies)}
-                      </span>
+                      {suppliesLabel(cleaner.cleaning_supplies) && (
+                        <span className="inline-flex items-center gap-1">
+                          <Package className="h-3.5 w-3.5" />
+                          {suppliesLabel(cleaner.cleaning_supplies)}
+                        </span>
+                      )}
                     </div>
 
                     {cleaner.bio && <p className="mt-1 line-clamp-1 text-[12px] leading-5 text-slate-600">{cleaner.bio}</p>}

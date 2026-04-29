@@ -12,6 +12,8 @@ const updateClientMeSchema = z.object({
   default_city: z.string().trim().max(120).nullable().optional(),
   default_postcode: z.string().trim().max(40).nullable().optional(),
   default_country: z.string().trim().length(2).nullable().optional(),
+  id_file_name: z.string().trim().max(255).nullable().optional(),
+  id_file_url: z.string().trim().max(2000).nullable().optional(),
 })
 
 export const GET = requireClient(async (_req, _ctx, user) => {
@@ -48,6 +50,8 @@ export const PATCH = requireClient(async (req: NextRequest, _ctx, user) => {
     ...(data.default_country !== undefined && data.default_country !== null
       ? { defaultCountry: data.default_country.toUpperCase() }
       : {}),
+    ...(data.id_file_name !== undefined ? { idFileName: data.id_file_name } : {}),
+    ...(data.id_file_url !== undefined ? { idFileUrl: data.id_file_url, idSubmittedAt: data.id_file_url ? new Date() : null } : {}),
   })
 
   const full = await clientRepo.findById(updated.id)

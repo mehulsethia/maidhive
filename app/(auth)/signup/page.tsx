@@ -20,7 +20,6 @@ function SignupForm() {
   const [firstName, setFirstName] = useState('')
   const [lastName, setLastName] = useState('')
   const [phone, setPhone] = useState('')
-  const [address, setAddress] = useState('')
   const [experience, setExperience] = useState('')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
@@ -39,7 +38,7 @@ function SignupForm() {
       password,
       options: {
         emailRedirectTo: `${appUrl}/auth/callback`,
-        data: { name, role, phone, address, experience: role === 'cleaner' ? experience : undefined },
+        data: { name, role, phone, experience: role === 'cleaner' ? experience : undefined },
       },
     })
 
@@ -172,21 +171,7 @@ function SignupForm() {
                 className="w-full border border-gray-200 rounded-lg px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-colors placeholder:text-gray-400"
               />
             </div>
-          ) : (
-            <div>
-              <label className="text-sm font-medium text-gray-700 mb-1.5 block">
-                Address <span className="text-red-500">*</span>
-              </label>
-              <input
-                type="text"
-                required
-                placeholder="Enter your address"
-                value={address}
-                onChange={(e) => setAddress(e.target.value)}
-                className="w-full border border-gray-200 rounded-lg px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-colors placeholder:text-gray-400"
-              />
-            </div>
-          )}
+          ) : null}
 
           {/* Email */}
           <div>

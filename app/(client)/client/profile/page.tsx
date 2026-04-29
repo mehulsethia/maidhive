@@ -2,8 +2,10 @@
 
 import { useDeferredValue, useEffect, useState, startTransition } from 'react'
 import { Bricolage_Grotesque, IBM_Plex_Mono } from 'next/font/google'
-import { Star } from 'lucide-react'
-import { bookingsApi, clientsApi } from '@/lib/api'
+import { CreditCard, ShieldCheck } from 'lucide-react'
+import { loadStripe } from '@stripe/stripe-js'
+import { Elements, PaymentElement, useElements, useStripe } from '@stripe/react-stripe-js'
+import { bookingsApi, clientsApi, paymentsApi } from '@/lib/api'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -12,11 +14,14 @@ import { ProfilePageSkeleton } from '@/components/page-skeletons'
 import { AvatarUpload } from '@/components/avatar-upload'
 import { PhoneInput } from '@/components/phone-input'
 import { formatCurrency } from '@/lib/utils'
+import { getAccessToken } from '@/lib/auth-cache'
+import { toApiV1Url } from '@/lib/api-base'
 import type { BookingRead } from '@/types'
 import { toast } from 'sonner'
 
 const displayFont = Bricolage_Grotesque({ subsets: ['latin'], weight: ['400', '500', '700', '800'] })
 const monoFont = IBM_Plex_Mono({ subsets: ['latin'], weight: ['400', '500', '600'] })
+const stripePromise = loadStripe(process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY!)
 
 export default function ClientProfilePage() {
   const [loading, setLoading] = useState(true)
@@ -30,6 +35,13 @@ export default function ClientProfilePage() {
   const [defaultAddress, setDefaultAddress] = useState('')
   const [defaultCity, setDefaultCity] = useState('')
   const [defaultPostcode, setDefaultPostcode] = useState('')
+  const [memberSince, setMemberSince] = useState('')
+  const [idFileName, setIdFileName] = useState('')
+  const [idFileUrl, setIdFileUrl] = useState('')
+  const [uploadingId, setUploadingId] = useState(false)
+  const [savedCards, setSavedCards] = useState<Array<{ id: string; brand: string; last4: string; exp_month: number | null; exp_year: number | null }>>([])
+  const [setupSecret, setSetupSecret] = useState<string | null>(null)
+  const [loadingPayment, setLoadingPayment] = useState(false)
   const [bio, setBio] = useState('')
   const [avatarUrl, setAvatarUrl] = useState<string | null>(null)
 
@@ -50,6 +62,13 @@ export default function ClientProfilePage() {
           setDefaultAddress(client?.default_address ?? '')
           setDefaultCity(client?.default_city ?? '')
           setDefaultPostcode(client?.default_postcode ?? '')
+          setIdFileName(client?.id_file_name ?? '')
+          setIdFileUrl(client?.id_file_url ?? '')
+          setMemberSince(
+            client?.created_at
+              ? new Date(client.created_at).toLocaleDateString('en-IE', { month: 'short', year: 'numeric', timeZone: 'Europe/Nicosia' })
+              : '',
+          )
           setBio('')
           setAvatarUrl(user?.avatar_url ?? null)
           setBookings(bookingRes.data?.items ?? [])
@@ -60,6 +79,20 @@ export default function ClientProfilePage() {
         setLoading(false)
       }
     })()
+  }, [])
+
+  async function loadPaymentMethods() {
+    setLoadingPayment(true)
+    try {
+      const methodsRes = await paymentsApi.listMethods()
+      setSavedCards(methodsRes.data ?? [])
+    } finally {
+      setLoadingPayment(false)
+    }
+  }
+
+  useEffect(() => {
+    loadPaymentMethods().catch(() => null)
   }, [])
 
   const deferredBookings = useDeferredValue(bookings)
@@ -87,6 +120,46 @@ export default function ClientProfilePage() {
       toast.error(err.message ?? 'Failed to save profile.')
     } finally {
       setSaving(false)
+    }
+  }
+
+  async function initializeCardSetup() {
+    try {
+      const res = await paymentsApi.createSetupIntent()
+      const clientSecret = res.data?.client_secret ?? null
+      if (!clientSecret) {
+        toast.error('Unable to initialize card setup.')
+        return
+      }
+      setSetupSecret(clientSecret)
+    } catch (err: any) {
+      toast.error(err.message ?? 'Failed to initialize card setup.')
+    }
+  }
+
+  async function uploadClientIdDocument(file: File) {
+    if (!file) return
+    setUploadingId(true)
+    try {
+      const token = await getAccessToken()
+      const form = new FormData()
+      form.append('file', file)
+      const res = await fetch(toApiV1Url('/upload/client-id-document'), {
+        method: 'POST',
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+        body: form,
+      })
+      const json = await res.json().catch(() => ({}))
+      if (!res.ok || !json.success) {
+        throw new Error(json.message ?? 'Failed to upload ID document.')
+      }
+      setIdFileName(String(json.data?.file_name ?? file.name))
+      setIdFileUrl(String(json.data?.url ?? ''))
+      toast.success('ID submitted.')
+    } catch (err: any) {
+      toast.error(err.message ?? 'Failed to upload ID document.')
+    } finally {
+      setUploadingId(false)
     }
   }
 
@@ -149,10 +222,21 @@ export default function ClientProfilePage() {
               <div className="min-w-0">
                 <p className={`${displayFont.className} text-2xl font-bold tracking-[-0.02em] text-slate-900`}>{fullName}</p>
                 <p className="truncate text-sm text-slate-500">{email || 'No email available'}</p>
-                <div className="mt-2 flex items-center gap-1 text-amber-500">
-                  {Array.from({ length: 5 }).map((_, index) => (
-                    <Star key={index} className={`h-4 w-4 ${index === 0 ? 'fill-current' : ''}`} />
-                  ))}
+                <div className="mt-2 flex flex-wrap items-center gap-2">
+                  {memberSince && (
+                    <span className="inline-flex items-center rounded-full bg-slate-100 px-2.5 py-1 text-xs font-semibold text-slate-700">
+                      Member since {memberSince}
+                    </span>
+                  )}
+                  <span className="inline-flex items-center rounded-full bg-slate-100 px-2.5 py-1 text-xs font-semibold text-slate-700">
+                    {deferredBookings.filter((booking) => booking.status === 'completed').length} completed bookings
+                  </span>
+                  {idFileUrl && (
+                    <span className="inline-flex items-center gap-1 rounded-full bg-emerald-100 px-2.5 py-1 text-xs font-semibold text-emerald-700">
+                      <ShieldCheck className="h-3.5 w-3.5" />
+                      ID submitted
+                    </span>
+                  )}
                 </div>
               </div>
             </div>
@@ -186,6 +270,76 @@ export default function ClientProfilePage() {
                 rows={4}
                 placeholder="Saved locally in this browser for now."
               />
+            </div>
+
+            <div className="mt-4 rounded-xl border border-slate-200 bg-slate-50 p-4">
+              <p className="text-sm font-semibold text-slate-900">Trust Signals</p>
+              <p className="mt-1 text-xs text-slate-600">Complete this to improve cleaner acceptance rates.</p>
+              <ul className="mt-2 space-y-1 text-xs text-slate-600">
+                <li>- Add a clear profile photo</li>
+                <li>- Submit an optional ID document</li>
+              </ul>
+              <div className="mt-3">
+                <Label>Optional ID Upload (PDF or image)</Label>
+                <Input
+                  type="file"
+                  accept=".pdf,image/*"
+                  className="mt-1"
+                  disabled={uploadingId}
+                  onChange={async (event) => {
+                    const file = event.target.files?.[0]
+                    if (!file) return
+                    await uploadClientIdDocument(file)
+                  }}
+                />
+                {idFileName && (
+                  <p className="mt-2 text-xs font-medium text-emerald-700">
+                    ID submitted: {idFileName}
+                  </p>
+                )}
+              </div>
+            </div>
+
+            <div className="mt-4 rounded-xl border border-slate-200 bg-white p-4">
+              <div className="flex items-center justify-between gap-3">
+                <div>
+                  <p className="text-sm font-semibold text-slate-900">Payment Method</p>
+                  <p className="mt-1 text-xs text-slate-600">Add a card before booking, or add one during checkout.</p>
+                </div>
+                <CreditCard className="h-5 w-5 text-slate-500" />
+              </div>
+
+              {loadingPayment ? (
+                <p className="mt-3 text-xs text-slate-500">Loading saved cards...</p>
+              ) : savedCards.length === 0 ? (
+                <p className="mt-3 text-xs text-slate-500">No saved cards yet.</p>
+              ) : (
+                <div className="mt-3 space-y-2">
+                  {savedCards.map((card) => (
+                    <div key={card.id} className="rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-700">
+                      {card.brand.toUpperCase()} •••• {card.last4}
+                      {card.exp_month && card.exp_year ? ` (exp ${card.exp_month}/${card.exp_year})` : ''}
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {!setupSecret ? (
+                <Button onClick={initializeCardSetup} variant="outline" className="mt-3">
+                  Add Card
+                </Button>
+              ) : (
+                <div className="mt-3">
+                  <Elements stripe={stripePromise} options={{ clientSecret: setupSecret }}>
+                    <AddCardForm
+                      onAdded={async () => {
+                        setSetupSecret(null)
+                        await loadPaymentMethods()
+                      }}
+                    />
+                  </Elements>
+                </div>
+              )}
             </div>
 
             <div className="mt-5 flex justify-end">
@@ -268,6 +422,40 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
     <div>
       <Label>{label}</Label>
       {children}
+    </div>
+  )
+}
+
+function AddCardForm({ onAdded }: { onAdded: () => Promise<void> }) {
+  const stripe = useStripe()
+  const elements = useElements()
+  const [submitting, setSubmitting] = useState(false)
+
+  async function handleAddCard() {
+    if (!stripe || !elements) return
+    setSubmitting(true)
+    try {
+      const { error } = await stripe.confirmSetup({
+        elements,
+        redirect: 'if_required',
+      })
+      if (error) {
+        toast.error(error.message ?? 'Failed to add card.')
+      } else {
+        await onAdded()
+        toast.success('Card added successfully.')
+      }
+    } finally {
+      setSubmitting(false)
+    }
+  }
+
+  return (
+    <div className="space-y-3 rounded-xl border border-slate-200 p-3">
+      <PaymentElement />
+      <Button onClick={handleAddCard} loading={submitting} disabled={!stripe || !elements}>
+        Save Card
+      </Button>
     </div>
   )
 }

@@ -281,6 +281,9 @@ export default function CleanerBookingsPage() {
                     <div>
                       <p className="text-base font-semibold text-slate-900">{SERVICE_LABELS[b.service_type] ?? b.service_type}</p>
                       <p className="text-sm text-slate-600">Client: {b.client?.user?.name ?? 'Client'}</p>
+                      {(b.client as any)?.idFileUrl && (
+                        <p className="text-xs font-medium text-emerald-700">ID submitted</p>
+                      )}
                       <p className="text-sm text-slate-500">{formatDate(b.scheduled_start)}</p>
                       <p className="text-sm text-slate-500">{b.address}, {b.city}, {b.postcode}</p>
                       {b.status === 'pending' && (
