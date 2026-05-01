@@ -631,7 +631,7 @@ export const bookingService = {
 
     if (!isParty && user.role !== 'admin') throw new ServiceError('Forbidden', 403)
 
-    await applyCancellationPaymentPolicy(booking)
+    await applyCancellationPaymentPolicy(booking, booking.status)
 
     const updated = await bookingRepo.update(bookingId, {
       status: 'cancelled',
@@ -1026,7 +1026,10 @@ function normalizeCancellationReason(reason?: string) {
   return normalized || 'unspecified'
 }
 
-async function applyCancellationPaymentPolicy(booking: Awaited<ReturnType<typeof bookingRepo.findById>>) {
+async function applyCancellationPaymentPolicy(
+  booking: Awaited<ReturnType<typeof bookingRepo.findById>>,
+  bookingStatus: string,
+) {
   if (!booking?.payment) return
 
   const payment = booking.payment
@@ -1039,6 +1042,13 @@ async function applyCancellationPaymentPolicy(booking: Awaited<ReturnType<typeof
   }
 
   if (payment.status !== 'authorized') return
+
+  // Pending cleaner acceptance cancellations should always release auth in full.
+  if (bookingStatus === 'pending') {
+    await stripe.paymentIntents.cancel(payment.stripePaymentIntentId)
+    await paymentRepo.update(payment.id, { status: 'failed', failedAt: new Date() })
+    return
+  }
 
   const hoursUntilStart = (booking.scheduledStart.getTime() - Date.now()) / (60 * 60 * 1000)
   const totalAmountCents = Math.round(Number(booking.totalAmount) * 100)
