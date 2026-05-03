@@ -16,6 +16,7 @@ import { PhoneInput } from '@/components/phone-input'
 import { formatCurrency } from '@/lib/utils'
 import { getAccessToken } from '@/lib/auth-cache'
 import { toApiV1Url } from '@/lib/api-base'
+import { createClient } from '@/lib/supabase'
 import type { BookingRead } from '@/types'
 import { toast } from 'sonner'
 
@@ -44,11 +45,13 @@ export default function ClientProfilePage() {
   const [loadingPayment, setLoadingPayment] = useState(false)
   const [bio, setBio] = useState('')
   const [avatarUrl, setAvatarUrl] = useState<string | null>(null)
+  const [emailVerified, setEmailVerified] = useState(false)
+  const [phoneVerified, setPhoneVerified] = useState(false)
 
   useEffect(() => {
     ;(async () => {
       try {
-        const [clientRes, bookingRes] = await Promise.all([clientsApi.me(), bookingsApi.my()])
+        const [clientRes, bookingRes, authUserRes] = await Promise.all([clientsApi.me(), bookingsApi.my(), createClient().auth.getUser()])
         const client = clientRes.data as any
         const user = client?.user ?? {}
         const fullName = String(user?.name ?? '').trim()
@@ -71,6 +74,8 @@ export default function ClientProfilePage() {
           )
           setBio('')
           setAvatarUrl(user?.avatar_url ?? null)
+          setEmailVerified(Boolean(authUserRes.data.user?.email_confirmed_at))
+          setPhoneVerified(Boolean(authUserRes.data.user?.phone_confirmed_at))
           setBookings(bookingRes.data?.items ?? [])
           setLoading(false)
         })
@@ -108,6 +113,18 @@ export default function ClientProfilePage() {
 
     setSaving(true)
     try {
+      const supabase = createClient()
+      const currentAuth = await supabase.auth.getUser()
+      const currentEmail = currentAuth.data.user?.email ?? ''
+      const currentPhone = currentAuth.data.user?.phone ?? ''
+      if (email.trim() && email.trim() !== currentEmail) {
+        await supabase.auth.updateUser({ email: email.trim() })
+        toast.success('Verification email sent. Please verify your new email.')
+      }
+      if (phone.trim() && phone.trim() !== currentPhone) {
+        await supabase.auth.updateUser({ phone: phone.trim() })
+        toast.success('Verification SMS sent. Please verify your new phone number.')
+      }
       await clientsApi.updateMe({
         name: `${firstName.trim()} ${lastName.trim()}`,
         phone,
@@ -155,7 +172,7 @@ export default function ClientProfilePage() {
       }
       setIdFileName(String(json.data?.file_name ?? file.name))
       setIdFileUrl(String(json.data?.url ?? ''))
-      toast.success('ID submitted.')
+      toast.success('ID provided.')
     } catch (err: any) {
       toast.error(err.message ?? 'Failed to upload ID document.')
     } finally {
@@ -236,7 +253,7 @@ export default function ClientProfilePage() {
                   {idFileUrl && (
                     <span className="inline-flex items-center gap-1 rounded-full bg-emerald-100 px-2.5 py-1 text-xs font-semibold text-emerald-700">
                       <ShieldCheck className="h-3.5 w-3.5" />
-                      ID submitted
+                      ID provided
                     </span>
                   )}
                 </div>
@@ -284,6 +301,15 @@ export default function ClientProfilePage() {
             </div>
 
             <div className="mt-4 rounded-xl border border-slate-200 bg-slate-50 p-4">
+              <p className="text-sm font-semibold text-slate-900">Account Credentials</p>
+              <p className="mt-1 text-xs text-slate-600">Verified contact details are required for booking communication.</p>
+              <ul className="mt-2 space-y-1 text-xs text-slate-600">
+                <li>- Email: {email || 'Not set'} ({emailVerified ? 'Verified' : 'Not verified'})</li>
+                <li>- Phone: {phone || 'Not set'} ({phoneVerified ? 'Verified' : 'Not verified'})</li>
+              </ul>
+            </div>
+
+            <div className="mt-4 rounded-xl border border-slate-200 bg-slate-50 p-4">
               <p className="text-sm font-semibold text-slate-900">Trust Signals</p>
               <p className="mt-1 text-xs text-slate-600">Complete this to improve cleaner acceptance rates.</p>
               <ul className="mt-2 space-y-1 text-xs text-slate-600">
@@ -305,7 +331,7 @@ export default function ClientProfilePage() {
                 />
                 {idFileName && (
                   <p className="mt-2 text-xs font-medium text-emerald-700">
-                    ID submitted: {idFileName}
+                    ID provided: {idFileName}
                   </p>
                 )}
               </div>

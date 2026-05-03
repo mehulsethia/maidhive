@@ -18,6 +18,7 @@ import { StarRating } from '@/components/star-rating'
 import { DetailPageSkeleton } from '@/components/page-skeletons'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
+import { UserAvatar } from '@/components/ui/user-avatar'
 import { isChatActiveForBooking } from '@/lib/chat-window'
 import { formatCurrency, formatDate } from '@/lib/utils'
 import type { CleanerRead, ReviewRead } from '@/types'
@@ -130,6 +131,7 @@ export default function CleanerProfilePage() {
     : ''
   const location = cleaner.service_areas?.[0]?.city ?? ''
   const nextAvailable = closestSlots[0]
+  const cleanerImageUrl = (cleaner as any)?.profile_image_url ?? (cleaner as any)?.profileImageUrl ?? cleaner.user?.avatar_url
 
   function suppliesText(value?: string) {
     if (value === 'own_supplies') return 'Brings own supplies'
@@ -156,9 +158,19 @@ export default function CleanerProfilePage() {
               <p className={`${monoFont.className} text-[0.7rem] uppercase tracking-[0.24em] text-white/75`}>
                 MaidHive Cleaner Profile
               </p>
-              <h1 className={`${displayFont.className} text-2xl font-extrabold tracking-[-0.03em] text-white sm:text-3xl lg:text-4xl`}>
-                {cleanerName}
-              </h1>
+              <div className="flex items-center gap-3">
+                <UserAvatar
+                  name={cleanerName}
+                  imageUrl={cleanerImageUrl}
+                  alt={`${cleanerName} profile`}
+                  className="h-12 w-12 border border-white/30 sm:h-14 sm:w-14"
+                  textClassName="text-lg font-bold"
+                  fallback="C"
+                />
+                <h1 className={`${displayFont.className} text-2xl font-extrabold tracking-[-0.03em] text-white sm:text-3xl lg:text-4xl`}>
+                  {cleanerName}
+                </h1>
+              </div>
               <p className="max-w-xl text-sm text-slate-100/90 sm:text-base">
                 View expertise, service quality, and recent client feedback before booking.
               </p>
@@ -301,7 +313,7 @@ export default function CleanerProfilePage() {
                   )}
                   {closestSlots.length > 0 && (
                     <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2">
-                      <p className="text-xs text-slate-500">Closest slots</p>
+                      <p className="text-xs text-slate-500">Next available times</p>
                       <div className="mt-1 space-y-1">
                         {closestSlots.map((slot) => (
                           <p key={slot} className="text-xs font-medium text-slate-700">

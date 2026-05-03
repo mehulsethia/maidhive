@@ -301,7 +301,7 @@ export default function CleanerBookingsPage() {
                         </span>
                       </div>
                       {((b.client as any)?.idFileUrl || (b.client as any)?.id_file_url) && (
-                        <p className="text-xs font-medium text-emerald-700">ID submitted</p>
+                        <p className="text-xs font-medium text-emerald-700">ID provided</p>
                       )}
                       <p className="text-sm text-slate-500">{formatDate(b.scheduled_start)}</p>
                       <p className="text-sm text-slate-500">{b.address}, {b.city}, {b.postcode}</p>
@@ -380,6 +380,14 @@ export default function CleanerBookingsPage() {
                       <span className="rounded-lg bg-slate-100 px-2.5 py-1 text-xs font-medium text-slate-600">
                         Waiting for client completion
                       </span>
+                    )}
+                    {['in_progress', 'completed', 'disputed'].includes(b.status) && (
+                      <Link
+                        href={`/cleaner/bookings/${b.id}`}
+                        className="inline-flex h-8 items-center rounded-xl border border-slate-300 px-3 text-xs font-semibold text-slate-700 transition-all duration-200 hover:-translate-y-0.5 hover:bg-slate-50"
+                      >
+                        Report a problem
+                      </Link>
                     )}
                   </div>
                   {b.status === 'pending' && !eligibility.canProposeAlternative && !eligibility.canRespondToCounter && eligibility.proposeAlternativeDisabledReason && (

@@ -65,6 +65,7 @@ export const cleanerRepo = {
     city?: string
     availability?: 'any' | 'next_7_days'
     transportMode?: 'own_car' | 'bus_walk' | 'requires_pickup'
+    cleaningSupplies?: 'own_supplies' | 'client_supplies'
     servicesOffered?: string[]
     minRating?: number
     minPrice?: number
@@ -77,6 +78,7 @@ export const cleanerRepo = {
       profileComplete: true,
       stripeOnboardingComplete: true,
       ...(params.transportMode ? { transportMode: params.transportMode } : {}),
+      ...(params.cleaningSupplies ? { cleaningSupplies: params.cleaningSupplies } : {}),
       ...(params.availability === 'next_7_days'
         ? { availabilitySchedules: { some: { isActive: true } } }
         : {}),

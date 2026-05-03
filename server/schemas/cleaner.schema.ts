@@ -58,6 +58,7 @@ export const cleanerSearchSchema = z.object({
   city: z.string().optional(),
   availability: z.enum(['any', 'next_7_days']).optional().default('any'),
   transport_mode: z.enum(['own_car', 'bus_walk', 'requires_pickup']).optional(),
+  brings_own_supplies: z.enum(['yes', 'no']).optional(),
   services_offered: z.string().optional(),
   min_rating: z.coerce.number().min(0).max(5).optional(),
   min_price: z.coerce.number().min(0).optional(),

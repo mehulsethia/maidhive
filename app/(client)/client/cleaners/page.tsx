@@ -68,6 +68,7 @@ export default function ClientCleanersPage() {
   const [maxRate, setMaxRate] = useState('')
   const [availability, setAvailability] = useState<AvailabilityFilter>('any')
   const [transport, setTransport] = useState('')
+  const [bringsOwnSupplies, setBringsOwnSupplies] = useState<'any' | 'yes' | 'no'>('any')
   const [service, setService] = useState('')
   const [view, setView] = useState<ViewMode>('card')
   const [cleaners, setCleaners] = useState<CleanerVM[]>([])
@@ -83,6 +84,7 @@ export default function ClientCleanersPage() {
         city: city.trim() || undefined,
         availability,
         transport_mode: transport ? (transport as any) : undefined,
+        brings_own_supplies: bringsOwnSupplies === 'any' ? undefined : bringsOwnSupplies,
         services_offered: service || undefined,
         min_rating: minRatingValue > 0 ? minRatingValue : undefined,
         min_price: minRateValue,
@@ -117,7 +119,7 @@ export default function ClientCleanersPage() {
 
   useEffect(() => {
     load()
-  }, [city, minRating, minRate, maxRate, availability, transport, service])
+  }, [city, minRating, minRate, maxRate, availability, transport, bringsOwnSupplies, service])
 
   const deferredCleaners = useDeferredValue(cleaners)
 
@@ -197,6 +199,15 @@ export default function ClientCleanersPage() {
               <option value="own_car">Own car</option>
               <option value="bus_walk">Bus / walk</option>
               <option value="requires_pickup">Requires pick-up</option>
+            </Select>
+            <Select
+              value={bringsOwnSupplies}
+              onChange={(event) => setBringsOwnSupplies(event.target.value as 'any' | 'yes' | 'no')}
+              className="w-full"
+            >
+              <option value="any">Brings own supplies: Any</option>
+              <option value="yes">Yes</option>
+              <option value="no">No</option>
             </Select>
             <Select value={service} onChange={(event) => setService(event.target.value)} className="w-full lg:col-start-1">
               <option value="">Services: Any</option>

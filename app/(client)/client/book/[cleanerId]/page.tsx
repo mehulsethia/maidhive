@@ -21,6 +21,7 @@ import { formatCurrency, cn, APP_TIMEZONE } from '@/lib/utils'
 import type { CleanerRead, PriceBreakdown, BookingRead, ClientProfileRead, ClientAddressRead } from '@/types'
 import { PhoneInput } from '@/components/phone-input'
 import { toast } from 'sonner'
+import { createClient } from '@/lib/supabase'
 
 const stripePromise = loadStripe(process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY!)
 const displayFont = Bricolage_Grotesque({ subsets: ['latin'], weight: ['400', '500', '700', '800'] })
@@ -302,9 +303,11 @@ function BookingSummary({
 function StripePaymentForm({
   booking,
   onSuccess,
+  validateBeforeSubmit,
 }: {
   booking: BookingRead
   onSuccess: () => Promise<void>
+  validateBeforeSubmit: () => string[]
 }) {
   const stripe = useStripe()
   const elements = useElements()
@@ -339,6 +342,17 @@ function StripePaymentForm({
   }, [])
 
   async function handleSubmit() {
+    const missingItems = validateBeforeSubmit()
+    if (mode === 'saved' && !selectedSavedCardId) {
+      missingItems.push('Add payment method')
+    }
+    if (missingItems.length > 0) {
+      toast.error(
+        `Complete your account to send this booking request: ${missingItems.join(', ')}`,
+      )
+      return
+    }
+
     if (mode === 'saved') {
       if (!selectedSavedCardId) {
         toast.error('Select a saved card or choose to add a new card.')
@@ -523,6 +537,8 @@ export default function BookingFlowPage() {
   const [booking, setBooking] = useState<BookingRead | null>(null)
   const [clientSecret, setClientSecret] = useState<string | null>(null)
   const [submitting, setSubmitting] = useState(false)
+  const [emailVerified, setEmailVerified] = useState(false)
+  const [phoneVerified, setPhoneVerified] = useState(false)
 
   // Load cleaner + client profile
   useEffect(() => {
@@ -530,8 +546,9 @@ export default function BookingFlowPage() {
       cleanersApi.getById(cleanerId),
       clientsApi.me().catch(() => null),
       clientsApi.listAddresses().catch(() => null),
+      createClient().auth.getUser().catch(() => null),
     ])
-      .then(([cleanerRes, clientRes, addressRes]) => {
+      .then(([cleanerRes, clientRes, addressRes, authUserRes]) => {
         setCleaner(cleanerRes.data ?? null)
         const cp = (clientRes as any)?.data ?? null
         const cpAny = (cp ?? {}) as any
@@ -563,6 +580,9 @@ export default function BookingFlowPage() {
           setApartmentDetails(defaultAddress.apartment_details ?? '')
           setAccessNotes(defaultAddress.access_notes ?? '')
         }
+        const authUser = (authUserRes as any)?.data?.user
+        setEmailVerified(Boolean(authUser?.email_confirmed_at))
+        setPhoneVerified(Boolean(authUser?.phone_confirmed_at))
       })
       .catch(() => toast.error('Failed to load data'))
       .finally(() => { setLoading(false) })
@@ -610,6 +630,14 @@ export default function BookingFlowPage() {
     if (!cleaner) return 0
     return cleaner.hourly_rate * duration
   }, [cleaner, duration])
+
+  const missingAccountItems = useMemo(() => {
+    const issues: string[] = []
+    if (!emailVerified) issues.push('Verify email')
+    if (!phoneVerified) issues.push('Verify phone number')
+    if (!address.trim() || !city.trim() || !postcode.trim()) issues.push('Add service address')
+    return issues
+  }, [emailVerified, phoneVerified, address, city, postcode])
 
   function applySavedAddress(addressId: string) {
     const selected = savedAddresses.find((entry) => entry.id === addressId)
@@ -1302,9 +1330,23 @@ export default function BookingFlowPage() {
               <CardContent className="space-y-5">
 
                 <Elements stripe={stripePromise} options={{ clientSecret, appearance: { theme: 'stripe' } }}>
+                  {missingAccountItems.length > 0 && (
+                    <div className="mb-4 rounded-xl border border-amber-200 bg-amber-50 p-3">
+                      <p className="text-sm font-semibold text-amber-900">Complete your account to send this booking request.</p>
+                      <ul className="mt-1 text-xs text-amber-800">
+                        {missingAccountItems.map((item) => (
+                          <li key={item}>- {item}</li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
                   <StripePaymentForm
                     booking={booking}
                     onSuccess={handlePaymentSuccess}
+                    validateBeforeSubmit={() => {
+                      const checks = [...missingAccountItems]
+                      return checks
+                    }}
                   />
                 </Elements>
               </CardContent>

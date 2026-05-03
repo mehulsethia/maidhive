@@ -2,6 +2,7 @@ import { requireCleaner } from '@/server/auth'
 import { cleanerRepo } from '@/server/repositories/cleaner.repo'
 import { stripe } from '@/server/stripe'
 import { ok, err } from '@/server/response'
+import { pushInAppNotification } from '@/server/services/in-app-notification.service'
 
 export const GET = requireCleaner(async (_req, _ctx, user) => {
   const cleaner = await cleanerRepo.findByUserId(user.id)
@@ -30,6 +31,15 @@ export const GET = requireCleaner(async (_req, _ctx, user) => {
 
   if (cleaner.stripeOnboardingComplete !== connected) {
     await cleanerRepo.update(cleaner.id, { stripeOnboardingComplete: connected })
+    if (connected) {
+      await pushInAppNotification({
+        userId: user.id,
+        type: 'stripe_connected',
+        title: 'Stripe connected',
+        body: 'Your payment setup is complete. Your profile is now live and visible to clients.',
+        data: { cleaner_id: cleaner.id },
+      })
+    }
   }
 
   return ok({

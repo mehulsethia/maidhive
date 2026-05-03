@@ -29,6 +29,7 @@ const STATUS_FILTERS: Array<{ key: 'all' | BookingStatus; label: string }> = [
   { key: 'expired', label: 'Expired' },
   { key: 'disputed', label: 'Disputed' },
 ]
+type DashboardStatusFilter = 'active' | 'completed' | 'closed'
 
 const SERVICE_LABELS: Record<string, string> = {
   standard: 'Standard Clean',
@@ -46,6 +47,7 @@ export default function ClientBookingsPage() {
   const [actionLoadingId, setActionLoadingId] = useState<string | null>(null)
   const [query, setQuery] = useState('')
   const [filter, setFilter] = useState<'all' | BookingStatus>('all')
+  const [dashboardFilter, setDashboardFilter] = useState<DashboardStatusFilter | null>(null)
 
   async function loadBookings() {
     try {
@@ -85,6 +87,9 @@ export default function ClientBookingsPage() {
   const deferredBookings = useDeferredValue(bookings)
 
   const filtered = deferredBookings.filter((booking) => {
+    if (dashboardFilter === 'active' && !['pending', 'accepted', 'confirmed', 'in_progress'].includes(booking.status)) return false
+    if (dashboardFilter === 'completed' && booking.status !== 'completed') return false
+    if (dashboardFilter === 'closed' && !['cancelled', 'expired'].includes(booking.status)) return false
     if (filter !== 'all' && booking.status !== filter) return false
     if (!query.trim()) return true
 
@@ -137,9 +142,9 @@ export default function ClientBookingsPage() {
 
             <div className="animate-stage-up delay-120">
               <div className="ml-auto grid w-full max-w-sm grid-cols-1 gap-2 rounded-3xl border border-white/20 bg-black/35 p-4 backdrop-blur-sm sm:grid-cols-3 sm:gap-3">
-                <MetricChip label="Active" value={activeCount} icon={<Clock3 className="h-4 w-4" />} monoFont={monoFont.className} displayFont={displayFont.className} />
-                <MetricChip label="Done" value={completedCount} icon={<CalendarCheck2 className="h-4 w-4" />} monoFont={monoFont.className} displayFont={displayFont.className} />
-                <MetricChip label="Closed" value={cancelledCount} icon={<CircleX className="h-4 w-4" />} monoFont={monoFont.className} displayFont={displayFont.className} />
+                <MetricChip label="Active" value={activeCount} icon={<Clock3 className="h-4 w-4" />} monoFont={monoFont.className} displayFont={displayFont.className} active={dashboardFilter === 'active'} onClick={() => { setDashboardFilter('active'); setFilter('all') }} />
+                <MetricChip label="Done" value={completedCount} icon={<CalendarCheck2 className="h-4 w-4" />} monoFont={monoFont.className} displayFont={displayFont.className} active={dashboardFilter === 'completed'} onClick={() => { setDashboardFilter('completed'); setFilter('all') }} />
+                <MetricChip label="Closed" value={cancelledCount} icon={<CircleX className="h-4 w-4" />} monoFont={monoFont.className} displayFont={displayFont.className} active={dashboardFilter === 'closed'} onClick={() => { setDashboardFilter('closed'); setFilter('all') }} />
               </div>
             </div>
           </div>
@@ -160,7 +165,10 @@ export default function ClientBookingsPage() {
               {STATUS_FILTERS.map((status) => (
                 <button
                   key={status.key}
-                  onClick={() => setFilter(status.key)}
+                  onClick={() => {
+                    setDashboardFilter(null)
+                    setFilter(status.key)
+                  }}
                   className={`rounded-full px-3 py-1.5 text-xs font-semibold transition ${
                     filter === status.key
                       ? 'bg-[#0d4bc9] text-white shadow-[0_8px_16px_rgba(13,75,201,0.32)]'
@@ -387,20 +395,28 @@ function MetricChip({
   icon,
   monoFont,
   displayFont,
+  active,
+  onClick,
 }: {
   label: string
   value: number
   icon: React.ReactNode
   monoFont: string
   displayFont: string
+  active: boolean
+  onClick: () => void
 }) {
   return (
-    <div className="rounded-2xl border border-white/25 bg-white/10 p-3 text-white">
+    <button
+      type="button"
+      onClick={onClick}
+      className={`rounded-2xl border p-3 text-white text-left transition ${active ? 'border-white/70 bg-white/25' : 'border-white/25 bg-white/10 hover:bg-white/20'}`}
+    >
       <div className="mb-1 inline-flex h-7 w-7 items-center justify-center rounded-full bg-white/15 text-cyan-100">
         {icon}
       </div>
       <p className={`${monoFont} text-[0.6rem] uppercase tracking-[0.18em] text-white/70`}>{label}</p>
       <p className={`${displayFont} mt-1 text-xl font-bold tracking-[-0.02em]`}>{value}</p>
-    </div>
+    </button>
   )
 }

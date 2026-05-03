@@ -18,6 +18,7 @@ import type { BookingRead, ClientDispute } from '@/types'
 import { toast } from 'sonner'
 
 type ReportStatus = 'open' | 'under_review' | 'resolved' | 'closed'
+type ReportDashboardFilter = 'open' | 'under_review' | 'done'
 const DISPUTE_WINDOW_HOURS = Number(process.env.NEXT_PUBLIC_DISPUTE_WINDOW_HOURS ?? 24)
 const DISPUTE_WINDOW_MS = DISPUTE_WINDOW_HOURS * 60 * 60 * 1000
 
@@ -75,6 +76,7 @@ function ClientReportPageContent() {
   const [uploadingEvidence, setUploadingEvidence] = useState(false)
   const [search, setSearch] = useState('')
   const [statusFilter, setStatusFilter] = useState<'all' | ReportStatus>('all')
+  const [dashboardFilter, setDashboardFilter] = useState<ReportDashboardFilter | null>(null)
 
   async function load() {
     setLoading(true)
@@ -224,6 +226,9 @@ function ClientReportPageContent() {
   ).length
 
   const filteredDisputes = deferredDisputes.filter((dispute) => {
+    if (dashboardFilter === 'open' && dispute.status !== 'open') return false
+    if (dashboardFilter === 'under_review' && dispute.status !== 'under_review') return false
+    if (dashboardFilter === 'done' && dispute.status !== 'resolved' && dispute.status !== 'closed') return false
     if (statusFilter !== 'all' && dispute.status !== statusFilter) return false
     if (!search.trim()) return true
 
@@ -259,9 +264,9 @@ function ClientReportPageContent() {
 
             <div className="animate-stage-up delay-120">
               <div className="ml-auto grid w-full max-w-sm grid-cols-1 gap-2 rounded-3xl border border-white/20 bg-black/35 p-4 backdrop-blur-sm sm:grid-cols-3">
-                <StatTile label="Open" value={pendingCount} monoFont={monoFont.className} displayFont={displayFont.className} />
-                <StatTile label="Review" value={underReviewCount} monoFont={monoFont.className} displayFont={displayFont.className} />
-                <StatTile label="Done" value={resolvedCount} monoFont={monoFont.className} displayFont={displayFont.className} />
+                <StatTile label="Open" value={pendingCount} monoFont={monoFont.className} displayFont={displayFont.className} active={dashboardFilter === 'open'} onClick={() => { setDashboardFilter('open'); setStatusFilter('all') }} />
+                <StatTile label="Review" value={underReviewCount} monoFont={monoFont.className} displayFont={displayFont.className} active={dashboardFilter === 'under_review'} onClick={() => { setDashboardFilter('under_review'); setStatusFilter('all') }} />
+                <StatTile label="Done" value={resolvedCount} monoFont={monoFont.className} displayFont={displayFont.className} active={dashboardFilter === 'done'} onClick={() => { setDashboardFilter('done'); setStatusFilter('all') }} />
               </div>
             </div>
           </div>
@@ -382,7 +387,7 @@ function ClientReportPageContent() {
                 />
               </div>
 
-              <Select value={statusFilter} onChange={(event) => setStatusFilter(event.target.value as 'all' | ReportStatus)}>
+              <Select value={statusFilter} onChange={(event) => { setDashboardFilter(null); setStatusFilter(event.target.value as 'all' | ReportStatus) }}>
                 <option value="all">All Status</option>
                 <option value="open">Pending Review</option>
                 <option value="under_review">Under Review</option>
@@ -547,17 +552,25 @@ function StatTile({
   value,
   monoFont,
   displayFont,
+  active,
+  onClick,
 }: {
   label: string
   value: number
   monoFont: string
   displayFont: string
+  active: boolean
+  onClick: () => void
 }) {
   return (
-    <div className="rounded-2xl border border-white/25 bg-white/10 p-3 text-white">
+    <button
+      type="button"
+      onClick={onClick}
+      className={`rounded-2xl border p-3 text-left text-white transition ${active ? 'border-white/70 bg-white/25' : 'border-white/25 bg-white/10 hover:bg-white/20'}`}
+    >
       <p className={`${monoFont} text-[0.6rem] uppercase tracking-[0.18em] text-white/70`}>{label}</p>
       <p className={`${displayFont} mt-1 text-xl font-bold tracking-[-0.02em]`}>{value}</p>
-    </div>
+    </button>
   )
 }
 

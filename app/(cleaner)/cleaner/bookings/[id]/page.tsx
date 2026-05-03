@@ -301,7 +301,7 @@ export default function CleanerBookingDetailPage() {
             <p className="flex items-center gap-2"><Clock className="h-4 w-4" />{booking.duration_hours} hours</p>
             <p className="flex items-center gap-2"><MapPin className="h-4 w-4" />{booking.address}, {booking.city}, {booking.postcode}</p>
             {((booking.client as any)?.idFileUrl || (booking.client as any)?.id_file_url) && (
-              <p className="text-xs font-medium text-emerald-700">Client trust badge: ID submitted</p>
+              <p className="text-xs font-medium text-emerald-700">Client trust badge: ID provided</p>
             )}
             <div className="flex flex-wrap items-center gap-2">
               {memberSinceLabel && (

@@ -195,6 +195,7 @@ export const cleanersApi = {
     city?: string
     availability?: 'any' | 'next_7_days'
     transport_mode?: 'own_car' | 'bus_walk' | 'requires_pickup'
+    brings_own_supplies?: 'yes' | 'no'
     services_offered?: string
     min_rating?: number
     min_price?: number

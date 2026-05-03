@@ -178,6 +178,7 @@ function CleanerProfilePageContent() {
   }, [])
 
   const googleCalendarState = params.get('google_calendar')
+  const stripeState = params.get('stripe')
   useEffect(() => {
     if (!googleCalendarState) return
     if (googleCalendarState === 'connected') {
@@ -187,6 +188,12 @@ function CleanerProfilePageContent() {
       toast.error('Google Calendar connection failed. Please try again.')
     }
   }, [googleCalendarState])
+
+  useEffect(() => {
+    if (stripeState !== 'connected') return
+    toast.success('Stripe connected.')
+    loadAll().catch(() => null)
+  }, [stripeState])
 
   const stats = useMemo(() => {
     const totalJobs = bookings.length
@@ -220,6 +227,11 @@ function CleanerProfilePageContent() {
       .filter((b) => b.payment || ['completed', 'disputed', 'confirmed', 'in_progress'].includes(b.status))
       .sort((a, b) => new Date(b.scheduled_start).getTime() - new Date(a.scheduled_start).getTime())
   }, [bookings])
+  const stripeFullyReady =
+    stripe.connected &&
+    stripe.payouts_enabled &&
+    stripe.charges_enabled &&
+    stripe.details_submitted
 
   const missingOnboardingParts = useMemo(() => {
     if (!onboardingSteps) return []
@@ -690,7 +702,9 @@ function CleanerProfilePageContent() {
                     <div>
                       <p className="text-2xl font-semibold leading-none text-[#635BFF]">stripe</p>
                       <p className="mt-2 text-sm text-slate-500">Manage earnings and payouts securely with Stripe Connect.</p>
-                      <p className="mt-1 text-sm font-medium text-amber-700">You must connect Stripe to accept bookings and receive payouts. Go to: Profile → Payments to complete setup.</p>
+                      {!stripeFullyReady && (
+                        <p className="mt-1 text-sm font-medium text-amber-700">You must connect Stripe to accept bookings and receive payouts. Go to: Profile → Payments to complete setup.</p>
+                      )}
                     </div>
                     <Button onClick={connectStripe} variant="outline">{stripe.connected ? 'Manage Stripe' : 'Connect Stripe'}</Button>
                   </div>
@@ -723,7 +737,7 @@ function CleanerProfilePageContent() {
                   </div>
                 </div>
 
-                {!stripe.connected && (
+                {!stripeFullyReady && (
                   <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800">
                     Connect Stripe to accept bookings and receive payouts. Go to: Profile → Payments to complete setup.
                   </div>
