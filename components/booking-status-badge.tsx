@@ -13,7 +13,13 @@ const STATUS_CONFIG: Record<BookingStatus, { label: string; variant: 'default' |
   disputed:    { label: 'Under Review',    variant: 'destructive' },
 }
 
-export function BookingStatusBadge({ status }: { status: BookingStatus }) {
-  const config = STATUS_CONFIG[status] ?? { label: status, variant: 'outline' as const }
+function isPaymentAuthorized(paymentStatus?: string | null) {
+  return ['authorized', 'captured', 'transferred'].includes(String(paymentStatus ?? ''))
+}
+
+export function BookingStatusBadge({ status, paymentStatus }: { status: BookingStatus; paymentStatus?: string | null }) {
+  const config = status === 'pending' && !isPaymentAuthorized(paymentStatus)
+    ? { label: 'Payment Required', variant: 'warning' as const }
+    : STATUS_CONFIG[status] ?? { label: status, variant: 'outline' as const }
   return <Badge variant={config.variant}>{config.label}</Badge>
 }

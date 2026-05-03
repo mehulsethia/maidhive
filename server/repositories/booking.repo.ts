@@ -135,8 +135,22 @@ export const bookingRepo = {
     db.booking.findMany({
       where: {
         cleanerId,
-        status: { notIn: ['cancelled', 'expired'] },
-        OR: [
+        AND: [
+          {
+            OR: [
+              {
+                status: { in: ['accepted', 'confirmed', 'in_progress', 'completed', 'disputed'] },
+              },
+              {
+                status: 'pending',
+                payment: {
+                  is: {
+                    status: { in: ['authorized', 'captured', 'transferred'] },
+                  },
+                },
+              },
+            ],
+          },
           { scheduledStart: { lt: end }, scheduledEnd: { gt: start } },
         ],
       },

@@ -237,7 +237,7 @@ export default function CheckoutPage() {
               <CardContent className="space-y-2 text-sm">
                 <div className="flex justify-between">
                   <span className="text-muted-foreground">Status</span>
-                  <BookingStatusBadge status={booking.status} />
+                  <BookingStatusBadge status={booking.status} paymentStatus={booking.payment?.status} />
                 </div>
                 <div className="flex justify-between">
                   <span className="text-muted-foreground">Scheduled</span>

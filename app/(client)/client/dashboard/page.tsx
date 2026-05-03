@@ -234,7 +234,7 @@ export default function ClientDashboardPage() {
                         {formatDate(booking.scheduled_start)}
                       </p>
                     </div>
-                    <BookingStatusBadge status={booking.status} />
+                    <BookingStatusBadge status={booking.status} paymentStatus={booking.payment?.status} />
                   </Link>
                 ))}
               </div>

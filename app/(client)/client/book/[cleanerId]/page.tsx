@@ -38,6 +38,7 @@ const DURATION_OPTIONS = [1, 1.5, 2, 2.5, 3, 3.5, 4, 4.5, 5, 5.5, 6, 6.5, 7, 7.5
 const NOTES_MIN_CHARS = 12
 const MAX_JOB_PHOTOS = 5
 const MAX_SPECIAL_INSTRUCTIONS_CHARS = 5000
+const BOOKING_FLOW_DRAFT_VERSION = 1
 
 const JOB_TYPE_OPTIONS = [
   { value: 'regular_clean', label: 'Regular clean', serviceType: 'standard' as const },
@@ -67,6 +68,37 @@ const STEP_INFO = [
   { num: 3, title: 'Payment', desc: 'Card authorisation' },
   { num: 4, title: 'Confirmation', desc: 'Booking confirmation' },
 ]
+
+type BookingFlowDraft = {
+  version: number
+  step: number
+  duration: number
+  date: string
+  selectedSlot: string
+  firstName: string
+  lastName: string
+  email: string
+  phone: string
+  addressMode: 'saved' | 'new'
+  selectedAddressId: string
+  address: string
+  city: string
+  postcode: string
+  apartmentDetails: string
+  accessNotes: string
+  jobType: string
+  bedrooms: string
+  bathrooms: string
+  propertyCondition: string
+  suppliesProvider: string
+  notes: string
+  saveAddressForLater: boolean
+  bookingId: string
+}
+
+function isPaymentAuthorizedStatus(status?: string | null) {
+  return ['authorized', 'captured', 'transferred'].includes(String(status ?? ''))
+}
 
 // ── Step indicator ────────────────────────────────────────────────────────
 function StepIndicator({ current }: { current: number }) {
@@ -565,6 +597,42 @@ export default function BookingFlowPage() {
   const [phoneVerified, setPhoneVerified] = useState(false)
   const [transportAgreementConfirmed, setTransportAgreementConfirmed] = useState(false)
   const [suppliesAgreementConfirmed, setSuppliesAgreementConfirmed] = useState(false)
+  const hasHydratedDraftRef = useRef(false)
+  const draftStorageKey = `maidhive:booking-flow-draft:${cleanerId}`
+
+  function clearSessionDraft() {
+    if (typeof window === 'undefined') return
+    window.sessionStorage.removeItem(draftStorageKey)
+  }
+
+  function buildSessionDraft(): BookingFlowDraft {
+    return {
+      version: BOOKING_FLOW_DRAFT_VERSION,
+      step,
+      duration,
+      date,
+      selectedSlot,
+      firstName,
+      lastName,
+      email,
+      phone,
+      addressMode,
+      selectedAddressId,
+      address,
+      city,
+      postcode,
+      apartmentDetails,
+      accessNotes,
+      jobType,
+      bedrooms,
+      bathrooms,
+      propertyCondition,
+      suppliesProvider,
+      notes,
+      saveAddressForLater,
+      bookingId: booking?.id ?? '',
+    }
+  }
 
   async function refreshVerificationStatus() {
     try {
@@ -607,9 +675,15 @@ export default function BookingFlowPage() {
           }
           if (user?.email) setEmail(user.email)
           if (user?.phone) setPhone(user.phone)
-          if (cpAny.default_address ?? cpAny.defaultAddress) setAddress(cpAny.default_address ?? cpAny.defaultAddress)
-          if (cpAny.default_city ?? cpAny.defaultCity) setCity(cpAny.default_city ?? cpAny.defaultCity)
-          if (cpAny.default_postcode ?? cpAny.defaultPostcode) setPostcode(cpAny.default_postcode ?? cpAny.defaultPostcode)
+          const defaultAddressLine = (cpAny.default_address ?? cpAny.defaultAddress ?? '').trim()
+          const defaultCity = (cpAny.default_city ?? cpAny.defaultCity ?? '').trim()
+          const defaultPostcode = (cpAny.default_postcode ?? cpAny.defaultPostcode ?? '').trim()
+          if (defaultAddressLine) setAddress(defaultAddressLine)
+          if (defaultCity) setCity(defaultCity)
+          if (defaultPostcode) setPostcode(defaultPostcode)
+          if (defaultAddressLine || defaultCity || defaultPostcode) {
+            setAddressMode('saved')
+          }
         }
         if (addresses.length > 0) {
           const defaultAddress = addresses.find((entry: ClientAddressRead) => entry.is_default) ?? addresses[0]
@@ -628,6 +702,97 @@ export default function BookingFlowPage() {
       .catch(() => toast.error('Failed to load data'))
       .finally(() => { setLoading(false) })
   }, [cleanerId])
+
+  useEffect(() => {
+    if (loading || hasHydratedDraftRef.current || typeof window === 'undefined') return
+    hasHydratedDraftRef.current = true
+    const raw = window.sessionStorage.getItem(draftStorageKey)
+    if (!raw) return
+
+    try {
+      const parsed = JSON.parse(raw) as BookingFlowDraft
+      if (parsed.version !== BOOKING_FLOW_DRAFT_VERSION) return
+
+      setDuration(parsed.duration || 1)
+      setDate(parsed.date || '')
+      setSelectedSlot(parsed.selectedSlot || '')
+      setFirstName(parsed.firstName || '')
+      setLastName(parsed.lastName || '')
+      setEmail(parsed.email || '')
+      setPhone(parsed.phone || '')
+      setAddressMode(parsed.addressMode === 'saved' ? 'saved' : 'new')
+      setSelectedAddressId(parsed.selectedAddressId || '')
+      setAddress(parsed.address || '')
+      setCity(parsed.city || '')
+      setPostcode(parsed.postcode || '')
+      setApartmentDetails(parsed.apartmentDetails || '')
+      setAccessNotes(parsed.accessNotes || '')
+      setJobType((parsed.jobType as (typeof JOB_TYPE_OPTIONS)[number]['value']) || '')
+      setBedrooms(parsed.bedrooms || '')
+      setBathrooms(parsed.bathrooms || '')
+      setPropertyCondition((parsed.propertyCondition as (typeof PROPERTY_CONDITION_OPTIONS)[number]['value']) || '')
+      setSuppliesProvider((parsed.suppliesProvider as (typeof SUPPLIES_OPTIONS)[number]['value']) || '')
+      setNotes(parsed.notes || '')
+      setSaveAddressForLater(Boolean(parsed.saveAddressForLater))
+      const requestedStep = Math.min(Math.max(Number(parsed.step || 1), 1), 3)
+      setStep(requestedStep === 3 && !parsed.bookingId ? 2 : requestedStep)
+
+      if (parsed.bookingId) {
+        bookingsApi.getById(parsed.bookingId)
+          .then(async (res) => {
+            const restoredBooking = res.data
+            if (!restoredBooking) return
+            const restoredDate = parsed.date
+            const restoredSlot = parsed.selectedSlot
+            if (restoredDate && restoredSlot) {
+              const slotList = await availabilityApi.getSlots(cleanerId, restoredDate, parsed.duration || 1)
+              const stillAvailable = (slotList.data ?? []).some((slot) => slot.start === restoredSlot && !slot.disabled)
+              if (!stillAvailable) {
+                toast.error('This time is no longer available. Please choose another time.')
+                setBooking(null)
+                setClientSecret(null)
+                setStep(1)
+                return
+              }
+            }
+            setBooking(restoredBooking)
+            if (isPaymentAuthorizedStatus(restoredBooking.payment?.status)) {
+              clearSessionDraft()
+              setStep(4)
+              return
+            }
+
+            try {
+              const intentRes = await paymentsApi.createIntent(restoredBooking.id)
+              const secret = intentRes.data?.client_secret ?? null
+              if (secret) {
+                setClientSecret(secret)
+                setStep(3)
+                return
+              }
+            } catch {
+              // fall through to a final status refresh below
+            }
+
+            const latest = await bookingsApi.getById(restoredBooking.id)
+            const latestBooking = latest.data
+            if (!latestBooking) return
+            setBooking(latestBooking)
+            if (isPaymentAuthorizedStatus(latestBooking.payment?.status)) {
+              clearSessionDraft()
+              setStep(4)
+              return
+            }
+            setStep(2)
+          })
+          .catch(() => {
+            // stale draft booking id; keep local form draft only
+          })
+      }
+    } catch {
+      clearSessionDraft()
+    }
+  }, [loading, draftStorageKey])
 
   useEffect(() => {
     function onFocus() {
@@ -675,6 +840,37 @@ export default function BookingFlowPage() {
     }
   }, [jobPhotos])
 
+  useEffect(() => {
+    if (loading || typeof window === 'undefined') return
+    window.sessionStorage.setItem(draftStorageKey, JSON.stringify(buildSessionDraft()))
+  }, [
+    loading,
+    draftStorageKey,
+    step,
+    duration,
+    date,
+    selectedSlot,
+    firstName,
+    lastName,
+    email,
+    phone,
+    addressMode,
+    selectedAddressId,
+    address,
+    city,
+    postcode,
+    apartmentDetails,
+    accessNotes,
+    jobType,
+    bedrooms,
+    bathrooms,
+    propertyCondition,
+    suppliesProvider,
+    notes,
+    saveAddressForLater,
+    booking?.id,
+  ])
+
   const estimatedCost = useMemo(() => {
     if (!cleaner) return 0
     return cleaner.hourly_rate * duration
@@ -697,6 +893,38 @@ export default function BookingFlowPage() {
     setPostcode(selected.postcode)
     setApartmentDetails(selected.apartment_details ?? '')
     setAccessNotes(selected.access_notes ?? '')
+  }
+
+  function switchToSavedAddressMode() {
+    setAddressMode('saved')
+    if (selectedAddressId) {
+      applySavedAddress(selectedAddressId)
+      return
+    }
+    const fallback = savedAddresses.find((entry) => entry.is_default) ?? savedAddresses[0]
+    if (fallback) {
+      applySavedAddress(fallback.id)
+      return
+    }
+    const cpAny = (clientProfile ?? {}) as any
+    const defaultAddressLine = (cpAny.default_address ?? cpAny.defaultAddress ?? '').trim()
+    const defaultCity = (cpAny.default_city ?? cpAny.defaultCity ?? '').trim()
+    const defaultPostcode = (cpAny.default_postcode ?? cpAny.defaultPostcode ?? '').trim()
+    if (defaultAddressLine || defaultCity || defaultPostcode) {
+      setAddress(defaultAddressLine)
+      setCity(defaultCity)
+      setPostcode(defaultPostcode)
+    }
+  }
+
+  function switchToNewAddressMode() {
+    setAddressMode('new')
+    setSelectedAddressId('')
+    setAddress('')
+    setCity('')
+    setPostcode('')
+    setApartmentDetails('')
+    setAccessNotes('')
   }
 
   useEffect(() => {
@@ -747,6 +975,15 @@ export default function BookingFlowPage() {
       uploadedUrls.push(json.data.url)
     }
     return uploadedUrls
+  }
+
+  async function assertSelectedSlotStillAvailable() {
+    if (!date || !selectedSlot) return
+    const slotList = await availabilityApi.getSlots(cleanerId, date, duration)
+    const stillAvailable = (slotList.data ?? []).some((slot) => slot.start === selectedSlot && !slot.disabled)
+    if (!stillAvailable) {
+      throw new Error('This time is no longer available. Please choose another time.')
+    }
   }
 
   function buildSpecialInstructions(photoUrls: string[]) {
@@ -850,29 +1087,40 @@ export default function BookingFlowPage() {
   async function createDraftBookingAndProceed() {
     setSubmitting(true)
     try {
+      await assertSelectedSlotStillAvailable()
       const selectedJobType = JOB_TYPE_OPTIONS.find((option) => option.value === jobType)
       if (!selectedJobType) {
         throw new Error('Please select what type of clean this is.')
       }
 
+      const reusableBooking =
+        booking &&
+        ['draft', 'pending', 'accepted'].includes(booking.status) &&
+        booking.cleaner_id === cleanerId &&
+        booking.scheduled_start === selectedSlot &&
+        Number(booking.duration_hours) === Number(duration)
+          ? booking
+          : null
+
       let uploadedPhotoUrls: string[] = []
-      if (jobPhotos.length > 0) {
+      if (!reusableBooking && jobPhotos.length > 0) {
         uploadedPhotoUrls = await uploadJobPhotos(jobPhotos)
       }
 
-      const res = await bookingsApi.create({
-        cleaner_id: cleanerId,
-        service_type: selectedJobType.serviceType,
-        address: address.trim(),
-        city: city.trim(),
-        postcode: postcode.trim(),
-        apartment_details: apartmentDetails.trim() || undefined,
-        access_notes: accessNotes.trim(),
-        scheduled_start: selectedSlot,
-        duration_hours: duration,
-        special_instructions: buildSpecialInstructions(uploadedPhotoUrls),
-      })
-      const b = res.data
+      const b = reusableBooking ?? (
+        await bookingsApi.create({
+          cleaner_id: cleanerId,
+          service_type: selectedJobType.serviceType,
+          address: address.trim(),
+          city: city.trim(),
+          postcode: postcode.trim(),
+          apartment_details: apartmentDetails.trim() || undefined,
+          access_notes: accessNotes.trim(),
+          scheduled_start: selectedSlot,
+          duration_hours: duration,
+          special_instructions: buildSpecialInstructions(uploadedPhotoUrls),
+        })
+      ).data
       if (!b) throw new Error('Failed to create draft booking')
       setBooking(b)
 
@@ -899,6 +1147,11 @@ export default function BookingFlowPage() {
       setStep(3)
     } catch (err: any) {
       toast.error(err.message ?? 'Failed to create draft booking')
+      if (String(err?.message ?? '').includes('no longer available')) {
+        setStep(1)
+        setBooking(null)
+        setClientSecret(null)
+      }
     } finally {
       setSubmitting(false)
     }
@@ -912,6 +1165,7 @@ export default function BookingFlowPage() {
     if (bookingRes.data) {
       setBooking(bookingRes.data)
     }
+    clearSessionDraft()
     setStep(4)
   }
 
@@ -1155,8 +1409,8 @@ export default function BookingFlowPage() {
                       <input
                         type="radio"
                         checked={addressMode === 'saved'}
-                        onChange={() => setAddressMode('saved')}
-                        disabled={savedAddresses.length === 0}
+                        onChange={switchToSavedAddressMode}
+                        disabled={savedAddresses.length === 0 && !address.trim() && !city.trim() && !postcode.trim()}
                       />
                       Saved Addresses
                     </label>
@@ -1164,7 +1418,7 @@ export default function BookingFlowPage() {
                       <input
                         type="radio"
                         checked={addressMode === 'new'}
-                        onChange={() => setAddressMode('new')}
+                        onChange={switchToNewAddressMode}
                       />
                       Add a new address
                     </label>
@@ -1186,6 +1440,11 @@ export default function BookingFlowPage() {
                   {addressMode === 'saved' && savedAddresses.length === 1 && (
                     <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-600">
                       Using saved address: {savedAddresses[0].address_line1}, {savedAddresses[0].city}
+                    </div>
+                  )}
+                  {addressMode === 'saved' && savedAddresses.length === 0 && (
+                    <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-600">
+                      Using your saved profile address.
                     </div>
                   )}
 

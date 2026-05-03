@@ -20,6 +20,9 @@ export const POST = requireClient(async (req: NextRequest, _ctx, user) => {
 
   const booking = await bookingRepo.findById(parsed.data.booking_id)
   if (!booking) return err('Booking not found', 404)
+  if (!['draft', 'pending', 'accepted'].includes(booking.status)) {
+    return err('Booking cannot be authorized in its current state', 400)
+  }
 
   const client = await clientRepo.findByUserId(user.id)
   if (!client || booking.clientId !== client.id) return err('Forbidden', 403)

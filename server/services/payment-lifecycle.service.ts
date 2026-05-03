@@ -127,6 +127,11 @@ export const paymentLifecycleService = {
       where: {
         status: 'pending',
         acceptBy: { lt: now },
+        payment: {
+          is: {
+            status: { in: ['authorized', 'captured', 'transferred'] },
+          },
+        },
       },
       include: {
         payment: true,

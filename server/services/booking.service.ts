@@ -117,29 +117,23 @@ export const bookingService = {
       originalScheduledStart: scheduledStart,
     }
 
-    let booking
     try {
-      booking = await bookingRepo.create({
+      return await bookingRepo.create({
         ...baseCreatePayload,
         status: 'draft',
       })
     } catch (error) {
-      // Backward-compat: some DBs still enforce status CHECK without 'draft'.
-      // Fall back to 'pending' and rely on cleaner-visibility + auth sync flow.
       const message = String((error as any)?.message ?? '')
       const likelyLegacyStatusConstraint =
         message.includes('status') &&
         (message.includes('check') || message.includes('constraint'))
 
-      if (!likelyLegacyStatusConstraint) throw error
+      if (likelyLegacyStatusConstraint) {
+        throw new ServiceError('Booking draft status is not enabled in database. Please run the latest booking status migration.', 500)
+      }
 
-      booking = await bookingRepo.create({
-        ...baseCreatePayload,
-        status: 'pending',
-      })
+      throw error
     }
-
-    return booking
   },
 
   async applyAction(

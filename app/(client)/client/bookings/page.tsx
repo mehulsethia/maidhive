@@ -20,7 +20,7 @@ const monoFont = IBM_Plex_Mono({ subsets: ['latin'], weight: ['400', '500', '600
 
 const STATUS_FILTERS: Array<{ key: 'all' | BookingStatus; label: string }> = [
   { key: 'all', label: 'All' },
-  { key: 'pending', label: 'Pending Cleaner Acceptance' },
+  { key: 'pending', label: 'Pending / Payment Required' },
   { key: 'accepted', label: 'Accepted' },
   { key: 'confirmed', label: 'Confirmed' },
   { key: 'in_progress', label: 'In Progress' },
@@ -229,7 +229,7 @@ export default function ClientBookingsPage() {
                         </div>
 
                         <div className="text-left sm:text-right">
-                          <BookingStatusBadge status={booking.status} />
+                          <BookingStatusBadge status={booking.status} paymentStatus={booking.payment?.status} />
                           <p className={`${displayFont.className} mt-2 text-base font-semibold text-slate-900`}>
                             {formatCurrency(Number(booking.total_amount ?? 0))}
                           </p>

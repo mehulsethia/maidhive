@@ -38,6 +38,11 @@ export const GET = requireAuth(async (_req, _ctx, user) => {
       where: {
         cleaner: { userId },
         status: 'pending',
+        payment: {
+          is: {
+            status: { in: ['authorized', 'captured', 'transferred'] },
+          },
+        },
       },
     })
   } else if (role === 'client') {
