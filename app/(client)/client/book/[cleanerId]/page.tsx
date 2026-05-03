@@ -307,7 +307,7 @@ function StripePaymentForm({
 }: {
   booking: BookingRead
   onSuccess: () => Promise<void>
-  validateBeforeSubmit: () => string[]
+  validateBeforeSubmit: () => Promise<string[]>
 }) {
   const stripe = useStripe()
   const elements = useElements()
@@ -342,7 +342,7 @@ function StripePaymentForm({
   }, [])
 
   async function handleSubmit() {
-    const missingItems = validateBeforeSubmit()
+    const missingItems = await validateBeforeSubmit()
     if (mode === 'saved' && !selectedSavedCardId) {
       missingItems.push('Add payment method')
     }
@@ -540,6 +540,21 @@ export default function BookingFlowPage() {
   const [emailVerified, setEmailVerified] = useState(false)
   const [phoneVerified, setPhoneVerified] = useState(false)
 
+  async function refreshVerificationStatus() {
+    try {
+      const authUserRes = await createClient().auth.getUser()
+      const authUser = authUserRes.data.user
+      const nextEmailVerified = Boolean(authUser?.email_confirmed_at)
+      const nextPhoneVerified = Boolean(authUser?.phone_confirmed_at)
+      setEmailVerified(nextEmailVerified)
+      setPhoneVerified(nextPhoneVerified)
+      return { emailVerified: nextEmailVerified, phoneVerified: nextPhoneVerified }
+    } catch {
+      // keep current values if auth refresh fails
+      return { emailVerified, phoneVerified }
+    }
+  }
+
   // Load cleaner + client profile
   useEffect(() => {
     Promise.all([
@@ -587,6 +602,14 @@ export default function BookingFlowPage() {
       .catch(() => toast.error('Failed to load data'))
       .finally(() => { setLoading(false) })
   }, [cleanerId])
+
+  useEffect(() => {
+    function onFocus() {
+      refreshVerificationStatus().catch(() => null)
+    }
+    window.addEventListener('focus', onFocus)
+    return () => window.removeEventListener('focus', onFocus)
+  }, [])
 
   // Fetch available slots when date or duration changes
   useEffect(() => {
@@ -1344,8 +1367,13 @@ export default function BookingFlowPage() {
                     booking={booking}
                     onSuccess={handlePaymentSuccess}
                     validateBeforeSubmit={() => {
-                      const checks = [...missingAccountItems]
-                      return checks
+                      return refreshVerificationStatus().then((verification) => {
+                        const checks: string[] = []
+                        if (!verification.emailVerified) checks.push('Verify email')
+                        if (!verification.phoneVerified) checks.push('Verify phone number')
+                        if (!address.trim() || !city.trim() || !postcode.trim()) checks.push('Add service address')
+                        return checks
+                      })
                     }}
                   />
                 </Elements>

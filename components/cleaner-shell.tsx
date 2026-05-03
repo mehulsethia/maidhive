@@ -4,7 +4,7 @@ import Link from 'next/link'
 import { useEffect, useState } from 'react'
 import { usePathname, useRouter } from 'next/navigation'
 import { Bricolage_Grotesque, IBM_Plex_Mono } from 'next/font/google'
-import { LayoutGrid, CalendarDays, MessagesSquare, Bell, User } from 'lucide-react'
+import { LayoutGrid, CalendarDays, MessagesSquare, Bell, User, ShieldAlert } from 'lucide-react'
 import { createClient } from '@/lib/supabase'
 import { clearAuthCache } from '@/lib/auth-cache'
 import { clearApiCache, cleanersApi } from '@/lib/api'
@@ -15,6 +15,7 @@ import { SidebarProfile } from '@/components/sidebar-profile'
 const NAV_ITEMS = [
   { href: '/cleaner/dashboard', label: 'Dashboard', icon: LayoutGrid },
   { href: '/cleaner/bookings', label: 'Bookings', icon: CalendarDays },
+  { href: '/cleaner/report', label: 'Report', icon: ShieldAlert },
   { href: '/cleaner/chats', label: 'Messages', icon: MessagesSquare },
   { href: '/cleaner/notifications', label: 'Notifications', icon: Bell },
   { href: '/cleaner/profile', label: 'Profile', icon: User },
@@ -46,6 +47,14 @@ function cleanerStageCopy(pathname: string) {
       title: 'Messages',
       desc: 'Coordinate directly with clients and keep context tied to each job.',
       image: '/images/stage/cleaner-chats.jpg',
+    }
+  }
+  if (pathname.startsWith('/cleaner/report')) {
+    return {
+      tag: 'MaidHive Resolution Desk',
+      title: 'Report Issues',
+      desc: 'Report no-shows, access problems, safety concerns, and disputes for admin review.',
+      image: '/images/stage/cleaner-default.jpg',
     }
   }
   if (pathname.startsWith('/cleaner/notifications')) {

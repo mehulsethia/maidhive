@@ -391,7 +391,7 @@ export default function CleanerDashboardPage() {
                 <span className="inline-flex items-center gap-2"><Euro className="h-4 w-4 text-primary" />Payments &amp; payouts</span>
                 <ArrowUpRight className="h-4 w-4" />
               </Link>
-              <Link href="/cleaner/bookings?filter=in_progress" className="flex items-center justify-between rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-700 transition-all duration-200 hover:-translate-y-0.5 hover:bg-slate-50">
+              <Link href="/cleaner/report" className="flex items-center justify-between rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-700 transition-all duration-200 hover:-translate-y-0.5 hover:bg-slate-50">
                 <span className="inline-flex items-center gap-2"><MessageSquare className="h-4 w-4 text-primary" />Report a problem</span>
                 <ArrowUpRight className="h-4 w-4" />
               </Link>
