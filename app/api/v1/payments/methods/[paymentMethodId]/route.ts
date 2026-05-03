@@ -13,7 +13,12 @@ export const DELETE = requireClient(async (req: NextRequest, ctx, user) => {
   const client = await clientRepo.findByUserId(user.id)
   if (!client?.stripeCustomerId) return err('No saved payment methods found', 404)
 
-  const method = await stripe.paymentMethods.retrieve(paymentMethodId)
+  let method
+  try {
+    method = await stripe.paymentMethods.retrieve(paymentMethodId)
+  } catch {
+    return err('Card not found for this account', 404)
+  }
   if (typeof method.customer !== 'string' || method.customer !== client.stripeCustomerId) {
     return err('Card not found for this account', 404)
   }
@@ -25,7 +30,12 @@ export const DELETE = requireClient(async (req: NextRequest, ctx, user) => {
 
   let replacementMethodId: string | null = null
   if (replacementPaymentMethodId) {
-    const replacement = await stripe.paymentMethods.retrieve(replacementPaymentMethodId)
+    let replacement
+    try {
+      replacement = await stripe.paymentMethods.retrieve(replacementPaymentMethodId)
+    } catch {
+      return err('Replacement card is not available for this account', 404)
+    }
     if (typeof replacement.customer !== 'string' || replacement.customer !== client.stripeCustomerId) {
       return err('Replacement card is not available for this account', 403)
     }

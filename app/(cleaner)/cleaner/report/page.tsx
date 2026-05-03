@@ -153,8 +153,8 @@ function CleanerReportPageContent() {
 
   return (
     <div className="space-y-7 md:space-y-9">
-      <section className="rounded-[1.5rem] border border-slate-200/80 bg-white/90 p-5 shadow-[0_18px_45px_rgba(11,33,78,0.08)]">
-        <div className="grid w-full max-w-sm grid-cols-3 gap-3">
+      <section className="rounded-[1.5rem] border border-slate-200/80 bg-white/90 p-4 shadow-[0_18px_45px_rgba(11,33,78,0.08)] sm:p-5">
+        <div className="grid w-full grid-cols-1 gap-2 sm:max-w-sm sm:grid-cols-3 sm:gap-3">
           <StatTile label="Open" value={openCount} monoFont={monoFont.className} displayFont={displayFont.className} />
           <StatTile label="Review" value={underReviewCount} monoFont={monoFont.className} displayFont={displayFont.className} />
           <StatTile label="Done" value={doneCount} monoFont={monoFont.className} displayFont={displayFont.className} />
@@ -162,7 +162,7 @@ function CleanerReportPageContent() {
       </section>
 
       <section className="grid gap-4 lg:grid-cols-[1fr_1fr]">
-        <div className="rounded-[1.5rem] border border-slate-200/80 bg-white/90 p-5 shadow-[0_18px_45px_rgba(11,33,78,0.08)]">
+        <div className="rounded-[1.5rem] border border-slate-200/80 bg-white/90 p-4 shadow-[0_18px_45px_rgba(11,33,78,0.08)] sm:p-5">
           <h2 className={`${displayFont.className} text-2xl font-bold tracking-[-0.02em] text-slate-900`}>Report a problem</h2>
           <p className="mt-1 text-sm text-slate-500">Available during the job and up to 24 hours after scheduled completion.</p>
           {eligibleBookings.length === 0 ? (
@@ -198,7 +198,7 @@ function CleanerReportPageContent() {
           )}
         </div>
 
-        <div className="rounded-[1.5rem] border border-slate-200/80 bg-white/90 p-5 shadow-[0_18px_45px_rgba(11,33,78,0.08)]">
+        <div className="rounded-[1.5rem] border border-slate-200/80 bg-white/90 p-4 shadow-[0_18px_45px_rgba(11,33,78,0.08)] sm:p-5">
           <h2 className={`${displayFont.className} text-2xl font-bold tracking-[-0.02em] text-slate-900`}>Report history</h2>
           <div className="mt-4 grid gap-2 lg:grid-cols-[1fr_170px]">
             <div className="relative">

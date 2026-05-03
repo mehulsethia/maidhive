@@ -166,6 +166,18 @@ export default function ClientProfilePage() {
       toast.success('Card removed.')
       await loadPaymentMethods()
     } catch (err: any) {
+      const fallbackCard = savedCards.find((card) => card.id !== paymentMethodId)
+      if (fallbackCard) {
+        try {
+          await paymentsApi.deleteMethod(paymentMethodId, fallbackCard.id)
+          toast.success('Card removed after re-authorising linked bookings.')
+          await loadPaymentMethods()
+          return
+        } catch (retryErr: any) {
+          toast.error(retryErr.message ?? 'Card cannot be removed right now.')
+          return
+        }
+      }
       toast.error(err.message ?? 'Card cannot be removed right now.')
     } finally {
       setRemovingCardId(null)
