@@ -41,8 +41,8 @@ function transportLabel(value?: string) {
 }
 
 function suppliesLabel(value?: string) {
-  if (value === 'own_supplies') return 'Brings supplies'
-  if (value === 'client_supplies') return 'Uses client supplies'
+  if (value === 'own_supplies') return 'Brings own supplies'
+  if (value === 'client_supplies') return 'Client must provide supplies'
   return null
 }
 

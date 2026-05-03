@@ -135,7 +135,7 @@ export default function CleanerProfilePage() {
 
   function suppliesText(value?: string) {
     if (value === 'own_supplies') return 'Brings own supplies'
-    if (value === 'client_supplies') return 'Uses client supplies'
+    if (value === 'client_supplies') return 'Client must provide supplies'
     return null
   }
 
@@ -359,6 +359,13 @@ export default function CleanerProfilePage() {
                       icon={<Clock className="h-4 w-4 text-slate-400" />}
                       title="Supplies"
                       value={suppliesText((cleaner as any).cleaning_supplies) as string}
+                    />
+                  )}
+                  {cleaner.transport_mode === 'requires_pickup' && (cleaner as any).transport_pickup_location && (
+                    <InfoLine
+                      icon={<MapPin className="h-4 w-4 text-slate-400" />}
+                      title="Pickup Location"
+                      value={String((cleaner as any).transport_pickup_location)}
                     />
                   )}
                   <InfoLine icon={<CalendarCheck className="h-4 w-4 text-slate-400" />} title="Member Since" value={memberSince} />

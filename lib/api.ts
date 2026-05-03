@@ -351,6 +351,18 @@ export const paymentsApi = {
       exp_month: number | null
       exp_year: number | null
     }>>>('/payments/methods'),
+  deleteMethod: (paymentMethodId: string, replacementPaymentMethodId?: string) =>
+    request<APIResponse<{ removed: boolean; replaced?: boolean; linked_bookings_reauthorised?: number }>>(
+      `/payments/methods/${paymentMethodId}`,
+      {
+        method: 'DELETE',
+        body: JSON.stringify(
+          replacementPaymentMethodId
+            ? { replacement_payment_method_id: replacementPaymentMethodId }
+            : {},
+        ),
+      },
+    ),
   createSetupIntent: () =>
     request<APIResponse<{ setup_intent_id: string; client_secret: string | null }>>('/payments/setup-intent', {
       method: 'POST',

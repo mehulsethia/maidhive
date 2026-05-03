@@ -43,10 +43,12 @@ export default function ClientProfilePage() {
   const [savedCards, setSavedCards] = useState<Array<{ id: string; brand: string; last4: string; exp_month: number | null; exp_year: number | null }>>([])
   const [setupSecret, setSetupSecret] = useState<string | null>(null)
   const [loadingPayment, setLoadingPayment] = useState(false)
+  const [removingCardId, setRemovingCardId] = useState<string | null>(null)
   const [bio, setBio] = useState('')
   const [avatarUrl, setAvatarUrl] = useState<string | null>(null)
   const [emailVerified, setEmailVerified] = useState(false)
   const [phoneVerified, setPhoneVerified] = useState(false)
+  const [verifiedPhoneFromAuth, setVerifiedPhoneFromAuth] = useState('')
 
   useEffect(() => {
     ;(async () => {
@@ -76,6 +78,7 @@ export default function ClientProfilePage() {
           setAvatarUrl(user?.avatar_url ?? null)
           setEmailVerified(Boolean(authUserRes.data.user?.email_confirmed_at))
           setPhoneVerified(Boolean(authUserRes.data.user?.phone_confirmed_at))
+          setVerifiedPhoneFromAuth(Boolean(authUserRes.data.user?.phone_confirmed_at) ? (authUserRes.data.user?.phone ?? '') : '')
           setBookings(bookingRes.data?.items ?? [])
           setLoading(false)
         })
@@ -117,6 +120,8 @@ export default function ClientProfilePage() {
       const currentAuth = await supabase.auth.getUser()
       const currentEmail = currentAuth.data.user?.email ?? ''
       const currentPhone = currentAuth.data.user?.phone ?? ''
+      const currentPhoneVerified = Boolean(currentAuth.data.user?.phone_confirmed_at)
+      const currentVerifiedPhone = currentPhoneVerified ? currentPhone : ''
       if (email.trim() && email.trim() !== currentEmail) {
         await supabase.auth.updateUser({ email: email.trim() })
         toast.success('Verification email sent. Please verify your new email.')
@@ -125,18 +130,45 @@ export default function ClientProfilePage() {
         await supabase.auth.updateUser({ phone: phone.trim() })
         toast.success('Verification SMS sent. Please verify your new phone number.')
       }
-      await clientsApi.updateMe({
+      const profilePayload: {
+        name: string
+        phone?: string
+        default_address: string | null
+        default_city: string | null
+        default_postcode: string | null
+      } = {
         name: `${firstName.trim()} ${lastName.trim()}`,
-        phone,
         default_address: defaultAddress || null,
         default_city: defaultCity || null,
         default_postcode: defaultPostcode || null,
-      })
+      }
+      if (currentVerifiedPhone) profilePayload.phone = currentVerifiedPhone
+      await clientsApi.updateMe(profilePayload)
       toast.success('Profile updated.')
     } catch (err: any) {
       toast.error(err.message ?? 'Failed to save profile.')
     } finally {
       setSaving(false)
+    }
+  }
+
+  useEffect(() => {
+    if (!phoneVerified || !verifiedPhoneFromAuth) return
+    if (verifiedPhoneFromAuth === phone) return
+    setPhone(verifiedPhoneFromAuth)
+    clientsApi.updateMe({ phone: verifiedPhoneFromAuth }).catch(() => null)
+  }, [phoneVerified, verifiedPhoneFromAuth])
+
+  async function removeCard(paymentMethodId: string) {
+    setRemovingCardId(paymentMethodId)
+    try {
+      await paymentsApi.deleteMethod(paymentMethodId)
+      toast.success('Card removed.')
+      await loadPaymentMethods()
+    } catch (err: any) {
+      toast.error(err.message ?? 'Card cannot be removed right now.')
+    } finally {
+      setRemovingCardId(null)
     }
   }
 
@@ -354,8 +386,20 @@ export default function ClientProfilePage() {
                 <div className="mt-3 space-y-2">
                   {savedCards.map((card) => (
                     <div key={card.id} className="rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-700">
-                      {card.brand.toUpperCase()} •••• {card.last4}
-                      {card.exp_month && card.exp_year ? ` (exp ${card.exp_month}/${card.exp_year})` : ''}
+                      <div className="flex items-center justify-between gap-2">
+                        <span>
+                          {card.brand.toUpperCase()} •••• {card.last4}
+                          {card.exp_month && card.exp_year ? ` (exp ${card.exp_month}/${card.exp_year})` : ''}
+                        </span>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => removeCard(card.id)}
+                          loading={removingCardId === card.id}
+                        >
+                          Remove
+                        </Button>
+                      </div>
                     </div>
                   ))}
                 </div>

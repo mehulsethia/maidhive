@@ -261,6 +261,9 @@ function CleanerProfilePageContent() {
     if (bio.trim().length > BIO_MAX_CHARS) return toast.error(`Professional bio can be up to ${BIO_MAX_CHARS} characters.`)
     if (skills.length === 0) return toast.error('Select at least one service.')
     if (!transportMode) return toast.error('Mode of transport is required.')
+    if (transportMode === 'requires_pickup' && !homeAddress.trim()) {
+      return toast.error('Pick-up/drop-off location is required for transport support.')
+    }
 
     setSaving(true)
     try {

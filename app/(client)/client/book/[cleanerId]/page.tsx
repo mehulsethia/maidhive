@@ -201,6 +201,23 @@ function BookingSummary({
 }) {
   const [showBreakdown, setShowBreakdown] = useState(false)
   const cleanerName = cleaner.user?.name ?? 'Professional Cleaner'
+  const total = breakdown?.total_amount ?? Number((cleaner.hourly_rate * duration * 1.1).toFixed(2))
+  const serviceCost = breakdown?.subtotal ?? cleaner.hourly_rate * duration
+  const platformFee = breakdown?.platform_fee ?? Number((serviceCost * 0.1).toFixed(2))
+  const transportLabel =
+    cleaner.transport_mode === 'own_car'
+      ? 'Own transport'
+      : cleaner.transport_mode === 'bus_walk'
+        ? 'Bus / Walk'
+        : cleaner.transport_mode === 'requires_pickup'
+          ? 'Requires pickup/drop-off'
+          : 'Not set'
+  const suppliesLabel =
+    cleaner.cleaning_supplies === 'own_supplies'
+      ? 'Brings own supplies'
+      : cleaner.cleaning_supplies === 'client_supplies'
+        ? 'Client must provide supplies'
+        : 'Not set'
   return (
     <Card className="rounded-2xl border-slate-200 sticky top-6">
       <CardHeader className="pb-2">
@@ -247,40 +264,47 @@ function BookingSummary({
 
         <Separator />
 
-        {/* Price breakdown */}
-        {breakdown && (
-          <div className="space-y-2 text-sm pt-2">
-            <div className="flex items-center justify-between">
-              <span className="text-slate-900 font-semibold">Total</span>
-              <span className="text-lg text-primary font-bold">{formatCurrency(breakdown.total_amount)}</span>
-            </div>
-            <p className="text-xs text-slate-500">Includes secure booking &amp; support fee</p>
-            <button
-              type="button"
-              onClick={() => setShowBreakdown((v) => !v)}
-              className="text-xs font-medium text-primary hover:underline"
-            >
-              {showBreakdown ? 'Hide price breakdown' : 'View price breakdown'}
-            </button>
-            {showBreakdown && (
-              <>
-            <div className="flex justify-between items-center">
-              <span className="text-slate-500">Service ({duration}h)</span>
-              <span className="font-semibold text-slate-900">{formatCurrency(breakdown.subtotal)}</span>
-            </div>
-            <div className="flex justify-between items-center">
-              <span className="text-slate-500">Secure booking &amp; support fee (10%)</span>
-              <span className="font-semibold text-slate-900">{formatCurrency(breakdown.platform_fee)}</span>
-            </div>
-            <Separator className="my-2" />
-            <div className="flex justify-between items-center font-bold">
-              <span className="text-slate-900">Total</span>
-              <span className="text-lg text-primary">{formatCurrency(breakdown.total_amount)}</span>
-            </div>
-              </>
-            )}
+        <div className="space-y-2 text-sm pt-2">
+          <div className="flex items-center justify-between">
+            <span className="text-slate-900 font-semibold">Total</span>
+            <span className="text-lg text-primary font-bold">{formatCurrency(total)}</span>
           </div>
-        )}
+          <p className="text-xs text-slate-500">Includes secure booking &amp; support fee</p>
+          <button
+            type="button"
+            onClick={() => setShowBreakdown((v) => !v)}
+            className="text-xs font-medium text-primary hover:underline"
+          >
+            {showBreakdown ? 'Hide price breakdown' : 'View price breakdown'}
+          </button>
+          {showBreakdown && (
+            <>
+              <div className="flex justify-between items-center">
+                <span className="text-slate-500">Service ({duration}h)</span>
+                <span className="font-semibold text-slate-900">{formatCurrency(serviceCost)}</span>
+              </div>
+              <div className="flex justify-between items-center">
+                <span className="text-slate-500">Secure booking &amp; support fee (10%)</span>
+                <span className="font-semibold text-slate-900">{formatCurrency(platformFee)}</span>
+              </div>
+              <Separator className="my-2" />
+              <div className="flex justify-between items-center font-bold">
+                <span className="text-slate-900">Total</span>
+                <span className="text-lg text-primary">{formatCurrency(total)}</span>
+              </div>
+            </>
+          )}
+        </div>
+
+        <Separator />
+        <div className="space-y-2 text-sm">
+          <p className="font-semibold text-slate-900">Cleaner Details</p>
+          <p className="text-slate-600">Transport: {transportLabel}</p>
+          <p className="text-slate-600">Supplies: {suppliesLabel}</p>
+          <p className="text-slate-600">Rating: {cleaner.average_rating?.toFixed(1) ?? 'N/A'}</p>
+          <p className="text-slate-600">Completed jobs: {cleaner.total_jobs ?? 0}</p>
+          <p className="text-slate-600">Experience: {cleaner.years_experience ?? 0} years</p>
+        </div>
 
         {/* Trust signals */}
         <div className="space-y-2 pt-2">
@@ -539,6 +563,8 @@ export default function BookingFlowPage() {
   const [submitting, setSubmitting] = useState(false)
   const [emailVerified, setEmailVerified] = useState(false)
   const [phoneVerified, setPhoneVerified] = useState(false)
+  const [transportAgreementConfirmed, setTransportAgreementConfirmed] = useState(false)
+  const [suppliesAgreementConfirmed, setSuppliesAgreementConfirmed] = useState(false)
 
   async function refreshVerificationStatus() {
     try {
@@ -718,12 +744,26 @@ export default function BookingFlowPage() {
     const jobTypeMeta = JOB_TYPE_OPTIONS.find((option) => option.value === jobType)
     const conditionMeta = PROPERTY_CONDITION_OPTIONS.find((option) => option.value === propertyCondition)
     const suppliesMeta = SUPPLIES_OPTIONS.find((option) => option.value === suppliesProvider)
+    const transportSnapshot =
+      cleaner?.transport_mode === 'own_car'
+        ? 'Own transport'
+        : cleaner?.transport_mode === 'bus_walk'
+          ? 'Bus / Walk'
+          : cleaner?.transport_mode === 'requires_pickup'
+            ? 'Requires pickup/drop-off'
+            : 'Not set'
+    const pickupLocationSnapshot =
+      cleaner?.transport_mode === 'requires_pickup'
+        ? ((cleaner as any)?.transport_pickup_location ?? '')
+        : ''
     const lines = [
       `Job type: ${jobTypeMeta?.label ?? 'Not provided'}`,
       `Bedrooms: ${bedrooms}`,
       `Bathrooms: ${bathrooms}`,
       `Property condition: ${conditionMeta?.label ?? 'Not provided'}`,
       `Cleaning supplies: ${suppliesMeta?.label ?? 'Not provided'}`,
+      `Cleaner transport: ${transportSnapshot}`,
+      ...(pickupLocationSnapshot ? [`Pickup location snapshot: ${pickupLocationSnapshot}`] : []),
       `What needs to be cleaned: ${notes.trim()}`,
     ]
     if (photoUrls.length > 0) {
@@ -750,6 +790,14 @@ export default function BookingFlowPage() {
   // Navigation
   function goNext() {
     if (step === 1) {
+      if (cleanerRequiresPickup && !transportAgreementConfirmed) {
+        toast.error('Please confirm pickup and drop-off arrangement before proceeding.')
+        return
+      }
+      if (cleanerNeedsClientSupplies && !suppliesAgreementConfirmed) {
+        toast.error('Please confirm cleaning supplies arrangement before proceeding.')
+        return
+      }
       if (!date) { toast.error('Please select a date.'); return }
       if (!selectedSlot) { toast.error('Please select a time slot.'); return }
       setStep(2)
@@ -863,6 +911,8 @@ export default function BookingFlowPage() {
 
   const cleanerName = cleaner.user?.name ?? 'Professional Cleaner'
   const showDeepCleanAdvisory = jobType === 'deep_clean' || jobType === 'move_out_end_of_tenancy'
+  const cleanerRequiresPickup = cleaner.transport_mode === 'requires_pickup'
+  const cleanerNeedsClientSupplies = cleaner.cleaning_supplies === 'client_supplies'
 
   return (
     <>
@@ -935,11 +985,46 @@ export default function BookingFlowPage() {
                     <p className="mt-1 text-lg font-bold text-slate-900">{formatCurrency(cleaner.hourly_rate)}<span className="text-sm font-normal text-slate-500">/hr</span></p>
                   </div>
                   <div>
-                    <Label className="text-sm font-semibold text-slate-700">Service Cost</Label>
-                    <p className="mt-1 text-lg font-bold text-primary">{formatCurrency(estimatedCost)}</p>
-                    <p className="mt-1 text-xs text-slate-500">Final price includes secure booking &amp; support fee.</p>
+                    <Label className="text-sm font-semibold text-slate-700">Total Price</Label>
+                    <p className="mt-1 text-lg font-bold text-primary">
+                      {formatCurrency(breakdown?.total_amount ?? Number((estimatedCost * 1.1).toFixed(2)))}
+                    </p>
+                    <p className="mt-1 text-xs text-slate-500">Includes secure booking &amp; support fee.</p>
                   </div>
                 </div>
+
+                {cleanerRequiresPickup && (
+                  <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800">
+                    <p>This cleaner requires pickup and drop-off. You will need to arrange transport to and from their pickup location.</p>
+                    {(cleaner as any).transport_pickup_location && (
+                      <p className="mt-1 text-xs font-medium text-amber-900">
+                        Pickup location: {(cleaner as any).transport_pickup_location}
+                      </p>
+                    )}
+                    <label className="mt-2 inline-flex items-start gap-2 text-xs font-medium text-amber-900">
+                      <input
+                        type="checkbox"
+                        checked={transportAgreementConfirmed}
+                        onChange={(event) => setTransportAgreementConfirmed(event.target.checked)}
+                      />
+                      I confirm I will provide pickup and drop-off for this booking.
+                    </label>
+                  </div>
+                )}
+
+                {cleanerNeedsClientSupplies && (
+                  <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800">
+                    <p>This cleaner does not bring cleaning supplies. You will need to provide all required supplies.</p>
+                    <label className="mt-2 inline-flex items-start gap-2 text-xs font-medium text-amber-900">
+                      <input
+                        type="checkbox"
+                        checked={suppliesAgreementConfirmed}
+                        onChange={(event) => setSuppliesAgreementConfirmed(event.target.checked)}
+                      />
+                      I confirm I will provide cleaning supplies.
+                    </label>
+                  </div>
+                )}
 
                 {/* Date picker */}
                 <div>
