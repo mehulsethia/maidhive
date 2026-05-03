@@ -152,12 +152,31 @@ function CleanerReportPageContent() {
   if (loading) return <ReportPageSkeleton />
 
   return (
-    <div className="space-y-7 md:space-y-9">
-      <section className="rounded-[1.5rem] border border-slate-200/80 bg-white/90 p-4 shadow-[0_18px_45px_rgba(11,33,78,0.08)] sm:p-5">
-        <div className="grid w-full grid-cols-1 gap-2 sm:max-w-sm sm:grid-cols-3 sm:gap-3">
-          <StatTile label="Open" value={openCount} monoFont={monoFont.className} displayFont={displayFont.className} />
-          <StatTile label="Review" value={underReviewCount} monoFont={monoFont.className} displayFont={displayFont.className} />
-          <StatTile label="Done" value={doneCount} monoFont={monoFont.className} displayFont={displayFont.className} />
+    <>
+    <div className="client-report-revamp space-y-7 md:space-y-9">
+      <section className="client-stage overflow-hidden rounded-[2rem] border border-slate-200/70">
+        <div className="client-stage__media" aria-hidden="true" />
+        <div className="client-stage__grain" aria-hidden="true" />
+        <div className="relative z-10 grid gap-3 px-5 py-3 sm:px-6 sm:py-3 lg:grid-cols-[1.2fr_0.8fr] lg:items-end lg:px-8 lg:py-4">
+          <div className="animate-stage-up space-y-4">
+            <p className={`${monoFont.className} text-[0.7rem] uppercase tracking-[0.24em] text-white/75`}>
+              MaidHive Resolution Desk
+            </p>
+            <h1 className={`${displayFont.className} text-2xl font-extrabold tracking-[-0.03em] text-white sm:text-3xl lg:text-4xl`}>
+              Reports &amp; Disputes
+            </h1>
+            <p className="max-w-xl text-sm text-slate-100/90 sm:text-base">
+              Report no-shows, access problems, safety concerns, and disputes for admin review.
+            </p>
+          </div>
+
+          <div className="animate-stage-up delay-120">
+            <div className="ml-auto grid w-full max-w-sm grid-cols-1 gap-2 rounded-3xl border border-white/20 bg-black/35 p-4 backdrop-blur-sm sm:grid-cols-3">
+              <StatTile label="Open" value={openCount} monoFont={monoFont.className} displayFont={displayFont.className} />
+              <StatTile label="Review" value={underReviewCount} monoFont={monoFont.className} displayFont={displayFont.className} />
+              <StatTile label="Done" value={doneCount} monoFont={monoFont.className} displayFont={displayFont.className} />
+            </div>
+          </div>
         </div>
       </section>
 
@@ -258,6 +277,70 @@ function CleanerReportPageContent() {
         </div>
       </Dialog>
     </div>
+
+    <style jsx>{`
+      .client-stage {
+        position: relative;
+        isolation: isolate;
+        background: linear-gradient(125deg, #04162f 8%, #0f3b76 58%, #0e5698);
+      }
+
+      .client-stage__media {
+        position: absolute;
+        inset: 0;
+        background-image:
+          linear-gradient(105deg, rgba(2, 11, 27, 0.82) 10%, rgba(2, 11, 27, 0.5) 55%, rgba(8, 22, 44, 0.72) 100%),
+          radial-gradient(circle at 82% 18%, rgba(56, 220, 255, 0.24), transparent 34%),
+          repeating-linear-gradient(135deg, rgba(255, 255, 255, 0.08) 0 2px, rgba(255, 255, 255, 0) 2px 12px);
+        background-size: cover;
+        background-position: center;
+        mix-blend-mode: screen;
+        opacity: 0.9;
+      }
+
+      .client-stage__grain {
+        position: absolute;
+        inset: 0;
+        background-image:
+          linear-gradient(90deg, rgba(255, 255, 255, 0.11) 0%, rgba(255, 255, 255, 0) 45%),
+          radial-gradient(circle at 18% 22%, rgba(56, 220, 255, 0.22), transparent 28%),
+          radial-gradient(circle at 82% 12%, rgba(244, 180, 0, 0.2), transparent 22%);
+        animation: hero-sweep 11s ease-in-out infinite;
+        pointer-events: none;
+      }
+
+      .animate-stage-up {
+        animation: stage-up 0.72s cubic-bezier(0.18, 0.82, 0.3, 1) both;
+      }
+
+      .delay-120 {
+        animation-delay: 120ms;
+      }
+
+      @keyframes stage-up {
+        from {
+          opacity: 0;
+          transform: translateY(18px);
+        }
+        to {
+          opacity: 1;
+          transform: translateY(0);
+        }
+      }
+
+      @keyframes hero-sweep {
+        0%,
+        100% {
+          transform: translateX(0%);
+          opacity: 1;
+        }
+        50% {
+          transform: translateX(1.8%);
+          opacity: 0.88;
+        }
+      }
+    `}</style>
+    </>
   )
 }
 
@@ -273,8 +356,8 @@ function StatTile({
   displayFont: string
 }) {
   return (
-    <div className="rounded-2xl border border-slate-200 bg-slate-50 p-3 text-slate-900">
-      <p className={`${monoFont} text-[0.6rem] uppercase tracking-[0.18em] text-slate-500`}>{label}</p>
+    <div className="rounded-2xl border border-white/25 bg-white/10 p-3 text-white">
+      <p className={`${monoFont} text-[0.6rem] uppercase tracking-[0.18em] text-white/70`}>{label}</p>
       <p className={`${displayFont} mt-1 text-xl font-bold tracking-[-0.02em]`}>{value}</p>
     </div>
   )

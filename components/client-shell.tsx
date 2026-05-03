@@ -24,8 +24,8 @@ const NAV_ITEMS = [
   { href: '/client/bookings', label: 'Bookings', icon: CalendarDays },
   { href: '/client/chats', label: 'Messages', icon: MessagesSquare },
   { href: '/client/notifications', label: 'Notifications', icon: Bell },
-  { href: '/client/profile', label: 'Profile', icon: User },
   { href: '/client/report', label: 'Report', icon: Flag },
+  { href: '/client/profile', label: 'Profile', icon: User },
 ]
 
 export function ClientShell({ children }: { children: React.ReactNode }) {

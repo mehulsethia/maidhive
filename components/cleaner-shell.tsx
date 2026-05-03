@@ -4,7 +4,7 @@ import Link from 'next/link'
 import { useEffect, useState } from 'react'
 import { usePathname, useRouter } from 'next/navigation'
 import { Bricolage_Grotesque, IBM_Plex_Mono } from 'next/font/google'
-import { LayoutGrid, CalendarDays, MessagesSquare, Bell, User, ShieldAlert } from 'lucide-react'
+import { LayoutGrid, CalendarDays, MessagesSquare, Bell, User, Flag } from 'lucide-react'
 import { createClient } from '@/lib/supabase'
 import { clearAuthCache } from '@/lib/auth-cache'
 import { clearApiCache, cleanersApi } from '@/lib/api'
@@ -15,9 +15,9 @@ import { SidebarProfile } from '@/components/sidebar-profile'
 const NAV_ITEMS = [
   { href: '/cleaner/dashboard', label: 'Dashboard', icon: LayoutGrid },
   { href: '/cleaner/bookings', label: 'Bookings', icon: CalendarDays },
-  { href: '/cleaner/report', label: 'Report', icon: ShieldAlert },
   { href: '/cleaner/chats', label: 'Messages', icon: MessagesSquare },
   { href: '/cleaner/notifications', label: 'Notifications', icon: Bell },
+  { href: '/cleaner/report', label: 'Report', icon: Flag },
   { href: '/cleaner/profile', label: 'Profile', icon: User },
 ]
 
