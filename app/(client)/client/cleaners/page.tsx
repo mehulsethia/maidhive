@@ -62,7 +62,6 @@ const SERVICE_FILTER_OPTIONS = [
 export default function ClientCleanersPage() {
   const [loading, setLoading] = useState(true)
   const [searchQuery, setSearchQuery] = useState('')
-  const [city, setCity] = useState('')
   const [minRating, setMinRating] = useState('0')
   const [minRate, setMinRate] = useState('')
   const [maxRate, setMaxRate] = useState('')
@@ -79,9 +78,10 @@ export default function ClientCleanersPage() {
       const minRateValue = minRate ? Number(minRate) : undefined
       const maxRateValue = maxRate ? Number(maxRate) : undefined
       const minRatingValue = Number(minRating || 0)
+      const cityFromSearch = searchQuery.trim()
 
       const res = await cleanersApi.search({
-        city: city.trim() || undefined,
+        city: cityFromSearch || undefined,
         availability,
         transport_mode: transport ? (transport as any) : undefined,
         brings_own_supplies: bringsOwnSupplies === 'any' ? undefined : bringsOwnSupplies,
@@ -119,7 +119,7 @@ export default function ClientCleanersPage() {
 
   useEffect(() => {
     load()
-  }, [city, minRating, minRate, maxRate, availability, transport, bringsOwnSupplies, service])
+  }, [searchQuery, minRating, minRate, maxRate, availability, transport, bringsOwnSupplies, service])
 
   const deferredCleaners = useDeferredValue(cleaners)
 
@@ -177,14 +177,8 @@ export default function ClientCleanersPage() {
             <Input
               value={searchQuery}
               onChange={(event) => setSearchQuery(event.target.value)}
-              placeholder="Search name, bio, skills"
+              placeholder="Search name, bio, skills, city"
               className="w-full lg:col-span-2"
-            />
-            <Input
-              value={city}
-              onChange={(event) => setCity(event.target.value)}
-              placeholder="City"
-              className="w-full"
             />
             <Select
               value={availability}
@@ -209,7 +203,7 @@ export default function ClientCleanersPage() {
               <option value="yes">Yes</option>
               <option value="no">No</option>
             </Select>
-            <Select value={service} onChange={(event) => setService(event.target.value)} className="w-full lg:col-start-1">
+            <Select value={service} onChange={(event) => setService(event.target.value)} className="w-full">
               <option value="">Services: Any</option>
               {SERVICE_FILTER_OPTIONS.map((option) => (
                 <option key={option} value={option}>
