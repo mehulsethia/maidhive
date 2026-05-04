@@ -116,7 +116,7 @@ function StepIndicator({ current }: { current: number }) {
               >
                 {done ? <Check className="h-4 w-4" /> : s.num}
               </div>
-              <p className={`mt-1.5 text-center text-[10px] leading-tight whitespace-nowrap ${active || done ? 'font-semibold text-slate-900' : 'text-slate-400'}`}>
+              <p className={`mt-1.5 text-center text-[10px] leading-tight ${active || done ? 'font-semibold text-slate-900' : 'text-slate-400'}`}>
                 {s.title}
               </p>
               <p className="text-[9px] text-slate-400 text-center leading-tight hidden sm:block">{s.desc}</p>

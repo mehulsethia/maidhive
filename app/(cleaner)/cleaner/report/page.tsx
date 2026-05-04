@@ -219,7 +219,7 @@ function CleanerReportPageContent() {
 
         <div className="rounded-[1.5rem] border border-slate-200/80 bg-white/90 p-4 shadow-[0_18px_45px_rgba(11,33,78,0.08)] sm:p-5">
           <h2 className={`${displayFont.className} text-2xl font-bold tracking-[-0.02em] text-slate-900`}>Report history</h2>
-          <div className="mt-4 grid gap-2 lg:grid-cols-[1fr_170px]">
+          <div className="mt-4 grid gap-2 sm:grid-cols-[1fr_180px]">
             <div className="relative">
               <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
               <Input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search by reason or booking id" className="h-11 rounded-full border-slate-300 pl-9" />
