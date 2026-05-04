@@ -21,6 +21,18 @@ export const previewPriceSchema = z.object({
   duration_hours: z.number().min(1).max(8),
 })
 
+const datetimeInputSchema = z.string().trim().min(1).transform((value, ctx) => {
+  const parsed = new Date(value)
+  if (Number.isNaN(parsed.getTime())) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: 'Invalid datetime',
+    })
+    return z.NEVER
+  }
+  return parsed.toISOString()
+})
+
 export const createBookingSchema = z.object({
   cleaner_id: z.string().uuid(),
   service_type: z.enum(SERVICE_TYPES),
@@ -31,13 +43,13 @@ export const createBookingSchema = z.object({
   country: z.string().default('IE'),
   apartment_details: z.string().max(255).optional(),
   access_notes: z.string().trim().min(5, 'Access notes are required').max(1000),
-  scheduled_start: z.string().datetime(),
+  scheduled_start: datetimeInputSchema,
   duration_hours: z.number().min(1).max(8),
 })
 
 export const bookingActionSchema = z.object({
   action: z.enum(BOOKING_ACTIONS),
-  proposed_start: z.string().datetime().optional(),
+  proposed_start: datetimeInputSchema.optional(),
   start_location: z.object({
     latitude: z.number().min(-90).max(90),
     longitude: z.number().min(-180).max(180),

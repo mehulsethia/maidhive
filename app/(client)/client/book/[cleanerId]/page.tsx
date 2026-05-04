@@ -100,6 +100,14 @@ function isPaymentAuthorizedStatus(status?: string | null) {
   return ['authorized', 'captured', 'transferred'].includes(String(status ?? ''))
 }
 
+function normalizeToIsoDatetime(value: string): string | null {
+  const raw = value.trim()
+  if (!raw) return null
+  const parsed = new Date(raw)
+  if (Number.isNaN(parsed.getTime())) return null
+  return parsed.toISOString()
+}
+
 // ── Step indicator ────────────────────────────────────────────────────────
 function StepIndicator({ current }: { current: number }) {
   return (
@@ -715,7 +723,7 @@ export default function BookingFlowPage() {
 
       setDuration(parsed.duration || 1)
       setDate(parsed.date || '')
-      setSelectedSlot(parsed.selectedSlot || '')
+      setSelectedSlot(normalizeToIsoDatetime(parsed.selectedSlot || '') ?? '')
       setFirstName(parsed.firstName || '')
       setLastName(parsed.lastName || '')
       setEmail(parsed.email || '')
@@ -743,10 +751,14 @@ export default function BookingFlowPage() {
             const restoredBooking = res.data
             if (!restoredBooking) return
             const restoredDate = parsed.date
-            const restoredSlot = parsed.selectedSlot
+            const restoredSlot = normalizeToIsoDatetime(parsed.selectedSlot || '')
             if (restoredDate && restoredSlot) {
               const slotList = await availabilityApi.getSlots(cleanerId, restoredDate, parsed.duration || 1)
-              const stillAvailable = (slotList.data ?? []).some((slot) => slot.start === restoredSlot && !slot.disabled)
+              const restoredSlotMs = new Date(restoredSlot).getTime()
+              const stillAvailable = (slotList.data ?? []).some((slot) => {
+                const slotIso = normalizeToIsoDatetime(slot.start)
+                return slotIso && new Date(slotIso).getTime() === restoredSlotMs && !slot.disabled
+              })
               if (!stillAvailable) {
                 toast.error('This time is no longer available. Please choose another time.')
                 setBooking(null)
@@ -979,8 +991,16 @@ export default function BookingFlowPage() {
 
   async function assertSelectedSlotStillAvailable() {
     if (!date || !selectedSlot) return
+    const normalizedSelectedSlot = normalizeToIsoDatetime(selectedSlot)
+    if (!normalizedSelectedSlot) {
+      throw new Error('Please select a valid time slot.')
+    }
+    const selectedSlotMs = new Date(normalizedSelectedSlot).getTime()
     const slotList = await availabilityApi.getSlots(cleanerId, date, duration)
-    const stillAvailable = (slotList.data ?? []).some((slot) => slot.start === selectedSlot && !slot.disabled)
+    const stillAvailable = (slotList.data ?? []).some((slot) => {
+      const slotIso = normalizeToIsoDatetime(slot.start)
+      return slotIso && new Date(slotIso).getTime() === selectedSlotMs && !slot.disabled
+    })
     if (!stillAvailable) {
       throw new Error('This time is no longer available. Please choose another time.')
     }
@@ -1092,12 +1112,16 @@ export default function BookingFlowPage() {
       if (!selectedJobType) {
         throw new Error('Please select what type of clean this is.')
       }
+      const normalizedScheduledStart = normalizeToIsoDatetime(selectedSlot)
+      if (!normalizedScheduledStart) {
+        throw new Error('Please select a valid time slot.')
+      }
 
       const reusableBooking =
         booking &&
         ['draft', 'pending', 'accepted'].includes(booking.status) &&
         booking.cleaner_id === cleanerId &&
-        booking.scheduled_start === selectedSlot &&
+        normalizeToIsoDatetime(booking.scheduled_start) === normalizedScheduledStart &&
         Number(booking.duration_hours) === Number(duration)
           ? booking
           : null
@@ -1116,7 +1140,7 @@ export default function BookingFlowPage() {
           postcode: postcode.trim(),
           apartment_details: apartmentDetails.trim() || undefined,
           access_notes: accessNotes.trim(),
-          scheduled_start: selectedSlot,
+          scheduled_start: normalizedScheduledStart,
           duration_hours: duration,
           special_instructions: buildSpecialInstructions(uploadedPhotoUrls),
         })
