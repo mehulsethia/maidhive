@@ -311,8 +311,8 @@ export default function ClientCleanersPage() {
                 className="cleaner-row rounded-[20px] border border-[#ecedf3] bg-white px-4 py-3.5 shadow-[0_1px_2px_rgba(15,23,51,0.04),0_10px_28px_-14px_rgba(15,23,51,0.12)]"
                 style={{ animationDelay: `${index * 65}ms` }}
               >
-                <div className="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
-                  <div className="flex min-w-0 flex-1 items-start gap-3">
+                <div className="grid gap-4 xl:grid-cols-[320px_1fr_auto] xl:items-center">
+                  <div className="flex min-w-0 items-center gap-3">
                     <UserAvatar
                       name={cleaner.name}
                       imageUrl={cleaner.profile_image_url}
@@ -321,7 +321,7 @@ export default function ClientCleanersPage() {
                       textClassName="text-lg font-bold"
                       fallback="C"
                     />
-                    <div className="min-w-0 flex-1">
+                    <div className="min-w-0">
                       <h3 className={`${displayFont.className} truncate text-[20px] font-bold tracking-[-0.02em] text-[#0f1733]`}>
                         {cleaner.name}
                       </h3>
@@ -340,31 +340,34 @@ export default function ClientCleanersPage() {
                         ) : null}
                         <span className="text-[14px] leading-none text-[#8a90a8]">({Number(cleaner.total_jobs ?? 0)})</span>
                       </div>
-                      <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-[13px] text-[#4a5170]">
-                        <span className="inline-flex items-center gap-1.5"><Briefcase className="h-[15px] w-[15px] text-[#8a90a8]" />{cleaner.years_experience ?? 0} yrs</span>
-                        <span className="text-[#e3e6ef]">•</span>
-                        <span className="inline-flex items-center gap-1.5"><Car className="h-[15px] w-[15px] text-[#8a90a8]" />{transportLabel(cleaner.transport_mode)}</span>
-                        {suppliesLabel(cleaner.cleaning_supplies) ? (
-                          <>
-                            <span className="text-[#e3e6ef]">•</span>
-                            <span className="inline-flex items-center gap-1.5"><Package className="h-[15px] w-[15px] text-[#8a90a8]" />{suppliesLabel(cleaner.cleaning_supplies)}</span>
-                          </>
-                        ) : null}
-                      </div>
-                      <p className="mt-2 line-clamp-2 text-[18px] leading-[1.25] text-[#4a5170]">
-                        {cleaner.bio?.trim() || 'Detail-oriented cleaner with a calm, methodical approach.'}
-                      </p>
-                      <div className="mt-2 flex flex-wrap gap-2">
-                        {['Pro Cleaner', ...(cleaner.skills ?? []).slice(0, 3)].map((tag) => (
-                          <span key={tag} className="rounded-full bg-[#eef1ff] px-[11px] py-[5px] text-[12.5px] font-semibold tracking-[0.005em] text-[#1f3bd6]">
-                            {tag}
-                          </span>
-                        ))}
-                      </div>
                     </div>
                   </div>
 
-                  <div className="flex w-full items-center gap-2.5 xl:w-auto">
+                  <div className="min-w-0">
+                    <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[13px] text-[#4a5170]">
+                      <span className="inline-flex items-center gap-1.5"><Briefcase className="h-[15px] w-[15px] text-[#8a90a8]" />{cleaner.years_experience ?? 0} yrs</span>
+                      <span className="text-[#e3e6ef]">•</span>
+                      <span className="inline-flex items-center gap-1.5"><Car className="h-[15px] w-[15px] text-[#8a90a8]" />{transportLabel(cleaner.transport_mode)}</span>
+                      {suppliesLabel(cleaner.cleaning_supplies) ? (
+                        <>
+                          <span className="text-[#e3e6ef]">•</span>
+                          <span className="inline-flex items-center gap-1.5"><Package className="h-[15px] w-[15px] text-[#8a90a8]" />{suppliesLabel(cleaner.cleaning_supplies)}</span>
+                        </>
+                      ) : null}
+                    </div>
+                    <p className="mt-1.5 line-clamp-2 text-[16px] leading-[1.25] text-[#4a5170]">
+                      {cleaner.bio?.trim() || 'Detail-oriented cleaner with a calm, methodical approach.'}
+                    </p>
+                    <div className="mt-2 flex flex-wrap gap-2">
+                      {['Pro Cleaner', ...(cleaner.skills ?? []).slice(0, 3)].map((tag) => (
+                        <span key={tag} className="rounded-full bg-[#eef1ff] px-[11px] py-[5px] text-[12.5px] font-semibold tracking-[0.005em] text-[#1f3bd6]">
+                          {tag}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div className="flex w-full flex-wrap items-center justify-start gap-2.5 xl:w-auto xl:justify-end">
                     <p className={`${displayFont.className} shrink-0 text-[18px] font-bold tracking-[-0.02em] text-[#0f1733]`}>
                       {formatCurrency(Number(cleaner.hourly_rate ?? 0))}
                       <span className="ml-1 text-[12px] font-medium text-[#8a90a8]">/hr</span>
@@ -373,28 +376,26 @@ export default function ClientCleanersPage() {
                       type="button"
                       onClick={() => toggleFavorite(cleaner.id)}
                       aria-label={favoriteCleanerIds.has(cleaner.id) ? 'Remove from favourites' : 'Add to favourites'}
-                      className={`inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full border transition ${
+                      className={`inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full border transition ${
                         favoriteCleanerIds.has(cleaner.id)
                           ? 'border-[#ffd9dd] bg-[#fff1f2] text-[#e11d48]'
                           : 'border-[#ffd9dd] bg-white text-[#f06a84] hover:bg-[#fff1f2]'
                       }`}
                     >
-                      <Heart className={`h-[15px] w-[15px] ${favoriteCleanerIds.has(cleaner.id) ? 'fill-current' : ''}`} />
+                      <Heart className={`h-4 w-4 ${favoriteCleanerIds.has(cleaner.id) ? 'fill-current' : ''}`} />
                     </button>
-                    <div className="ml-auto flex items-center gap-2">
-                      <Link
-                        href={`/client/cleaners/${cleaner.id}`}
-                        className="inline-flex h-[44px] items-center justify-center rounded-xl border border-[#e3e6ef] px-4 text-[14px] font-semibold text-[#0f1733] hover:bg-[#fafbfe]"
-                      >
-                        View Profile
-                      </Link>
-                      <Link
-                        href={`/client/book/${cleaner.id}`}
-                        className="inline-flex h-[44px] items-center justify-center rounded-xl bg-[#1f3bd6] px-4 text-[14px] font-semibold text-white hover:bg-[#182fb3]"
-                      >
-                        Book Now
-                      </Link>
-                    </div>
+                    <Link
+                      href={`/client/cleaners/${cleaner.id}`}
+                      className="inline-flex h-[44px] items-center justify-center rounded-xl border border-[#e3e6ef] px-4 text-[14px] font-semibold text-[#0f1733] hover:bg-[#fafbfe]"
+                    >
+                      View Profile
+                    </Link>
+                    <Link
+                      href={`/client/book/${cleaner.id}`}
+                      className="inline-flex h-[44px] items-center justify-center rounded-xl bg-[#1f3bd6] px-4 text-[14px] font-semibold text-white hover:bg-[#182fb3]"
+                    >
+                      Book Now
+                    </Link>
                   </div>
                 </div>
               </article>
