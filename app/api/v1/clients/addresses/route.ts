@@ -52,6 +52,10 @@ export const POST = requireClient(async (req: NextRequest, _ctx, user) => {
     return ok(created, 201)
   } catch (e: any) {
     const message = String(e?.message ?? '')
+    console.error('[clients/addresses][POST] save failed', {
+      userId: user.id,
+      message,
+    })
     if (message.includes('duplicate key')) {
       return err('This address is already saved.', 409)
     }
@@ -60,6 +64,12 @@ export const POST = requireClient(async (req: NextRequest, _ctx, user) => {
     }
     if (message.includes('violates not-null constraint')) {
       return err('Unable to save this address due to missing required details. Please review the form and try again.', 422)
+    }
+    if (message.includes('violates check constraint')) {
+      return err('Address does not match MVP location rules. Please use a Larnaca, Cyprus address with a 4-digit postcode.', 422)
+    }
+    if (message.includes('relation') && message.includes('client_addresses') && message.includes('does not exist')) {
+      return err('Address setup is incomplete. Please try again in 1 minute.', 503)
     }
     return err('Unable to save this address right now. Please try again.', 500)
   }
