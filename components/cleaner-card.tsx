@@ -40,69 +40,74 @@ export function CleanerCard({ cleaner, isFavorite, onToggleFavorite }: CleanerCa
   const bio = cleaner.bio?.trim() || 'Detail-oriented cleaner with a calm, methodical approach.'
   const name = cleaner.name ?? cleaner.user?.name ?? 'Cleaner'
   const hasRating = averageRating > 0
-  const displayRating = hasRating ? averageRating.toFixed(1) : 'New'
+  const displayRating = hasRating ? averageRating.toFixed(1) : null
   const displayCount = hasRating ? `(${reviewCount})` : '(0)'
 
   return (
     <Card className="rounded-[20px] border-[#ecedf3] bg-white shadow-[0_1px_2px_rgba(15,23,51,0.04),0_12px_32px_-12px_rgba(15,23,51,0.10)]">
       <CardContent className="p-4 sm:p-[22px]">
-        <div className="flex items-start gap-3.5">
-          <UserAvatar
-            name={name}
-            imageUrl={cleaner.profile_image_url ?? cleaner.user?.avatar_url}
-            className="h-14 w-14 shrink-0 border border-[#e3e6ef]"
-            textClassName="text-base"
-            fallback="C"
-          />
-          <div className="min-w-0 flex-1">
-            <div className="flex items-start justify-between gap-2.5 sm:gap-3">
-              <div className="min-w-0 pr-2">
-                <h3 className="truncate text-[18px] leading-[1.15] font-bold tracking-[-0.01em] text-[#0f1733]">
-                  {name}
-                </h3>
-                <div className="mt-1.5 flex items-center gap-1.5 whitespace-nowrap">
-                  <span className="inline-flex items-center gap-0.5 text-[#f5b400]">
-                    {Array.from({ length: 5 }).map((_, index) => {
-                      const filled = hasRating && averageRating >= index + 1
-                      return (
-                        <Star
-                          key={index}
-                          className={cn('h-[13px] w-[13px]', filled ? 'fill-current text-[#f5b400]' : 'text-[#c9cdda]')}
-                        />
-                      )
-                    })}
-                  </span>
-                  <span className="text-[12.5px] font-semibold leading-none text-[#0f1733]">
-                    {displayRating}
-                  </span>
-                  <span className="text-[12.5px] leading-none text-[#8a90a8]">{displayCount}</span>
+        <div className="space-y-5">
+          <div className="flex items-start gap-3.5">
+            <UserAvatar
+              name={name}
+              imageUrl={cleaner.profile_image_url ?? cleaner.user?.avatar_url}
+              className="h-14 w-14 shrink-0 border border-[#e3e6ef]"
+              textClassName="text-base"
+              fallback="C"
+            />
+            <div className="min-w-0 flex-1">
+              <div className="flex items-start justify-between gap-2.5 sm:gap-3">
+                <div className="min-w-0 pr-2">
+                  <h3 className="truncate text-[18px] leading-[1.15] font-bold tracking-[-0.01em] text-[#0f1733]">
+                    {name}
+                  </h3>
+                  <div className="mt-1.5 flex items-center gap-1.5 whitespace-nowrap">
+                    <span className="inline-flex items-center gap-0.5 text-[#f5b400]">
+                      {Array.from({ length: 5 }).map((_, index) => {
+                        const filled = hasRating && averageRating >= index + 1
+                        return (
+                          <Star
+                            key={index}
+                            className={cn('h-[13px] w-[13px]', filled ? 'fill-current text-[#f5b400]' : 'text-[#c9cdda]')}
+                          />
+                        )
+                      })}
+                    </span>
+                    {displayRating ? (
+                      <span className="text-[12.5px] font-semibold leading-none text-[#0f1733]">
+                        {displayRating}
+                      </span>
+                    ) : null}
+                    <span className="text-[12.5px] leading-none text-[#8a90a8]">{displayCount}</span>
+                  </div>
+                </div>
+                <div className="flex items-center gap-2 shrink-0">
+                  <p className="text-[18px] leading-none font-bold tracking-[-0.01em] text-[#0f1733]">
+                    {formatCurrency(cleaner.hourly_rate)}
+                    <span className="ml-1 text-[12px] font-medium text-[#8a90a8]">/hr</span>
+                  </p>
+                  <button
+                    type="button"
+                    onClick={() => onToggleFavorite(cleaner.id)}
+                    aria-label={isFavorite ? 'Remove from favourites' : 'Add to favourites'}
+                    className={cn(
+                      'inline-flex h-8 w-8 items-center justify-center rounded-full border transition',
+                      isFavorite
+                        ? 'border-[#ffd9dd] bg-[#fff1f2] text-[#e11d48]'
+                        : 'border-[#ffd9dd] bg-white text-[#f06a84] hover:bg-[#fff1f2]',
+                    )}
+                  >
+                    <Heart className={cn('h-[15px] w-[15px]', isFavorite ? 'fill-current' : '')} />
+                  </button>
                 </div>
               </div>
-              <div className="flex items-center gap-2 shrink-0">
-                <p className="text-[18px] leading-none font-bold tracking-[-0.01em] text-[#0f1733]">
-                  {formatCurrency(cleaner.hourly_rate)}
-                  <span className="ml-1 text-[12px] font-medium text-[#8a90a8]">/hr</span>
-                </p>
-                <button
-                  type="button"
-                  onClick={() => onToggleFavorite(cleaner.id)}
-                  aria-label={isFavorite ? 'Remove from favourites' : 'Add to favourites'}
-                  className={cn(
-                    'inline-flex h-9 w-9 items-center justify-center rounded-full border transition',
-                    isFavorite
-                      ? 'border-[#ffd9dd] bg-[#fff1f2] text-[#e11d48]'
-                      : 'border-[#ffd9dd] bg-white text-[#f06a84] hover:bg-[#fff1f2]',
-                  )}
-                >
-                  <Heart className={cn('h-4 w-4', isFavorite ? 'fill-current' : '')} />
-                </button>
-              </div>
             </div>
+          </div>
 
-            <div className="mt-5 flex flex-wrap items-center gap-x-3 gap-y-1 text-[13px] text-[#4a5170]">
+          <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[13px] text-[#4a5170]">
               <span className="inline-flex items-center gap-1.5">
                 <Briefcase className="h-[15px] w-[15px] text-[#8a90a8]" />
-                {years} yrs experience
+                {years} yrs
               </span>
               {transportText && (
                 <>
@@ -122,38 +127,37 @@ export function CleanerCard({ cleaner, isFavorite, onToggleFavorite }: CleanerCa
                   </span>
                 </>
               )}
-            </div>
-
-            <p className="mt-4 text-[15px] leading-[1.5] text-[#4a5170] line-clamp-3">
-              {bio}
-            </p>
-
-            <div className="mt-4 flex flex-wrap gap-2">
-              {tags.map((tag) => (
-                <span key={tag} className="rounded-full bg-[#eef1ff] px-[11px] py-[5px] text-[12.5px] font-semibold tracking-[0.005em] text-[#1f3bd6]">
-                  {tag}
-                </span>
-              ))}
-            </div>
-
-            <div className="mt-5 h-px bg-[#ecedf3]" />
-
-            <div className="mt-4 grid grid-cols-2 gap-2.5">
-              <Link
-                href={`/client/cleaners/${cleaner.id}`}
-                className="inline-flex h-[44px] items-center justify-center rounded-xl border border-[#e3e6ef] px-3 text-[14px] font-semibold text-[#0f1733] hover:bg-[#fafbfe]"
-              >
-                View Profile
-              </Link>
-              <Link
-                href={`/client/book/${cleaner.id}`}
-                className="inline-flex h-[44px] items-center justify-center rounded-xl bg-[#1f3bd6] px-3 text-[14px] font-semibold text-white hover:bg-[#182fb3]"
-              >
-                Book Now
-              </Link>
-            </div>
           </div>
-        </div>
+
+          <p className="text-[15px] leading-[1.5] text-[#4a5170] line-clamp-3">
+            {bio}
+          </p>
+
+          <div className="flex flex-wrap gap-2">
+            {tags.map((tag) => (
+              <span key={tag} className="rounded-full bg-[#eef1ff] px-[11px] py-[5px] text-[12.5px] font-semibold tracking-[0.005em] text-[#1f3bd6]">
+                {tag}
+              </span>
+            ))}
+          </div>
+
+          <div className="h-px bg-[#ecedf3]" />
+
+          <div className="grid grid-cols-2 gap-2.5">
+            <Link
+              href={`/client/cleaners/${cleaner.id}`}
+              className="inline-flex h-[44px] items-center justify-center rounded-xl border border-[#e3e6ef] px-3 text-[14px] font-semibold text-[#0f1733] hover:bg-[#fafbfe]"
+            >
+              View Profile
+            </Link>
+            <Link
+              href={`/client/book/${cleaner.id}`}
+              className="inline-flex h-[44px] items-center justify-center rounded-xl bg-[#1f3bd6] px-3 text-[14px] font-semibold text-white hover:bg-[#182fb3]"
+            >
+              Book Now
+            </Link>
+          </div>
+          </div>
       </CardContent>
     </Card>
   )
