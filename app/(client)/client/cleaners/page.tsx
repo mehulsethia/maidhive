@@ -3,7 +3,7 @@
 import Link from 'next/link'
 import { useDeferredValue, useEffect, useMemo, useState, startTransition } from 'react'
 import { Bricolage_Grotesque, IBM_Plex_Mono } from 'next/font/google'
-import { Grid3x3, List, MapPin, Briefcase, Car, Package, Clock3, Heart } from 'lucide-react'
+import { Grid3x3, List, Car, Package, Clock3, Heart } from 'lucide-react'
 import { cleanersApi, favoritesApi } from '@/lib/api'
 import { EmptyState } from '@/components/empty-state'
 import { ListPageSkeleton } from '@/components/page-skeletons'
@@ -11,6 +11,7 @@ import { StarRating } from '@/components/star-rating'
 import { UserAvatar } from '@/components/ui/user-avatar'
 import { Input } from '@/components/ui/input'
 import { Select } from '@/components/ui/select'
+import { CleanerCard } from '@/components/cleaner-card'
 import { formatCurrency } from '@/lib/utils'
 import type { CleanerSummary } from '@/types'
 import { toast } from 'sonner'
@@ -294,104 +295,13 @@ export default function ClientCleanersPage() {
         ) : view === 'card' ? (
           <section className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
             {filtered.map((cleaner, index) => (
-              <article
-                key={cleaner.id}
-                className="cleaner-row rounded-2xl border border-slate-200 bg-white p-3 shadow-[0_4px_12px_rgba(15,23,42,0.04)] transition duration-300 hover:-translate-y-0.5 hover:border-[#8aa8e2] hover:shadow-[0_10px_22px_rgba(15,23,42,0.08)]"
-                style={{ animationDelay: `${index * 65}ms` }}
-              >
-                <div className="flex items-start gap-2">
-                  <UserAvatar
-                    name={cleaner.name}
-                    imageUrl={cleaner.profile_image_url}
-                    alt={`${cleaner.name} profile`}
-                    className="h-12 w-12 border border-slate-200"
-                    textClassName="text-lg font-bold"
-                    fallback="C"
-                  />
-                  <div className="min-w-0 flex-1">
-                    <div className="flex items-start justify-between gap-2">
-                      <div className="min-w-0">
-                        <h3
-                          className={`${displayFont.className} truncate text-[1.35rem] leading-none font-semibold tracking-[-0.02em] text-slate-900`}
-                        >
-                          {cleaner.name}
-                        </h3>
-                        <div className="mt-0.5">
-                          <StarRating rating={Number(cleaner.average_rating ?? 0)} />
-                        </div>
-                      </div>
-                      <p className={`${displayFont.className} shrink-0 text-lg font-bold tracking-[-0.02em] text-slate-900`}>
-                        {formatCurrency(Number(cleaner.hourly_rate ?? 0))}
-                        <span className="text-xs font-medium text-slate-500">/hr</span>
-                      </p>
-                    </div>
-                    <div className="mt-1 flex justify-end">
-                      <button
-                        type="button"
-                        onClick={() => toggleFavorite(cleaner.id)}
-                        aria-label={favoriteCleanerIds.has(cleaner.id) ? 'Remove from favourites' : 'Add to favourites'}
-                        className={`inline-flex h-8 w-8 items-center justify-center rounded-full border transition ${
-                          favoriteCleanerIds.has(cleaner.id)
-                            ? 'border-rose-300 bg-rose-50 text-rose-600'
-                            : 'border-slate-300 bg-white text-slate-500 hover:bg-slate-50'
-                        }`}
-                      >
-                        <Heart className={`h-4 w-4 ${favoriteCleanerIds.has(cleaner.id) ? 'fill-current' : ''}`} />
-                      </button>
-                    </div>
-
-                    <div className="mt-1.5 flex flex-wrap items-center gap-x-2.5 gap-y-1 text-xs text-slate-500">
-                      {cleaner.city && (
-                        <span className="inline-flex items-center gap-1">
-                          <MapPin className="h-3.5 w-3.5" />
-                          {cleaner.city}
-                        </span>
-                      )}
-                      {cleaner.years_experience !== undefined && (
-                        <span className="inline-flex items-center gap-1">
-                          <Briefcase className="h-3.5 w-3.5" />
-                          {cleaner.years_experience} years
-                        </span>
-                      )}
-                      <span className="inline-flex items-center gap-1">
-                        <Car className="h-3.5 w-3.5" />
-                        {transportLabel(cleaner.transport_mode)}
-                      </span>
-                      {suppliesLabel(cleaner.cleaning_supplies) && (
-                        <span className="inline-flex items-center gap-1">
-                          <Package className="h-3.5 w-3.5" />
-                          {suppliesLabel(cleaner.cleaning_supplies)}
-                        </span>
-                      )}
-                    </div>
-
-                    {cleaner.bio && <p className="mt-1 line-clamp-1 text-[12px] leading-5 text-slate-600">{cleaner.bio}</p>}
-
-                    <div className="mt-1.5 flex flex-wrap gap-1">
-                      {(cleaner.skills ?? []).slice(0, 2).map((skill) => (
-                        <span key={skill} className="rounded-full bg-slate-100 px-2 py-0.5 text-[11px] text-slate-700">
-                          {skill}
-                        </span>
-                      ))}
-                    </div>
-
-                    <div className="mt-2 flex items-center justify-end gap-1.5">
-                      <Link
-                        href={`/client/cleaners/${cleaner.id}`}
-                        className="inline-flex h-8 items-center rounded-full border border-slate-300 px-2.5 text-xs font-semibold text-slate-700 hover:bg-slate-50"
-                      >
-                        View Profile
-                      </Link>
-                      <Link
-                        href={`/client/book/${cleaner.id}`}
-                        className="inline-flex h-8 items-center rounded-full bg-[#0d4bc9] px-2.5 text-xs font-semibold text-white hover:bg-[#0a3ea8]"
-                      >
-                        Book Now
-                      </Link>
-                    </div>
-                  </div>
-                </div>
-              </article>
+              <div key={cleaner.id} className="cleaner-row" style={{ animationDelay: `${index * 65}ms` }}>
+                <CleanerCard
+                  cleaner={cleaner}
+                  isFavorite={favoriteCleanerIds.has(cleaner.id)}
+                  onToggleFavorite={toggleFavorite}
+                />
+              </div>
             ))}
           </section>
         ) : (

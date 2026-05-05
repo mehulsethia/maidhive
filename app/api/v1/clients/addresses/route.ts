@@ -19,34 +19,42 @@ export const GET = requireClient(async (_req: NextRequest, _ctx, user) => {
 })
 
 export const POST = requireClient(async (req: NextRequest, _ctx, user) => {
-  const body = await req.json()
-  const parsed = createClientAddressSchema.safeParse(body)
-  if (!parsed.success) return err(parsed.error.message, 422)
+  try {
+    const body = await req.json()
+    const parsed = createClientAddressSchema.safeParse(body)
+    if (!parsed.success) return err(parsed.error.message, 422)
 
-  let client = await clientRepo.findByUserId(user.id)
-  if (!client) client = await clientRepo.create(user.id)
-  const existing = await clientAddressRepo.listByClientId(client.id)
-  if (existing.length >= MAX_SAVED_ADDRESSES) {
-    return err("You've reached the maximum number of saved addresses. Please remove an existing address to add a new one.", 422)
+    let client = await clientRepo.findByUserId(user.id)
+    if (!client) client = await clientRepo.create(user.id)
+    const existing = await clientAddressRepo.listByClientId(client.id)
+    if (existing.length >= MAX_SAVED_ADDRESSES) {
+      return err("You've reached the maximum number of saved addresses. Please remove an existing address to add a new one.", 422)
+    }
+
+    if (parsed.data.is_default) {
+      await clientAddressRepo.clearDefaultForClient(client.id)
+    }
+
+    const created = await clientAddressRepo.create({
+      clientId: client.id,
+      label: parsed.data.label,
+      addressLine1: parsed.data.address_line1,
+      city: MVP_CITY,
+      postcode: normalizeCyprusPostcode(parsed.data.postcode),
+      country: MVP_COUNTRY_CODE,
+      apartmentDetails: parsed.data.apartment_details,
+      accessNotes: parsed.data.access_notes?.trim() || '',
+      latitude: parsed.data.latitude,
+      longitude: parsed.data.longitude,
+      isDefault: Boolean(parsed.data.is_default),
+    })
+
+    return ok(created, 201)
+  } catch (e: any) {
+    const message = String(e?.message ?? '')
+    if (message.includes('duplicate key')) {
+      return err('This address is already saved.', 409)
+    }
+    return err('Unable to save this address right now. Please try again.', 500)
   }
-
-  if (parsed.data.is_default) {
-    await clientAddressRepo.clearDefaultForClient(client.id)
-  }
-
-  const created = await clientAddressRepo.create({
-    clientId: client.id,
-    label: parsed.data.label,
-    addressLine1: parsed.data.address_line1,
-    city: MVP_CITY,
-    postcode: normalizeCyprusPostcode(parsed.data.postcode),
-    country: MVP_COUNTRY_CODE,
-    apartmentDetails: parsed.data.apartment_details,
-    accessNotes: parsed.data.access_notes?.trim() || '',
-    latitude: parsed.data.latitude,
-    longitude: parsed.data.longitude,
-    isDefault: Boolean(parsed.data.is_default),
-  })
-
-  return ok(created, 201)
 })

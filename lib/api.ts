@@ -47,6 +47,7 @@ function toUserFriendlyErrorMessage(message: string, fallbackStatus: number): st
   const lower = text.toLowerCase()
 
   if (!text) return `Something went wrong. Please try again. (${fallbackStatus})`
+  if (lower === 'unknown error') return 'Something went wrong. Please try again.'
   if (lower.includes('invalid datetime')) return 'Please select a valid date and time.'
   if (lower.includes('booking draft status is not enabled') || lower.includes('status migration')) {
     return 'Booking is temporarily unavailable. Please try again in a few minutes.'

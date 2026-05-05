@@ -189,7 +189,7 @@ export default function CleanerProfilePage() {
               <p className={`${monoFont.className} text-[0.7rem] uppercase tracking-[0.24em] text-white/75`}>
                 MaidHive Cleaner Profile
               </p>
-              <div className="flex items-center gap-3">
+              <div className="flex flex-wrap items-center gap-2.5 sm:gap-3">
                 <UserAvatar
                   name={cleanerName}
                   imageUrl={cleanerImageUrl}
@@ -198,7 +198,7 @@ export default function CleanerProfilePage() {
                   textClassName="text-lg font-bold"
                   fallback="C"
                 />
-                <h1 className={`${displayFont.className} text-2xl font-extrabold tracking-[-0.03em] text-white sm:text-3xl lg:text-4xl`}>
+                <h1 className={`${displayFont.className} text-xl font-extrabold tracking-[-0.03em] text-white sm:text-3xl lg:text-4xl`}>
                   {cleanerName}
                 </h1>
                 <button
@@ -228,7 +228,7 @@ export default function CleanerProfilePage() {
                   {formatCurrency(cleaner.hourly_rate)} / hr
                 </p>
                 <p className="mt-1 text-sm text-white/80">{deferredReviews.length} reviews · {cleaner.total_jobs} jobs completed</p>
-                <div className="mt-3 flex gap-2">
+                <div className="mt-3 flex flex-col gap-2 sm:flex-row">
                   <Button onClick={() => router.push(`/client/book/${id}`)} className="h-9 rounded-full bg-[#f4b400] px-4 text-slate-950 hover:bg-[#ffca3a]">
                     Book Service
                   </Button>
@@ -238,9 +238,12 @@ export default function CleanerProfilePage() {
                     className="h-9 rounded-full border-white/35 bg-white/10 text-white hover:bg-white/20 hover:text-white disabled:cursor-not-allowed disabled:opacity-65"
                     title={!canMessageCleaner ? 'Messaging available after booking is confirmed.' : 'Open messaging'}
                   >
-                    {canMessageCleaner ? 'Send Message' : 'Messaging available after booking is confirmed.'}
+                    {canMessageCleaner ? 'Send Message' : 'Message Locked'}
                   </Button>
                 </div>
+                {!canMessageCleaner && (
+                  <p className="mt-1 text-xs text-white/70">Messaging unlocks after a confirmed booking.</p>
+                )}
               </div>
             </div>
           </div>

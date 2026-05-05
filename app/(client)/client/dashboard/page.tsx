@@ -321,7 +321,7 @@ export default function ClientDashboardPage() {
                 <div className="mt-3 space-y-2">
                   {favorites.slice(0, 4).map((favorite) => (
                     <div key={favorite.cleaner_id} className="rounded-xl border border-slate-200 bg-white px-3 py-2">
-                      <div className="flex items-center justify-between gap-2">
+                      <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
                         <div className="flex min-w-0 items-center gap-2">
                           <UserAvatar
                             name={favorite.user?.name ?? 'Cleaner'}
@@ -337,7 +337,7 @@ export default function ClientDashboardPage() {
                             </p>
                           </div>
                         </div>
-                        <div className="shrink-0 text-right">
+                        <div className="shrink-0 text-left sm:text-right">
                           <p className="text-xs font-semibold text-slate-700">{formatCurrency(favorite.hourly_rate)}/hr</p>
                           <Link
                             href={`/client/book/${favorite.cleaner_id}`}
