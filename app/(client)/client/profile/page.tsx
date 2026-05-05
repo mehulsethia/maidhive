@@ -343,6 +343,10 @@ export default function ClientProfilePage() {
 
   async function uploadClientIdDocument(file: File) {
     if (!file) return
+    if (idFileUrl) {
+      toast.error('ID already submitted. Please contact support to update or remove it.')
+      return
+    }
     setUploadingId(true)
     try {
       const token = await getAccessToken()
@@ -550,13 +554,19 @@ export default function ClientProfilePage() {
                       type="file"
                       accept=".pdf,image/*"
                       className="mt-1"
-                      disabled={uploadingId}
+                      disabled={uploadingId || hasIdSubmitted}
                       onChange={async (event) => {
+                        if (hasIdSubmitted) return
                         const file = event.target.files?.[0]
                         if (!file) return
                         await uploadClientIdDocument(file)
                       }}
                     />
+                    {hasIdSubmitted && (
+                      <p className="mt-2 text-xs font-medium text-slate-600">
+                        Upload locked after submission for security.
+                      </p>
+                    )}
                     {idFileName && (
                       <p className="mt-2 text-xs font-medium text-emerald-700">
                         ID provided: {idFileName}
