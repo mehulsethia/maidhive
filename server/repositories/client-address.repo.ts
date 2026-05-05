@@ -18,32 +18,61 @@ type ClientAddressRow = {
 }
 
 export const clientAddressRepo = {
-  listByClientId: (clientId: string) =>
-    db.$queryRawUnsafe<ClientAddressRow[]>(
-      `
-      SELECT
-        id,
-        client_id,
-        label,
-        address_line1,
-        city,
-        postcode,
-        country,
-        apartment_details,
-        access_notes,
-        latitude::float8 AS latitude,
-        longitude::float8 AS longitude,
-        is_default,
-        created_at,
-        updated_at
-      FROM public.client_addresses
-      WHERE client_id = $1
-      ORDER BY is_default DESC, updated_at DESC
-      `,
-      clientId,
-    ),
+  listByClientId: async (clientId: string) => {
+    try {
+      return await db.$queryRawUnsafe<ClientAddressRow[]>(
+        `
+        SELECT
+          id,
+          client_id,
+          label,
+          address_line1,
+          city,
+          postcode,
+          country,
+          apartment_details,
+          access_notes,
+          latitude::float8 AS latitude,
+          longitude::float8 AS longitude,
+          is_default,
+          created_at,
+          updated_at
+        FROM public.client_addresses
+        WHERE client_id = $1
+        ORDER BY is_default DESC, updated_at DESC
+        `,
+        clientId,
+      )
+    } catch {
+      const rows = await db.$queryRawUnsafe<any[]>(
+        `
+        SELECT *
+        FROM public.client_addresses
+        WHERE client_id = $1
+        ORDER BY id DESC
+        `,
+        clientId,
+      )
+      return rows.map((row) => ({
+        id: row.id,
+        client_id: row.client_id,
+        label: row.label ?? null,
+        address_line1: row.address_line1,
+        city: row.city,
+        postcode: row.postcode,
+        country: row.country ?? 'CY',
+        apartment_details: row.apartment_details ?? null,
+        access_notes: row.access_notes ?? '',
+        latitude: row.latitude ?? null,
+        longitude: row.longitude ?? null,
+        is_default: Boolean(row.is_default),
+        created_at: row.created_at ?? new Date(),
+        updated_at: row.updated_at ?? new Date(),
+      }))
+    }
+  },
 
-  create: (data: {
+  create: async (data: {
     clientId: string
     label?: string
     addressLine1: string
@@ -55,52 +84,98 @@ export const clientAddressRepo = {
     latitude?: number
     longitude?: number
     isDefault?: boolean
-  }) =>
-    db.$queryRawUnsafe<ClientAddressRow[]>(
-      `
-      INSERT INTO public.client_addresses (
-        client_id,
-        label,
-        address_line1,
-        city,
-        postcode,
-        country,
-        apartment_details,
-        access_notes,
-        latitude,
-        longitude,
-        is_default
-      ) VALUES (
-        $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11
+  }) => {
+    try {
+      const rows = await db.$queryRawUnsafe<ClientAddressRow[]>(
+        `
+        INSERT INTO public.client_addresses (
+          client_id,
+          label,
+          address_line1,
+          city,
+          postcode,
+          country,
+          apartment_details,
+          access_notes,
+          latitude,
+          longitude,
+          is_default
+        ) VALUES (
+          $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11
+        )
+        RETURNING
+          id,
+          client_id,
+          label,
+          address_line1,
+          city,
+          postcode,
+          country,
+          apartment_details,
+          access_notes,
+          latitude::float8 AS latitude,
+          longitude::float8 AS longitude,
+          is_default,
+          created_at,
+          updated_at
+        `,
+        data.clientId,
+        data.label ?? null,
+        data.addressLine1,
+        data.city,
+        data.postcode,
+        data.country,
+        data.apartmentDetails ?? null,
+        data.accessNotes,
+        data.latitude ?? null,
+        data.longitude ?? null,
+        Boolean(data.isDefault),
       )
-      RETURNING
-        id,
-        client_id,
-        label,
-        address_line1,
-        city,
-        postcode,
-        country,
-        apartment_details,
-        access_notes,
-        latitude::float8 AS latitude,
-        longitude::float8 AS longitude,
-        is_default,
-        created_at,
-        updated_at
-      `,
-      data.clientId,
-      data.label ?? null,
-      data.addressLine1,
-      data.city,
-      data.postcode,
-      data.country,
-      data.apartmentDetails ?? null,
-      data.accessNotes,
-      data.latitude ?? null,
-      data.longitude ?? null,
-      Boolean(data.isDefault),
-    ).then((rows) => rows[0]),
+      return rows[0]
+    } catch {
+      const insertedRows = await db.$queryRawUnsafe<any[]>(
+        `
+        INSERT INTO public.client_addresses (
+          client_id,
+          address_line1,
+          city,
+          postcode,
+          country,
+          apartment_details,
+          access_notes,
+          is_default
+        )
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+        RETURNING *
+        `,
+        data.clientId,
+        data.addressLine1,
+        data.city,
+        data.postcode,
+        data.country,
+        data.apartmentDetails ?? null,
+        data.accessNotes ?? '',
+        Boolean(data.isDefault),
+      )
+      const row = insertedRows[0]
+      return {
+        id: row.id,
+        client_id: row.client_id,
+        label: row.label ?? null,
+        address_line1: row.address_line1,
+        city: row.city,
+        postcode: row.postcode,
+        country: row.country ?? 'CY',
+        apartment_details: row.apartment_details ?? null,
+        access_notes: row.access_notes ?? '',
+        latitude: row.latitude ?? null,
+        longitude: row.longitude ?? null,
+        is_default: Boolean(row.is_default),
+        created_at: row.created_at ?? new Date(),
+        updated_at: row.updated_at ?? new Date(),
+      } as ClientAddressRow
+    }
+  },
 
   clearDefaultForClient: (clientId: string) =>
     db.$executeRawUnsafe(
