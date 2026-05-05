@@ -1,5 +1,6 @@
 import { NextRequest } from 'next/server'
 import { requireClient } from '@/server/auth'
+import { db } from '@/server/db'
 import { clientRepo } from '@/server/repositories/client.repo'
 import { clientAddressRepo } from '@/server/repositories/client-address.repo'
 import { createClientAddressSchema } from '@/server/schemas/client-address.schema'
@@ -25,7 +26,14 @@ export const POST = requireClient(async (req: NextRequest, _ctx, user) => {
     if (!parsed.success) return err(parsed.error.message, 422)
 
     let client = await clientRepo.findByUserId(user.id)
-    if (!client) client = await clientRepo.create(user.id)
+    if (!client) {
+      try {
+        client = await clientRepo.create(user.id)
+      } catch {
+        client = await clientRepo.findByUserId(user.id)
+      }
+    }
+    if (!client) return err('Unable to load your profile right now. Please try again.', 503)
     const existing = await clientAddressRepo.listByClientId(client.id)
     if (existing.length >= MAX_SAVED_ADDRESSES) {
       return err("You've reached the maximum number of saved addresses. Please remove an existing address to add a new one.", 422)
@@ -35,19 +43,41 @@ export const POST = requireClient(async (req: NextRequest, _ctx, user) => {
       await clientAddressRepo.clearDefaultForClient(client.id)
     }
 
-    const created = await clientAddressRepo.create({
-      clientId: client.id,
-      label: parsed.data.label,
-      addressLine1: parsed.data.address_line1,
-      city: MVP_CITY,
-      postcode: normalizeCyprusPostcode(parsed.data.postcode),
-      country: MVP_COUNTRY_CODE,
-      apartmentDetails: parsed.data.apartment_details,
-      accessNotes: parsed.data.access_notes?.trim() || '',
-      latitude: parsed.data.latitude,
-      longitude: parsed.data.longitude,
-      isDefault: Boolean(parsed.data.is_default),
-    })
+    let created
+    try {
+      created = await clientAddressRepo.create({
+        clientId: client.id,
+        label: parsed.data.label,
+        addressLine1: parsed.data.address_line1,
+        city: MVP_CITY,
+        postcode: normalizeCyprusPostcode(parsed.data.postcode),
+        country: MVP_COUNTRY_CODE,
+        apartmentDetails: parsed.data.apartment_details,
+        accessNotes: parsed.data.access_notes?.trim() || '',
+        latitude: parsed.data.latitude,
+        longitude: parsed.data.longitude,
+        isDefault: Boolean(parsed.data.is_default),
+      })
+    } catch (repoError) {
+      // Last-resort write path via Prisma model API with only required fields.
+      created = await db.clientAddress.create({
+        data: {
+          clientId: client.id,
+          label: parsed.data.label,
+          addressLine1: parsed.data.address_line1,
+          city: MVP_CITY,
+          postcode: normalizeCyprusPostcode(parsed.data.postcode),
+          country: MVP_COUNTRY_CODE,
+          apartmentDetails: parsed.data.apartment_details,
+          accessNotes: parsed.data.access_notes?.trim() || '',
+          isDefault: Boolean(parsed.data.is_default),
+        },
+      })
+      console.error('[clients/addresses][POST] repo create failed; Prisma fallback succeeded', {
+        userId: user.id,
+        message: String((repoError as any)?.message ?? ''),
+      })
+    }
 
     return ok(created, 201)
   } catch (e: any) {
