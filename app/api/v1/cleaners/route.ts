@@ -2,7 +2,6 @@ import { NextRequest } from 'next/server'
 import { cleanerRepo } from '@/server/repositories/cleaner.repo'
 import { ok, err } from '@/server/response'
 import { cleanerSearchSchema } from '@/server/schemas/cleaner.schema'
-import { MVP_CITY } from '@/lib/location-policy'
 
 export async function GET(req: NextRequest) {
   const params = Object.fromEntries(req.nextUrl.searchParams)
@@ -10,6 +9,7 @@ export async function GET(req: NextRequest) {
   if (!parsed.success) return err(parsed.error.message, 422)
 
   const {
+    city,
     availability,
     transport_mode,
     brings_own_supplies,
@@ -28,7 +28,7 @@ export async function GET(req: NextRequest) {
     : undefined
 
   const [cleaners, total] = await cleanerRepo.search({
-    city: MVP_CITY,
+    city,
     availability,
     transportMode: transport_mode,
     cleaningSupplies: brings_own_supplies === 'yes' ? 'own_supplies' : brings_own_supplies === 'no' ? 'client_supplies' : undefined,
