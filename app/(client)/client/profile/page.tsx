@@ -49,6 +49,14 @@ export default function ClientProfilePage() {
   const [newApartmentDetails, setNewApartmentDetails] = useState('')
   const [newAccessNotes, setNewAccessNotes] = useState('')
   const [newAddressDefault, setNewAddressDefault] = useState(false)
+  const [editingAddressId, setEditingAddressId] = useState<string | null>(null)
+  const [updatingAddress, setUpdatingAddress] = useState(false)
+  const [editAddressLabel, setEditAddressLabel] = useState('')
+  const [editAddressLine1, setEditAddressLine1] = useState('')
+  const [editAddressPostcode, setEditAddressPostcode] = useState('')
+  const [editApartmentDetails, setEditApartmentDetails] = useState('')
+  const [editAccessNotes, setEditAccessNotes] = useState('')
+  const [editAddressDefault, setEditAddressDefault] = useState(false)
   const [idFileName, setIdFileName] = useState('')
   const [idFileUrl, setIdFileUrl] = useState('')
   const [uploadingId, setUploadingId] = useState(false)
@@ -79,15 +87,17 @@ export default function ClientProfilePage() {
         const user = client?.user ?? {}
         const fullName = String(user?.name ?? '').trim()
         const parts = fullName.split(' ').filter(Boolean)
+        const loadedAddresses = ((addressesRes as any)?.data ?? []) as ClientAddressRead[]
+        const defaultEntry = loadedAddresses.find((entry) => entry.is_default) ?? loadedAddresses[0]
 
         startTransition(() => {
           setFirstName(parts[0] ?? '')
           setLastName(parts.slice(1).join(' '))
           setEmail(user?.email ?? '')
           setPhone(user?.phone ?? '')
-          setDefaultAddress(client?.default_address ?? '')
+          setDefaultAddress(defaultEntry?.address_line1 ?? client?.default_address ?? '')
           setDefaultCity(client?.default_city ?? MVP_CITY)
-          setDefaultPostcode(client?.default_postcode ?? '')
+          setDefaultPostcode(defaultEntry?.postcode ?? client?.default_postcode ?? '')
           setIdFileName(client?.id_file_name ?? '')
           setIdFileUrl(client?.id_file_url ?? '')
           setMemberSince(
@@ -97,7 +107,7 @@ export default function ClientProfilePage() {
           )
           setBio('')
           setAvatarUrl(user?.avatar_url ?? null)
-          setSavedAddresses((addressesRes as any)?.data ?? [])
+          setSavedAddresses(loadedAddresses.sort((a, b) => Number(b.is_default) - Number(a.is_default)))
           setEmailVerified(Boolean(authUserRes.data.user?.email_confirmed_at))
           setPhoneVerified(Boolean(authUserRes.data.user?.phone_confirmed_at))
           setVerifiedPhoneFromAuth(Boolean(authUserRes.data.user?.phone_confirmed_at) ? (authUserRes.data.user?.phone ?? '') : '')
@@ -229,7 +239,7 @@ export default function ClientProfilePage() {
       return
     }
     if (!/^\d{4}$/.test(normalizeCyprusPostcode(newAddressPostcode))) {
-      toast.error('Postcode must be 4 digits.')
+      toast.error('Postcode must be exactly 4 digits.')
       return
     }
     if (savedAddresses.length >= MAX_SAVED_ADDRESSES) {
@@ -257,10 +267,16 @@ export default function ClientProfilePage() {
           return next
         })
       }
-      if (newAddressDefault || !defaultAddress) {
-        setDefaultAddress(newAddressLine1.trim())
+      if (created?.is_default || !defaultAddress) {
+        setDefaultAddress(created?.address_line1 ?? newAddressLine1.trim())
         setDefaultCity(MVP_CITY)
-        setDefaultPostcode(normalizeCyprusPostcode(newAddressPostcode))
+        setDefaultPostcode(created?.postcode ?? normalizeCyprusPostcode(newAddressPostcode))
+        await clientsApi.updateMe({
+          default_address: created?.address_line1 ?? newAddressLine1.trim(),
+          default_city: MVP_CITY,
+          default_postcode: created?.postcode ?? normalizeCyprusPostcode(newAddressPostcode),
+          default_country: MVP_COUNTRY_CODE,
+        })
       }
       setNewAddressLabel('')
       setNewAddressLine1('')
@@ -275,6 +291,105 @@ export default function ClientProfilePage() {
       toast.error(err.message ?? 'Failed to add saved address.')
     } finally {
       setAddingAddress(false)
+    }
+  }
+
+  function startEditAddress(entry: ClientAddressRead) {
+    setEditingAddressId(entry.id)
+    setEditAddressLabel(entry.label ?? '')
+    setEditAddressLine1(entry.address_line1)
+    setEditAddressPostcode(entry.postcode)
+    setEditApartmentDetails(entry.apartment_details ?? '')
+    setEditAccessNotes(entry.access_notes ?? '')
+    setEditAddressDefault(Boolean(entry.is_default))
+  }
+
+  function cancelEditAddress() {
+    setEditingAddressId(null)
+    setEditAddressLabel('')
+    setEditAddressLine1('')
+    setEditAddressPostcode('')
+    setEditApartmentDetails('')
+    setEditAccessNotes('')
+    setEditAddressDefault(false)
+  }
+
+  async function persistDefaultAddressFromEntry(entry: ClientAddressRead) {
+    setDefaultAddress(entry.address_line1)
+    setDefaultCity(MVP_CITY)
+    setDefaultPostcode(entry.postcode)
+    await clientsApi.updateMe({
+      default_address: entry.address_line1,
+      default_city: MVP_CITY,
+      default_postcode: entry.postcode,
+      default_country: MVP_COUNTRY_CODE,
+    })
+  }
+
+  async function setAddressAsDefault(entry: ClientAddressRead) {
+    if (entry.is_default) return
+    setUpdatingAddress(true)
+    try {
+      const res = await clientsApi.updateAddress(entry.id, { is_default: true })
+      const updated = res.data
+      if (!updated) throw new Error('Failed to set default address.')
+      setSavedAddresses((prev) =>
+        prev
+          .map((item) => (item.id === updated.id ? { ...item, ...updated, is_default: true } : { ...item, is_default: false }))
+          .sort((a, b) => Number(b.is_default) - Number(a.is_default)),
+      )
+      await persistDefaultAddressFromEntry({ ...entry, ...updated, is_default: true })
+      toast.success('Default address updated.')
+    } catch (err: any) {
+      toast.error(err.message ?? 'Failed to set default address.')
+    } finally {
+      setUpdatingAddress(false)
+    }
+  }
+
+  async function saveEditedAddress() {
+    if (!editingAddressId) return
+    if (!editAddressLine1.trim() || !editAddressPostcode.trim()) {
+      toast.error('Address and postcode are required.')
+      return
+    }
+    if (!/^\d{4}$/.test(normalizeCyprusPostcode(editAddressPostcode))) {
+      toast.error('Postcode must be exactly 4 digits.')
+      return
+    }
+
+    setUpdatingAddress(true)
+    try {
+      const res = await clientsApi.updateAddress(editingAddressId, {
+        label: editAddressLabel.trim() || undefined,
+        address_line1: editAddressLine1.trim(),
+        city: MVP_CITY,
+        postcode: normalizeCyprusPostcode(editAddressPostcode),
+        country: MVP_COUNTRY_CODE,
+        apartment_details: editApartmentDetails.trim() || undefined,
+        access_notes: editAccessNotes.trim() || undefined,
+        is_default: editAddressDefault,
+      })
+      const updated = res.data
+      if (!updated) throw new Error('Failed to update saved address.')
+      setSavedAddresses((prev) => {
+        const next = prev.map((item) => {
+          if (item.id === updated.id) return { ...item, ...updated }
+          if (updated.is_default) return { ...item, is_default: false }
+          return item
+        })
+        next.sort((a, b) => Number(b.is_default) - Number(a.is_default))
+        return next
+      })
+      if (updated.is_default) {
+        await persistDefaultAddressFromEntry(updated)
+      }
+      cancelEditAddress()
+      toast.success('Saved address updated.')
+    } catch (err: any) {
+      toast.error(err.message ?? 'Failed to update saved address.')
+    } finally {
+      setUpdatingAddress(false)
     }
   }
 
@@ -585,9 +700,9 @@ export default function ClientProfilePage() {
                 </h2>
                 <p className="mt-1 text-sm text-slate-500">Saved/default addresses used to prefill booking flow.</p>
                 <div className="mt-5 grid gap-3 md:grid-cols-2">
-                  <Field label="Default Address"><Input value={defaultAddress} onChange={(event) => setDefaultAddress(event.target.value)} className="mt-1" /></Field>
+                  <Field label="Default Address"><Input value={defaultAddress} readOnly className="mt-1 bg-slate-50" /></Field>
                   <Field label="Default City"><Input value={MVP_CITY} readOnly className="mt-1 bg-slate-50" /></Field>
-                  <Field label="Default Postcode"><Input value={defaultPostcode} onChange={(event) => setDefaultPostcode(normalizeCyprusPostcode(event.target.value))} className="mt-1" placeholder="6010" maxLength={4} inputMode="numeric" /></Field>
+                  <Field label="Default Postcode"><Input value={defaultPostcode} readOnly className="mt-1 bg-slate-50" placeholder="6010" maxLength={4} inputMode="numeric" /></Field>
                 </div>
                 <div className="mt-4 rounded-xl border border-slate-200 bg-slate-50 p-4">
                   <p className="text-sm font-semibold text-slate-900">Saved Addresses</p>
@@ -598,8 +713,68 @@ export default function ClientProfilePage() {
                     <div className="mt-3 space-y-2">
                       {savedAddresses.map((entry) => (
                         <div key={entry.id} className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700">
-                          <p className="font-medium">{entry.label?.trim() || 'Saved address'} {entry.is_default ? '(Default)' : ''}</p>
+                          <div className="flex items-center justify-between gap-2">
+                            <p className="font-medium">{entry.label?.trim() || 'Saved address'} {entry.is_default ? '(Default)' : ''}</p>
+                            <div className="flex items-center gap-2">
+                              {!entry.is_default && (
+                                <Button
+                                  type="button"
+                                  variant="outline"
+                                  className="h-7 px-2 text-xs"
+                                  onClick={() => setAddressAsDefault(entry)}
+                                  disabled={updatingAddress}
+                                >
+                                  Set Default
+                                </Button>
+                              )}
+                              <Button
+                                type="button"
+                                variant="outline"
+                                className="h-7 px-2 text-xs"
+                                onClick={() => startEditAddress(entry)}
+                                disabled={updatingAddress}
+                              >
+                                Edit
+                              </Button>
+                            </div>
+                          </div>
                           <p className="text-xs text-slate-500">{entry.address_line1}, {entry.city}, {entry.postcode}</p>
+                          {editingAddressId === entry.id && (
+                            <div className="mt-3 grid gap-3 md:grid-cols-2">
+                              <Field label="Label (optional)">
+                                <Input value={editAddressLabel} onChange={(event) => setEditAddressLabel(event.target.value)} className="mt-1" />
+                              </Field>
+                              <Field label="Address">
+                                <Input value={editAddressLine1} onChange={(event) => setEditAddressLine1(event.target.value)} className="mt-1" />
+                              </Field>
+                              <Field label="Postcode">
+                                <Input value={editAddressPostcode} onChange={(event) => setEditAddressPostcode(normalizeCyprusPostcode(event.target.value))} className="mt-1" maxLength={4} inputMode="numeric" />
+                              </Field>
+                              <Field label="Apartment details (optional)">
+                                <Input value={editApartmentDetails} onChange={(event) => setEditApartmentDetails(event.target.value)} className="mt-1" />
+                              </Field>
+                              <div className="md:col-span-2">
+                                <Label>Access notes</Label>
+                                <Textarea value={editAccessNotes} onChange={(event) => setEditAccessNotes(event.target.value)} className="mt-1" rows={2} />
+                              </div>
+                              <label className="md:col-span-2 flex items-center gap-2 text-xs text-slate-600">
+                                <input
+                                  type="checkbox"
+                                  checked={editAddressDefault}
+                                  onChange={(event) => setEditAddressDefault(event.target.checked)}
+                                />
+                                Set as default address
+                              </label>
+                              <div className="md:col-span-2 flex justify-end gap-2">
+                                <Button type="button" variant="outline" onClick={cancelEditAddress} disabled={updatingAddress}>
+                                  Cancel
+                                </Button>
+                                <Button type="button" onClick={saveEditedAddress} loading={updatingAddress}>
+                                  Save Changes
+                                </Button>
+                              </div>
+                            </div>
+                          )}
                         </div>
                       ))}
                     </div>

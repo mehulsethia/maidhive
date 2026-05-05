@@ -39,7 +39,8 @@ export const POST = requireClient(async (req: NextRequest, _ctx, user) => {
       return err("You've reached the maximum number of saved addresses. Please remove an existing address to add a new one.", 422)
     }
 
-    if (parsed.data.is_default) {
+    const shouldBeDefault = existing.length === 0 || Boolean(parsed.data.is_default)
+    if (shouldBeDefault) {
       await clientAddressRepo.clearDefaultForClient(client.id)
     }
 
@@ -56,7 +57,7 @@ export const POST = requireClient(async (req: NextRequest, _ctx, user) => {
         accessNotes: parsed.data.access_notes?.trim() || '',
         latitude: parsed.data.latitude,
         longitude: parsed.data.longitude,
-        isDefault: Boolean(parsed.data.is_default),
+        isDefault: shouldBeDefault,
       })
     } catch (repoError) {
       // Last-resort write path via Prisma model API with only required fields.
@@ -70,7 +71,7 @@ export const POST = requireClient(async (req: NextRequest, _ctx, user) => {
           country: MVP_COUNTRY_CODE,
           apartmentDetails: parsed.data.apartment_details,
           accessNotes: parsed.data.access_notes?.trim() || '',
-          isDefault: Boolean(parsed.data.is_default),
+          isDefault: shouldBeDefault,
         },
       })
       console.error('[clients/addresses][POST] repo create failed; Prisma fallback succeeded', {
