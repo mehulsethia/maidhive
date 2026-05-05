@@ -38,7 +38,7 @@ export const clientAddressRepo = {
           created_at,
           updated_at
         FROM public.client_addresses
-        WHERE client_id = $1
+        WHERE client_id = $1::uuid
         ORDER BY is_default DESC, updated_at DESC
         `,
         clientId,
@@ -48,7 +48,7 @@ export const clientAddressRepo = {
         `
         SELECT *
         FROM public.client_addresses
-        WHERE client_id = $1
+        WHERE client_id = $1::uuid
         ORDER BY id DESC
         `,
         clientId,
@@ -88,8 +88,8 @@ export const clientAddressRepo = {
     try {
       const rows = await db.$queryRawUnsafe<ClientAddressRow[]>(
         `
-        INSERT INTO public.client_addresses (
-          client_id,
+      INSERT INTO public.client_addresses (
+        client_id,
           label,
           address_line1,
           city,
@@ -100,9 +100,9 @@ export const clientAddressRepo = {
           latitude,
           longitude,
           is_default
-        ) VALUES (
-          $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11
-        )
+      ) VALUES (
+        $1::uuid, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11
+      )
         RETURNING
           id,
           client_id,
@@ -145,7 +145,7 @@ export const clientAddressRepo = {
           access_notes,
           is_default
         )
-        VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+        VALUES ($1::uuid, $2, $3, $4, $5, $6, $7, $8)
         RETURNING *
         `,
         data.clientId,
@@ -182,7 +182,7 @@ export const clientAddressRepo = {
       `
       UPDATE public.client_addresses
       SET is_default = FALSE
-      WHERE client_id = $1
+      WHERE client_id = $1::uuid
         AND is_default = TRUE
       `,
       clientId,
@@ -207,7 +207,7 @@ export const clientAddressRepo = {
         created_at,
         updated_at
       FROM public.client_addresses
-      WHERE id = $1
+      WHERE id = $1::uuid
       LIMIT 1
       `,
       id,
@@ -243,7 +243,7 @@ export const clientAddressRepo = {
         longitude = COALESCE($10, longitude),
         is_default = COALESCE($11, is_default),
         updated_at = NOW()
-      WHERE id = $1
+      WHERE id = $1::uuid
       RETURNING
         id,
         client_id,
@@ -277,7 +277,7 @@ export const clientAddressRepo = {
     db.$executeRawUnsafe(
       `
       DELETE FROM public.client_addresses
-      WHERE id = $1
+      WHERE id = $1::uuid
       `,
       id,
     ),
