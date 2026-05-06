@@ -783,7 +783,7 @@ export default function ClientProfilePage() {
                                 variant="outline"
                                 className="h-7 px-2 text-xs"
                                 onClick={() => setConfirmDeleteAddressId(entry.id)}
-                                disabled={updatingAddress || deletingAddressId === entry.id}
+                                disabled={updatingAddress || deletingAddressId === entry.id || savedAddresses.length <= 1}
                               >
                                 Delete
                               </Button>
