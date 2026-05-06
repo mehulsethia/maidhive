@@ -1828,15 +1828,15 @@ export default function BookingFlowPage() {
                         )}
                       </div>
                       {!phoneVerified && showPhoneOtpEntry && (
-                        <div className="mt-2 flex gap-2">
+                        <div className="mt-2 flex flex-col gap-2 sm:flex-row">
                           <Input
                             value={phoneOtpCode}
                             onChange={(event) => setPhoneOtpCode(event.target.value.replace(/\D/g, '').slice(0, 8))}
                             placeholder="Enter OTP code"
                             inputMode="numeric"
-                            className="max-w-[180px]"
+                            className="sm:max-w-[180px]"
                           />
-                          <Button type="button" variant="outline" onClick={verifyPhoneOtpInline} loading={verifyingPhoneOtp} className="h-10 px-3 text-xs">
+                          <Button type="button" variant="outline" onClick={verifyPhoneOtpInline} loading={verifyingPhoneOtp} className="h-10 px-3 text-xs sm:w-auto">
                             Confirm Code
                           </Button>
                         </div>
