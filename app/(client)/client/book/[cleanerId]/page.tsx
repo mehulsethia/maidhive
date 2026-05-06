@@ -241,6 +241,7 @@ function BookingSummary({
   jobType,
   date,
   selectedSlot,
+  city,
   postcode,
 }: {
   cleaner: CleanerRead
@@ -249,6 +250,7 @@ function BookingSummary({
   jobType: string
   date: string
   selectedSlot: string
+  city: string
   postcode: string
 }) {
   const [showBreakdown, setShowBreakdown] = useState(false)
@@ -333,6 +335,10 @@ function BookingSummary({
           <div className="flex items-center justify-between text-slate-600">
             <span>Start time</span>
             <span>{selectedTimeLabel}</span>
+          </div>
+          <div className="flex items-center justify-between text-slate-600">
+            <span>Area</span>
+            <span>{city || 'Not set'}</span>
           </div>
           <div className="flex items-center justify-between text-slate-600">
             <span>Postcode</span>
@@ -2063,6 +2069,7 @@ export default function BookingFlowPage() {
               jobType={jobType}
               date={date}
               selectedSlot={selectedSlot}
+              city={city}
               postcode={postcode}
             />
           </div>

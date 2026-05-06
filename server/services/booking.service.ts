@@ -117,25 +117,10 @@ export const bookingService = {
       originalScheduledStart: scheduledStart,
     }
 
-    try {
-      return await bookingRepo.create({
-        ...baseCreatePayload,
-        status: 'draft',
-      })
-    } catch (error) {
-      const message = String((error as any)?.message ?? '').toLowerCase()
-      const likelyLegacyStatusConstraint =
-        message.includes('status') &&
-        (message.includes('check') || message.includes('constraint') || message.includes('invalid input value for enum'))
-
-      if (likelyLegacyStatusConstraint) {
-        // Compatibility fallback for environments where booking status constraints
-        // were not migrated to include `draft` yet.
-        return bookingRepo.create(baseCreatePayload)
-      }
-
-      throw error
-    }
+    return bookingRepo.create({
+      ...baseCreatePayload,
+      status: 'draft',
+    })
   },
 
   async applyAction(
