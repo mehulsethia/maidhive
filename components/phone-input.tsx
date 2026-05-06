@@ -4,7 +4,14 @@ import { useEffect, useRef, useState } from 'react'
 import { ChevronDown } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
-const COUNTRY_CODES = [
+type CountryCodeOption = {
+  code: string
+  country: string
+  flag: string
+  label: string
+}
+
+const DEFAULT_COUNTRY_CODES: CountryCodeOption[] = [
   { code: '+357', country: 'CY', flag: '🇨🇾', label: 'Cyprus' },
   { code: '+353', country: 'IE', flag: '🇮🇪', label: 'Ireland' },
   { code: '+44', country: 'GB', flag: '🇬🇧', label: 'United Kingdom' },
@@ -33,7 +40,7 @@ export function parsePhone(full: string): { dialCode: string; number: string } {
   if (!trimmed.startsWith('+')) return { dialCode: '+357', number: trimmed }
 
   // Sort by code length desc so longer codes match first
-  const sorted = [...COUNTRY_CODES].sort((a, b) => b.code.length - a.code.length)
+  const sorted = [...DEFAULT_COUNTRY_CODES].sort((a, b) => b.code.length - a.code.length)
   for (const c of sorted) {
     if (trimmed.startsWith(c.code)) {
       return { dialCode: c.code, number: trimmed.slice(c.code.length) }
@@ -64,6 +71,7 @@ export function PhoneInput({ value, onChange, className, placeholder }: PhoneInp
   const parsed = parsePhone(value)
   const [dialCode, setDialCode] = useState(parsed.dialCode)
   const [number, setNumber] = useState(parsed.number)
+  const [countryCodes, setCountryCodes] = useState<CountryCodeOption[]>(DEFAULT_COUNTRY_CODES)
   const [open, setOpen] = useState(false)
   const [search, setSearch] = useState('')
   const ref = useRef<HTMLDivElement>(null)
@@ -74,6 +82,51 @@ export function PhoneInput({ value, onChange, className, placeholder }: PhoneInp
     setDialCode(p.dialCode)
     setNumber(p.number)
   }, [value])
+
+  // Load complete country list for dropdown (fallback to static defaults if request fails)
+  useEffect(() => {
+    let active = true
+    async function loadAllCountries() {
+      try {
+        const response = await fetch('https://restcountries.com/v3.1/all?fields=cca2,name,idd,flag')
+        if (!response.ok) return
+        const rows = (await response.json()) as Array<{
+          cca2?: string
+          flag?: string
+          name?: { common?: string }
+          idd?: { root?: string; suffixes?: string[] }
+        }>
+        const seen = new Set<string>()
+        const options: CountryCodeOption[] = []
+        for (const row of rows) {
+          const root = row.idd?.root ?? ''
+          const suffixes = row.idd?.suffixes ?? []
+          const suffix = suffixes[0] ?? ''
+          if (!root || !suffix) continue
+          const code = `${root}${suffix}`
+          if (!/^\+\d{1,4}$/.test(code)) continue
+          if (seen.has(code)) continue
+          seen.add(code)
+          options.push({
+            code,
+            country: row.cca2 ?? 'ZZ',
+            flag: row.flag ?? '🌐',
+            label: row.name?.common ?? code,
+          })
+        }
+
+        if (options.length === 0 || !active) return
+        options.sort((a, b) => a.label.localeCompare(b.label))
+        const cyprus = options.find((option) => option.country === 'CY' || option.code === '+357')
+        const withoutCyprus = options.filter((option) => option !== cyprus)
+        setCountryCodes(cyprus ? [cyprus, ...withoutCyprus] : [{ code: '+357', country: 'CY', flag: '🇨🇾', label: 'Cyprus' }, ...withoutCyprus])
+      } catch {
+        // Keep static fallback list
+      }
+    }
+    loadAllCountries()
+    return () => { active = false }
+  }, [])
 
   // Close dropdown on outside click
   useEffect(() => {
@@ -88,16 +141,16 @@ export function PhoneInput({ value, onChange, className, placeholder }: PhoneInp
     return () => document.removeEventListener('mousedown', handleClick)
   }, [open])
 
-  const selected = COUNTRY_CODES.find(c => c.code === dialCode) ?? { code: dialCode, country: 'ZZ', flag: '🌐', label: 'Custom' }
-  const selectedLabel = COUNTRY_CODES.find(c => c.code === dialCode)?.label ?? 'Custom'
+  const selected = countryCodes.find(c => c.code === dialCode) ?? { code: dialCode, country: 'ZZ', flag: '🌐', label: 'Custom' }
+  const selectedLabel = countryCodes.find(c => c.code === dialCode)?.label ?? 'Custom'
 
   const filtered = search.trim()
-    ? COUNTRY_CODES.filter(c =>
+    ? countryCodes.filter(c =>
         c.label.toLowerCase().includes(search.toLowerCase()) ||
         c.code.includes(search) ||
         c.country.toLowerCase().includes(search.toLowerCase())
       )
-    : COUNTRY_CODES
+    : countryCodes
 
   function selectCode(code: string) {
     setDialCode(code)
