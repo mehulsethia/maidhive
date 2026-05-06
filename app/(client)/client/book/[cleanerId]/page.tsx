@@ -579,13 +579,15 @@ function StripePaymentForm({
             <p className="font-semibold text-slate-900">Total = {formatCurrency(booking.total_amount)}</p>
           </div>
         )}
-        <Button
-          onClick={handleSubmit}
-          loading={submitting}
-          disabled={mode === 'new' ? (!stripe || !elements) : !selectedSavedCardId}
-        >
-          Authorise & Send Request
-        </Button>
+        <div className="flex justify-end">
+          <Button
+            onClick={handleSubmit}
+            loading={submitting}
+            disabled={mode === 'new' ? (!stripe || !elements) : !selectedSavedCardId}
+          >
+            Authorise & Send Request
+          </Button>
+        </div>
       </div>
     </div>
   )
