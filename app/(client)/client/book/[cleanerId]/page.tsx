@@ -95,6 +95,8 @@ type BookingFlowDraft = {
   notes: string
   saveAddressForLater: boolean
   bookingId: string
+  jobPhotoCount?: number
+  jobPhotoNames?: string[]
 }
 
 type BookingSnapshotDetails = {
@@ -501,10 +503,14 @@ function StripePaymentForm({
   booking,
   onSuccess,
   validateBeforeSubmit,
+  onCancelRequest,
+  cancelRequestLoading = false,
 }: {
   booking: BookingRead
   onSuccess: () => Promise<void>
   validateBeforeSubmit: () => Promise<string[]>
+  onCancelRequest?: () => Promise<void> | void
+  cancelRequestLoading?: boolean
 }) {
   const stripe = useStripe()
   const elements = useElements()
@@ -674,11 +680,25 @@ function StripePaymentForm({
             <p className="font-semibold text-slate-900">Total = {formatCurrency(booking.total_amount)}</p>
           </div>
         )}
-        <div className="flex justify-end">
+        <div className="flex items-center justify-between gap-3">
+          {onCancelRequest ? (
+            <Button
+              type="button"
+              variant="outline"
+              className="border-red-200 text-red-700 hover:bg-red-50 hover:text-red-800"
+              onClick={() => void onCancelRequest()}
+              loading={cancelRequestLoading}
+              disabled={submitting}
+            >
+              Cancel Request
+            </Button>
+          ) : (
+            <span />
+          )}
           <Button
             onClick={handleSubmit}
             loading={submitting}
-            disabled={mode === 'new' ? (!stripe || !elements) : !selectedSavedCardId}
+            disabled={cancelRequestLoading || (mode === 'new' ? (!stripe || !elements) : !selectedSavedCardId)}
           >
             Authorise & Send Request
           </Button>
@@ -745,6 +765,7 @@ export default function BookingFlowPage() {
   const [clientSecret, setClientSecret] = useState<string | null>(null)
   const [submitting, setSubmitting] = useState(false)
   const [nextStepLoading, setNextStepLoading] = useState(false)
+  const [cancelRequestLoading, setCancelRequestLoading] = useState(false)
   const [emailVerified, setEmailVerified] = useState(false)
   const [phoneVerified, setPhoneVerified] = useState(false)
   const [sendingPhoneOtp, setSendingPhoneOtp] = useState(false)
@@ -850,7 +871,7 @@ export default function BookingFlowPage() {
 
   }
 
-  function buildSessionDraft(): BookingFlowDraft {
+  function buildSessionDraft(photoFiles: File[] = jobPhotos): BookingFlowDraft {
     return {
       version: BOOKING_FLOW_DRAFT_VERSION,
       step,
@@ -876,6 +897,8 @@ export default function BookingFlowPage() {
       notes,
       saveAddressForLater,
       bookingId: booking?.id ?? '',
+      jobPhotoCount: photoFiles.length,
+      jobPhotoNames: photoFiles.map((file) => file.name),
     }
   }
 
@@ -902,8 +925,8 @@ export default function BookingFlowPage() {
     setSaveAddressForLater(Boolean(parsed.saveAddressForLater))
   }
 
-  async function persistFlowDraft(lastStep: number, bookingId?: string) {
-    const snapshot = buildSessionDraft()
+  async function persistFlowDraft(lastStep: number, bookingId?: string, photoFiles: File[] = jobPhotos) {
+    const snapshot = buildSessionDraft(photoFiles)
     const normalizedSlot = normalizeToIsoDatetime(snapshot.selectedSlot || '')
     return bookingsApi.saveFlowDraft({
       cleaner_id: cleanerId,
@@ -919,8 +942,8 @@ export default function BookingFlowPage() {
     })
   }
 
-  function buildFlowDraftBody(lastStep: number, bookingId?: string) {
-    const snapshot = buildSessionDraft()
+  function buildFlowDraftBody(lastStep: number, bookingId?: string, photoFiles: File[] = jobPhotos) {
+    const snapshot = buildSessionDraft(photoFiles)
     const normalizedSlot = normalizeToIsoDatetime(snapshot.selectedSlot || '')
     return {
       cleaner_id: cleanerId,
@@ -1404,7 +1427,24 @@ export default function BookingFlowPage() {
   }
 
   function removeJobPhoto(index: number) {
-    setJobPhotos((prev) => prev.filter((_, i) => i !== index))
+    const nextPhotos = jobPhotos.filter((_, i) => i !== index)
+    setJobPhotos(nextPhotos)
+
+    if (step !== 2 || !date || !selectedSlot) return
+
+    void persistFlowDraft(2, booking?.id ?? undefined, nextPhotos).catch((error) => {
+      const message = error instanceof Error ? error.message : 'Draft save failed after photo removal'
+      console.error('[booking-flow][photo-remove][draft-save] failed', {
+        cleanerId,
+        step,
+        date,
+        selectedSlot,
+        duration,
+        bookingId: booking?.id ?? null,
+        nextPhotoCount: nextPhotos.length,
+        message,
+      })
+    })
   }
 
   async function uploadJobPhotos(files: File[]) {
@@ -1703,6 +1743,25 @@ export default function BookingFlowPage() {
     }
     await bookingsApi.clearFlowDraft(cleanerId).catch(() => null)
     navigateToStep(4, { dropResumeParams: true })
+  }
+
+  async function cancelDraftAndRestart() {
+    if (!booking) return
+    const confirmed = window.confirm('Cancel this draft and start a new booking?')
+    if (!confirmed) return
+
+    setCancelRequestLoading(true)
+    try {
+      await bookingsApi.cancel(booking.id, 'Client cancelled draft before payment authorisation')
+      await bookingsApi.clearFlowDraft(cleanerId).catch(() => null)
+      clearSessionDraft()
+      toast.success('Draft cancelled. You can start a new booking now.')
+      router.push(`/client/book/${cleanerId}?reset=1&step=1`)
+    } catch (err: any) {
+      toast.error(err?.message ?? 'Unable to cancel this draft right now. Please try again.')
+    } finally {
+      setCancelRequestLoading(false)
+    }
   }
 
   const isPaymentRequiredLocked =
@@ -2256,10 +2315,11 @@ export default function BookingFlowPage() {
                                 <button
                                   type="button"
                                   onClick={() => removeJobPhoto(idx)}
-                                  className="rounded p-1 text-slate-500 hover:bg-slate-100 hover:text-slate-700"
+                                  className="inline-flex items-center gap-1 rounded px-1.5 py-1 text-xs font-medium text-red-600 hover:bg-red-50 hover:text-red-700"
                                   aria-label={`Remove ${file.name}`}
                                 >
                                   <X className="h-3.5 w-3.5" />
+                                  Remove
                                 </button>
                               </div>
                             </div>
@@ -2300,7 +2360,7 @@ export default function BookingFlowPage() {
                 )}
 
                 <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
-                  <p className="text-sm font-semibold text-slate-900">Saved booking details (read-only)</p>
+                  <p className="text-sm font-semibold text-slate-900">Saved booking details</p>
                   <div className="mt-2 grid gap-2 text-xs text-slate-700 sm:grid-cols-2">
                     <p><span className="font-medium">Date/time:</span> {new Date(booking.scheduled_start).toLocaleString('en-IE', { weekday: 'short', day: '2-digit', month: 'short', year: 'numeric', hour: 'numeric', minute: '2-digit', hour12: true, timeZone: APP_TIMEZONE })}</p>
                     <p><span className="font-medium">Duration:</span> {booking.duration_hours} hour{Number(booking.duration_hours) === 1 ? '' : 's'}</p>
@@ -2367,6 +2427,8 @@ export default function BookingFlowPage() {
                   <StripePaymentForm
                     booking={booking}
                     onSuccess={handlePaymentSuccess}
+                    onCancelRequest={isPaymentRequiredLocked ? cancelDraftAndRestart : undefined}
+                    cancelRequestLoading={cancelRequestLoading}
                     validateBeforeSubmit={() => {
                       return refreshVerificationStatus().then((verification) => {
                         const checks: string[] = []

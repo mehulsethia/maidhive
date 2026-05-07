@@ -190,7 +190,10 @@ export default function ClientBookingDetailPage() {
   const canCounterProposal = isPending && cleanerProposed && (booking.client_proposals ?? 0) < 1 && moreThan24HoursAway
   const showChat = isChatActiveForBooking(booking)
   const chatIsReadOnly = isChatReadOnly(booking.scheduled_end)
-  const canRevealCleanerPhone = ['confirmed', 'in_progress', 'completed', 'disputed'].includes(booking.status)
+  const sixHoursBeforeStart = Date.now() >= new Date(booking.scheduled_start).getTime() - 6 * 60 * 60 * 1000
+  const canRevealCleanerPhone =
+    ['confirmed', 'in_progress', 'completed', 'disputed'].includes(booking.status) &&
+    sixHoursBeforeStart
   const cleanerPhone = booking.cleaner?.user?.phone ?? ''
 
   return (
@@ -299,7 +302,7 @@ export default function ClientBookingDetailPage() {
                     <p className="text-sm text-slate-500">Cleaner phone is not available yet.</p>
                   )
                 ) : (
-                  <p className="text-sm text-slate-500">Cleaner number becomes available once booking is confirmed.</p>
+                  <p className="text-sm text-slate-500">Chat becomes available once the booking is confirmed. Cleaner phone number is revealed 6 hours before the booking start time.</p>
                 )}
               </CardContent>
             </Card>
