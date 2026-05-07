@@ -13,6 +13,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Select } from '@/components/ui/select'
 import { Textarea } from '@/components/ui/textarea'
+import { Dialog, DialogTitle } from '@/components/ui/dialog'
 import { Separator } from '@/components/ui/separator'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { BookableCalendar } from '@/components/ui/bookable-calendar'
@@ -766,6 +767,7 @@ export default function BookingFlowPage() {
   const [submitting, setSubmitting] = useState(false)
   const [nextStepLoading, setNextStepLoading] = useState(false)
   const [cancelRequestLoading, setCancelRequestLoading] = useState(false)
+  const [cancelRequestConfirmOpen, setCancelRequestConfirmOpen] = useState(false)
   const [emailVerified, setEmailVerified] = useState(false)
   const [phoneVerified, setPhoneVerified] = useState(false)
   const [sendingPhoneOtp, setSendingPhoneOtp] = useState(false)
@@ -1747,8 +1749,6 @@ export default function BookingFlowPage() {
 
   async function cancelDraftAndRestart() {
     if (!booking) return
-    const confirmed = window.confirm('Cancel this draft and start a new booking?')
-    if (!confirmed) return
 
     setCancelRequestLoading(true)
     try {
@@ -1756,6 +1756,7 @@ export default function BookingFlowPage() {
       await bookingsApi.clearFlowDraft(cleanerId).catch(() => null)
       clearSessionDraft()
       toast.success('Draft cancelled. You can start a new booking now.')
+      setCancelRequestConfirmOpen(false)
       router.push(`/client/book/${cleanerId}?reset=1&step=1`)
     } catch (err: any) {
       toast.error(err?.message ?? 'Unable to cancel this draft right now. Please try again.')
@@ -2427,7 +2428,7 @@ export default function BookingFlowPage() {
                   <StripePaymentForm
                     booking={booking}
                     onSuccess={handlePaymentSuccess}
-                    onCancelRequest={isPaymentRequiredLocked ? cancelDraftAndRestart : undefined}
+                    onCancelRequest={isPaymentRequiredLocked ? () => setCancelRequestConfirmOpen(true) : undefined}
                     cancelRequestLoading={cancelRequestLoading}
                     validateBeforeSubmit={() => {
                       return refreshVerificationStatus().then((verification) => {
@@ -2555,6 +2556,39 @@ export default function BookingFlowPage() {
           </div>
         </div>
       </div>
+
+      <Dialog
+        open={cancelRequestConfirmOpen}
+        onClose={() => {
+          if (cancelRequestLoading) return
+          setCancelRequestConfirmOpen(false)
+        }}
+      >
+        <DialogTitle>Cancel booking request</DialogTitle>
+        <div className="space-y-3">
+          <p className="text-sm text-muted-foreground">
+            Need to change something? Cancel this draft and start a new booking.
+          </p>
+          <div className="flex gap-2">
+            <Button
+              variant="outline"
+              className="w-full"
+              onClick={() => setCancelRequestConfirmOpen(false)}
+              disabled={cancelRequestLoading}
+            >
+              Keep request
+            </Button>
+            <Button
+              variant="destructive"
+              className="w-full"
+              onClick={cancelDraftAndRestart}
+              loading={cancelRequestLoading}
+            >
+              Cancel request
+            </Button>
+          </div>
+        </div>
+      </Dialog>
 
       <style jsx>{`
         .client-stage {

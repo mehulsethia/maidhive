@@ -9,6 +9,7 @@ import { BookingStatusBadge } from '@/components/booking-status-badge'
 import { EmptyState } from '@/components/empty-state'
 import { ListPageSkeleton } from '@/components/page-skeletons'
 import { Button } from '@/components/ui/button'
+import { Dialog, DialogTitle } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import { getDisputeWindowMs, isChatActiveForBooking } from '@/lib/chat-window'
 import { formatCurrency, formatDate } from '@/lib/utils'
@@ -59,6 +60,8 @@ export default function ClientBookingsPage() {
   const [query, setQuery] = useState('')
   const [filter, setFilter] = useState<'all' | BookingStatus>('all')
   const [dashboardFilter, setDashboardFilter] = useState<DashboardStatusFilter | null>(null)
+  const [cancelConfirmOpen, setCancelConfirmOpen] = useState(false)
+  const [cancelTargetBookingId, setCancelTargetBookingId] = useState<string | null>(null)
 
   async function loadBookings() {
     try {
@@ -110,6 +113,18 @@ export default function ClientBookingsPage() {
     } finally {
       setActionLoadingId(null)
     }
+  }
+
+  function openCancelConfirm(bookingId: string) {
+    setCancelTargetBookingId(bookingId)
+    setCancelConfirmOpen(true)
+  }
+
+  async function confirmCancelRequest() {
+    if (!cancelTargetBookingId) return
+    await handleCancel(cancelTargetBookingId)
+    setCancelConfirmOpen(false)
+    setCancelTargetBookingId(null)
   }
 
   const deferredBookings = useDeferredValue(bookings)
@@ -299,7 +314,7 @@ export default function ClientBookingsPage() {
                             size="sm"
                             variant="outline"
                             className="h-8 border-red-300 px-3 text-xs font-semibold text-red-700 hover:bg-red-50"
-                            onClick={() => handleCancel(booking.id)}
+                            onClick={() => openCancelConfirm(booking.id)}
                             loading={actionLoadingId === booking.id}
                           >
                             Cancel request
@@ -369,6 +384,43 @@ export default function ClientBookingsPage() {
           </div>
         </section>
       </div>
+
+      <Dialog
+        open={cancelConfirmOpen}
+        onClose={() => {
+          if (actionLoadingId) return
+          setCancelConfirmOpen(false)
+          setCancelTargetBookingId(null)
+        }}
+      >
+        <DialogTitle>Cancel booking request</DialogTitle>
+        <div className="space-y-3">
+          <p className="text-sm text-muted-foreground">
+            Need to change something? Cancel this draft and start a new booking.
+          </p>
+          <div className="flex gap-2">
+            <Button
+              variant="outline"
+              className="w-full"
+              onClick={() => {
+                setCancelConfirmOpen(false)
+                setCancelTargetBookingId(null)
+              }}
+              disabled={Boolean(actionLoadingId)}
+            >
+              Keep request
+            </Button>
+            <Button
+              variant="destructive"
+              className="w-full"
+              onClick={confirmCancelRequest}
+              loading={Boolean(cancelTargetBookingId && actionLoadingId === cancelTargetBookingId)}
+            >
+              Cancel request
+            </Button>
+          </div>
+        </div>
+      </Dialog>
 
       <style jsx>{`
         .client-stage {
