@@ -52,7 +52,7 @@ function toUserFriendlyErrorMessage(message: string, fallbackStatus: number): st
   if (lower.includes('booking draft status is not enabled') || lower.includes('status migration')) {
     return 'Booking is temporarily unavailable. Please try again in a few minutes.'
   }
-  if (lower.includes('request failed:')) return 'Something went wrong. Please try again.'
+  if (lower.includes('request failed:')) return `Request failed (${fallbackStatus}). Please try again.`
   if (lower.includes('zoderror') || lower.includes('validation')) return 'Some details are invalid. Please check and try again.'
 
   return text

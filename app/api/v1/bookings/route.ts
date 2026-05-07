@@ -35,15 +35,22 @@ export const GET = requireAuth(async (req: NextRequest, _ctx, user) => {
 
 // POST /api/v1/bookings — create booking
 export const POST = requireClient(async (req: NextRequest, _ctx, user) => {
-  const body = await req.json()
-  const parsed = createBookingSchema.safeParse(body)
-  if (!parsed.success) return err(parsed.error.message, 422)
-
   try {
+    const body = await req.json()
+    const parsed = createBookingSchema.safeParse(body)
+    if (!parsed.success) return err(parsed.error.message, 422)
+
     const booking = await bookingService.create(user, parsed.data)
     return ok(booking, 201)
   } catch (e) {
     if (e instanceof ServiceError) return err(e.message, e.status)
-    throw e
+    const message = e instanceof Error ? e.message : String(e)
+    console.error('bookings.create failed', { message })
+    return err(
+      message
+        ? `Unable to create booking draft: ${message}`
+        : 'Unable to create booking draft right now. Please try again.',
+      500,
+    )
   }
 })
