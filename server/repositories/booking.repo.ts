@@ -98,6 +98,24 @@ export const bookingRepo = {
   update: (id: string, data: Prisma.BookingUpdateInput) =>
     db.booking.update({ where: { id }, data, include: bookingInclude }),
 
+  findOverlappingDraftForClient: (params: {
+    clientId: string
+    cleanerId: string
+    start: Date
+    end: Date
+  }) =>
+    db.booking.findFirst({
+      where: {
+        clientId: params.clientId,
+        cleanerId: params.cleanerId,
+        status: 'draft',
+        scheduledStart: { lt: params.end },
+        scheduledEnd: { gt: params.start },
+      },
+      include: bookingInclude,
+      orderBy: { updatedAt: 'desc' },
+    }),
+
   listAll: (params: { status?: string; page: number; pageSize: number }) => {
     const statuses = params.status
       ? params.status

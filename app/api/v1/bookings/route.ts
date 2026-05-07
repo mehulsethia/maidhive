@@ -45,6 +45,9 @@ export const POST = requireClient(async (req: NextRequest, _ctx, user) => {
   } catch (e) {
     if (e instanceof ServiceError) return err(e.message, e.status)
     const message = e instanceof Error ? e.message : String(e)
+    if (message.includes('no_overlapping_bookings') || message.includes('23P01')) {
+      return err('This time is no longer available. Please choose another time.', 409)
+    }
     console.error('bookings.create failed', { message })
     return err(
       message

@@ -117,6 +117,36 @@ export const bookingService = {
       originalScheduledStart: scheduledStart,
     }
 
+    const overlappingDraft = await bookingRepo.findOverlappingDraftForClient({
+      clientId: client.id,
+      cleanerId: cleaner.id,
+      start: scheduledStart,
+      end: scheduledEnd,
+    })
+    if (overlappingDraft) {
+      return bookingRepo.update(overlappingDraft.id, {
+        status: 'draft',
+        serviceType: baseCreatePayload.serviceType,
+        specialInstructions: baseCreatePayload.specialInstructions,
+        address: baseCreatePayload.address,
+        city: baseCreatePayload.city,
+        postcode: baseCreatePayload.postcode,
+        country: baseCreatePayload.country,
+        apartmentDetails: baseCreatePayload.apartmentDetails,
+        accessNotes: baseCreatePayload.accessNotes,
+        scheduledStart: baseCreatePayload.scheduledStart,
+        scheduledEnd: baseCreatePayload.scheduledEnd,
+        durationHours: baseCreatePayload.durationHours,
+        hourlyRate: baseCreatePayload.hourlyRate,
+        subtotal: baseCreatePayload.subtotal,
+        platformFeePct: baseCreatePayload.platformFeePct,
+        platformFee: baseCreatePayload.platformFee,
+        cleanerPayout: baseCreatePayload.cleanerPayout,
+        totalAmount: baseCreatePayload.totalAmount,
+        acceptBy: baseCreatePayload.acceptBy,
+      })
+    }
+
     return bookingRepo.create({
       ...baseCreatePayload,
       status: 'draft',
