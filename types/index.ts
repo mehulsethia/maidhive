@@ -233,6 +233,21 @@ export interface BookingRead {
   } | null
 }
 
+export interface BookingFlowDraftRead {
+  id: string
+  client_id: string
+  cleaner_id: string
+  booking_id?: string | null
+  last_step: number
+  duration_hours?: number | null
+  selected_date?: string | null
+  selected_slot?: string | null
+  payload?: Record<string, any> | null
+  created_at: string
+  updated_at: string
+  booking?: BookingRead | null
+}
+
 export interface PriceBreakdown {
   hourly_rate: number
   duration_hours: number

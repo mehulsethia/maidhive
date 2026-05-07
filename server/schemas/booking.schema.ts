@@ -80,3 +80,17 @@ export const myBookingsQuerySchema = z.object({
   page_size: z.coerce.number().int().min(1).max(50).default(20),
   status: z.enum(BOOKING_STATUSES).optional(),
 })
+
+export const bookingFlowDraftQuerySchema = z.object({
+  cleaner_id: z.string().uuid(),
+})
+
+export const saveBookingFlowDraftSchema = z.object({
+  cleaner_id: z.string().uuid(),
+  booking_id: z.string().uuid().optional(),
+  last_step: z.coerce.number().int().min(1).max(3),
+  duration_hours: z.number().min(1).max(8).optional(),
+  selected_date: z.string().trim().min(1).optional(),
+  selected_slot: datetimeInputSchema.optional(),
+  payload: z.record(z.any()).optional(),
+})

@@ -162,6 +162,9 @@ export default function ClientBookingDetailPage() {
     setActionLoading(true)
     try {
       await bookingsApi.cancel(id, 'Cancelled by client while pending cleaner acceptance')
+      if (booking?.cleaner_id) {
+        await bookingsApi.clearFlowDraft(booking.cleaner_id).catch(() => null)
+      }
       toast.success('Booking request cancelled')
       setCancelConfirmOpen(false)
       await refresh()

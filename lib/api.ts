@@ -12,6 +12,7 @@ import type {
   AdminUser,
   APIResponse,
   BookingCreate,
+  BookingFlowDraftRead,
   BookingRead,
   CleanerRead,
   CleanerOnboardingProgress,
@@ -376,6 +377,25 @@ export const bookingsApi = {
     request<APIResponse<BookingRead>>(`/bookings/${id}/cancel`, {
       method: 'POST',
       body: JSON.stringify({ reason }),
+    }),
+  getFlowDraft: (cleanerId: string) =>
+    request<APIResponse<BookingFlowDraftRead | null>>(`/bookings/draft?cleaner_id=${encodeURIComponent(cleanerId)}`),
+  saveFlowDraft: (body: {
+    cleaner_id: string
+    booking_id?: string
+    last_step: number
+    duration_hours?: number
+    selected_date?: string
+    selected_slot?: string
+    payload?: Record<string, any>
+  }) =>
+    request<APIResponse<BookingFlowDraftRead>>('/bookings/draft', {
+      method: 'PUT',
+      body: JSON.stringify(body),
+    }),
+  clearFlowDraft: (cleanerId: string) =>
+    request<APIResponse<{ removed: true }>>(`/bookings/draft?cleaner_id=${encodeURIComponent(cleanerId)}`, {
+      method: 'DELETE',
     }),
 }
 

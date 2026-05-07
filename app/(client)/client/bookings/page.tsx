@@ -98,7 +98,11 @@ export default function ClientBookingsPage() {
   async function handleCancel(bookingId: string) {
     setActionLoadingId(bookingId)
     try {
+      const booking = bookings.find((item) => item.id === bookingId)
       await bookingsApi.cancel(bookingId, 'Cancelled by client while pending payment authorization')
+      if (booking?.cleaner_id) {
+        await bookingsApi.clearFlowDraft(booking.cleaner_id).catch(() => null)
+      }
       toast.success('Booking request cancelled.')
       await loadBookings()
     } catch (err: any) {

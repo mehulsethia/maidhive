@@ -702,12 +702,9 @@ export default function BookingFlowPage() {
   const [transportAgreementConfirmed, setTransportAgreementConfirmed] = useState(false)
   const [suppliesAgreementConfirmed, setSuppliesAgreementConfirmed] = useState(false)
   const hasHydratedDraftRef = useRef(false)
-  const latestDraftRef = useRef<BookingFlowDraft | null>(null)
+  const draftAutosaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const slotsRequestSeqRef = useRef(0)
   const datesRequestSeqRef = useRef(0)
-  const draftStorageKey = continueDraft && continueBookingId
-    ? `maidhive:booking-flow-draft:${cleanerId}:booking:${continueBookingId}`
-    : `maidhive:booking-flow-draft:${cleanerId}`
 
   function getDateKeyInAppTimezone(value: string): string {
     const parsed = new Date(value)
@@ -721,21 +718,7 @@ export default function BookingFlowPage() {
   }
 
   function clearSessionDraft() {
-    if (typeof window === 'undefined') return
-    window.sessionStorage.removeItem(draftStorageKey)
-    window.localStorage.removeItem(draftStorageKey)
-  }
-
-  function readStoredDraft() {
-    if (typeof window === 'undefined') return null
-    return window.sessionStorage.getItem(draftStorageKey) ?? window.localStorage.getItem(draftStorageKey)
-  }
-
-  function writeStoredDraft(nextDraft: BookingFlowDraft) {
-    if (typeof window === 'undefined') return
-    const payload = JSON.stringify(nextDraft)
-    window.sessionStorage.setItem(draftStorageKey, payload)
-    window.localStorage.setItem(draftStorageKey, payload)
+    bookingsApi.clearFlowDraft(cleanerId).catch(() => null)
   }
 
   async function initializePaymentIntentForBooking(bookingId: string) {
@@ -819,6 +802,42 @@ export default function BookingFlowPage() {
       saveAddressForLater,
       bookingId: booking?.id ?? '',
     }
+  }
+
+  function hydrateFromDraftPayload(parsed: BookingFlowDraft) {
+    const restoredSlot = normalizeToIsoDatetime(parsed.selectedSlot || '') ?? ''
+    const restoredDate = parsed.date || (restoredSlot ? getDateKeyInAppTimezone(restoredSlot) : '')
+
+    setDuration(parsed.duration || 1)
+    setDate(restoredDate)
+    setSelectedSlot(restoredSlot)
+    setAddressMode(parsed.addressMode === 'saved' ? 'saved' : 'new')
+    setSelectedAddressId(parsed.selectedAddressId || '')
+    setAddress(parsed.address || '')
+    setCity(MVP_CITY)
+    setPostcode(normalizePostcodeInput(parsed.postcode || ''))
+    setApartmentDetails(parsed.apartmentDetails || '')
+    setAccessNotes(parsed.accessNotes || '')
+    setJobType((parsed.jobType as (typeof JOB_TYPE_OPTIONS)[number]['value']) || '')
+    setBedrooms(parsed.bedrooms || '')
+    setBathrooms(parsed.bathrooms || '')
+    setPropertyCondition((parsed.propertyCondition as (typeof PROPERTY_CONDITION_OPTIONS)[number]['value']) || '')
+    setSuppliesProvider((parsed.suppliesProvider as (typeof SUPPLIES_OPTIONS)[number]['value']) || '')
+    setNotes(parsed.notes || '')
+    setSaveAddressForLater(Boolean(parsed.saveAddressForLater))
+  }
+
+  async function persistFlowDraft(lastStep: number, bookingId?: string) {
+    const snapshot = buildSessionDraft()
+    await bookingsApi.saveFlowDraft({
+      cleaner_id: cleanerId,
+      booking_id: (bookingId ?? snapshot.bookingId) || undefined,
+      last_step: lastStep,
+      duration_hours: snapshot.duration,
+      selected_date: snapshot.date || undefined,
+      selected_slot: snapshot.selectedSlot || undefined,
+      payload: snapshot,
+    })
   }
 
   async function refreshVerificationStatus() {
@@ -934,8 +953,9 @@ export default function BookingFlowPage() {
   }, [cleanerId])
 
   useEffect(() => {
-    if (loading || hasHydratedDraftRef.current || typeof window === 'undefined') return
+    if (loading || hasHydratedDraftRef.current) return
     hasHydratedDraftRef.current = true
+
     if (forceFresh) {
       clearSessionDraft()
       setRestoringDraft(false)
@@ -943,153 +963,51 @@ export default function BookingFlowPage() {
       return
     }
 
-    if (continueDraft && continueBookingId) {
-      const hydrateFromBooking = () => {
-        bookingsApi.getById(continueBookingId)
-          .then(async (res) => {
-            const b = res.data
-            if (!b) {
-              setRestoringDraft(false)
-              setDraftHydrated(true)
-              return
-            }
-            const restoredSlot = normalizeToIsoDatetime(b.scheduled_start) ?? ''
-            const restoredDate = restoredSlot ? getDateKeyInAppTimezone(restoredSlot) : ''
-            const restoredDuration = Number(b.duration_hours) || 1
-            setDuration(restoredDuration)
-            setDate(restoredDate)
-            setSelectedSlot(restoredSlot)
-            await resumeExistingBooking(continueBookingId, restoredDate, restoredSlot, restoredDuration)
-            setRestoringDraft(false)
-            setDraftHydrated(true)
-          })
-          .catch(() => {
-            toast.error('Could not resume this booking. Please start a new booking.')
-            setRestoringDraft(false)
-            setDraftHydrated(true)
-          })
-      }
-
-      const rawContinueDraft = readStoredDraft()
-      if (!rawContinueDraft) {
-        hydrateFromBooking()
-        return
-      }
-
+    ;(async () => {
       try {
-        const parsed = JSON.parse(rawContinueDraft) as BookingFlowDraft
-        if (parsed.version !== BOOKING_FLOW_DRAFT_VERSION) {
-          clearSessionDraft()
-          hydrateFromBooking()
+        const serverDraft = (await bookingsApi.getFlowDraft(cleanerId)).data
+        const payload = serverDraft?.payload as BookingFlowDraft | undefined
+
+        if (continueDraft && continueBookingId) {
+          if (payload && payload.version === BOOKING_FLOW_DRAFT_VERSION) {
+            hydrateFromDraftPayload(payload)
+          }
+          const fallbackSlot = normalizeToIsoDatetime(payload?.selectedSlot || '') ?? ''
+          const fallbackDate = payload?.date || (fallbackSlot ? getDateKeyInAppTimezone(fallbackSlot) : '')
+          const fallbackDuration = Number(payload?.duration || 1)
+          await resumeExistingBooking(continueBookingId, fallbackDate, fallbackSlot, fallbackDuration)
+          setRestoringDraft(false)
+          setDraftHydrated(true)
           return
         }
-        if (parsed.bookingId && parsed.bookingId !== continueBookingId) {
-          clearSessionDraft()
-          hydrateFromBooking()
+
+        if (!serverDraft || !payload || payload.version !== BOOKING_FLOW_DRAFT_VERSION) {
+          setRestoringDraft(false)
+          setDraftHydrated(true)
           return
         }
 
-        const restoredSlot = normalizeToIsoDatetime(parsed.selectedSlot || '') ?? ''
-        const restoredDate = parsed.date || (restoredSlot ? getDateKeyInAppTimezone(restoredSlot) : '')
-        const restoredDuration = parsed.duration || 1
-
-        setDuration(restoredDuration)
-        setDate(restoredDate)
-        setSelectedSlot(restoredSlot)
-        setAddressMode(parsed.addressMode === 'saved' ? 'saved' : 'new')
-        setSelectedAddressId(parsed.selectedAddressId || '')
-        setAddress(parsed.address || '')
-        setCity(MVP_CITY)
-        setPostcode(normalizePostcodeInput(parsed.postcode || ''))
-        setApartmentDetails(parsed.apartmentDetails || '')
-        setAccessNotes(parsed.accessNotes || '')
-        setJobType((parsed.jobType as (typeof JOB_TYPE_OPTIONS)[number]['value']) || '')
-        setBedrooms(parsed.bedrooms || '')
-        setBathrooms(parsed.bathrooms || '')
-        setPropertyCondition((parsed.propertyCondition as (typeof PROPERTY_CONDITION_OPTIONS)[number]['value']) || '')
-        setSuppliesProvider((parsed.suppliesProvider as (typeof SUPPLIES_OPTIONS)[number]['value']) || '')
-        setNotes(parsed.notes || '')
-        setSaveAddressForLater(Boolean(parsed.saveAddressForLater))
-
-        resumeExistingBooking(continueBookingId, restoredDate, restoredSlot, restoredDuration)
-          .catch(() => {
-            toast.error('Could not resume this booking. Please start a new booking.')
-          })
-          .finally(() => {
-            setRestoringDraft(false)
-            setDraftHydrated(true)
-          })
+        hydrateFromDraftPayload(payload)
+        const restoredStep = Math.min(Math.max(Number(serverDraft.last_step || payload.step || 1), 1), 3)
+        const restoredBookingId = String(serverDraft.booking_id ?? payload.bookingId ?? '').trim()
+        if (restoredStep >= 3 && restoredBookingId) {
+          await resumeExistingBooking(
+            restoredBookingId,
+            payload.date || '',
+            normalizeToIsoDatetime(payload.selectedSlot || '') ?? '',
+            Number(payload.duration || 1),
+          )
+        } else {
+          setStep(restoredStep === 3 ? 2 : restoredStep)
+        }
       } catch {
-        clearSessionDraft()
-        hydrateFromBooking()
-      }
-      return
-    }
-
-    const raw = readStoredDraft()
-    if (!raw) {
-      setRestoringDraft(false)
-      setDraftHydrated(true)
-      return
-    }
-
-    try {
-      const parsed = JSON.parse(raw) as BookingFlowDraft
-      if (parsed.version !== BOOKING_FLOW_DRAFT_VERSION) {
-        setRestoringDraft(false)
-        setDraftHydrated(true)
-        return
-      }
-
-      const restoredSlot = normalizeToIsoDatetime(parsed.selectedSlot || '') ?? ''
-      const restoredDate = parsed.date || (restoredSlot ? getDateKeyInAppTimezone(restoredSlot) : '')
-
-      setDuration(parsed.duration || 1)
-      setDate(restoredDate)
-      setSelectedSlot(restoredSlot)
-      setAddressMode(parsed.addressMode === 'saved' ? 'saved' : 'new')
-      setSelectedAddressId(parsed.selectedAddressId || '')
-      setAddress(parsed.address || '')
-      setCity(MVP_CITY)
-      setPostcode(normalizePostcodeInput(parsed.postcode || ''))
-      setApartmentDetails(parsed.apartmentDetails || '')
-      setAccessNotes(parsed.accessNotes || '')
-      setJobType((parsed.jobType as (typeof JOB_TYPE_OPTIONS)[number]['value']) || '')
-      setBedrooms(parsed.bedrooms || '')
-      setBathrooms(parsed.bathrooms || '')
-      setPropertyCondition((parsed.propertyCondition as (typeof PROPERTY_CONDITION_OPTIONS)[number]['value']) || '')
-      setSuppliesProvider((parsed.suppliesProvider as (typeof SUPPLIES_OPTIONS)[number]['value']) || '')
-      setNotes(parsed.notes || '')
-      setSaveAddressForLater(Boolean(parsed.saveAddressForLater))
-      const requestedStep = Math.min(Math.max(Number(parsed.step || 1), 1), 3)
-      const targetBookingId = parsed.bookingId || ''
-      const canResumeExistingBooking = Boolean(targetBookingId && continueDraft)
-      setStep(requestedStep === 3 && !canResumeExistingBooking ? 2 : requestedStep)
-
-      if (canResumeExistingBooking && targetBookingId) {
-        resumeExistingBooking(targetBookingId, restoredDate, restoredSlot, parsed.duration || 1)
-          .catch(() => {
-            toast.error('Could not resume this booking. Please start a new booking.')
-          })
-          .finally(() => {
-            setRestoringDraft(false)
-            setDraftHydrated(true)
-          })
-      } else if (parsed.bookingId && !continueDraft) {
-        setBooking(null)
-        setClientSecret(null)
-        setRestoringDraft(false)
-        setDraftHydrated(true)
-      } else {
+        setStep(1)
+      } finally {
         setRestoringDraft(false)
         setDraftHydrated(true)
       }
-    } catch {
-      clearSessionDraft()
-      setRestoringDraft(false)
-      setDraftHydrated(true)
-    }
-  }, [loading, draftStorageKey, continueDraft, continueBookingId, forceFresh])
+    })()
+  }, [loading, continueDraft, continueBookingId, forceFresh, cleanerId])
 
   useEffect(() => {
     function onFocus() {
@@ -1177,58 +1095,27 @@ export default function BookingFlowPage() {
   }, [jobPhotos])
 
   useEffect(() => {
-    if (loading || !draftHydrated || typeof window === 'undefined') return
-    const nextDraft = buildSessionDraft()
-    latestDraftRef.current = nextDraft
-    writeStoredDraft(nextDraft)
-  }, [
-    loading,
-    draftHydrated,
-    draftStorageKey,
-    step,
-    duration,
-    date,
-    selectedSlot,
-    firstName,
-    lastName,
-    email,
-    phone,
-    addressMode,
-    selectedAddressId,
-    address,
-    city,
-    postcode,
-    apartmentDetails,
-    accessNotes,
-    jobType,
-    bedrooms,
-    bathrooms,
-    propertyCondition,
-    suppliesProvider,
-    notes,
-    saveAddressForLater,
-    booking?.id,
-  ])
+    if (loading || !draftHydrated) return
+    if (step > 3) return
+    if (!date || !selectedSlot) return
 
-  useEffect(() => {
-    if (typeof window === 'undefined') return
-    function flushDraftOnLifecycle() {
-      if (loading || !draftHydrated) return
-      const nextDraft = buildSessionDraft()
-      latestDraftRef.current = nextDraft
-      writeStoredDraft(nextDraft)
+    if (draftAutosaveTimerRef.current) {
+      clearTimeout(draftAutosaveTimerRef.current)
     }
-    window.addEventListener('pagehide', flushDraftOnLifecycle)
-    window.addEventListener('beforeunload', flushDraftOnLifecycle)
+
+    const persistedStep = booking?.id && step >= 3 ? 3 : Math.min(step, 2)
+    draftAutosaveTimerRef.current = setTimeout(() => {
+      persistFlowDraft(persistedStep, booking?.id ?? undefined).catch(() => null)
+    }, 700)
+
     return () => {
-      flushDraftOnLifecycle()
-      window.removeEventListener('pagehide', flushDraftOnLifecycle)
-      window.removeEventListener('beforeunload', flushDraftOnLifecycle)
+      if (draftAutosaveTimerRef.current) {
+        clearTimeout(draftAutosaveTimerRef.current)
+      }
     }
   }, [
     loading,
     draftHydrated,
-    draftStorageKey,
     step,
     duration,
     date,
@@ -1240,7 +1127,6 @@ export default function BookingFlowPage() {
     addressMode,
     selectedAddressId,
     address,
-    city,
     postcode,
     apartmentDetails,
     accessNotes,
@@ -1450,7 +1336,7 @@ export default function BookingFlowPage() {
   }
 
   // Navigation
-  function goNext() {
+  async function goNext() {
     if (step === 1) {
       if (cleanerRequiresPickup && !transportAgreementConfirmed) {
         toast.error('Please confirm pickup and drop-off arrangement before proceeding.')
@@ -1462,6 +1348,12 @@ export default function BookingFlowPage() {
       }
       if (!date) { toast.error('Please select a date.'); return }
       if (!selectedSlot) { toast.error('Please select a time slot.'); return }
+      try {
+        await persistFlowDraft(1)
+      } catch {
+        toast.error('Unable to save draft right now. Please try again.')
+        return
+      }
       setStep(2)
     } else if (step === 2) {
       if (missingProfileRequiredItems.length > 0) {
@@ -1493,6 +1385,12 @@ export default function BookingFlowPage() {
       }
       if (jobPhotos.length > MAX_JOB_PHOTOS) {
         toast.error(`You can upload up to ${MAX_JOB_PHOTOS} photos.`)
+        return
+      }
+      try {
+        await persistFlowDraft(2, booking?.id ?? undefined)
+      } catch {
+        toast.error('Unable to save draft right now. Please try again.')
         return
       }
       createDraftBookingAndProceed()
@@ -1555,6 +1453,7 @@ export default function BookingFlowPage() {
         throw new Error('Unable to initialize card authorization for this booking')
       }
       setClientSecret(nextClientSecret)
+      await persistFlowDraft(3, b.id)
       setStep(3)
     } catch (err: any) {
       const rawMessage = String(err?.message ?? '').trim()
@@ -1622,7 +1521,7 @@ export default function BookingFlowPage() {
     if (bookingRes.data) {
       setBooking(bookingRes.data)
     }
-    clearSessionDraft()
+    await bookingsApi.clearFlowDraft(cleanerId).catch(() => null)
     setStep(4)
   }
 
@@ -1834,7 +1733,7 @@ export default function BookingFlowPage() {
                 {/* Navigation */}
                 <div className="flex justify-end pt-4">
                   <Button onClick={goNext} className="gap-2">
-                    Next <ArrowRight className="h-4 w-4" />
+                    Save and Next <ArrowRight className="h-4 w-4" />
                   </Button>
                 </div>
               </CardContent>
@@ -2200,7 +2099,7 @@ export default function BookingFlowPage() {
                     <ArrowLeft className="h-4 w-4" /> Previous
                   </button>
                   <Button onClick={goNext} loading={submitting} className="gap-1.5">
-                    Next <ArrowRight className="h-4 w-4" />
+                    Save and Next <ArrowRight className="h-4 w-4" />
                   </Button>
                 </div>
               </CardContent>

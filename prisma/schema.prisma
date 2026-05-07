@@ -106,6 +106,7 @@ model Cleaner {
   reviews               Review[]
   strikes               CleanerStrike[]
   favoritedByClients    ClientFavorite[]
+  bookingFlowDrafts     BookingFlowDraft[]
 
   @@map("cleaners")
   @@schema("public")
@@ -130,6 +131,7 @@ model Client {
   reviews  Review[]
   addresses ClientAddress[]
   favorites ClientFavorite[]
+  bookingFlowDrafts BookingFlowDraft[]
 
   @@map("clients")
   @@schema("public")
@@ -278,8 +280,33 @@ model Booking {
   messages         Message[]
   blockedTimes     BlockedTime[]
   strikes          CleanerStrike[]
+  bookingFlowDraft BookingFlowDraft?
 
   @@map("bookings")
+  @@schema("public")
+}
+
+model BookingFlowDraft {
+  id               String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  clientId         String   @map("client_id") @db.Uuid
+  cleanerId        String   @map("cleaner_id") @db.Uuid
+  bookingId        String?  @unique @map("booking_id") @db.Uuid
+  lastStep         Int      @default(1) @map("last_step")
+  durationHours    Decimal? @map("duration_hours") @db.Decimal(4, 2)
+  selectedDate     String?  @map("selected_date")
+  selectedSlot     DateTime? @map("selected_slot") @db.Timestamptz(6)
+  payload          Json?    @map("payload")
+  createdAt        DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt        DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  client  Client   @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  cleaner Cleaner  @relation(fields: [cleanerId], references: [id], onDelete: Cascade)
+  booking Booking? @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+
+  @@unique([clientId, cleanerId])
+  @@index([clientId, updatedAt])
+  @@index([cleanerId, updatedAt])
+  @@map("booking_flow_drafts")
   @@schema("public")
 }
 
