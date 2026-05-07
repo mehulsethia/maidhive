@@ -38,6 +38,13 @@ const SERVICE_LABELS: Record<string, string> = {
   move_in: 'Move-in Clean',
 }
 
+function getBookingDisplayTitle(booking: BookingRead) {
+  const instructions = String(booking.special_instructions ?? '')
+  const match = instructions.match(/(?:^|\n)Job type:\s*([^\n]+)/i)
+  const jobType = match?.[1]?.trim()
+  return jobType || SERVICE_LABELS[booking.service_type] || booking.service_type
+}
+
 const DISPUTE_WINDOW_MS = getDisputeWindowMs()
 
 function isPaymentAuthorized(paymentStatus?: string | null) {
@@ -112,8 +119,8 @@ export default function ClientBookingsPage() {
     if (dashboardFilter === 'closed' && !['cancelled', 'expired'].includes(booking.status)) return false
     if (filter !== 'all') {
       if (filter === 'pending') {
-        const isPaymentRequired = booking.status === 'draft' || (booking.status === 'pending' && !isPaymentAuthorized(booking.payment?.status))
-        if (!isPaymentRequired) return false
+        const isPendingOrPaymentRequired = booking.status === 'draft' || booking.status === 'pending'
+        if (!isPendingOrPaymentRequired) return false
       } else if (booking.status !== filter) {
         return false
       }
@@ -125,7 +132,7 @@ export default function ClientBookingsPage() {
 
     return (
       cleanerName.includes(q) ||
-      (SERVICE_LABELS[booking.service_type] ?? booking.service_type).toLowerCase().includes(q) ||
+      getBookingDisplayTitle(booking).toLowerCase().includes(q) ||
       booking.city.toLowerCase().includes(q) ||
       booking.postcode.toLowerCase().includes(q)
     )
@@ -251,7 +258,7 @@ export default function ClientBookingsPage() {
                       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                         <div>
                           <p className={`${displayFont.className} text-lg font-semibold tracking-[-0.01em] text-slate-900`}>
-                            {SERVICE_LABELS[booking.service_type] ?? booking.service_type}
+                            {getBookingDisplayTitle(booking)}
                           </p>
                           <p className="text-sm text-slate-600">{booking.cleaner?.user?.name ?? 'Cleaner'}</p>
                           <p className={`${monoFont.className} mt-1 text-[0.72rem] tracking-wide text-slate-500`}>

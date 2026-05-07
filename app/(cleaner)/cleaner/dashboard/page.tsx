@@ -26,6 +26,13 @@ const SERVICE_LABELS: Record<string, string> = {
   move_in: 'Move-in Clean',
 }
 
+function resolveJobTypeTitle(booking: BookingRead) {
+  const snapshotMatch = booking.special_instructions?.match(/(?:^|\n)Job type:\s*([^\n]+)/i)
+  const snapshotJobType = snapshotMatch?.[1]?.trim()
+  if (snapshotJobType) return snapshotJobType
+  return SERVICE_LABELS[booking.service_type] ?? booking.service_type
+}
+
 export default function CleanerDashboardPage() {
   const [bookings, setBookings] = useState<BookingRead[]>([])
   const [completionPct, setCompletionPct] = useState<number>(0)
@@ -317,7 +324,7 @@ export default function CleanerDashboardPage() {
                 <div key={b.id} className="rounded-xl border border-slate-200 bg-slate-50/60 p-3">
                   <div className="flex flex-wrap items-center justify-between gap-2">
                     <div>
-                      <p className="font-semibold text-slate-900">{SERVICE_LABELS[b.service_type] ?? b.service_type}</p>
+                      <p className="font-semibold text-slate-900">{resolveJobTypeTitle(b)}</p>
                       <p className="text-xs text-slate-500">{formatDate(b.scheduled_start)}</p>
                       <div className="mt-1 flex flex-wrap items-center gap-2">
                         {memberSinceLabel && (
@@ -409,7 +416,7 @@ export default function CleanerDashboardPage() {
                 stats.upcoming.slice(0, 3).map((b) => (
                   <Link key={b.id} href={`/cleaner/bookings/${b.id}`} className="block rounded-xl border border-slate-200 bg-slate-50 p-3 hover:bg-slate-100">
                     <div className="mb-1 flex items-center justify-between">
-                      <p className="text-sm font-semibold text-slate-900">{SERVICE_LABELS[b.service_type] ?? b.service_type}</p>
+                      <p className="text-sm font-semibold text-slate-900">{resolveJobTypeTitle(b)}</p>
                       <BookingStatusBadge status={b.status} />
                     </div>
                     <p className="text-xs text-slate-500">{formatDate(b.scheduled_start)}</p>
@@ -438,7 +445,7 @@ export default function CleanerDashboardPage() {
             <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
               {bookings.slice(0, 6).map((b) => (
                 <Link key={b.id} href={`/cleaner/bookings/${b.id}`} className="rounded-xl border border-slate-200 bg-white p-3 hover:border-primary/40 hover:shadow-sm">
-                  <p className="font-medium text-slate-900">{SERVICE_LABELS[b.service_type] ?? b.service_type}</p>
+                  <p className="font-medium text-slate-900">{resolveJobTypeTitle(b)}</p>
                   <p className="mt-1 text-xs text-slate-500">{formatDate(b.scheduled_start)}</p>
                   <p className="mt-2 text-xs text-slate-500">{b.city}, {b.postcode}</p>
                   <div className="mt-2 flex items-center justify-between">

@@ -22,6 +22,13 @@ const SERVICE_LABELS: Record<string, string> = {
   move_in: 'Move-in Clean',
 }
 
+function resolveJobTypeTitle(booking: BookingRead) {
+  const snapshotMatch = booking.special_instructions?.match(/(?:^|\n)Job type:\s*([^\n]+)/i)
+  const snapshotJobType = snapshotMatch?.[1]?.trim()
+  if (snapshotJobType) return snapshotJobType
+  return SERVICE_LABELS[booking.service_type] ?? booking.service_type
+}
+
 export default function CleanerChatsPage() {
   const [loading, setLoading] = useState(true)
   const [bookings, setBookings] = useState<BookingRead[]>([])
@@ -65,7 +72,7 @@ export default function CleanerChatsPage() {
     if (!query.trim()) return bookings
     const q = query.toLowerCase()
     return bookings.filter((b) => {
-      const service = SERVICE_LABELS[b.service_type] ?? b.service_type
+      const service = resolveJobTypeTitle(b)
       const clientName = ((b as any)?.client?.user?.name ?? '').toLowerCase()
       return (
         service.toLowerCase().includes(q) ||
@@ -159,7 +166,7 @@ export default function CleanerChatsPage() {
           ) : (
             <div className="flex h-full min-h-0 flex-col p-3 md:p-4">
               <div className="mb-3 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2">
-                <p className="text-sm font-semibold text-slate-900">{SERVICE_LABELS[selected.service_type] ?? selected.service_type}</p>
+                <p className="text-sm font-semibold text-slate-900">{resolveJobTypeTitle(selected)}</p>
                 <p className="text-xs text-slate-500">{selected.city}, {selected.postcode} · {formatDate(selected.scheduled_start)}</p>
                 <Link href={`/cleaner/bookings/${selected.id}`} className="mt-1 inline-block text-xs font-medium text-primary hover:underline">
                   Open booking details

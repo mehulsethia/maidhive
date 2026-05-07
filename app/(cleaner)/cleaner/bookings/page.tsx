@@ -21,17 +21,8 @@ import {
   toTimeInputValue,
 } from '@/lib/booking-proposal'
 import { formatCurrency, formatDate } from '@/lib/utils'
-import type { BookingRead, BookingStatus } from '@/types'
+import type { BookingRead } from '@/types'
 import { toast } from 'sonner'
-
-const STATUS_FILTERS: Array<{ key: 'all' | BookingStatus; label: string }> = [
-  { key: 'all', label: 'All' },
-  { key: 'pending', label: 'New' },
-  { key: 'accepted', label: 'Accepted' },
-  { key: 'confirmed', label: 'Confirmed' },
-  { key: 'in_progress', label: 'In Progress' },
-  { key: 'completed', label: 'Completed' },
-]
 
 const SERVICE_LABELS: Record<string, string> = {
   standard: 'Standard Clean',
@@ -45,7 +36,6 @@ export default function CleanerBookingsPage() {
   const [stripeConnected, setStripeConnected] = useState(false)
   const [loading, setLoading] = useState(true)
   const [actionLoading, setActionLoading] = useState<string | null>(null)
-  const [filter, setFilter] = useState<'all' | BookingStatus>('all')
   const [query, setQuery] = useState('')
   const [proposalBooking, setProposalBooking] = useState<BookingRead | null>(null)
   const [proposalDate, setProposalDate] = useState('')
@@ -171,24 +161,29 @@ export default function CleanerBookingsPage() {
     await action(id, 'decline')
   }
 
+  function resolveJobTypeTitle(booking: BookingRead) {
+    const snapshotMatch = booking.special_instructions?.match(/(?:^|\n)Job type:\s*([^\n]+)/i)
+    const snapshotJobType = snapshotMatch?.[1]?.trim()
+    if (snapshotJobType) return snapshotJobType
+    return SERVICE_LABELS[booking.service_type] ?? booking.service_type
+  }
+
   const filtered = useMemo(() => {
     return bookings.filter((b) => {
-      if (filter === 'pending' && b.status !== 'pending') return false
-      if (filter === 'accepted' && !['accepted', 'confirmed'].includes(b.status)) return false
-      if (filter !== 'all' && filter !== 'pending' && filter !== 'accepted' && b.status !== filter) return false
+      if (b.status !== 'completed') return false
       if (!query.trim()) return true
       const q = query.toLowerCase()
       return (
-        (SERVICE_LABELS[b.service_type] ?? b.service_type).toLowerCase().includes(q) ||
+        resolveJobTypeTitle(b).toLowerCase().includes(q) ||
         b.city.toLowerCase().includes(q) ||
         b.postcode.toLowerCase().includes(q)
       )
     })
-  }, [bookings, filter, query])
+  }, [bookings, query])
 
   const summary = useMemo(() => {
-    const pending = bookings.filter((b) => b.status === 'pending').length
-    const inProgress = bookings.filter((b) => b.status === 'in_progress').length
+    const pending = 0
+    const inProgress = 0
     const completed = bookings.filter((b) => b.status === 'completed').length
     return { pending, inProgress, completed }
   }, [bookings])
@@ -256,17 +251,9 @@ export default function CleanerBookingsPage() {
           </div>
 
           <div className="flex flex-wrap gap-2">
-            {STATUS_FILTERS.map((f) => (
-              <button
-                key={f.key}
-                onClick={() => setFilter(f.key)}
-                className={`rounded-full px-3 py-1.5 text-xs font-medium ${
-                  filter === f.key ? 'bg-primary text-white shadow-[0_8px_16px_rgba(39,70,250,0.3)]' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
-                }`}
-              >
-                {f.label}
-              </button>
-            ))}
+            <span className="rounded-full bg-primary px-3 py-1.5 text-xs font-medium text-white shadow-[0_8px_16px_rgba(39,70,250,0.3)]">
+              Completed
+            </span>
           </div>
 
           {filtered.length === 0 ? (
@@ -288,7 +275,7 @@ export default function CleanerBookingsPage() {
                   <div key={b.id} className="rounded-2xl border border-slate-200 bg-white p-4 transition-all duration-200 hover:-translate-y-0.5 hover:shadow-[0_10px_26px_rgba(15,23,42,0.08)] sm:p-5">
                   <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
                     <div>
-                      <p className="text-base font-semibold text-slate-900">{SERVICE_LABELS[b.service_type] ?? b.service_type}</p>
+                      <p className="text-base font-semibold text-slate-900">{resolveJobTypeTitle(b)}</p>
                       <p className="text-sm text-slate-600">Client: {b.client?.user?.name ?? 'Client'}</p>
                       <div className="mt-1 flex flex-wrap items-center gap-2">
                         {memberSinceLabel && (

@@ -128,8 +128,8 @@ function CleanerProfilePageContent() {
     details_submitted: false,
   })
 
-  async function loadAll() {
-    setLoading(true)
+  async function loadAll(showSkeleton = true) {
+    if (showSkeleton) setLoading(true)
     try {
       const [meRes, bookingRes, stripeRes, authUserRes] = await Promise.all([
         cleanersApi.me(),
@@ -207,12 +207,12 @@ function CleanerProfilePageContent() {
     } catch {
       toast.error('Failed to load profile.')
     } finally {
-      setLoading(false)
+      if (showSkeleton) setLoading(false)
     }
   }
 
   useEffect(() => {
-    loadAll()
+    loadAll(true)
   }, [])
 
   const googleCalendarState = params.get('google_calendar')
@@ -230,7 +230,7 @@ function CleanerProfilePageContent() {
   useEffect(() => {
     if (stripeState !== 'connected') return
     toast.success('Stripe connected.')
-    loadAll().catch(() => null)
+    loadAll(false).catch(() => null)
   }, [stripeState])
 
   const stats = useMemo(() => {
@@ -358,7 +358,7 @@ function CleanerProfilePageContent() {
         skills,
       })
       toast.success('Profile updated.')
-      await loadAll()
+      void loadAll(false)
     } catch (err: any) {
       toast.error(err.message ?? 'Failed to save profile.')
     } finally {
@@ -440,7 +440,7 @@ function CleanerProfilePageContent() {
       }
       await cleanersApi.submitForApproval()
       toast.success('Profile submitted for approval!')
-      await loadAll()
+      void loadAll(false)
     } catch (err: any) {
       toast.error(err.message ?? 'Failed to submit profile.')
     } finally {
@@ -458,7 +458,7 @@ function CleanerProfilePageContent() {
     try {
       await reviewsApi.replyToReview(reviewId, draft)
       toast.success('Reply posted. It cannot be edited after posting.')
-      await loadAll()
+      void loadAll(false)
       setReviewReplyDrafts((prev) => ({ ...prev, [reviewId]: '' }))
     } catch (err: any) {
       toast.error(err.message ?? 'Failed to post reply.')

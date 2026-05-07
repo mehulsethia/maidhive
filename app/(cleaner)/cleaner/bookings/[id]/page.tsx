@@ -35,6 +35,13 @@ const SERVICE_LABELS: Record<string, string> = {
   move_in: 'Move-in Clean',
 }
 
+function resolveJobTypeTitle(booking: BookingRead) {
+  const snapshotMatch = booking.special_instructions?.match(/(?:^|\n)Job type:\s*([^\n]+)/i)
+  const snapshotJobType = snapshotMatch?.[1]?.trim()
+  if (snapshotJobType) return snapshotJobType
+  return SERVICE_LABELS[booking.service_type] ?? booking.service_type
+}
+
 export default function CleanerBookingDetailPage() {
   const { id } = useParams<{ id: string }>()
   const router = useRouter()
@@ -294,7 +301,7 @@ export default function CleanerBookingDetailPage() {
       {/* Job info */}
       <Card>
         <CardContent className="space-y-3 px-5 pb-5 pt-6">
-          <span className="font-semibold">{SERVICE_LABELS[booking.service_type]}</span>
+          <span className="font-semibold">{resolveJobTypeTitle(booking)}</span>
           <Separator />
           <div className="space-y-2 text-sm text-muted-foreground">
             <p className="flex items-center gap-2"><Calendar className="h-4 w-4" />{formatDate(booking.scheduled_start)}</p>
