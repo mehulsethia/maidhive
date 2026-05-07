@@ -354,9 +354,14 @@ export default function ClientBookingDetailPage() {
                     </Button>
                   )}
                   {(booking.status === 'draft' || (booking.status === 'pending' && !isPaymentAuthorized(booking.payment?.status))) && (
-                    <Button variant="outline" onClick={() => router.push(`/client/book/${booking.cleaner_id}?continue=1&bookingId=${booking.id}`)}>
-                      Continue payment in booking flow
-                    </Button>
+                    <>
+                      <Button variant="outline" onClick={() => router.push(`/client/book/${booking.cleaner_id}?continue=1&bookingId=${booking.id}`)}>
+                        Continue payment in booking flow
+                      </Button>
+                      <p className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-600">
+                        Need to change something? Cancel this draft and start a new booking.
+                      </p>
+                    </>
                   )}
                   {(booking.status === 'draft' || booking.status === 'pending') && (
                     <Button variant="outline" className="border-red-300 text-red-700 hover:bg-red-50" onClick={() => setCancelConfirmOpen(true)}>

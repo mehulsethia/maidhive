@@ -654,6 +654,7 @@ export default function BookingFlowPage() {
   const [loading, setLoading] = useState(true)
   const [step, setStep] = useState(1)
   const [restoringDraft, setRestoringDraft] = useState(paymentResumeMode)
+  const [draftHydrated, setDraftHydrated] = useState(false)
 
   // Step 1: Schedule
   const [duration, setDuration] = useState(1)
@@ -924,6 +925,7 @@ export default function BookingFlowPage() {
     if (forceFresh) {
       clearSessionDraft()
       setRestoringDraft(false)
+      setDraftHydrated(true)
       return
     }
 
@@ -932,7 +934,11 @@ export default function BookingFlowPage() {
         bookingsApi.getById(continueBookingId)
           .then(async (res) => {
             const b = res.data
-            if (!b) return
+            if (!b) {
+              setRestoringDraft(false)
+              setDraftHydrated(true)
+              return
+            }
             const restoredSlot = normalizeToIsoDatetime(b.scheduled_start) ?? ''
             const restoredDate = restoredSlot ? getDateKeyInAppTimezone(restoredSlot) : ''
             const restoredDuration = Number(b.duration_hours) || 1
@@ -941,10 +947,12 @@ export default function BookingFlowPage() {
             setSelectedSlot(restoredSlot)
             await resumeExistingBooking(continueBookingId, restoredDate, restoredSlot, restoredDuration)
             setRestoringDraft(false)
+            setDraftHydrated(true)
           })
           .catch(() => {
             toast.error('Could not resume this booking. Please start a new booking.')
             setRestoringDraft(false)
+            setDraftHydrated(true)
           })
       }
 
@@ -995,6 +1003,7 @@ export default function BookingFlowPage() {
           })
           .finally(() => {
             setRestoringDraft(false)
+            setDraftHydrated(true)
           })
       } catch {
         clearSessionDraft()
@@ -1006,12 +1015,17 @@ export default function BookingFlowPage() {
     const raw = window.sessionStorage.getItem(draftStorageKey)
     if (!raw) {
       setRestoringDraft(false)
+      setDraftHydrated(true)
       return
     }
 
     try {
       const parsed = JSON.parse(raw) as BookingFlowDraft
-      if (parsed.version !== BOOKING_FLOW_DRAFT_VERSION) return
+      if (parsed.version !== BOOKING_FLOW_DRAFT_VERSION) {
+        setRestoringDraft(false)
+        setDraftHydrated(true)
+        return
+      }
 
       const restoredSlot = normalizeToIsoDatetime(parsed.selectedSlot || '') ?? ''
       const restoredDate = parsed.date || (restoredSlot ? getDateKeyInAppTimezone(restoredSlot) : '')
@@ -1045,17 +1059,21 @@ export default function BookingFlowPage() {
           })
           .finally(() => {
             setRestoringDraft(false)
+            setDraftHydrated(true)
           })
       } else if (parsed.bookingId && !continueDraft) {
         setBooking(null)
         setClientSecret(null)
         setRestoringDraft(false)
+        setDraftHydrated(true)
       } else {
         setRestoringDraft(false)
+        setDraftHydrated(true)
       }
     } catch {
       clearSessionDraft()
       setRestoringDraft(false)
+      setDraftHydrated(true)
     }
   }, [loading, draftStorageKey, continueDraft, continueBookingId, forceFresh])
 
@@ -1145,10 +1163,11 @@ export default function BookingFlowPage() {
   }, [jobPhotos])
 
   useEffect(() => {
-    if (loading || typeof window === 'undefined') return
+    if (loading || !draftHydrated || typeof window === 'undefined') return
     window.sessionStorage.setItem(draftStorageKey, JSON.stringify(buildSessionDraft()))
   }, [
     loading,
+    draftHydrated,
     draftStorageKey,
     step,
     duration,
@@ -1547,8 +1566,7 @@ export default function BookingFlowPage() {
     setStep(4)
   }
 
-  const isLockedPaymentResume =
-    paymentResumeMode &&
+  const isPaymentRequiredLocked =
     step === 3 &&
     Boolean(booking) &&
     ['draft', 'pending'].includes(String(booking?.status ?? '')) &&
@@ -1601,7 +1619,7 @@ export default function BookingFlowPage() {
 
         <div className="mx-auto max-w-5xl">
           <div className="mb-5">
-            {!isLockedPaymentResume && (
+            {!isPaymentRequiredLocked && (
               <button
                 onClick={() => (step > 1 ? setStep(step - 1) : router.back())}
                 className="inline-flex items-center gap-1 rounded-xl border border-slate-200 bg-white px-3 py-1.5 text-sm font-semibold text-slate-600 transition-all duration-200 hover:-translate-y-0.5 hover:text-slate-900"
@@ -1616,7 +1634,7 @@ export default function BookingFlowPage() {
         {/* Main content */}
         <div>
           {/* ── Step 1: Service & Date ─────────────────────────────── */}
-          {step === 1 && !isLockedPaymentResume && (
+          {step === 1 && !isPaymentRequiredLocked && (
             <Card className="rounded-2xl border-slate-200">
               <CardHeader>
                 <CardTitle>Select Date &amp; Time</CardTitle>
@@ -1764,7 +1782,7 @@ export default function BookingFlowPage() {
           )}
 
           {/* ── Step 2: Your Details ───────────────────────────────── */}
-          {step === 2 && !isLockedPaymentResume && (
+          {step === 2 && !isPaymentRequiredLocked && (
             <Card className="rounded-2xl border-slate-200">
               <CardHeader>
                 <CardTitle>Address &amp; Job Details</CardTitle>
@@ -2136,7 +2154,7 @@ export default function BookingFlowPage() {
                 <CardTitle>Payment</CardTitle>
               </CardHeader>
               <CardContent className="space-y-5">
-                {isLockedPaymentResume && (
+                {isPaymentRequiredLocked && (
                   <div className="rounded-xl border border-slate-200 bg-slate-50 p-3 text-sm text-slate-700">
                     Need to change something? Cancel this draft and start a new booking.
                   </div>
