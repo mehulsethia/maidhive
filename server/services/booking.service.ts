@@ -683,7 +683,7 @@ export const bookingService = {
       await loopsEmailService.sendClientCancellationConfirmation({
         email: booking.client.user.email,
         fullName: booking.client.user.name ?? 'Client',
-        date: new Date(),
+        date: booking.scheduledStart,
       })
     } catch (emailError) {
       console.error('Failed to send client cancellation confirmation email via Loops:', emailError)

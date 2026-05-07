@@ -660,7 +660,9 @@ export default function BookingFlowPage() {
   const [transportAgreementConfirmed, setTransportAgreementConfirmed] = useState(false)
   const [suppliesAgreementConfirmed, setSuppliesAgreementConfirmed] = useState(false)
   const hasHydratedDraftRef = useRef(false)
-  const draftStorageKey = `maidhive:booking-flow-draft:${cleanerId}`
+  const draftStorageKey = continueDraft && continueBookingId
+    ? `maidhive:booking-flow-draft:${cleanerId}:booking:${continueBookingId}`
+    : `maidhive:booking-flow-draft:${cleanerId}`
 
   function getDateKeyInAppTimezone(value: string): string {
     const parsed = new Date(value)
@@ -879,26 +881,79 @@ export default function BookingFlowPage() {
       return
     }
 
-    const raw = window.sessionStorage.getItem(draftStorageKey)
-    if (!raw) {
-      if (continueDraft && continueBookingId) {
+    if (continueDraft && continueBookingId) {
+      const hydrateFromBooking = () => {
         bookingsApi.getById(continueBookingId)
           .then(async (res) => {
             const b = res.data
             if (!b) return
             const restoredSlot = normalizeToIsoDatetime(b.scheduled_start) ?? ''
             const restoredDate = restoredSlot ? getDateKeyInAppTimezone(restoredSlot) : ''
-            setDuration(Number(b.duration_hours) || 1)
+            const restoredDuration = Number(b.duration_hours) || 1
+            setDuration(restoredDuration)
             setDate(restoredDate)
             setSelectedSlot(restoredSlot)
-            await resumeExistingBooking(continueBookingId, restoredDate, restoredSlot, Number(b.duration_hours) || 1)
+            await resumeExistingBooking(continueBookingId, restoredDate, restoredSlot, restoredDuration)
           })
           .catch(() => {
             toast.error('Could not resume this booking. Please start a new booking.')
           })
       }
+
+      const rawContinueDraft = window.sessionStorage.getItem(draftStorageKey)
+      if (!rawContinueDraft) {
+        hydrateFromBooking()
+        return
+      }
+
+      try {
+        const parsed = JSON.parse(rawContinueDraft) as BookingFlowDraft
+        if (parsed.version !== BOOKING_FLOW_DRAFT_VERSION) {
+          clearSessionDraft()
+          hydrateFromBooking()
+          return
+        }
+        if (parsed.bookingId && parsed.bookingId !== continueBookingId) {
+          clearSessionDraft()
+          hydrateFromBooking()
+          return
+        }
+
+        const restoredSlot = normalizeToIsoDatetime(parsed.selectedSlot || '') ?? ''
+        const restoredDate = parsed.date || (restoredSlot ? getDateKeyInAppTimezone(restoredSlot) : '')
+        const restoredDuration = parsed.duration || 1
+
+        setDuration(restoredDuration)
+        setDate(restoredDate)
+        setSelectedSlot(restoredSlot)
+        setAddressMode(parsed.addressMode === 'saved' ? 'saved' : 'new')
+        setSelectedAddressId(parsed.selectedAddressId || '')
+        setAddress(parsed.address || '')
+        setCity(MVP_CITY)
+        setPostcode(normalizePostcodeInput(parsed.postcode || ''))
+        setApartmentDetails(parsed.apartmentDetails || '')
+        setAccessNotes(parsed.accessNotes || '')
+        setJobType((parsed.jobType as (typeof JOB_TYPE_OPTIONS)[number]['value']) || '')
+        setBedrooms(parsed.bedrooms || '')
+        setBathrooms(parsed.bathrooms || '')
+        setPropertyCondition((parsed.propertyCondition as (typeof PROPERTY_CONDITION_OPTIONS)[number]['value']) || '')
+        setSuppliesProvider((parsed.suppliesProvider as (typeof SUPPLIES_OPTIONS)[number]['value']) || '')
+        setNotes(parsed.notes || '')
+        setSaveAddressForLater(Boolean(parsed.saveAddressForLater))
+
+        resumeExistingBooking(continueBookingId, restoredDate, restoredSlot, restoredDuration)
+          .catch(() => {
+            toast.error('Could not resume this booking. Please start a new booking.')
+          })
+      } catch {
+        clearSessionDraft()
+        hydrateFromBooking()
+      }
       return
     }
+
+    const raw = window.sessionStorage.getItem(draftStorageKey)
+    if (!raw) return
 
     try {
       const parsed = JSON.parse(raw) as BookingFlowDraft
@@ -925,7 +980,7 @@ export default function BookingFlowPage() {
       setNotes(parsed.notes || '')
       setSaveAddressForLater(Boolean(parsed.saveAddressForLater))
       const requestedStep = Math.min(Math.max(Number(parsed.step || 1), 1), 3)
-      const targetBookingId = continueBookingId || parsed.bookingId || ''
+      const targetBookingId = parsed.bookingId || ''
       const canResumeExistingBooking = Boolean(targetBookingId && continueDraft)
       setStep(requestedStep === 3 && !canResumeExistingBooking ? 2 : requestedStep)
 

@@ -151,7 +151,7 @@ export function CleanerCard({ cleaner, isFavorite, onToggleFavorite }: CleanerCa
               View Profile
             </Link>
             <Link
-              href={`/client/book/${cleaner.id}`}
+              href={`/client/book/${cleaner.id}?fresh=1`}
               className="inline-flex h-[44px] items-center justify-center rounded-xl bg-[#1f3bd6] px-3 text-[14px] font-semibold text-white hover:bg-[#182fb3]"
             >
               Book Now
