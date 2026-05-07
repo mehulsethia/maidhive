@@ -5,6 +5,7 @@ import { clientRepo } from '@/server/repositories/client.repo'
 import { paymentRepo } from '@/server/repositories/payment.repo'
 import { stripe } from '@/server/stripe'
 import { ok, err } from '@/server/response'
+import { bookingService } from '@/server/services/booking.service'
 import { z } from 'zod'
 
 const schema = z.object({ booking_id: z.string().uuid() })
@@ -15,7 +16,7 @@ export const POST = requireClient(async (req: NextRequest, _ctx, user) => {
     const parsed = schema.safeParse(body)
     if (!parsed.success) return err(parsed.error.message, 422)
 
-    const booking = await bookingRepo.findById(parsed.data.booking_id)
+    let booking = await bookingRepo.findById(parsed.data.booking_id)
     if (!booking) return err('Booking not found', 404)
     if (!['draft', 'pending', 'accepted'].includes(booking.status)) {
       return err('Booking must be draft, pending, or accepted for authorisation', 400)
@@ -57,7 +58,33 @@ export const POST = requireClient(async (req: NextRequest, _ctx, user) => {
       await clientRepo.update(client.id, { stripeCustomerId })
     }
 
+    if (booking.status === 'draft') {
+      const repriced = bookingService.previewPrice(
+        Number(booking.cleaner.hourlyRate),
+        Number(booking.durationHours),
+      )
+      const needsReprice =
+        Number(booking.hourlyRate) !== Number(repriced.hourly_rate) ||
+        Number(booking.subtotal) !== Number(repriced.subtotal) ||
+        Number(booking.platformFee) !== Number(repriced.platform_fee) ||
+        Number(booking.cleanerPayout) !== Number(repriced.cleaner_payout) ||
+        Number(booking.totalAmount) !== Number(repriced.total_amount)
+
+      if (needsReprice) {
+        booking = await bookingRepo.update(booking.id, {
+          hourlyRate: repriced.hourly_rate,
+          subtotal: repriced.subtotal,
+          platformFeePct: repriced.platform_fee_pct,
+          platformFee: repriced.platform_fee,
+          cleanerPayout: repriced.cleaner_payout,
+          totalAmount: repriced.total_amount,
+        })
+      }
+    }
+
     const existing = await paymentRepo.findByBookingId(booking.id)
+    const amountCents = Math.round(Number(booking.totalAmount) * 100)
+    const feeCents = Math.round(Number(booking.platformFee) * 100)
     if (existing) {
       const pi = await stripe.paymentIntents.retrieve(existing.stripePaymentIntentId)
       if (pi.currency !== 'eur') {
@@ -72,13 +99,22 @@ export const POST = requireClient(async (req: NextRequest, _ctx, user) => {
         return err('Payment already processed for this booking', 409)
       }
 
+      if (String(pi.status) !== 'requires_capture' && (pi.amount !== amountCents || (pi.application_fee_amount ?? 0) !== feeCents)) {
+        await stripe.paymentIntents.update(pi.id, {
+          amount: amountCents,
+          application_fee_amount: feeCents,
+        })
+      }
+      await paymentRepo.update(existing.id, {
+        amount: Number(booking.totalAmount),
+        platformFee: Number(booking.platformFee),
+        cleanerPayout: Number(booking.cleanerPayout),
+      })
+
       if (pi.client_secret) {
         return ok({ client_secret: pi.client_secret, payment_intent_id: pi.id })
       }
     }
-
-    const amountCents = Math.round(Number(booking.totalAmount) * 100)
-    const feeCents = Math.round(Number(booking.platformFee) * 100)
 
     const intent = await stripe.paymentIntents.create({
       amount: amountCents,

@@ -661,6 +661,8 @@ export default function BookingFlowPage() {
   const [transportAgreementConfirmed, setTransportAgreementConfirmed] = useState(false)
   const [suppliesAgreementConfirmed, setSuppliesAgreementConfirmed] = useState(false)
   const hasHydratedDraftRef = useRef(false)
+  const slotsRequestSeqRef = useRef(0)
+  const datesRequestSeqRef = useRef(0)
   const draftStorageKey = continueDraft && continueBookingId
     ? `maidhive:booking-flow-draft:${cleanerId}:booking:${continueBookingId}`
     : `maidhive:booking-flow-draft:${cleanerId}`
@@ -713,6 +715,10 @@ export default function BookingFlowPage() {
       const intentRes = await paymentsApi.createIntent(restoredBooking.id)
       const secret = intentRes.data?.client_secret ?? null
       if (secret) {
+        const latest = await bookingsApi.getById(restoredBooking.id)
+        if (latest.data) {
+          setBooking(latest.data)
+        }
         setClientSecret(secret)
         setStep(3)
         return
@@ -1010,9 +1016,11 @@ export default function BookingFlowPage() {
   // Fetch available slots when date or duration changes
   useEffect(() => {
     if (!date || !cleanerId) return
+    const requestSeq = ++slotsRequestSeqRef.current
     setSlotsLoading(true)
     availabilityApi.getSlots(cleanerId, date, duration)
       .then((r) => {
+        if (requestSeq !== slotsRequestSeqRef.current) return
         const nextSlots = r.data ?? []
         setSlots(nextSlots)
         if (!selectedSlot) return
@@ -1023,29 +1031,47 @@ export default function BookingFlowPage() {
         })
         if (!stillAvailable) {
           setSelectedSlot('')
-          toast.error('This time is no longer available. Please choose another time.')
+          if (normalizedSelected) {
+            toast.error('This time is no longer available. Please choose another time.')
+          }
         }
       })
-      .catch(() => setSlots([]))
-      .finally(() => setSlotsLoading(false))
+      .catch(() => {
+        if (requestSeq !== slotsRequestSeqRef.current) return
+        setSlots([])
+      })
+      .finally(() => {
+        if (requestSeq !== slotsRequestSeqRef.current) return
+        setSlotsLoading(false)
+      })
   }, [date, duration, cleanerId, selectedSlot])
 
   useEffect(() => {
     if (!cleanerId) return
+    const requestSeq = ++datesRequestSeqRef.current
     setBookableDatesLoading(true)
     setBookableDates([])
     availabilityApi.getBookableDates(cleanerId, duration, 28)
       .then((r) => {
+        if (requestSeq !== datesRequestSeqRef.current) return
         const nextDates = r.data ?? []
         setBookableDates(nextDates)
         if (date && !nextDates.includes(date)) {
           setDate('')
           setSelectedSlot('')
-          toast.error('This time is no longer available. Please choose another time.')
+          if (selectedSlot) {
+            toast.error('This time is no longer available. Please choose another time.')
+          }
         }
       })
-      .catch(() => setBookableDates([]))
-      .finally(() => setBookableDatesLoading(false))
+      .catch(() => {
+        if (requestSeq !== datesRequestSeqRef.current) return
+        setBookableDates([])
+      })
+      .finally(() => {
+        if (requestSeq !== datesRequestSeqRef.current) return
+        setBookableDatesLoading(false)
+      })
   }, [cleanerId, duration, date])
 
   // Fetch price breakdown when duration changes
@@ -1099,6 +1125,22 @@ export default function BookingFlowPage() {
     if (!cleaner) return 0
     return cleaner.hourly_rate * duration
   }, [cleaner, duration])
+  const sidebarDuration = step === 3 && booking ? Number(booking.duration_hours) : duration
+  const sidebarBreakdown = step === 3 && booking
+    ? {
+        hourly_rate: Number(booking.hourly_rate),
+        duration_hours: Number(booking.duration_hours),
+        subtotal: Number(booking.subtotal ?? (booking.total_amount - booking.platform_fee)),
+        platform_fee_pct: 10,
+        platform_fee: Number(booking.platform_fee),
+        cleaner_payout: Number(booking.cleaner_payout),
+        total_amount: Number(booking.total_amount),
+      }
+    : breakdown
+  const sidebarSelectedSlot = step === 3 && booking ? String(booking.scheduled_start) : selectedSlot
+  const sidebarDate = step === 3 && booking
+    ? getDateKeyInAppTimezone(String(booking.scheduled_start))
+    : date
 
   const missingAccountItems = useMemo(() => {
     const issues: string[] = []
@@ -1743,7 +1785,14 @@ export default function BookingFlowPage() {
 
                   <div>
                     <Label className="text-sm font-semibold">Service Address <span className="text-red-500">*</span></Label>
-                    <Input required value={address} onChange={e => setAddress(e.target.value)} className="mt-1" placeholder="Street address" />
+                    <Input
+                      required
+                      value={address}
+                      onChange={e => setAddress(e.target.value)}
+                      className={`mt-1 ${addressMode === 'saved' ? 'bg-slate-50' : ''}`}
+                      placeholder="Street address"
+                      readOnly={addressMode === 'saved'}
+                    />
                   </div>
 
                 <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
@@ -1753,13 +1802,28 @@ export default function BookingFlowPage() {
                   </div>
                   <div>
                     <Label className="text-sm font-semibold">Postcode <span className="text-red-500">*</span></Label>
-                    <Input required value={postcode} onChange={e => setPostcode(normalizePostcodeInput(e.target.value))} className="mt-1" placeholder="6010" inputMode="numeric" maxLength={4} />
+                    <Input
+                      required
+                      value={postcode}
+                      onChange={e => setPostcode(normalizePostcodeInput(e.target.value))}
+                      className={`mt-1 ${addressMode === 'saved' ? 'bg-slate-50' : ''}`}
+                      placeholder="6010"
+                      inputMode="numeric"
+                      maxLength={4}
+                      readOnly={addressMode === 'saved'}
+                    />
                   </div>
                 </div>
 
                   <div>
                     <Label className="text-sm font-semibold">Apartment details</Label>
-                    <Input value={apartmentDetails} onChange={e => setApartmentDetails(e.target.value)} className="mt-1" placeholder="Apartment / unit / floor (optional)" />
+                    <Input
+                      value={apartmentDetails}
+                      onChange={e => setApartmentDetails(e.target.value)}
+                      className={`mt-1 ${addressMode === 'saved' ? 'bg-slate-50' : ''}`}
+                      placeholder="Apartment / unit / floor (optional)"
+                      readOnly={addressMode === 'saved'}
+                    />
                   </div>
 
                   <div>
@@ -1769,8 +1833,9 @@ export default function BookingFlowPage() {
                       value={accessNotes}
                       onChange={e => setAccessNotes(e.target.value)}
                       placeholder="Doorbell details, gate code, parking, or entry instructions"
-                      className="mt-1"
+                      className={`mt-1 ${addressMode === 'saved' ? 'bg-slate-50' : ''}`}
                       rows={3}
+                      readOnly={addressMode === 'saved'}
                     />
                   </div>
                   {addressMode === 'new' && (
@@ -2143,11 +2208,11 @@ export default function BookingFlowPage() {
           <div className="order-last lg:order-none">
             <BookingSummary
               cleaner={cleaner}
-              duration={duration}
-              breakdown={breakdown}
+              duration={sidebarDuration}
+              breakdown={sidebarBreakdown}
               jobType={jobType}
-              date={date}
-              selectedSlot={selectedSlot}
+              date={sidebarDate}
+              selectedSlot={sidebarSelectedSlot}
               city={city}
               postcode={postcode}
             />
