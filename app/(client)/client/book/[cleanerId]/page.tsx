@@ -97,6 +97,16 @@ type BookingFlowDraft = {
   bookingId: string
 }
 
+type BookingSnapshotDetails = {
+  jobType: string
+  bedrooms: string
+  bathrooms: string
+  propertyCondition: string
+  supplies: string
+  needsCleaning: string
+  photos: string[]
+}
+
 function isPaymentAuthorizedStatus(status?: string | null) {
   return ['authorized', 'captured', 'transferred'].includes(String(status ?? ''))
 }
@@ -111,6 +121,34 @@ function normalizeToIsoDatetime(value: string): string | null {
 
 function normalizePostcodeInput(value: string): string {
   return normalizeCyprusPostcode(value)
+}
+
+function parseBookingSnapshotDetails(specialInstructions?: string | null): BookingSnapshotDetails {
+  const value = String(specialInstructions ?? '')
+  const lines = value.split('\n')
+  const readLine = (prefix: string) => {
+    const row = lines.find((line) => line.toLowerCase().startsWith(`${prefix.toLowerCase()}:`))
+    return row ? row.split(':').slice(1).join(':').trim() : ''
+  }
+  const photosLine = lines.find((line) => line.toLowerCase().startsWith('job photos'))
+  const photos = photosLine
+    ? photosLine
+        .split(':')
+        .slice(1)
+        .join(':')
+        .split(',')
+        .map((url) => url.trim())
+        .filter((url) => /^https?:\/\//i.test(url))
+    : []
+  return {
+    jobType: readLine('Job type'),
+    bedrooms: readLine('Bedrooms'),
+    bathrooms: readLine('Bathrooms'),
+    propertyCondition: readLine('Property condition'),
+    supplies: readLine('Cleaning supplies'),
+    needsCleaning: readLine('What needs to be cleaned'),
+    photos,
+  }
 }
 
 // ── Step indicator ────────────────────────────────────────────────────────
@@ -608,12 +646,14 @@ export default function BookingFlowPage() {
   const continueDraft = searchParams.get('continue') === '1'
   const continueBookingId = searchParams.get('bookingId')?.trim() || ''
   const forceFresh = searchParams.get('fresh') === '1'
+  const paymentResumeMode = continueDraft && Boolean(continueBookingId) && !forceFresh
 
   const [cleaner, setCleaner] = useState<CleanerRead | null>(null)
   const [clientProfile, setClientProfile] = useState<ClientProfileRead | null>(null)
   const [savedAddresses, setSavedAddresses] = useState<ClientAddressRead[]>([])
   const [loading, setLoading] = useState(true)
   const [step, setStep] = useState(1)
+  const [restoringDraft, setRestoringDraft] = useState(paymentResumeMode)
 
   // Step 1: Schedule
   const [duration, setDuration] = useState(1)
@@ -683,6 +723,15 @@ export default function BookingFlowPage() {
     window.sessionStorage.removeItem(draftStorageKey)
   }
 
+  async function initializePaymentIntentForBooking(bookingId: string) {
+    const intentRes = await paymentsApi.createIntent(bookingId)
+    const secret = intentRes.data?.client_secret ?? null
+    if (!secret) {
+      throw new Error('Unable to initialise card authorisation for this booking. Please try again.')
+    }
+    setClientSecret(secret)
+  }
+
   async function resumeExistingBooking(bookingId: string, restoredDate: string, restoredSlot: string, restoredDuration: number) {
     const restoredBooking = (await bookingsApi.getById(bookingId)).data
     if (!restoredBooking) return
@@ -712,31 +761,20 @@ export default function BookingFlowPage() {
     }
 
     try {
-      const intentRes = await paymentsApi.createIntent(restoredBooking.id)
-      const secret = intentRes.data?.client_secret ?? null
-      if (secret) {
-        const latest = await bookingsApi.getById(restoredBooking.id)
-        if (latest.data) {
-          setBooking(latest.data)
-        }
-        setClientSecret(secret)
-        setStep(3)
-        return
+      await initializePaymentIntentForBooking(restoredBooking.id)
+      const latest = await bookingsApi.getById(restoredBooking.id)
+      if (latest.data) {
+        setBooking(latest.data)
       }
-    } catch {
-      // fall through to a final status refresh below
-    }
-
-    const latest = await bookingsApi.getById(restoredBooking.id)
-    const latestBooking = latest.data
-    if (!latestBooking) return
-    setBooking(latestBooking)
-    if (isPaymentAuthorizedStatus(latestBooking.payment?.status)) {
-      clearSessionDraft()
-      setStep(4)
+      setStep(3)
+      return
+    } catch (err: any) {
+      setClientSecret(null)
+      setStep(3)
+      toast.error(err?.message ?? 'Unable to resume payment right now. Please try again.')
       return
     }
-    setStep(2)
+
   }
 
   function buildSessionDraft(): BookingFlowDraft {
@@ -885,6 +923,7 @@ export default function BookingFlowPage() {
     hasHydratedDraftRef.current = true
     if (forceFresh) {
       clearSessionDraft()
+      setRestoringDraft(false)
       return
     }
 
@@ -901,9 +940,11 @@ export default function BookingFlowPage() {
             setDate(restoredDate)
             setSelectedSlot(restoredSlot)
             await resumeExistingBooking(continueBookingId, restoredDate, restoredSlot, restoredDuration)
+            setRestoringDraft(false)
           })
           .catch(() => {
             toast.error('Could not resume this booking. Please start a new booking.')
+            setRestoringDraft(false)
           })
       }
 
@@ -952,6 +993,9 @@ export default function BookingFlowPage() {
           .catch(() => {
             toast.error('Could not resume this booking. Please start a new booking.')
           })
+          .finally(() => {
+            setRestoringDraft(false)
+          })
       } catch {
         clearSessionDraft()
         hydrateFromBooking()
@@ -960,7 +1004,10 @@ export default function BookingFlowPage() {
     }
 
     const raw = window.sessionStorage.getItem(draftStorageKey)
-    if (!raw) return
+    if (!raw) {
+      setRestoringDraft(false)
+      return
+    }
 
     try {
       const parsed = JSON.parse(raw) as BookingFlowDraft
@@ -996,12 +1043,19 @@ export default function BookingFlowPage() {
           .catch(() => {
             toast.error('Could not resume this booking. Please start a new booking.')
           })
+          .finally(() => {
+            setRestoringDraft(false)
+          })
       } else if (parsed.bookingId && !continueDraft) {
         setBooking(null)
         setClientSecret(null)
+        setRestoringDraft(false)
+      } else {
+        setRestoringDraft(false)
       }
     } catch {
       clearSessionDraft()
+      setRestoringDraft(false)
     }
   }, [loading, draftStorageKey, continueDraft, continueBookingId, forceFresh])
 
@@ -1493,13 +1547,21 @@ export default function BookingFlowPage() {
     setStep(4)
   }
 
-  if (loading) return <FormPageSkeleton />
+  const isLockedPaymentResume =
+    paymentResumeMode &&
+    step === 3 &&
+    Boolean(booking) &&
+    ['draft', 'pending'].includes(String(booking?.status ?? '')) &&
+    !isPaymentAuthorizedStatus(booking?.payment?.status)
+
+  if (loading || restoringDraft) return <FormPageSkeleton />
   if (!cleaner) return <div className="text-center py-16 text-muted-foreground">Cleaner not found.</div>
 
   const cleanerName = cleaner.user?.name ?? 'Professional Cleaner'
   const showDeepCleanAdvisory = jobType === 'deep_clean' || jobType === 'move_out_end_of_tenancy'
   const cleanerRequiresPickup = cleaner.transport_mode === 'requires_pickup'
   const cleanerNeedsClientSupplies = cleaner.cleaning_supplies === 'client_supplies'
+  const bookingSnapshot = booking ? parseBookingSnapshotDetails(booking.special_instructions) : null
 
   return (
     <>
@@ -1539,12 +1601,14 @@ export default function BookingFlowPage() {
 
         <div className="mx-auto max-w-5xl">
           <div className="mb-5">
-            <button
-              onClick={() => (step > 1 ? setStep(step - 1) : router.back())}
-              className="inline-flex items-center gap-1 rounded-xl border border-slate-200 bg-white px-3 py-1.5 text-sm font-semibold text-slate-600 transition-all duration-200 hover:-translate-y-0.5 hover:text-slate-900"
-            >
-              <ArrowLeft className="h-4 w-4" /> {step > 1 ? 'Previous' : 'Back to All Cleaners'}
-            </button>
+            {!isLockedPaymentResume && (
+              <button
+                onClick={() => (step > 1 ? setStep(step - 1) : router.back())}
+                className="inline-flex items-center gap-1 rounded-xl border border-slate-200 bg-white px-3 py-1.5 text-sm font-semibold text-slate-600 transition-all duration-200 hover:-translate-y-0.5 hover:text-slate-900"
+              >
+                <ArrowLeft className="h-4 w-4" /> {step > 1 ? 'Previous' : 'Back to All Cleaners'}
+              </button>
+            )}
           </div>
           <StepIndicator current={step} />
 
@@ -1552,7 +1616,7 @@ export default function BookingFlowPage() {
         {/* Main content */}
         <div>
           {/* ── Step 1: Service & Date ─────────────────────────────── */}
-          {step === 1 && (
+          {step === 1 && !isLockedPaymentResume && (
             <Card className="rounded-2xl border-slate-200">
               <CardHeader>
                 <CardTitle>Select Date &amp; Time</CardTitle>
@@ -1700,7 +1764,7 @@ export default function BookingFlowPage() {
           )}
 
           {/* ── Step 2: Your Details ───────────────────────────────── */}
-          {step === 2 && (
+          {step === 2 && !isLockedPaymentResume && (
             <Card className="rounded-2xl border-slate-200">
               <CardHeader>
                 <CardTitle>Address &amp; Job Details</CardTitle>
@@ -1820,9 +1884,8 @@ export default function BookingFlowPage() {
                     <Input
                       value={apartmentDetails}
                       onChange={e => setApartmentDetails(e.target.value)}
-                      className={`mt-1 ${addressMode === 'saved' ? 'bg-slate-50' : ''}`}
+                      className="mt-1"
                       placeholder="Apartment / unit / floor (optional)"
-                      readOnly={addressMode === 'saved'}
                     />
                   </div>
 
@@ -1833,9 +1896,8 @@ export default function BookingFlowPage() {
                       value={accessNotes}
                       onChange={e => setAccessNotes(e.target.value)}
                       placeholder="Doorbell details, gate code, parking, or entry instructions"
-                      className={`mt-1 ${addressMode === 'saved' ? 'bg-slate-50' : ''}`}
+                      className="mt-1"
                       rows={3}
-                      readOnly={addressMode === 'saved'}
                     />
                   </div>
                   {addressMode === 'new' && (
@@ -2068,13 +2130,46 @@ export default function BookingFlowPage() {
           )}
 
           {/* ── Step 3: Payment ────────────────────────────────────── */}
-          {step === 3 && clientSecret && booking && (
+          {step === 3 && booking && (
             <Card className="rounded-2xl border-slate-200">
               <CardHeader>
                 <CardTitle>Payment</CardTitle>
               </CardHeader>
               <CardContent className="space-y-5">
+                {isLockedPaymentResume && (
+                  <div className="rounded-xl border border-slate-200 bg-slate-50 p-3 text-sm text-slate-700">
+                    Need to change something? Cancel this draft and start a new booking.
+                  </div>
+                )}
 
+                <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
+                  <p className="text-sm font-semibold text-slate-900">Saved booking details (read-only)</p>
+                  <div className="mt-2 grid gap-2 text-xs text-slate-700 sm:grid-cols-2">
+                    <p><span className="font-medium">Date/time:</span> {new Date(booking.scheduled_start).toLocaleString('en-IE', { weekday: 'short', day: '2-digit', month: 'short', year: 'numeric', hour: 'numeric', minute: '2-digit', hour12: true, timeZone: APP_TIMEZONE })}</p>
+                    <p><span className="font-medium">Duration:</span> {booking.duration_hours} hour{Number(booking.duration_hours) === 1 ? '' : 's'}</p>
+                    <p><span className="font-medium">Address:</span> {booking.address}, {booking.city}, {booking.postcode}</p>
+                    <p><span className="font-medium">Job type:</span> {bookingSnapshot?.jobType || 'Not provided'}</p>
+                    <p><span className="font-medium">Bedrooms/bathrooms:</span> {bookingSnapshot?.bedrooms || '-'} / {bookingSnapshot?.bathrooms || '-'}</p>
+                    <p><span className="font-medium">Property condition:</span> {bookingSnapshot?.propertyCondition || 'Not provided'}</p>
+                    <p><span className="font-medium">Supplies choice:</span> {bookingSnapshot?.supplies || 'Not provided'}</p>
+                    <p className="sm:col-span-2"><span className="font-medium">What needs to be cleaned:</span> {bookingSnapshot?.needsCleaning || 'Not provided'}</p>
+                    <p className="sm:col-span-2"><span className="font-medium">Total price:</span> {formatCurrency(booking.total_amount)}</p>
+                    {bookingSnapshot?.photos && bookingSnapshot.photos.length > 0 && (
+                      <div className="sm:col-span-2 space-y-2">
+                        <p><span className="font-medium">Photos:</span></p>
+                        <div className="grid gap-2 sm:grid-cols-3">
+                          {bookingSnapshot.photos.map((photoUrl, idx) => (
+                            <a key={`${photoUrl}-${idx}`} href={photoUrl} target="_blank" rel="noreferrer" className="block overflow-hidden rounded-lg border border-slate-200 bg-white">
+                              <img src={photoUrl} alt={`Booking photo ${idx + 1}`} className="h-20 w-full object-cover" />
+                            </a>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                {clientSecret ? (
                 <Elements stripe={stripePromise} options={{ clientSecret, appearance: { theme: 'stripe' } }}>
                   {missingAccountItems.length > 0 && (
                     <div className="mb-4 rounded-xl border border-amber-200 bg-amber-50 p-3">
@@ -2126,6 +2221,26 @@ export default function BookingFlowPage() {
                     }}
                   />
                 </Elements>
+                ) : (
+                  <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
+                    <p>Card authorisation could not be initialised for this draft.</p>
+                    <div className="mt-2">
+                      <Button
+                        type="button"
+                        onClick={async () => {
+                          try {
+                            await initializePaymentIntentForBooking(booking.id)
+                            toast.success('Payment step is ready. You can authorise your card now.')
+                          } catch (err: any) {
+                            toast.error(err?.message ?? 'Unable to initialise card authorisation. Please try again.')
+                          }
+                        }}
+                      >
+                        Retry payment setup
+                      </Button>
+                    </div>
+                  </div>
+                )}
               </CardContent>
             </Card>
           )}
