@@ -9,7 +9,6 @@ import { loopsEmailService } from './loops-email.service'
 import { pushInAppNotification } from './in-app-notification.service'
 import { googleCalendarService } from './google-calendar.service'
 import { stripe } from '../stripe'
-import { config } from '../config'
 import type { User } from '@prisma/client'
 
 const PLATFORM_FEE_PCT = 10
@@ -225,6 +224,29 @@ export const bookingService = {
         body: 'Cleaner accepted your booking request.',
         data: { booking_id: bookingId },
       })
+      try {
+        await loopsEmailService.sendCleanerBookingAcceptedConfirmation({
+          email: booking.cleaner.user.email,
+          fullName: booking.cleaner.user.name ?? 'Cleaner',
+          bookingId: booking.id,
+        })
+      } catch (emailError) {
+        console.error('Failed to send cleaner booking accepted confirmation email via Loops:', emailError)
+      }
+      if (isPaymentAuthorized) {
+        try {
+          await loopsEmailService.sendClientBookingConfirmed({
+            email: booking.client.user.email,
+            fullName: booking.client.user.name ?? 'Client',
+            cleanerName: booking.cleaner.user.name ?? 'Cleaner',
+            scheduledStart: booking.scheduledStart,
+            durationHours: Number(booking.durationHours),
+            bookingId: booking.id,
+          })
+        } catch (emailError) {
+          console.error('Failed to send client booking accepted confirmation email via Loops:', emailError)
+        }
+      }
       void googleCalendarService.upsertCleanerBookingEvent(updated.id).catch((e) => {
         console.error('Failed to sync cleaner Google Calendar event:', e)
       })
@@ -473,6 +495,31 @@ export const bookingService = {
           body: 'The proposed booking time has been accepted and confirmed.',
           data: { booking_id: bookingId },
         })
+        if (isCleaner) {
+          try {
+            await loopsEmailService.sendCleanerBookingAcceptedConfirmation({
+              email: booking.cleaner.user.email,
+              fullName: booking.cleaner.user.name ?? 'Cleaner',
+              bookingId: booking.id,
+            })
+          } catch (emailError) {
+            console.error('Failed to send cleaner accepted confirmation email via Loops:', emailError)
+          }
+        }
+        if (isPaymentAuthorized) {
+          try {
+            await loopsEmailService.sendClientBookingConfirmed({
+              email: booking.client.user.email,
+              fullName: booking.client.user.name ?? 'Client',
+              cleanerName: booking.cleaner.user.name ?? 'Cleaner',
+              scheduledStart: booking.proposedStart,
+              durationHours: Number(booking.durationHours),
+              bookingId: booking.id,
+            })
+          } catch (emailError) {
+            console.error('Failed to send client booking confirmed email via Loops:', emailError)
+          }
+        }
         void googleCalendarService.upsertCleanerBookingEvent(updated.id).catch((e) => {
           console.error('Failed to sync cleaner Google Calendar event:', e)
         })
@@ -617,40 +664,11 @@ export const bookingService = {
       throw new ServiceError(`Cannot complete a booking in status '${booking.status}'`, 400)
     }
 
-    if (!booking.startedAt) {
-      throw new ServiceError('Start Cleaning is required before completing the job', 400)
-    }
-
     assertCompletionWindow(booking.scheduledEnd)
     return completeBookingFlow(bookingId, {
       completedAt: new Date(),
       initiatedByUserId: user.id,
       initiatedByRole: 'cleaner',
-    })
-  },
-
-  async completeByClient(bookingId: string, user: User) {
-    const booking = await bookingRepo.findById(bookingId)
-    if (!booking) throw new ServiceError('Booking not found', 404)
-
-    const client = await clientRepo.findByUserId(user.id)
-    if (!client || booking.clientId !== client.id) {
-      throw new ServiceError('Only booking client can complete this booking', 403)
-    }
-
-    if (!['in_progress', 'disputed'].includes(booking.status)) {
-      throw new ServiceError(`Cannot complete a booking in status '${booking.status}'`, 400)
-    }
-
-    if (!booking.startedAt) {
-      throw new ServiceError('Booking must be started before completion', 400)
-    }
-
-    assertCompletionWindow(booking.scheduledEnd)
-    return completeBookingFlow(bookingId, {
-      completedAt: new Date(),
-      initiatedByUserId: user.id,
-      initiatedByRole: 'client',
     })
   },
 
@@ -934,14 +952,14 @@ async function completeBookingFlow(
   bookingId: string,
   args: {
     completedAt: Date
-    initiatedByRole: 'cleaner' | 'client' | 'system'
+    initiatedByRole: 'cleaner' | 'system'
     initiatedByUserId?: string
   },
 ) {
   const booking = await bookingRepo.findById(bookingId)
   if (!booking) throw new ServiceError('Booking not found', 404)
 
-  if (!['in_progress', 'disputed'].includes(booking.status)) {
+  if (!['confirmed', 'in_progress', 'disputed'].includes(booking.status)) {
     throw new ServiceError(`Cannot complete a booking in status '${booking.status}'`, 400)
   }
 
@@ -954,39 +972,25 @@ async function completeBookingFlow(
     completedAt: args.completedAt,
   })
 
-  if (!unresolvedDispute && booking.payment?.status === 'authorized') {
-    const captured = await stripe.paymentIntents.capture(booking.payment.stripePaymentIntentId)
-    await paymentRepo.update(booking.payment.id, {
-      status: 'captured',
-      stripeChargeId: typeof captured.latest_charge === 'string' ? captured.latest_charge : undefined,
-      capturedAt: new Date(),
-      payoutScheduledAt: new Date(Date.now() + config.DISPUTE_WINDOW_HOURS * 60 * 60 * 1000),
-    })
-  }
-
   await pushInAppNotification({
     userId: booking.client.userId,
     type: 'booking_completed',
-    title: 'Booking Completed',
+    title: 'Booking completed',
     body:
       args.initiatedByRole === 'system'
-        ? 'Booking was auto-completed after the scheduled end time.'
-        : args.initiatedByRole === 'client'
-          ? 'You marked this booking as completed.'
-          : 'Cleaner marked this booking as completed.',
+        ? 'Your booking has been marked as completed. If there was an issue, please report it within 24 hours.'
+        : 'Cleaner marked this booking as completed. If there was an issue, please report it within 24 hours.',
     data: { booking_id: bookingId },
   })
 
   await pushInAppNotification({
     userId: booking.cleaner.userId,
     type: 'booking_completed',
-    title: 'Booking completed',
+    title: 'Completed - awaiting release',
     body:
       args.initiatedByRole === 'system'
-        ? 'This booking was auto-completed after the scheduled end time.'
-        : args.initiatedByRole === 'client'
-          ? 'Client marked this booking as completed. Payout will be released after the dispute window.'
-        : 'Booking marked complete. Payout will be released after the dispute window.',
+        ? 'This booking was auto-completed at scheduled end time. Payout will release after the 24-hour report window if no issue is raised.'
+        : 'Booking marked complete. Payout will release after the 24-hour report window if no issue is raised.',
     data: { booking_id: bookingId },
   })
 

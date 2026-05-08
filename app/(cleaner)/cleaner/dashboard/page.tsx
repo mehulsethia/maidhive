@@ -146,13 +146,13 @@ export default function CleanerDashboardPage() {
   const stats = useMemo(() => {
     const requests = bookings.filter((b) => REQUEST_STATUSES.includes(b.status))
     const upcoming = bookings.filter((b) => UPCOMING_STATUSES.includes(b.status))
-    const active = bookings.filter((b) => ACTIVE_STATUSES.includes(b.status))
+    const activeJobs = bookings.filter((b) => ACTIVE_STATUSES.includes(b.status) || UPCOMING_STATUSES.includes(b.status))
     const completed = bookings.filter((b) => COMPLETED_STATUSES.includes(b.status))
 
     return {
       requests,
       upcoming,
-      active,
+      activeJobs,
       completed,
       totalRevenue: completed.reduce((sum, b) => sum + b.cleaner_payout, 0),
     }
@@ -292,7 +292,7 @@ export default function CleanerDashboardPage() {
           <CardContent className="flex items-center justify-between p-4 !pt-6">
             <div>
               <p className="text-xs uppercase tracking-wide text-slate-500">Active Jobs</p>
-              <p className="mt-1 text-2xl font-bold text-slate-900">{stats.active.length}</p>
+              <p className="mt-1 text-2xl font-bold text-slate-900">{stats.activeJobs.length}</p>
             </div>
             <div className="rounded-xl bg-violet-50 p-2 text-violet-600"><Clock3 className="h-5 w-5" /></div>
           </CardContent>

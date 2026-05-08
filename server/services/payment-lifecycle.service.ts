@@ -9,7 +9,7 @@ export const paymentLifecycleService = {
   async processAutoCompletions(limit = 200) {
     const overdue = await db.booking.findMany({
       where: {
-        status: { in: ['in_progress', 'disputed'] },
+        status: { in: ['confirmed', 'in_progress', 'disputed'] },
         scheduledEnd: { lte: new Date() },
         completedAt: null,
       },

@@ -7,7 +7,7 @@ const STATUS_CONFIG: Record<BookingStatus, { label: string; variant: 'default' |
   accepted:    { label: 'Accepted',    variant: 'info' },
   confirmed:   { label: 'Confirmed',   variant: 'info' },
   in_progress: { label: 'In Progress', variant: 'default' },
-  completed:   { label: 'Completed',   variant: 'success' },
+  completed:   { label: 'Completed - Awaiting Release',   variant: 'success' },
   cancelled:   { label: 'Cancelled',   variant: 'secondary' },
   expired:     { label: 'Expired',     variant: 'secondary' },
   disputed:    { label: 'Under Review',    variant: 'destructive' },
