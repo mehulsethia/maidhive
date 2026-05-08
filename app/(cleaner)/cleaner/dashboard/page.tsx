@@ -205,7 +205,7 @@ export default function CleanerDashboardPage() {
               </Link>
               <Link
                 href="/cleaner/bookings"
-                className="inline-flex h-11 items-center rounded-full bg-[#0d4bc9] px-5 text-sm font-semibold text-white shadow-[0_8px_20px_rgba(13,75,201,0.4)] transition duration-300 hover:-translate-y-0.5 hover:bg-[#0a3ea8]"
+                className="inline-flex h-11 items-center rounded-full bg-[#f4b400] px-5 text-sm font-semibold text-slate-950 transition duration-300 hover:-translate-y-0.5 hover:bg-[#ffca3a]"
               >
                 View bookings
               </Link>
@@ -217,7 +217,7 @@ export default function CleanerDashboardPage() {
               <p className="text-[0.7rem] uppercase tracking-[0.24em] text-cyan-200/90">
                 Live Snapshot
               </p>
-              <div className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-4">
+              <div className="mt-3 grid grid-cols-2 gap-2.5">
                 <SnapshotStat label="Revenue" value={stats.totalRevenue > 0 ? formatCurrency(stats.totalRevenue) : '€0.00'} />
                 <SnapshotStat label="Completed" value={String(stats.completed.length)} />
                 <SnapshotStat label="Active" value={String(stats.activeJobs.length)} />
@@ -557,8 +557,10 @@ export default function CleanerDashboardPage() {
 function SnapshotStat({ label, value }: { label: string; value: string }) {
   return (
     <div className="rounded-2xl border border-white/20 bg-white/10 px-3 py-2">
-      <p className="text-[0.62rem] uppercase tracking-[0.18em] text-white/65">{label}</p>
-      <p className="mt-1 text-xl font-bold tracking-[-0.02em] text-white">{value}</p>
+      <p className="whitespace-nowrap text-[0.6rem] uppercase tracking-[0.08em] text-white/65 sm:text-[0.62rem]">
+        {label}
+      </p>
+      <p className="mt-1 text-xl font-bold tracking-[-0.01em] text-white">{value}</p>
     </div>
   )
 }

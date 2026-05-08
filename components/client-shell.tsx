@@ -51,7 +51,7 @@ export function ClientShell({ children }: { children: React.ReactNode }) {
   }
 
   return (
-    <div className="min-h-screen text-slate-900 lg:pl-72">
+    <div className="min-h-screen overflow-x-hidden text-slate-900 lg:pl-72">
       <div className="mx-auto max-w-[1500px]">
         <aside className="hidden lg:fixed lg:inset-y-0 lg:left-0 lg:z-30 lg:flex lg:h-screen lg:w-72 lg:flex-col lg:border-r lg:border-slate-200/80 lg:bg-white/90 lg:px-5 lg:py-6 lg:backdrop-blur-md">
           <Link href="/client/dashboard" className="mb-8 inline-flex items-center gap-2.5">
