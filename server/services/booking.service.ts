@@ -995,14 +995,26 @@ async function completeBookingFlow(
   })
 
   try {
+    await loopsEmailService.sendClientBookingCompleted({
+      email: booking.client.user.email,
+      fullName: booking.client.user.name ?? 'Client',
+      cleanerName: booking.cleaner.user.name ?? 'Cleaner',
+      bookingId: booking.id,
+      completedBy: args.initiatedByRole,
+    })
+  } catch (completionEmailError) {
+    console.error('Failed to send client completion email via Loops:', completionEmailError)
+  }
+
+  try {
     await loopsEmailService.sendClientReviewRequest({
       email: booking.client.user.email,
       fullName: booking.client.user.name ?? 'Client',
       cleanerName: booking.cleaner.user.name ?? 'Cleaner',
       bookingId: booking.id,
     })
-  } catch (emailError) {
-    console.error('Failed to send client review request email via Loops:', emailError)
+  } catch (reviewEmailError) {
+    console.error('Failed to send client review request email via Loops:', reviewEmailError)
   }
 
   return updated

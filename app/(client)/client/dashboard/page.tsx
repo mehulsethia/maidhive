@@ -345,12 +345,20 @@ export default function ClientDashboardPage() {
                         </div>
                         <div className="shrink-0 text-left sm:text-right">
                           <p className="text-xs font-semibold text-slate-700">{formatCurrency(favorite.hourly_rate)}/hr</p>
-                          <Link
-                            href={`/client/book/${favorite.cleaner_id}?reset=1&step=1`}
-                            className="mt-1 inline-flex h-7 items-center rounded-full bg-[#0d4bc9] px-2.5 text-[11px] font-semibold text-white hover:bg-[#0a3ea8]"
-                          >
-                            Book
-                          </Link>
+                          <div className="mt-1 flex items-center gap-2 sm:justify-end">
+                            <Link
+                              href={`/client/cleaners/${favorite.cleaner_id}`}
+                              className="inline-flex h-7 items-center rounded-full border border-slate-300 bg-white px-2.5 text-[11px] font-semibold text-slate-700 hover:bg-slate-50"
+                            >
+                              View profile
+                            </Link>
+                            <Link
+                              href={`/client/book/${favorite.cleaner_id}?reset=1&step=1`}
+                              className="inline-flex h-7 items-center rounded-full bg-[#0d4bc9] px-2.5 text-[11px] font-semibold text-white hover:bg-[#0a3ea8]"
+                            >
+                              Book
+                            </Link>
+                          </div>
                         </div>
                       </div>
                     </div>

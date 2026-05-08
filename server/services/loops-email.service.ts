@@ -12,6 +12,8 @@ const CLIENT_BOOKING_CREATED_PENDING_TRANSACTIONAL_ID =
 const CLIENT_BOOKING_REJECTED_OR_EXPIRED_TRANSACTIONAL_ID = 'cmo2rozk700gw0izg1w1rhfrf'
 const CLIENT_PAYMENT_RECEIPT_TRANSACTIONAL_ID = 'cmo2rrvdv2ppa0izkfm5zk7ov'
 const CLIENT_REVIEW_REQUEST_TRANSACTIONAL_ID = 'cmo2rtf800f500iyxs4d16x8x'
+const CLIENT_BOOKING_COMPLETED_TRANSACTIONAL_ID =
+  process.env.LOOPS_CLIENT_BOOKING_COMPLETED_TRANSACTIONAL_ID ?? 'cmo2rtf800f500iyxs4d16x8x'
 const CLIENT_CANCELLATION_CONFIRMATION_TRANSACTIONAL_ID = 'cmo2ruvdu07yk0iw5gw79hvew'
 const CLIENT_ISSUE_OR_NOSHOW_NOTIFICATION_TRANSACTIONAL_ID = 'cmo2rwfnv2p3t0izcpaqf74tc'
 const CLEANER_SIGNUP_TRANSACTIONAL_ID = 'cmo5hbjfv0lbm0iya3k626pjl'
@@ -224,6 +226,31 @@ export const loopsEmailService = {
         first_name: firstName(args.fullName),
         cleaner_name: args.cleanerName,
         review_link: `${appUrl()}/client/bookings/${args.bookingId}`,
+      },
+    })
+  },
+
+  async sendClientBookingCompleted(args: {
+    email: string
+    fullName: string
+    cleanerName: string
+    bookingId: string
+    completedBy: 'cleaner' | 'system'
+  }) {
+    const message =
+      args.completedBy === 'system'
+        ? 'Your booking has been marked as completed. If there was an issue, please report it within 24 hours.'
+        : 'Cleaner marked this booking as completed. If there was an issue, please report it within 24 hours.'
+
+    return sendTransactionalEmail({
+      transactionalId: CLIENT_BOOKING_COMPLETED_TRANSACTIONAL_ID,
+      email: args.email,
+      dataVariables: {
+        first_name: firstName(args.fullName),
+        cleaner_name: args.cleanerName,
+        message,
+        report_link: `${appUrl()}/client/report?booking=${args.bookingId}`,
+        booking_link: `${appUrl()}/client/bookings/${args.bookingId}`,
       },
     })
   },

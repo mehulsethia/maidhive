@@ -33,6 +33,8 @@ const SERVICE_LABELS: Record<string, string> = {
   end_of_tenancy: 'End of Tenancy',
   move_in: 'Move-in Clean',
 }
+const DISPUTE_WINDOW_HOURS = Number(process.env.NEXT_PUBLIC_DISPUTE_WINDOW_HOURS ?? 24)
+const DISPUTE_WINDOW_MS = DISPUTE_WINDOW_HOURS * 60 * 60 * 1000
 
 function isPaymentAuthorized(paymentStatus?: string | null) {
   return ['authorized', 'captured', 'transferred'].includes(String(paymentStatus ?? ''))
@@ -195,6 +197,10 @@ export default function ClientBookingDetailPage() {
     ['confirmed', 'in_progress', 'completed', 'disputed'].includes(booking.status) &&
     sixHoursBeforeStart
   const cleanerPhone = booking.cleaner?.user?.phone ?? ''
+  const completedAtMs = booking.completed_at ? new Date(booking.completed_at).getTime() : 0
+  const reportDeadlineMs = completedAtMs ? completedAtMs + DISPUTE_WINDOW_MS : 0
+  const reportWindowActive = Boolean(completedAtMs && Date.now() <= reportDeadlineMs)
+  const reportWindowExpired = Boolean(completedAtMs && Date.now() > reportDeadlineMs)
 
   return (
     <>
@@ -330,6 +336,19 @@ export default function ClientBookingDetailPage() {
                 <h2 className={`${displayFont.className} text-lg font-semibold tracking-[-0.02em] text-slate-900`}>
                   Next actions
                 </h2>
+                {completedAtMs && (
+                  <p
+                    className={`rounded-xl border px-3 py-2 text-sm ${
+                      reportWindowActive
+                        ? 'border-amber-200 bg-amber-50 text-amber-800'
+                        : 'border-slate-200 bg-slate-50 text-slate-600'
+                    }`}
+                  >
+                    {reportWindowActive
+                      ? `Report window is active until ${new Date(reportDeadlineMs).toLocaleString('en-IE')}.`
+                      : `Report window closed on ${new Date(reportDeadlineMs).toLocaleString('en-IE')}.`}
+                  </p>
+                )}
                 <div className="flex flex-col gap-2">
                   {isPending && cleanerProposed && (
                     <>
@@ -393,6 +412,16 @@ export default function ClientBookingDetailPage() {
                     <Button variant="outline" onClick={() => setReviewOpen(true)}>
                       Leave a review
                     </Button>
+                  )}
+                  {reportWindowActive && (
+                    <Button variant="destructive" onClick={() => router.push(`/client/report?booking=${id}`)}>
+                      Report a Problem
+                    </Button>
+                  )}
+                  {reportWindowExpired && (
+                    <p className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-500">
+                      The {DISPUTE_WINDOW_HOURS}-hour report window has expired for this booking.
+                    </p>
                   )}
                 </div>
               </CardContent>
