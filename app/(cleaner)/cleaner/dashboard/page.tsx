@@ -2,7 +2,7 @@
 
 import Link from 'next/link'
 import { useEffect, useMemo, useState } from 'react'
-import { CalendarDays, CircleCheck, Clock3, Euro, Star, ArrowUpRight, CalendarClock, MessageSquare } from 'lucide-react'
+import { CircleCheck, Clock3, Euro, Star, ArrowUpRight, CalendarClock, MessageSquare } from 'lucide-react'
 import { bookingsApi, cleanersApi } from '@/lib/api'
 import { BookingStatusBadge } from '@/components/booking-status-badge'
 import { Button } from '@/components/ui/button'
@@ -158,6 +158,13 @@ export default function CleanerDashboardPage() {
     }
   }, [bookings])
 
+  const nextUpcoming = useMemo(() => {
+    if (stats.upcoming.length === 0) return null
+    return [...stats.upcoming].sort(
+      (a, b) => new Date(a.scheduled_start).getTime() - new Date(b.scheduled_start).getTime(),
+    )[0] ?? null
+  }, [stats.upcoming])
+
   const missingOnboardingParts = useMemo(() => {
     if (!onboardingSteps) return []
     const labels: Array<[keyof CleanerOnboardingProgress['steps'], string]> = [
@@ -174,16 +181,66 @@ export default function CleanerDashboardPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-end">
-        <div className="flex items-center gap-2">
-          <Link href="/cleaner/profile" className="inline-flex h-10 items-center rounded-xl border border-slate-200 bg-white px-4 text-sm font-semibold text-slate-700 transition-all duration-200 hover:-translate-y-0.5 hover:bg-slate-50">
-            Update profile
-          </Link>
-          <Link href="/cleaner/bookings" className="inline-flex h-10 items-center rounded-xl bg-primary px-4 text-sm font-semibold text-white shadow-[0_10px_22px_rgba(39,70,250,0.35)] transition-all duration-200 hover:-translate-y-0.5 hover:opacity-95">
-            View bookings
-          </Link>
+      <section className="client-stage overflow-hidden rounded-[2rem] border border-slate-200/70">
+        <div className="client-stage__media" aria-hidden="true" />
+        <div className="client-stage__grain" aria-hidden="true" />
+
+        <div className="relative z-10 grid gap-3 px-5 py-4 sm:px-6 sm:py-5 lg:grid-cols-[1.2fr_0.8fr] lg:items-end lg:px-8 lg:py-6">
+          <div className="animate-stage-up space-y-4">
+            <p className="text-[0.72rem] uppercase tracking-[0.24em] text-white/75">
+              MaidHive Cleaner Hub
+            </p>
+            <h1 className="text-3xl font-extrabold tracking-[-0.03em] text-white sm:text-4xl">
+              Cleaner Dashboard
+            </h1>
+            <p className="max-w-xl text-base text-slate-100/90 sm:text-lg">
+              Track jobs, manage requests, and run your cleaner business from one focused workspace.
+            </p>
+            <div className="flex flex-wrap gap-2 pt-1">
+              <Link
+                href="/cleaner/profile"
+                className="inline-flex h-11 items-center rounded-full border border-white/30 bg-white/15 px-5 text-sm font-semibold text-white transition duration-300 hover:-translate-y-0.5 hover:bg-white/25"
+              >
+                Update profile
+              </Link>
+              <Link
+                href="/cleaner/bookings"
+                className="inline-flex h-11 items-center rounded-full bg-[#0d4bc9] px-5 text-sm font-semibold text-white shadow-[0_8px_20px_rgba(13,75,201,0.4)] transition duration-300 hover:-translate-y-0.5 hover:bg-[#0a3ea8]"
+              >
+                View bookings
+              </Link>
+            </div>
+          </div>
+
+          <div className="animate-stage-up delay-120">
+            <div className="ml-auto w-full max-w-lg rounded-3xl border border-white/20 bg-black/35 p-4 backdrop-blur-sm">
+              <p className="text-[0.7rem] uppercase tracking-[0.24em] text-cyan-200/90">
+                Live Snapshot
+              </p>
+              <div className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-4">
+                <SnapshotStat label="Revenue" value={stats.totalRevenue > 0 ? formatCurrency(stats.totalRevenue) : '€0.00'} />
+                <SnapshotStat label="Completed" value={String(stats.completed.length)} />
+                <SnapshotStat label="Active" value={String(stats.activeJobs.length)} />
+                <SnapshotStat label="Rating" value={avgRating ? Number(avgRating).toFixed(1) : '-'} />
+              </div>
+
+              <div className="my-3 h-px bg-white/20" />
+              <p className="text-[0.66rem] uppercase tracking-[0.2em] text-white/65">Next job</p>
+              <div className="mt-2 rounded-2xl border border-white/20 bg-white/10 px-3 py-2.5">
+                {nextUpcoming ? (
+                  <>
+                    <p className="text-base font-semibold text-white">{resolveJobTypeTitle(nextUpcoming)}</p>
+                    <p className="text-sm text-white/85">{formatDate(nextUpcoming.scheduled_start)}</p>
+                    <p className="text-sm text-white/75">{nextUpcoming.city}, {nextUpcoming.postcode}</p>
+                  </>
+                ) : (
+                  <p className="text-sm text-white/80">No upcoming jobs yet.</p>
+                )}
+              </div>
+            </div>
+          </div>
         </div>
-      </div>
+      </section>
 
       {lifecycleStatus === 'rejected' ? (
         <div className="rounded-2xl border border-red-200 bg-gradient-to-r from-red-50 to-rose-50 px-4 py-3">
@@ -262,54 +319,6 @@ export default function CleanerDashboardPage() {
           </div>
         </div>
       ) : null}
-
-      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-        <Card className="border-slate-200">
-          <CardContent className="flex items-center justify-between p-4 !pt-6">
-            <div>
-              <p className="text-xs uppercase tracking-wide text-slate-500">Total Revenue</p>
-              <p className="mt-1 text-2xl font-bold text-slate-900">
-                {stats.totalRevenue > 0 ? formatCurrency(stats.totalRevenue) : <span className="text-xl">No earnings yet</span>}
-              </p>
-            </div>
-            <div className="rounded-xl bg-emerald-50 p-2 text-emerald-600"><Euro className="h-5 w-5" /></div>
-          </CardContent>
-        </Card>
-
-        <Card className="border-slate-200">
-          <CardContent className="flex items-center justify-between p-4 !pt-6">
-            <div>
-              <p className="text-xs uppercase tracking-wide text-slate-500">Jobs Completed</p>
-              <p className="mt-1 text-2xl font-bold text-slate-900">
-                {stats.completed.length > 0 ? stats.completed.length : <span className="text-xl">No jobs yet</span>}
-              </p>
-            </div>
-            <div className="rounded-xl bg-blue-50 p-2 text-blue-600"><CircleCheck className="h-5 w-5" /></div>
-          </CardContent>
-        </Card>
-
-        <Card className="border-slate-200">
-          <CardContent className="flex items-center justify-between p-4 !pt-6">
-            <div>
-              <p className="text-xs uppercase tracking-wide text-slate-500">Active Jobs</p>
-              <p className="mt-1 text-2xl font-bold text-slate-900">{stats.activeJobs.length}</p>
-            </div>
-            <div className="rounded-xl bg-violet-50 p-2 text-violet-600"><Clock3 className="h-5 w-5" /></div>
-          </CardContent>
-        </Card>
-
-        <Card className="border-slate-200">
-          <CardContent className="flex items-center justify-between p-4 !pt-6">
-            <div>
-              <p className="text-xs uppercase tracking-wide text-slate-500">Average Rating</p>
-              <p className="mt-1 text-2xl font-bold text-slate-900">
-                {avgRating ? Number(avgRating).toFixed(1) : <span className="text-xl">No rating yet</span>}
-              </p>
-            </div>
-            <div className="rounded-xl bg-amber-50 p-2 text-amber-600"><Star className="h-5 w-5" /></div>
-          </CardContent>
-        </Card>
-      </div>
 
       <div className="grid gap-4 xl:grid-cols-3">
         <Card className="xl:col-span-2 border-slate-200">
@@ -478,6 +487,78 @@ export default function CleanerDashboardPage() {
           )}
         </CardContent>
       </Card>
+
+      <style jsx>{`
+        .client-stage {
+          position: relative;
+          isolation: isolate;
+          background: linear-gradient(125deg, #04162f 8%, #0f3b76 58%, #0e5698);
+        }
+
+        .client-stage__media {
+          position: absolute;
+          inset: 0;
+          background-image:
+            linear-gradient(105deg, rgba(2, 11, 27, 0.82) 10%, rgba(2, 11, 27, 0.5) 55%, rgba(8, 22, 44, 0.72) 100%),
+            radial-gradient(circle at 82% 18%, rgba(56, 220, 255, 0.24), transparent 34%),
+            repeating-linear-gradient(135deg, rgba(255, 255, 255, 0.08) 0 2px, rgba(255, 255, 255, 0) 2px 12px);
+          background-size: cover;
+          background-position: center;
+          mix-blend-mode: screen;
+          opacity: 0.9;
+        }
+
+        .client-stage__grain {
+          position: absolute;
+          inset: 0;
+          background-image:
+            linear-gradient(90deg, rgba(255, 255, 255, 0.11) 0%, rgba(255, 255, 255, 0) 45%),
+            radial-gradient(circle at 18% 22%, rgba(56, 220, 255, 0.22), transparent 28%),
+            radial-gradient(circle at 82% 12%, rgba(244, 180, 0, 0.2), transparent 22%);
+          animation: hero-sweep 11s ease-in-out infinite;
+          pointer-events: none;
+        }
+
+        .animate-stage-up {
+          animation: stage-up 0.72s cubic-bezier(0.18, 0.82, 0.3, 1) both;
+        }
+
+        .delay-120 {
+          animation-delay: 120ms;
+        }
+
+        @keyframes stage-up {
+          from {
+            opacity: 0;
+            transform: translateY(18px);
+          }
+          to {
+            opacity: 1;
+            transform: translateY(0);
+          }
+        }
+
+        @keyframes hero-sweep {
+          0%,
+          100% {
+            transform: translateX(0%);
+            opacity: 1;
+          }
+          50% {
+            transform: translateX(1.8%);
+            opacity: 0.88;
+          }
+        }
+      `}</style>
+    </div>
+  )
+}
+
+function SnapshotStat({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="rounded-2xl border border-white/20 bg-white/10 px-3 py-2">
+      <p className="text-[0.62rem] uppercase tracking-[0.18em] text-white/65">{label}</p>
+      <p className="mt-1 text-xl font-bold tracking-[-0.02em] text-white">{value}</p>
     </div>
   )
 }

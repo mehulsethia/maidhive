@@ -85,19 +85,6 @@ export default function ClientBookingsPage() {
     loadBookings()
   }, [])
 
-  async function handleComplete(bookingId: string) {
-    setActionLoadingId(bookingId)
-    try {
-      await bookingsApi.complete(bookingId)
-      toast.success('Booking marked as completed.')
-      await loadBookings()
-    } catch (err: any) {
-      toast.error(err.message ?? 'Failed to mark booking as complete.')
-    } finally {
-      setActionLoadingId(null)
-    }
-  }
-
   async function handleCancel(bookingId: string) {
     setActionLoadingId(bookingId)
     try {
@@ -261,9 +248,6 @@ export default function ClientBookingsPage() {
                   const completedAtMs = booking.completed_at ? new Date(booking.completed_at).getTime() : 0
                   const isWithinDisputeWindow = completedAtMs > 0 && Date.now() <= completedAtMs + DISPUTE_WINDOW_MS
                   const canDispute = booking.status === 'completed' && isWithinDisputeWindow && !disputeStatusForBooking
-                  const isActiveBooking =
-                    ['accepted', 'confirmed', 'in_progress'].includes(booking.status)
-                  const canComplete = booking.status === 'in_progress'
                   const canChat = isChatActiveForBooking(booking)
                   const canContinuePayment = booking.status === 'draft' || (booking.status === 'pending' && !isPaymentAuthorized(booking.payment?.status))
                   const canCancelPaymentRequired = booking.status === 'draft' || (booking.status === 'pending' && !isPaymentAuthorized(booking.payment?.status))
@@ -344,21 +328,6 @@ export default function ClientBookingsPage() {
                           </span>
                         )}
 
-                        {isActiveBooking && (
-                          <Button
-                            size="sm"
-                            onClick={() => handleComplete(booking.id)}
-                            loading={actionLoadingId === booking.id}
-                            disabled={!canComplete}
-                            title={
-                              canComplete
-                                ? 'Mark job as complete'
-                                : 'Available when booking is in progress'
-                            }
-                          >
-                            Mark job as complete
-                          </Button>
-                        )}
                         {booking.status === 'expired' && (
                           <>
                             <Link
