@@ -58,7 +58,15 @@ function pendingValidityLabel(booking: BookingRead) {
   if (remainingMs <= 0) return 'This request is no longer valid.'
   const remainingHours = Math.ceil(remainingMs / (60 * 60 * 1000))
   if (remainingHours >= 24) return 'This request is valid for 24 hours.'
-  return `This request is valid for ${remainingHours} hour${remainingHours === 1 ? '' : 's'}.`
+  const validUntilText = new Date(validUntilMs).toLocaleString('en-IE', {
+    hour: 'numeric',
+    minute: '2-digit',
+    hour12: true,
+    day: 'numeric',
+    month: 'short',
+    year: 'numeric',
+  })
+  return `This request is valid till ${validUntilText}.`
 }
 
 export default function ClientBookingDetailPage() {
