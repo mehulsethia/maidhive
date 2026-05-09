@@ -256,13 +256,20 @@ export default function CleanerBookingDetailPage() {
 
   const showChat = isChatActiveForBooking(booking)
   const chatIsReadOnly = isChatReadOnly(booking.scheduled_end)
-  const acceptByMs = booking.accept_by ? new Date(booking.accept_by).getTime() : 0
-  const requestMsLeft = acceptByMs ? acceptByMs - Date.now() : 0
-  const requestExpiryText = requestMsLeft <= 0
-    ? 'This request has expired.'
-    : requestMsLeft >= 60 * 60 * 1000
-      ? `This request expires in ${Math.ceil(requestMsLeft / (60 * 60 * 1000))} hour${Math.ceil(requestMsLeft / (60 * 60 * 1000)) === 1 ? '' : 's'}.`
-      : `This request expires in ${Math.max(1, Math.ceil(requestMsLeft / (60 * 1000)))} minute${Math.max(1, Math.ceil(requestMsLeft / (60 * 1000))) === 1 ? '' : 's'}.`
+  const pendingValidityLabel = (() => {
+    if (!booking.scheduled_start || !booking.accept_by) {
+      return 'This request is valid for 24 hours.'
+    }
+    const now = Date.now()
+    const startMs = new Date(booking.scheduled_start).getTime()
+    const acceptByMs = new Date(booking.accept_by).getTime()
+    const validUntilMs = Math.min(startMs, acceptByMs)
+    const remainingMs = validUntilMs - now
+    if (remainingMs <= 0) return 'This request is no longer valid.'
+    const remainingHours = Math.ceil(remainingMs / (60 * 60 * 1000))
+    if (remainingHours >= 24) return 'This request is valid for 24 hours.'
+    return `This request is valid for ${remainingHours} hour${remainingHours === 1 ? '' : 's'}.`
+  })()
   const completeOpensAt = booking.scheduled_end
     ? new Date(booking.scheduled_end).getTime() - 5 * 60 * 1000
     : Infinity
@@ -397,7 +404,7 @@ export default function CleanerBookingDetailPage() {
         )}
         {booking.status === 'pending' && (
           <p className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-700">
-            {requestExpiryText} This request is valid for 24 hours. If not accepted, it will expire automatically and your card authorisation will be released.
+            {pendingValidityLabel} If not accepted, it will expire automatically and your card authorisation will be released.
           </p>
         )}
         {canAcceptPending && (

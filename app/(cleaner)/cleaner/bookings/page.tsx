@@ -228,14 +228,23 @@ export default function CleanerBookingsPage() {
 
   if (loading) return <ListPageSkeleton />
 
-  function pendingExpiryLabel(acceptBy?: string) {
-    if (!acceptBy) return 'This request expires soon.'
-    const ms = new Date(acceptBy).getTime() - Date.now()
-    if (ms <= 0) return 'This request has expired.'
-    const hours = ms / (60 * 60 * 1000)
-    if (hours >= 1) return `This request expires in ${Math.ceil(hours)} hour${Math.ceil(hours) === 1 ? '' : 's'}.`
-    const mins = Math.max(1, Math.ceil(ms / (60 * 1000)))
-    return `This request expires in ${mins} minute${mins === 1 ? '' : 's'}.`
+  function pendingValidityLabel(bookingStart?: string, acceptBy?: string) {
+    if (!bookingStart || !acceptBy) {
+      return 'This request is valid for 24 hours.'
+    }
+    const now = Date.now()
+    const startMs = new Date(bookingStart).getTime()
+    const acceptByMs = new Date(acceptBy).getTime()
+    const validUntilMs = Math.min(startMs, acceptByMs)
+    const remainingMs = validUntilMs - now
+    if (remainingMs <= 0) {
+      return 'This request is no longer valid.'
+    }
+    const remainingHours = Math.ceil(remainingMs / (60 * 60 * 1000))
+    if (remainingHours >= 24) {
+      return 'This request is valid for 24 hours.'
+    }
+    return `This request is valid for ${remainingHours} hour${remainingHours === 1 ? '' : 's'}.`
   }
 
   return (
@@ -435,7 +444,7 @@ export default function CleanerBookingsPage() {
                   )}
                   {b.status === 'pending' && (
                     <p className="mt-2 rounded-lg border border-amber-200 bg-amber-50 px-2.5 py-1.5 text-xs text-amber-700">
-                      {pendingExpiryLabel(b.accept_by)} This request is valid for 24 hours. If not accepted, it will expire automatically and your card authorisation will be released.
+                      {pendingValidityLabel(b.scheduled_start, b.accept_by)} If not accepted, it will expire automatically and your card authorisation will be released.
                     </p>
                   )}
                   </div>

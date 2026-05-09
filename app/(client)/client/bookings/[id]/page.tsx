@@ -46,6 +46,21 @@ function isOverdueUnpaidDraftLike(booking: BookingRead) {
   return new Date(booking.scheduled_start).getTime() <= Date.now()
 }
 
+function pendingValidityLabel(booking: BookingRead) {
+  if (!booking.scheduled_start || !booking.accept_by) {
+    return 'This request is valid for 24 hours.'
+  }
+  const now = Date.now()
+  const startMs = new Date(booking.scheduled_start).getTime()
+  const acceptByMs = new Date(booking.accept_by).getTime()
+  const validUntilMs = Math.min(startMs, acceptByMs)
+  const remainingMs = validUntilMs - now
+  if (remainingMs <= 0) return 'This request is no longer valid.'
+  const remainingHours = Math.ceil(remainingMs / (60 * 60 * 1000))
+  if (remainingHours >= 24) return 'This request is valid for 24 hours.'
+  return `This request is valid for ${remainingHours} hour${remainingHours === 1 ? '' : 's'}.`
+}
+
 export default function ClientBookingDetailPage() {
   const { id } = useParams<{ id: string }>()
   const router = useRouter()
@@ -335,7 +350,7 @@ export default function ClientBookingDetailPage() {
               <p className="rounded-xl border border-yellow-200 bg-yellow-50 px-3 py-2 text-sm text-yellow-700">
                 {canAuthorize
                   ? 'Authorise your card to send this booking request to the cleaner.'
-                  : 'This request is valid for 24 hours. If not accepted, it will expire automatically and your card authorisation will be released.'}
+                  : `${pendingValidityLabel(booking)} If not accepted, it will expire automatically and your card authorisation will be released.`}
               </p>
             )}
             {booking.status === 'accepted' && canAuthorize && (
@@ -349,7 +364,7 @@ export default function ClientBookingDetailPage() {
                 <h2 className={`${displayFont.className} text-lg font-semibold tracking-[-0.02em] text-slate-900`}>
                   Next actions
                 </h2>
-                {completedAtMs && (
+                {Boolean(completedAtMs) && (
                   <p
                     className={`rounded-xl border px-3 py-2 text-sm ${
                       reportWindowActive
