@@ -41,6 +41,8 @@ const NOTES_MIN_CHARS = 12
 const MAX_JOB_PHOTOS = 5
 const MAX_SPECIAL_INSTRUCTIONS_CHARS = 5000
 const BOOKING_FLOW_DRAFT_VERSION = 1
+const BOOKING_FLOW_PHOTO_DB_NAME = 'maidhive-booking-flow-drafts'
+const BOOKING_FLOW_PHOTO_STORE_NAME = 'photo-files'
 
 const JOB_TYPE_OPTIONS = [
   { value: 'regular_clean', label: 'Regular clean', serviceType: 'standard' as const },
@@ -199,6 +201,54 @@ function normalizeFlowDraftPayload(
 function parseDraftTimestamp(value?: string): number {
   const parsed = Date.parse(String(value ?? ''))
   return Number.isFinite(parsed) ? parsed : 0
+}
+
+function openFlowPhotoStore(): Promise<IDBDatabase | null> {
+  if (typeof window === 'undefined' || !window.indexedDB) return Promise.resolve(null)
+  return new Promise((resolve) => {
+    try {
+      const request = window.indexedDB.open(BOOKING_FLOW_PHOTO_DB_NAME, 1)
+      request.onupgradeneeded = () => {
+        const db = request.result
+        if (!db.objectStoreNames.contains(BOOKING_FLOW_PHOTO_STORE_NAME)) {
+          db.createObjectStore(BOOKING_FLOW_PHOTO_STORE_NAME)
+        }
+      }
+      request.onsuccess = () => resolve(request.result)
+      request.onerror = () => resolve(null)
+    } catch {
+      resolve(null)
+    }
+  })
+}
+
+async function withFlowPhotoStore<T>(
+  mode: IDBTransactionMode,
+  run: (store: IDBObjectStore) => Promise<T>,
+): Promise<T | null> {
+  const db = await openFlowPhotoStore()
+  if (!db) return null
+  try {
+    const tx = db.transaction(BOOKING_FLOW_PHOTO_STORE_NAME, mode)
+    const store = tx.objectStore(BOOKING_FLOW_PHOTO_STORE_NAME)
+    const result = await run(store)
+    return await new Promise<T | null>((resolve) => {
+      tx.oncomplete = () => resolve(result)
+      tx.onerror = () => resolve(null)
+      tx.onabort = () => resolve(null)
+    })
+  } catch {
+    return null
+  } finally {
+    db.close()
+  }
+}
+
+function storeRequest<T = unknown>(request: IDBRequest<T>): Promise<T | undefined> {
+  return new Promise((resolve) => {
+    request.onsuccess = () => resolve(request.result)
+    request.onerror = () => resolve(undefined)
+  })
 }
 
 function parseBookingSnapshotDetails(specialInstructions?: string | null): BookingSnapshotDetails {
@@ -814,6 +864,10 @@ export default function BookingFlowPage() {
     return `booking_flow_draft_v${BOOKING_FLOW_DRAFT_VERSION}:${cleanerId}`
   }
 
+  function draftPhotoStorageKey() {
+    return `${draftStorageKey()}:photos`
+  }
+
   function readLocalDraft(): BookingFlowDraft | null {
     if (typeof window === 'undefined') return null
     try {
@@ -844,6 +898,33 @@ export default function BookingFlowPage() {
     } catch {
       // ignore
     }
+  }
+
+  async function writeDraftPhotos(photoFiles: File[]) {
+    const key = draftPhotoStorageKey()
+    const payload = photoFiles.slice(0, MAX_JOB_PHOTOS)
+    await withFlowPhotoStore('readwrite', async (store) => {
+      await storeRequest(store.put(payload, key))
+      return true
+    })
+  }
+
+  async function readDraftPhotos(): Promise<File[]> {
+    const key = draftPhotoStorageKey()
+    const result = await withFlowPhotoStore('readonly', async (store) => {
+      const raw = await storeRequest(store.get(key))
+      if (!Array.isArray(raw)) return [] as File[]
+      return raw.filter((item): item is File => item instanceof File)
+    })
+    return result ?? []
+  }
+
+  async function clearDraftPhotos() {
+    const key = draftPhotoStorageKey()
+    await withFlowPhotoStore('readwrite', async (store) => {
+      await storeRequest(store.delete(key))
+      return true
+    })
   }
 
   function navigateToStep(nextStep: number, options?: { dropResumeParams?: boolean; push?: boolean }) {
@@ -878,6 +959,7 @@ export default function BookingFlowPage() {
 
   function clearSessionDraft() {
     clearLocalDraft()
+    void clearDraftPhotos()
     bookingsApi.clearFlowDraft(cleanerId).catch(() => null)
   }
 
@@ -991,6 +1073,10 @@ export default function BookingFlowPage() {
     setDuration(parsed.duration || 1)
     setDate(restoredDate)
     setSelectedSlot(restoredSlot)
+    setFirstName(parsed.firstName || '')
+    setLastName(parsed.lastName || '')
+    setEmail(parsed.email || '')
+    setPhone(parsed.phone || '')
     setAddressMode(parsed.addressMode === 'saved' ? 'saved' : 'new')
     setSelectedAddressId(parsed.selectedAddressId || '')
     setAddress(parsed.address || '')
@@ -1007,10 +1093,18 @@ export default function BookingFlowPage() {
     setSaveAddressForLater(Boolean(parsed.saveAddressForLater))
   }
 
+  async function hydrateDraftPhotos() {
+    const savedPhotos = await readDraftPhotos()
+    if (savedPhotos.length > 0) {
+      setJobPhotos(savedPhotos.slice(0, MAX_JOB_PHOTOS))
+    }
+  }
+
   async function persistFlowDraft(lastStep: number, bookingId?: string, photoFiles: File[] = jobPhotos) {
     const snapshot = buildSessionDraft(photoFiles)
     setDraftSaveState('saving')
     writeLocalDraft(snapshot)
+    await writeDraftPhotos(photoFiles)
     const normalizedSlot = normalizeToIsoDatetime(snapshot.selectedSlot || '')
     try {
       const response = await bookingsApi.saveFlowDraft({
@@ -1036,6 +1130,7 @@ export default function BookingFlowPage() {
   function buildFlowDraftBody(lastStep: number, bookingId?: string, photoFiles: File[] = jobPhotos) {
     const snapshot = buildSessionDraft(photoFiles)
     writeLocalDraft(snapshot)
+    void writeDraftPhotos(photoFiles)
     const normalizedSlot = normalizeToIsoDatetime(snapshot.selectedSlot || '')
     return {
       cleaner_id: cleanerId,
@@ -1221,6 +1316,7 @@ export default function BookingFlowPage() {
           if (normalizedPayload && normalizedPayload.version === BOOKING_FLOW_DRAFT_VERSION) {
             hydrateFromDraftPayload(normalizedPayload)
             writeLocalDraft(normalizedPayload)
+            await hydrateDraftPhotos()
           }
           const fallbackSlot = normalizeToIsoDatetime(normalizedPayload?.selectedSlot || '') ?? ''
           const fallbackDate = normalizedPayload?.date || (fallbackSlot ? getDateKeyInAppTimezone(fallbackSlot) : '')
@@ -1239,6 +1335,7 @@ export default function BookingFlowPage() {
 
         hydrateFromDraftPayload(normalizedPayload)
         writeLocalDraft(normalizedPayload)
+        await hydrateDraftPhotos()
         const restoredStep = Math.min(
           Math.max(
             Number(readKey(serverDraftRecord, 'lastStep') || normalizedPayload.step || 1),
@@ -1405,6 +1502,7 @@ export default function BookingFlowPage() {
     suppliesProvider,
     notes,
     saveAddressForLater,
+    jobPhotos,
     booking?.id,
   ])
 
@@ -1521,26 +1619,26 @@ export default function BookingFlowPage() {
   }, [addressMode, savedAddresses, selectedAddressId])
 
   function mergeJobPhotos(selectedFiles: File[]) {
-    setJobPhotos((prev) => {
-      const merged = [...prev]
-      for (const file of selectedFiles) {
-        const exists = merged.some(
-          (item) =>
-            item.name === file.name &&
-            item.size === file.size &&
-            item.lastModified === file.lastModified,
-        )
-        if (exists) continue
-        if (merged.length >= MAX_JOB_PHOTOS) break
-        merged.push(file)
-      }
-      return merged
-    })
+    const merged = [...jobPhotos]
+    for (const file of selectedFiles) {
+      const exists = merged.some(
+        (item) =>
+          item.name === file.name &&
+          item.size === file.size &&
+          item.lastModified === file.lastModified,
+      )
+      if (exists) continue
+      if (merged.length >= MAX_JOB_PHOTOS) break
+      merged.push(file)
+    }
+    setJobPhotos(merged)
+    void writeDraftPhotos(merged)
   }
 
   function removeJobPhoto(index: number) {
     const nextPhotos = jobPhotos.filter((_, i) => i !== index)
     setJobPhotos(nextPhotos)
+    void writeDraftPhotos(nextPhotos)
 
     if (step !== 2 || !date || !selectedSlot) return
 

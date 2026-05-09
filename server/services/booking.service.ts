@@ -259,7 +259,6 @@ export const bookingService = {
       if (booking.status !== 'pending') {
         throw new ServiceError(`Cannot decline a booking in status '${booking.status}'`, 400)
       }
-      assertWithinRequestWindow(requestAcceptBy)
 
       const updated = await bookingRepo.update(bookingId, {
         status: 'declined',
@@ -913,10 +912,16 @@ function resolveRequestAcceptBy(booking: BookingWithRelations): Date | null {
   const isPendingAuthorized = booking.status === 'pending' && ['authorized', 'captured', 'transferred'].includes(paymentStatus)
   if (!isPendingAuthorized) return currentAcceptBy
 
-  const authorizedAt = booking.payment?.authorizedAt
-  if (!authorizedAt) return currentAcceptBy
+  const anchor =
+    booking.payment?.authorizedAt
+    ?? booking.payment?.capturedAt
+    ?? booking.payment?.transferredAt
+    ?? booking.payment?.updatedAt
+    ?? booking.payment?.createdAt
+    ?? null
+  if (!anchor) return currentAcceptBy
 
-  const windowEnd = new Date(authorizedAt.getTime() + BOOKING_ACCEPT_TTL_MINUTES * 60 * 1000)
+  const windowEnd = new Date(anchor.getTime() + BOOKING_ACCEPT_TTL_MINUTES * 60 * 1000)
   const cappedAtScheduledStart = new Date(Math.min(windowEnd.getTime(), booking.scheduledStart.getTime()))
   return cappedAtScheduledStart
 }

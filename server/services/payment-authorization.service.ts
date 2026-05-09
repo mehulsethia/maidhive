@@ -23,7 +23,8 @@ export const paymentAuthorizationService = {
     }
 
     const wasAuthorized = payment.status === 'authorized'
-    await paymentRepo.update(payment.id, { status: 'authorized', authorizedAt: new Date() })
+    const authorizedAt = new Date()
+    await paymentRepo.update(payment.id, { status: 'authorized', authorizedAt })
 
     const bookingId = pi.metadata?.booking_id
     if (!bookingId) {
@@ -39,7 +40,7 @@ export const paymentAuthorizationService = {
       const movedToPending =
         booking.status === 'draft' ||
         (booking.status === 'pending' && !booking.acceptedAt && !booking.confirmedAt)
-      const requestWindowEndsAt = new Date(Date.now() + BOOKING_ACCEPT_TTL_MINUTES * 60 * 1000)
+      const requestWindowEndsAt = new Date(authorizedAt.getTime() + BOOKING_ACCEPT_TTL_MINUTES * 60 * 1000)
       const acceptBy = new Date(Math.min(requestWindowEndsAt.getTime(), booking.scheduledStart.getTime()))
       await bookingRepo.update(booking.id, { status: 'pending', acceptBy })
 
