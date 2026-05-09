@@ -23,6 +23,10 @@ const CLEANER_BOOKING_ACCEPTED_CONFIRMATION_TRANSACTIONAL_ID = 'cmo5hi2ru00fv0i1
 const CLEANER_APPLICATION_REJECTED_TRANSACTIONAL_ID = 'cmo5hfgqp00aa0i08rmzp2w8f'
 const CLEANER_PAYOUT_NOTIFICATION_TRANSACTIONAL_ID = 'cmo5hj1953kp50i0ewrbk3wd4'
 const CLEANER_CANCELLATION_WARNING_OR_STRIKE_TRANSACTIONAL_ID = 'cmo5hk2jk09ci0i0x0iala79a'
+const CLIENT_ALT_TIME_PROPOSED_TRANSACTIONAL_ID =
+  process.env.LOOPS_CLIENT_ALT_TIME_PROPOSED_TRANSACTIONAL_ID ?? 'cmoy0itw205fk0ix97hljg7jz'
+const CLEANER_CLIENT_ALT_TIME_PROPOSED_TRANSACTIONAL_ID =
+  process.env.LOOPS_CLEANER_CLIENT_ALT_TIME_PROPOSED_TRANSACTIONAL_ID ?? 'cmoy0pn5w06x10iz4k8dxu3gl'
 
 function appUrl() {
   return (process.env.NEXT_PUBLIC_APP_URL ?? 'http://localhost:3000').replace(/\/+$/, '')
@@ -382,6 +386,48 @@ export const loopsEmailService = {
       email: args.email,
       dataVariables: {
         first_name: firstName(args.fullName),
+      },
+    })
+  },
+
+  async sendClientAlternateTimeProposed(args: {
+    email: string
+    clientName: string
+    cleanerName: string
+    originalStart: Date
+    proposedStart: Date
+  }) {
+    return sendTransactionalEmail({
+      transactionalId: CLIENT_ALT_TIME_PROPOSED_TRANSACTIONAL_ID,
+      email: args.email,
+      dataVariables: {
+        clientName: args.clientName,
+        cleanerName: args.cleanerName,
+        originalDate: formatBookingDate(args.originalStart),
+        originalTime: formatBookingTime(args.originalStart),
+        proposedDate: formatBookingDate(args.proposedStart),
+        proposedTime: formatBookingTime(args.proposedStart),
+      },
+    })
+  },
+
+  async sendCleanerClientAlternateTimeProposed(args: {
+    email: string
+    cleanerName: string
+    clientName: string
+    originalStart: Date
+    proposedStart: Date
+  }) {
+    return sendTransactionalEmail({
+      transactionalId: CLEANER_CLIENT_ALT_TIME_PROPOSED_TRANSACTIONAL_ID,
+      email: args.email,
+      dataVariables: {
+        cleanerName: args.cleanerName,
+        clientName: args.clientName,
+        originalDate: formatBookingDate(args.originalStart),
+        originalTime: formatBookingTime(args.originalStart),
+        proposedDate: formatBookingDate(args.proposedStart),
+        proposedTime: formatBookingTime(args.proposedStart),
       },
     })
   },

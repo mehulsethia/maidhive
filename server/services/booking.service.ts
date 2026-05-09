@@ -338,6 +338,27 @@ export const bookingService = {
           body: 'Review and accept, decline, or counter once before the request expires.',
           data: { booking_id: bookingId },
         })
+        try {
+          if (actor === 'cleaner') {
+            await loopsEmailService.sendClientAlternateTimeProposed({
+              email: booking.client.user.email,
+              clientName: booking.client.user.name ?? 'Client',
+              cleanerName: booking.cleaner.user.name ?? 'Cleaner',
+              originalStart: booking.scheduledStart,
+              proposedStart,
+            })
+          } else {
+            await loopsEmailService.sendCleanerClientAlternateTimeProposed({
+              email: booking.cleaner.user.email,
+              cleanerName: booking.cleaner.user.name ?? 'Cleaner',
+              clientName: booking.client.user.name ?? 'Client',
+              originalStart: booking.scheduledStart,
+              proposedStart,
+            })
+          }
+        } catch (emailError) {
+          console.error('Failed to send alternate-time proposal email via Loops:', emailError)
+        }
         return updated
       }
 
@@ -419,6 +440,27 @@ export const bookingService = {
           body: 'Accept or decline this counter-offer before the request expires.',
           data: { booking_id: bookingId },
         })
+        try {
+          if (actor === 'cleaner') {
+            await loopsEmailService.sendClientAlternateTimeProposed({
+              email: booking.client.user.email,
+              clientName: booking.client.user.name ?? 'Client',
+              cleanerName: booking.cleaner.user.name ?? 'Cleaner',
+              originalStart: booking.scheduledStart,
+              proposedStart,
+            })
+          } else {
+            await loopsEmailService.sendCleanerClientAlternateTimeProposed({
+              email: booking.cleaner.user.email,
+              cleanerName: booking.cleaner.user.name ?? 'Cleaner',
+              clientName: booking.client.user.name ?? 'Client',
+              originalStart: booking.scheduledStart,
+              proposedStart,
+            })
+          }
+        } catch (emailError) {
+          console.error('Failed to send alternate-time counter-proposal email via Loops:', emailError)
+        }
         return updated
       }
 
