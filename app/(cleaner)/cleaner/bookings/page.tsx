@@ -236,7 +236,7 @@ export default function CleanerBookingsPage() {
     const validUntilMs = Math.min(startMs, acceptByMs)
     const remainingMs = validUntilMs - now
     if (remainingMs <= 0) {
-      return 'This request is no longer valid.'
+      return 'This request is valid for 24 hours.'
     }
     const remainingHours = Math.ceil(remainingMs / (60 * 60 * 1000))
     if (remainingHours >= 24) {

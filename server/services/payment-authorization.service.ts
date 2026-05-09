@@ -4,6 +4,7 @@ import { bookingRepo } from '../repositories/booking.repo'
 import { loopsEmailService } from './loops-email.service'
 import { pushInAppNotification } from './in-app-notification.service'
 import { googleCalendarService } from './google-calendar.service'
+const BOOKING_ACCEPT_TTL_MINUTES = 24 * 60
 
 export const paymentAuthorizationService = {
   async syncFromPaymentIntent(pi: Stripe.PaymentIntent) {
@@ -38,7 +39,9 @@ export const paymentAuthorizationService = {
       const movedToPending =
         booking.status === 'draft' ||
         (booking.status === 'pending' && !booking.acceptedAt && !booking.confirmedAt)
-      await bookingRepo.update(booking.id, { status: 'pending' })
+      const requestWindowEndsAt = new Date(Date.now() + BOOKING_ACCEPT_TTL_MINUTES * 60 * 1000)
+      const acceptBy = new Date(Math.min(requestWindowEndsAt.getTime(), booking.scheduledStart.getTime()))
+      await bookingRepo.update(booking.id, { status: 'pending', acceptBy })
 
       if (!wasAuthorized) {
         await pushInAppNotification({

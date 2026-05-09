@@ -52,7 +52,7 @@ export default function CleanerBookingDetailPage() {
   const [stripeConnected, setStripeConnected] = useState(false)
   const [currentUserId, setCurrentUserId] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
-  const [actionLoading, setActionLoading] = useState(false)
+  const [actionLoading, setActionLoading] = useState<string | null>(null)
   const [cancelOpen, setCancelOpen] = useState(false)
   const [proposalOpen, setProposalOpen] = useState(false)
   const [proposalDate, setProposalDate] = useState('')
@@ -122,7 +122,7 @@ export default function CleanerBookingDetailPage() {
   }, [booking, proposalDate, proposalOpen, proposalTime])
 
   async function handleAction(action: 'start') {
-    setActionLoading(true)
+    setActionLoading(action)
     try {
       let startLocation:
         | {
@@ -157,12 +157,12 @@ export default function CleanerBookingDetailPage() {
     } catch (err: any) {
       toast.error(err.message)
     } finally {
-      setActionLoading(false)
+      setActionLoading(null)
     }
   }
 
   async function handleComplete() {
-    setActionLoading(true)
+    setActionLoading('complete')
     try {
       await bookingsApi.complete(id)
       toast.success('Job completed.')
@@ -170,12 +170,12 @@ export default function CleanerBookingDetailPage() {
     } catch (err: any) {
       toast.error(err.message)
     } finally {
-      setActionLoading(false)
+      setActionLoading(null)
     }
   }
 
   async function handleCancel() {
-    setActionLoading(true)
+    setActionLoading('decline')
     try {
       await bookingsApi.action(id, 'decline')
       toast.success('Booking request declined.')
@@ -184,7 +184,7 @@ export default function CleanerBookingDetailPage() {
     } catch (err: any) {
       toast.error(err.message)
     } finally {
-      setActionLoading(false)
+      setActionLoading(null)
     }
   }
 
@@ -192,7 +192,7 @@ export default function CleanerBookingDetailPage() {
     action: 'accept' | 'propose_alternative' | 'accept_proposal' | 'decline_proposal',
     customProposedStart?: string,
   ) {
-    setActionLoading(true)
+    setActionLoading(action)
     try {
       await bookingsApi.action(id, action, customProposedStart)
       const labels: Record<string, string> = {
@@ -211,7 +211,7 @@ export default function CleanerBookingDetailPage() {
     } catch (err: any) {
       toast.error(err.message ?? 'Action failed')
     } finally {
-      setActionLoading(false)
+      setActionLoading(null)
     }
   }
 
@@ -263,7 +263,7 @@ export default function CleanerBookingDetailPage() {
     const acceptByMs = new Date(booking.accept_by).getTime()
     const validUntilMs = Math.min(startMs, acceptByMs)
     const remainingMs = validUntilMs - now
-    if (remainingMs <= 0) return 'This request is no longer valid.'
+    if (remainingMs <= 0) return 'This request is valid for 24 hours.'
     const remainingHours = Math.ceil(remainingMs / (60 * 60 * 1000))
     if (remainingHours >= 24) return 'This request is valid for 24 hours.'
     const validUntilText = new Date(validUntilMs).toLocaleString('en-IE', {
@@ -415,7 +415,7 @@ export default function CleanerBookingDetailPage() {
         )}
         {canAcceptPending && (
           <>
-            <Button size="lg" onClick={() => handleBookingAction('accept')} loading={actionLoading} disabled={!stripeConnected || isCleanerProposal}>
+            <Button size="lg" onClick={() => handleBookingAction('accept')} loading={actionLoading === 'accept'} disabled={!stripeConnected || isCleanerProposal}>
               Accept booking
             </Button>
             {canProposeAlternative && (
@@ -426,7 +426,7 @@ export default function CleanerBookingDetailPage() {
                   setProposalTime(toTimeInputValueCyprus(booking.scheduled_start))
                   setProposalOpen(true)
                 }}
-                disabled={actionLoading}
+                disabled={Boolean(actionLoading)}
               >
                 Propose alternative time
               </Button>
@@ -441,16 +441,16 @@ export default function CleanerBookingDetailPage() {
         )}
         {canRespondToCounter && (
           <>
-            <Button size="lg" onClick={() => handleBookingAction('accept_proposal')} loading={actionLoading} disabled={!stripeConnected}>
+            <Button size="lg" onClick={() => handleBookingAction('accept_proposal')} loading={actionLoading === 'accept_proposal'} disabled={!stripeConnected}>
               Accept counter-offer
             </Button>
-            <Button variant="destructive" onClick={() => handleBookingAction('decline_proposal')} loading={actionLoading}>
+            <Button variant="destructive" onClick={() => handleBookingAction('decline_proposal')} loading={actionLoading === 'decline_proposal'}>
               Decline counter-offer
             </Button>
           </>
         )}
         {(booking.status === 'accepted' || booking.status === 'confirmed') && (
-          <Button size="lg" onClick={() => handleAction('start')} loading={actionLoading} disabled={!canStartJobNow}>
+          <Button size="lg" onClick={() => handleAction('start')} loading={actionLoading === 'start'} disabled={!canStartJobNow}>
             Start job
           </Button>
         )}
@@ -465,7 +465,7 @@ export default function CleanerBookingDetailPage() {
           </p>
         )}
         {canCompleteJob && (
-          <Button size="lg" onClick={handleComplete} loading={actionLoading}>
+          <Button size="lg" onClick={handleComplete} loading={actionLoading === 'complete'}>
             Complete Job
           </Button>
         )}
@@ -512,7 +512,7 @@ export default function CleanerBookingDetailPage() {
         <div className="space-y-3">
           <p className="text-sm text-muted-foreground">You can decline this request freely. Strikes only apply to late cancellations after accepting a booking.</p>
           <p className="text-sm text-muted-foreground">This will close the pending request for the client.</p>
-          <Button onClick={handleCancel} variant="destructive" className="w-full" loading={actionLoading}>
+          <Button onClick={handleCancel} variant="destructive" className="w-full" loading={actionLoading === 'decline'}>
             Decline booking
           </Button>
         </div>
@@ -559,7 +559,7 @@ export default function CleanerBookingDetailPage() {
               handleBookingAction('propose_alternative', proposedStartIso)
             }}
             disabled={!proposalDate || !proposalTime}
-            loading={actionLoading}
+            loading={actionLoading === 'propose_alternative'}
           >
             Send proposal
           </Button>

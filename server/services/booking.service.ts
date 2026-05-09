@@ -184,6 +184,7 @@ export const bookingService = {
     if (!isCleaner && !isClient) throw new ServiceError('Forbidden', 403)
 
     const action = payload.action
+    const requestAcceptBy = resolveRequestAcceptBy(booking)
 
     if (action === 'start') {
       if (!isCleaner) throw new ServiceError('Only cleaner can start a booking', 403)
@@ -207,7 +208,7 @@ export const bookingService = {
       if (booking.status !== 'pending') {
         throw new ServiceError(`Cannot accept a booking in status '${booking.status}'`, 400)
       }
-      assertWithinRequestWindow(booking.acceptBy)
+      assertWithinRequestWindow(requestAcceptBy)
       const isPaymentAuthorized = ['authorized', 'captured', 'transferred'].includes(String(booking.payment?.status ?? ''))
       const now = new Date()
       const updated = await bookingRepo.update(bookingId, {
@@ -258,7 +259,7 @@ export const bookingService = {
       if (booking.status !== 'pending') {
         throw new ServiceError(`Cannot decline a booking in status '${booking.status}'`, 400)
       }
-      assertWithinRequestWindow(booking.acceptBy)
+      assertWithinRequestWindow(requestAcceptBy)
 
       const updated = await bookingRepo.update(bookingId, {
         status: 'expired',
@@ -310,7 +311,7 @@ export const bookingService = {
       await validateBookingWindow(booking.cleanerId, proposedStart, proposedEnd)
 
       if (isPreConfirmation) {
-        assertWithinRequestWindow(booking.acceptBy)
+        assertWithinRequestWindow(requestAcceptBy)
         assertRescheduleWindow(booking.scheduledStart)
         if (booking.proposalBy) {
           throw new ServiceError('A proposal is already active for this booking', 400)
@@ -327,7 +328,7 @@ export const bookingService = {
           proposedEnd,
           proposalBy: actor,
           proposalContext: 'pre_confirmation',
-          proposalExpiresAt: booking.acceptBy,
+          proposalExpiresAt: requestAcceptBy,
           cleanerProposals: actor === 'cleaner' ? { increment: 1 } : undefined,
           clientProposals: actor === 'client' ? { increment: 1 } : undefined,
         })
@@ -415,7 +416,7 @@ export const bookingService = {
 
       const isPreConfirmation = booking.status === 'pending' && booking.proposalContext !== 'post_confirmation'
       if (isPreConfirmation) {
-        assertWithinRequestWindow(booking.acceptBy)
+        assertWithinRequestWindow(requestAcceptBy)
         assertRescheduleWindow(booking.scheduledStart)
         if (actor === 'client' && booking.clientProposals >= 1) {
           throw new ServiceError('Client can only counter once', 400)
@@ -429,7 +430,7 @@ export const bookingService = {
           proposedEnd,
           proposalBy: actor,
           proposalContext: 'pre_confirmation',
-          proposalExpiresAt: booking.acceptBy,
+          proposalExpiresAt: requestAcceptBy,
           cleanerProposals: actor === 'cleaner' ? { increment: 1 } : undefined,
           clientProposals: actor === 'client' ? { increment: 1 } : undefined,
         })
@@ -518,7 +519,7 @@ export const bookingService = {
       }
 
       if (proposalContext === 'pre_confirmation') {
-        assertWithinRequestWindow(booking.acceptBy)
+        assertWithinRequestWindow(requestAcceptBy)
         const isPaymentAuthorized = ['authorized', 'captured', 'transferred'].includes(String(booking.payment?.status ?? ''))
         const now = new Date()
         const updated = await bookingRepo.update(bookingId, {
@@ -892,6 +893,22 @@ function assertWithinRequestWindow(acceptBy: Date | null) {
   if (acceptBy.getTime() < Date.now()) {
     throw new ServiceError('Booking request window has expired', 400)
   }
+}
+
+type BookingWithRelations = NonNullable<Awaited<ReturnType<typeof bookingRepo.findById>>>
+
+function resolveRequestAcceptBy(booking: BookingWithRelations): Date | null {
+  const currentAcceptBy = booking.acceptBy
+  const paymentStatus = String(booking.payment?.status ?? '')
+  const isPendingAuthorized = booking.status === 'pending' && ['authorized', 'captured', 'transferred'].includes(paymentStatus)
+  if (!isPendingAuthorized) return currentAcceptBy
+
+  const authorizedAt = booking.payment?.authorizedAt
+  if (!authorizedAt) return currentAcceptBy
+
+  const windowEnd = new Date(authorizedAt.getTime() + BOOKING_ACCEPT_TTL_MINUTES * 60 * 1000)
+  const cappedAtScheduledStart = new Date(Math.min(windowEnd.getTime(), booking.scheduledStart.getTime()))
+  return cappedAtScheduledStart
 }
 
 function assertRescheduleWindow(scheduledStart: Date) {
