@@ -211,7 +211,7 @@ export default function ClientBookingsPage() {
         </section>
 
         <section className="rounded-[1.5rem] border border-slate-200/80 bg-white/90 p-4 shadow-[0_18px_45px_rgba(11,33,78,0.08)] backdrop-blur-sm sm:p-6">
-          <div className="grid gap-3 md:grid-cols-[1fr_auto] md:items-center">
+          <div className="space-y-3">
             <div className="relative">
               <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
               <Input
