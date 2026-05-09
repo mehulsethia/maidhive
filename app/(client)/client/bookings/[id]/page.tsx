@@ -53,18 +53,10 @@ function isOverdueUnpaidDraftLike(booking: BookingRead) {
 }
 
 function pendingValidityLabel(booking: BookingRead) {
-  if (!booking.scheduled_start || !booking.accept_by) {
-    return 'This request is valid for 24 hours.'
+  if (!booking.accept_by) {
+    return 'This request is valid until 24 hours from card authorisation. If the cleaner does not respond, your request will expire automatically and your card authorisation will be released.'
   }
-  const now = Date.now()
-  const startMs = new Date(booking.scheduled_start).getTime()
-  const acceptByMs = new Date(booking.accept_by).getTime()
-  const validUntilMs = Math.min(startMs, acceptByMs)
-  const remainingMs = validUntilMs - now
-  if (remainingMs <= 0) return 'This request is no longer valid.'
-  const remainingHours = Math.ceil(remainingMs / (60 * 60 * 1000))
-  if (remainingHours >= 24) return 'This request is valid for 24 hours.'
-  const validUntilText = new Date(validUntilMs).toLocaleString('en-IE', {
+  const validUntilText = new Date(booking.accept_by).toLocaleString('en-IE', {
     hour: 'numeric',
     minute: '2-digit',
     hour12: true,
@@ -72,7 +64,7 @@ function pendingValidityLabel(booking: BookingRead) {
     month: 'short',
     year: 'numeric',
   })
-  return `This request is valid till ${validUntilText}.`
+  return `This request is valid until ${validUntilText}, and if the cleaner does not respond, your request will expire automatically and your card authorisation will be released.`
 }
 
 export default function ClientBookingDetailPage() {
@@ -438,7 +430,7 @@ export default function ClientBookingDetailPage() {
                       Cancel booking request
                     </Button>
                   )}
-                  {(booking.status === 'expired' || booking.status === 'cancelled' || overdueUnpaidDraftLike) && (
+                  {(booking.status === 'expired' || booking.status === 'cancelled' || booking.status === 'declined' || overdueUnpaidDraftLike) && (
                     <>
                       <Button onClick={() => router.push(`/client/book/${booking.cleaner_id}?reset=1&step=1`)}>
                         Book again

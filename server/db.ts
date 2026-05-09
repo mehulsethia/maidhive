@@ -80,6 +80,7 @@ export function ensureDbSchema(): Promise<void> {
             'in_progress',
             'completed',
             'cancelled',
+            'declined',
             'expired',
             'disputed'
           )

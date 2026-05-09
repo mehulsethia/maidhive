@@ -262,7 +262,7 @@ export const bookingService = {
       assertWithinRequestWindow(requestAcceptBy)
 
       const updated = await bookingRepo.update(bookingId, {
-        status: 'expired',
+        status: 'declined',
         ...clearedProposalState(),
       })
       await releasePaymentAuthorization(
@@ -800,8 +800,8 @@ export const bookingService = {
 
     await applyCancellationPaymentPolicy(booking, booking.status)
 
-    const updated = await bookingRepo.update(bookingId, {
-      status: 'cancelled',
+      const updated = await bookingRepo.update(bookingId, {
+        status: 'cancelled',
       cancellationReason: reason,
       cancelledByUser: { connect: { id: user.id } },
       cancelledAt: new Date(),
@@ -816,22 +816,28 @@ export const bookingService = {
       })
     }
 
-    // Notify the other party
-    const notifyUserId =
-      client && booking.clientId === client.id
-        ? booking.cleaner.userId
-        : booking.client.userId
+    const isClientCancelling = Boolean(client && booking.clientId === client.id)
+    const isDraftLikePreAuthorisation =
+      isClientCancelling &&
+      (booking.status === 'draft' || (booking.status === 'pending' && !isPaymentAuthorizedStatus(booking.payment?.status)))
 
-    await pushInAppNotification({
-      userId: notifyUserId,
-      type: 'booking_cancelled',
-      title: 'Booking Cancelled',
-      body: 'A booking has been cancelled',
-      data: { booking_id: bookingId },
-    })
-    void googleCalendarService.removeCleanerBookingEvent(updated.id).catch((e) => {
-      console.error('Failed to remove cleaner Google Calendar event:', e)
-    })
+    if (!isDraftLikePreAuthorisation) {
+      const notifyUserId =
+        client && booking.clientId === client.id
+          ? booking.cleaner.userId
+          : booking.client.userId
+
+      await pushInAppNotification({
+        userId: notifyUserId,
+        type: 'booking_cancelled',
+        title: 'Booking Cancelled',
+        body: 'A booking has been cancelled',
+        data: { booking_id: bookingId },
+      })
+      void googleCalendarService.removeCleanerBookingEvent(updated.id).catch((e) => {
+        console.error('Failed to remove cleaner Google Calendar event:', e)
+      })
+    }
 
     try {
       await loopsEmailService.sendClientCancellationConfirmation({
@@ -868,6 +874,10 @@ export class ServiceError extends Error {
 
 function round2(n: number) {
   return Math.round(n * 100) / 100
+}
+
+function isPaymentAuthorizedStatus(status?: string | null) {
+  return ['authorized', 'captured', 'transferred'].includes(String(status ?? ''))
 }
 
 function parseProposedStart(proposedStart?: string) {

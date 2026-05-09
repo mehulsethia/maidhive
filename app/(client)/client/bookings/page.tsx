@@ -27,6 +27,7 @@ const STATUS_FILTERS: Array<{ key: 'all' | BookingStatus; label: string }> = [
   { key: 'in_progress', label: 'In Progress' },
   { key: 'completed', label: 'Completed' },
   { key: 'cancelled', label: 'Cancelled' },
+  { key: 'declined', label: 'Declined' },
   { key: 'expired', label: 'Expired' },
   { key: 'disputed', label: 'Disputed' },
 ]
@@ -140,7 +141,7 @@ export default function ClientBookingsPage() {
       if (!isActiveStatus) return false
     }
     if (dashboardFilter === 'completed' && booking.status !== 'completed') return false
-    if (dashboardFilter === 'closed' && !['cancelled', 'expired'].includes(booking.status)) return false
+    if (dashboardFilter === 'closed' && !['cancelled', 'declined', 'expired'].includes(booking.status)) return false
     if (filter !== 'all') {
       if (filter === 'pending') {
         const isPendingOrPaymentRequired = booking.status === 'draft' || booking.status === 'pending'
@@ -169,7 +170,7 @@ export default function ClientBookingsPage() {
   }).length
   const completedCount = deferredBookings.filter((booking) => booking.status === 'completed').length
   const cancelledCount = deferredBookings.filter((booking) =>
-    ['cancelled', 'expired'].includes(booking.status),
+    ['cancelled', 'declined', 'expired'].includes(booking.status),
   ).length
 
   if (loading) return <ListPageSkeleton />
@@ -365,7 +366,7 @@ export default function ClientBookingsPage() {
                           </span>
                         )}
 
-                        {(booking.status === 'expired' || booking.status === 'cancelled' || isOverdueDraftState) && (
+                        {(booking.status === 'expired' || booking.status === 'cancelled' || booking.status === 'declined' || isOverdueDraftState) && (
                           <>
                             <Link
                               href={`/client/book/${booking.cleaner_id}?reset=1&step=1`}

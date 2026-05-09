@@ -46,3 +46,19 @@ export function pickupShortLabel(value?: string | null): string {
   if (!fallback) return ''
   return fallback
 }
+
+export function pickupFullLabel(value?: string | null): string {
+  const structured = parsePickupLocation(value)
+  if (structured) {
+    const parts = [structured.label, structured.address, 'Larnaca']
+    if (structured.postcode) parts.push(structured.postcode)
+    return parts
+      .map((part) => part.trim())
+      .filter(Boolean)
+      .filter((part, index, arr) => arr.findIndex((candidate) => candidate.toLowerCase() === part.toLowerCase()) === index)
+      .join(', ')
+  }
+  const fallback = String(value ?? '').trim()
+  if (!fallback) return ''
+  return fallback
+}

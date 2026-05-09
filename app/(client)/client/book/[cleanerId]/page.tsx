@@ -20,7 +20,7 @@ import { BookableCalendar } from '@/components/ui/bookable-calendar'
 import { UserAvatar } from '@/components/ui/user-avatar'
 import { formatCurrency, cn, APP_TIMEZONE } from '@/lib/utils'
 import { MAX_SAVED_ADDRESSES, MVP_CITY, normalizeCyprusPostcode } from '@/lib/location-policy'
-import { pickupShortLabel } from '@/lib/transport-pickup'
+import { pickupFullLabel } from '@/lib/transport-pickup'
 import type { CleanerRead, PriceBreakdown, BookingRead, ClientProfileRead, ClientAddressRead } from '@/types'
 import { toast } from 'sonner'
 import { createClient } from '@/lib/supabase'
@@ -112,6 +112,22 @@ type BookingSnapshotDetails = {
 
 function isPaymentAuthorizedStatus(status?: string | null) {
   return ['authorized', 'captured', 'transferred'].includes(String(status ?? ''))
+}
+
+function bookingExpiryMessage(acceptBy?: string | null) {
+  if (!acceptBy) {
+    return 'This request is valid until 24 hours from card authorisation. If the cleaner does not respond, your request will expire automatically and your card authorisation will be released.'
+  }
+  const expiryLabel = new Date(acceptBy).toLocaleString('en-IE', {
+    hour: 'numeric',
+    minute: '2-digit',
+    hour12: true,
+    day: 'numeric',
+    month: 'short',
+    year: 'numeric',
+    timeZone: APP_TIMEZONE,
+  })
+  return `This request is valid until ${expiryLabel}, and if the cleaner does not respond, your request will expire automatically and your card authorisation will be released.`
 }
 
 function normalizeToIsoDatetime(value: string): string | null {
@@ -476,6 +492,9 @@ function BookingSummary({
         <div className="space-y-2 text-sm">
           <p className="font-semibold text-slate-900">Cleaner Details</p>
           <p className="text-slate-600">Transport: {transportLabel}</p>
+          {cleaner.transport_mode === 'requires_pickup' && Boolean((cleaner as any).transport_pickup_location) && (
+            <p className="text-slate-600">Pick-up location: {pickupFullLabel((cleaner as any).transport_pickup_location)}</p>
+          )}
           <p className="text-slate-600">Supplies: {suppliesLabel}</p>
           <p className="text-slate-600">Rating: {cleaner.average_rating?.toFixed(1) ?? 'N/A'}</p>
           <p className="text-slate-600">Completed jobs: {cleaner.total_jobs ?? 0}</p>
@@ -658,9 +677,7 @@ function StripePaymentForm({
       <p className="text-sm font-medium text-slate-700">
         Your card will NOT be charged now. Payment is only captured after the job is completed.
       </p>
-      <p className="text-xs text-slate-500">
-        This request is valid for 24 hours. If not accepted, it will expire automatically and your card authorisation will be released.
-      </p>
+      <p className="text-xs text-slate-500">{bookingExpiryMessage(booking.accept_by)}</p>
 
       <div className="space-y-2 pt-2">
         <div className="flex items-center justify-between">
@@ -691,7 +708,7 @@ function StripePaymentForm({
               loading={cancelRequestLoading}
               disabled={submitting}
             >
-              Cancel Request
+              Cancel draft
             </Button>
           ) : (
             <span />
@@ -818,6 +835,12 @@ export default function BookingFlowPage() {
   useEffect(() => {
     setStep((prev) => (prev === stepFromUrl ? prev : stepFromUrl))
   }, [stepFromUrl])
+
+  useEffect(() => {
+    if (cleaner?.cleaning_supplies === 'client_supplies' && suppliesProvider !== 'client_provides') {
+      setSuppliesProvider('client_provides')
+    }
+  }, [cleaner?.cleaning_supplies, suppliesProvider])
 
   async function initializePaymentIntentForBooking(bookingId: string) {
     const intentRes = await paymentsApi.createIntent(bookingId)
@@ -1488,7 +1511,8 @@ export default function BookingFlowPage() {
   function buildSpecialInstructions(photoUrls: string[]) {
     const jobTypeMeta = JOB_TYPE_OPTIONS.find((option) => option.value === jobType)
     const conditionMeta = PROPERTY_CONDITION_OPTIONS.find((option) => option.value === propertyCondition)
-    const suppliesMeta = SUPPLIES_OPTIONS.find((option) => option.value === suppliesProvider)
+    const selectedSuppliesProvider = cleaner?.cleaning_supplies === 'client_supplies' ? 'client_provides' : suppliesProvider
+    const suppliesMeta = SUPPLIES_OPTIONS.find((option) => option.value === selectedSuppliesProvider)
     const transportSnapshot =
       cleaner?.transport_mode === 'own_car'
         ? 'Own transport'
@@ -1499,7 +1523,7 @@ export default function BookingFlowPage() {
             : 'Not set'
     const pickupLocationSnapshot =
       cleaner?.transport_mode === 'requires_pickup'
-        ? pickupShortLabel((cleaner as any)?.transport_pickup_location ?? '')
+        ? pickupFullLabel((cleaner as any)?.transport_pickup_location ?? '')
         : ''
     const lines = [
       `Job type: ${jobTypeMeta?.label ?? 'Not provided'}`,
@@ -1586,7 +1610,7 @@ export default function BookingFlowPage() {
       if (!bedrooms) { toast.error('Please select bedrooms.'); return }
       if (!bathrooms) { toast.error('Please select bathrooms.'); return }
       if (!propertyCondition) { toast.error('Please select the current condition of the property.'); return }
-      if (!suppliesProvider) { toast.error('Please select who will provide cleaning supplies.'); return }
+      if (!effectiveSuppliesProvider) { toast.error('Please select who will provide cleaning supplies.'); return }
       if (!notes.trim()) {
         setNotesValidationWarning(true)
         toast.error('Please add a short description of what needs to be cleaned')
@@ -1778,6 +1802,7 @@ export default function BookingFlowPage() {
   const showDeepCleanAdvisory = jobType === 'deep_clean' || jobType === 'move_out_end_of_tenancy'
   const cleanerRequiresPickup = cleaner.transport_mode === 'requires_pickup'
   const cleanerNeedsClientSupplies = cleaner.cleaning_supplies === 'client_supplies'
+  const effectiveSuppliesProvider = cleanerNeedsClientSupplies ? 'client_provides' : suppliesProvider
   const bookingSnapshot = booking ? parseBookingSnapshotDetails(booking.special_instructions) : null
 
   return (
@@ -1866,7 +1891,7 @@ export default function BookingFlowPage() {
                     <p>This cleaner requires pickup and drop-off. You will need to arrange transport to and from their pickup location.</p>
                     {(cleaner as any).transport_pickup_location && (
                       <p className="mt-1 text-xs font-medium text-amber-900">
-                        Requires pick-up/drop-off: {pickupShortLabel((cleaner as any).transport_pickup_location)}
+                        Requires pick-up/drop-off: {pickupFullLabel((cleaner as any).transport_pickup_location)}
                       </p>
                     )}
                     <label className="mt-2 inline-flex items-start gap-2 text-xs font-medium text-amber-900">
@@ -2095,6 +2120,9 @@ export default function BookingFlowPage() {
                     />
                   </div>
                 </div>
+                <p className="text-xs text-slate-500">
+                  Your full address is only shared after the cleaner accepts the booking. Before acceptance, cleaners only see an approximate area/location.
+                </p>
 
                   <div>
                     <Label className="text-sm font-semibold">Apartment details</Label>
@@ -2224,14 +2252,18 @@ export default function BookingFlowPage() {
                             type="radio"
                             name="supplies-provider"
                             value={option.value}
-                            checked={suppliesProvider === option.value}
+                            checked={effectiveSuppliesProvider === option.value}
                             onChange={(event) => setSuppliesProvider(event.target.value as (typeof SUPPLIES_OPTIONS)[number]['value'])}
+                            disabled={cleanerNeedsClientSupplies && option.value !== 'client_provides'}
                             className="mt-1"
                           />
                           {option.label}
                         </label>
                       ))}
                     </div>
+                    {cleanerNeedsClientSupplies && (
+                      <p className="text-xs text-amber-700">This cleaner requires client-provided supplies, so this is locked to: I will provide cleaning supplies.</p>
+                    )}
                   </div>
 
                   <div className="space-y-2">
@@ -2370,6 +2402,9 @@ export default function BookingFlowPage() {
                     <p><span className="font-medium">Bedrooms/bathrooms:</span> {bookingSnapshot?.bedrooms || '-'} / {bookingSnapshot?.bathrooms || '-'}</p>
                     <p><span className="font-medium">Property condition:</span> {bookingSnapshot?.propertyCondition || 'Not provided'}</p>
                     <p><span className="font-medium">Supplies choice:</span> {bookingSnapshot?.supplies || 'Not provided'}</p>
+                    {cleanerRequiresPickup && Boolean((cleaner as any).transport_pickup_location) && (
+                      <p className="sm:col-span-2"><span className="font-medium">Pick-up location:</span> {pickupFullLabel((cleaner as any).transport_pickup_location)}</p>
+                    )}
                     <p className="sm:col-span-2"><span className="font-medium">What needs to be cleaned:</span> {bookingSnapshot?.needsCleaning || 'Not provided'}</p>
                     <p className="sm:col-span-2"><span className="font-medium">Total price:</span> {formatCurrency(booking.total_amount)}</p>
                     {bookingSnapshot?.photos && bookingSnapshot.photos.length > 0 && (
@@ -2484,7 +2519,7 @@ export default function BookingFlowPage() {
                   </p>
                   {booking.status === 'pending' && (
                     <p className="mt-1 text-xs text-slate-500">
-                      This request is valid for 24 hours. If not accepted, it will expire automatically and your card authorisation will be released.
+                      {bookingExpiryMessage(booking.accept_by)}
                     </p>
                   )}
                 </div>
@@ -2499,7 +2534,9 @@ export default function BookingFlowPage() {
                   </div>
                   <div className="flex justify-between text-sm">
                     <span className="text-slate-500">Status:</span>
-                    <span className="font-medium text-slate-900 capitalize">{booking.status.replace('_', ' ')}</span>
+                    <span className="font-medium text-slate-900 capitalize">
+                      {booking.status === 'pending' ? 'Pending Cleaner Acceptance' : booking.status.replace('_', ' ')}
+                    </span>
                   </div>
                   <div className="flex justify-between text-sm">
                     <span className="text-slate-500">Date:</span>

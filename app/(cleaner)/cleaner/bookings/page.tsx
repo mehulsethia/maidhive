@@ -33,6 +33,7 @@ const STATUS_FILTERS: Array<{ key: 'all' | BookingStatus; label: string }> = [
   { key: 'in_progress', label: 'In Progress' },
   { key: 'completed', label: 'Completed' },
   { key: 'cancelled', label: 'Cancelled' },
+  { key: 'declined', label: 'Declined' },
 ]
 
 const SERVICE_LABELS: Record<string, string> = {
@@ -227,22 +228,10 @@ export default function CleanerBookingsPage() {
   if (loading) return <ListPageSkeleton />
 
   function pendingValidityLabel(bookingStart?: string, acceptBy?: string) {
-    if (!bookingStart || !acceptBy) {
-      return 'This request is valid for 24 hours.'
+    if (!acceptBy) {
+      return 'This request is valid until 24 hours from card authorisation. If the cleaner does not respond, your request will expire automatically and the card authorisation will be released.'
     }
-    const now = Date.now()
-    const startMs = new Date(bookingStart).getTime()
-    const acceptByMs = new Date(acceptBy).getTime()
-    const validUntilMs = Math.min(startMs, acceptByMs)
-    const remainingMs = validUntilMs - now
-    if (remainingMs <= 0) {
-      return 'This request is valid for 24 hours.'
-    }
-    const remainingHours = Math.ceil(remainingMs / (60 * 60 * 1000))
-    if (remainingHours >= 24) {
-      return 'This request is valid for 24 hours.'
-    }
-    const validUntilText = new Date(validUntilMs).toLocaleString('en-IE', {
+    const validUntilText = new Date(acceptBy).toLocaleString('en-IE', {
       hour: 'numeric',
       minute: '2-digit',
       hour12: true,
@@ -250,7 +239,7 @@ export default function CleanerBookingsPage() {
       month: 'short',
       year: 'numeric',
     })
-    return `This request is valid till ${validUntilText}.`
+    return `This request is valid until ${validUntilText}, and if the cleaner does not respond, your request will expire automatically and the card authorisation will be released.`
   }
 
   return (

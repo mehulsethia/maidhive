@@ -39,7 +39,7 @@ const GROUPS: { key: string; label: string; statuses: string[] }[] = [
   {
     key: 'cancelled',
     label: 'Cancelled',
-    statuses: ['cancelled'],
+    statuses: ['cancelled', 'declined'],
   },
   {
     key: 'expired',

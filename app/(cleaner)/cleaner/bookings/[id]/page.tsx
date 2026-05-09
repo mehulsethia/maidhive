@@ -255,18 +255,10 @@ export default function CleanerBookingDetailPage() {
   const showChat = isChatActiveForBooking(booking)
   const chatIsReadOnly = isChatReadOnly(booking.scheduled_end)
   const pendingValidityLabel = (() => {
-    if (!booking.scheduled_start || !booking.accept_by) {
-      return 'This request is valid for 24 hours.'
+    if (!booking.accept_by) {
+      return 'This request is valid until 24 hours from card authorisation. If the cleaner does not respond, your request will expire automatically and the card authorisation will be released.'
     }
-    const now = Date.now()
-    const startMs = new Date(booking.scheduled_start).getTime()
-    const acceptByMs = new Date(booking.accept_by).getTime()
-    const validUntilMs = Math.min(startMs, acceptByMs)
-    const remainingMs = validUntilMs - now
-    if (remainingMs <= 0) return 'This request is valid for 24 hours.'
-    const remainingHours = Math.ceil(remainingMs / (60 * 60 * 1000))
-    if (remainingHours >= 24) return 'This request is valid for 24 hours.'
-    const validUntilText = new Date(validUntilMs).toLocaleString('en-IE', {
+    const validUntilText = new Date(booking.accept_by).toLocaleString('en-IE', {
       hour: 'numeric',
       minute: '2-digit',
       hour12: true,
@@ -274,7 +266,7 @@ export default function CleanerBookingDetailPage() {
       month: 'short',
       year: 'numeric',
     })
-    return `This request is valid till ${validUntilText}.`
+    return `This request is valid until ${validUntilText}, and if the cleaner does not respond, your request will expire automatically and the card authorisation will be released.`
   })()
   const completeOpensAt = booking.scheduled_end
     ? new Date(booking.scheduled_end).getTime() - 5 * 60 * 1000

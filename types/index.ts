@@ -149,6 +149,7 @@ export type BookingStatus =
   | 'in_progress'
   | 'completed'
   | 'cancelled'
+  | 'declined'
   | 'expired'
   | 'disputed'
 

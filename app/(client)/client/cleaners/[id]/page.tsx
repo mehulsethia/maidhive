@@ -22,7 +22,7 @@ import { Card, CardContent } from '@/components/ui/card'
 import { UserAvatar } from '@/components/ui/user-avatar'
 import { isChatActiveForBooking } from '@/lib/chat-window'
 import { formatCurrency, formatDate } from '@/lib/utils'
-import { pickupShortLabel } from '@/lib/transport-pickup'
+import { pickupFullLabel } from '@/lib/transport-pickup'
 import type { CleanerRead, ReviewRead } from '@/types'
 import { toast } from 'sonner'
 
@@ -412,7 +412,7 @@ export default function CleanerProfilePage() {
                     <InfoLine
                       icon={<MapPin className="h-4 w-4 text-slate-400" />}
                       title="Requires pick-up/drop-off"
-                      value={pickupShortLabel(String((cleaner as any).transport_pickup_location))}
+                      value={pickupFullLabel(String((cleaner as any).transport_pickup_location))}
                     />
                   )}
                   <InfoLine icon={<CalendarCheck className="h-4 w-4 text-slate-400" />} title="Member Since" value={memberSince} />
