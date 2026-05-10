@@ -364,7 +364,7 @@ export default function AdminCleanersPage() {
       </div>
 
       <Tabs value={tab} onValueChange={(v) => setTab(v as Tab)} className="space-y-0">
-        <TabsList className="grid h-auto w-full grid-cols-2 gap-1 rounded-xl bg-slate-100 p-1 lg:grid-cols-5">
+        <TabsList className="scrollbar-hide grid h-auto w-full auto-cols-[minmax(140px,1fr)] grid-flow-col gap-1 overflow-x-auto whitespace-nowrap rounded-xl bg-slate-100 p-1 [-webkit-overflow-scrolling:touch] lg:grid-flow-row lg:grid-cols-5 lg:auto-cols-auto">
           {TAB_STATUS.map((s) => (
             <TabsTrigger key={s} value={s} className="h-9 rounded-lg gap-1.5 text-[12px] sm:text-sm">
               {cleanerLifecycleLabel(s)}

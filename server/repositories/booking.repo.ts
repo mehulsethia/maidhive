@@ -44,19 +44,9 @@ export const bookingRepo = {
     const where: Prisma.BookingWhereInput = {
       cleanerId,
       ...(params.status ? { status: params.status } : {}),
-      NOT: {
-        AND: [
-          { status: 'cancelled' },
-          {
-            OR: [
-              { payment: null },
-              { payment: { is: { status: { notIn: ['authorized', 'captured', 'transferred'] } } } },
-            ],
-          },
-        ],
-      },
+      NOT: { status: 'draft' },
       OR: [
-        { status: { notIn: ['pending', 'draft'] } },
+        { status: { notIn: ['pending', 'draft', 'cancelled'] } },
         {
           status: 'pending',
           payment: {
@@ -64,6 +54,25 @@ export const bookingRepo = {
               status: { in: ['authorized', 'captured', 'transferred'] },
             },
           },
+        },
+        {
+          status: 'cancelled',
+          OR: [
+            { acceptedAt: { not: null } },
+            { confirmedAt: { not: null } },
+            { startedAt: { not: null } },
+            {
+              payment: {
+                is: {
+                  OR: [
+                    { authorizedAt: { not: null } },
+                    { capturedAt: { not: null } },
+                    { transferredAt: { not: null } },
+                  ],
+                },
+              },
+            },
+          ],
         },
       ],
     }

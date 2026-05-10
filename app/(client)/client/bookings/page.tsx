@@ -11,6 +11,7 @@ import { ListPageSkeleton } from '@/components/page-skeletons'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogTitle } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
+import { Select } from '@/components/ui/select'
 import { getDisputeWindowMs, isChatActiveForBooking } from '@/lib/chat-window'
 import { formatCurrency, formatDate } from '@/lib/utils'
 import type { BookingRead, BookingStatus } from '@/types'
@@ -19,8 +20,11 @@ import { toast } from 'sonner'
 const displayFont = Bricolage_Grotesque({ subsets: ['latin'], weight: ['400', '500', '700', '800'] })
 const monoFont = IBM_Plex_Mono({ subsets: ['latin'], weight: ['400', '500', '600'] })
 
-const STATUS_FILTERS: Array<{ key: 'all' | BookingStatus; label: string }> = [
+type ClientStatusFilter = 'all' | BookingStatus | 'awaiting_client_response'
+
+const STATUS_FILTERS: Array<{ key: ClientStatusFilter; label: string }> = [
   { key: 'all', label: 'All' },
+  { key: 'awaiting_client_response', label: 'Awaiting Client Response' },
   { key: 'pending', label: 'Pending Response / Payment Required' },
   { key: 'accepted', label: 'Accepted' },
   { key: 'confirmed', label: 'Confirmed' },
@@ -65,7 +69,7 @@ export default function ClientBookingsPage() {
   const [bookingDisputeStatus, setBookingDisputeStatus] = useState<Map<string, string>>(new Map())
   const [actionLoadingId, setActionLoadingId] = useState<string | null>(null)
   const [query, setQuery] = useState('')
-  const [filter, setFilter] = useState<'all' | BookingStatus>('all')
+  const [filter, setFilter] = useState<ClientStatusFilter>('all')
   const [dashboardFilter, setDashboardFilter] = useState<DashboardStatusFilter | null>(null)
   const [cancelConfirmOpen, setCancelConfirmOpen] = useState(false)
   const [cancelTargetBookingId, setCancelTargetBookingId] = useState<string | null>(null)
@@ -143,7 +147,10 @@ export default function ClientBookingsPage() {
     if (dashboardFilter === 'completed' && booking.status !== 'completed') return false
     if (dashboardFilter === 'closed' && !['cancelled', 'declined', 'expired'].includes(booking.status)) return false
     if (filter !== 'all') {
-      if (filter === 'pending') {
+      if (filter === 'awaiting_client_response') {
+        const awaitingClient = booking.status === 'pending' && booking.proposal_by === 'cleaner'
+        if (!awaitingClient) return false
+      } else if (filter === 'pending') {
         const isPendingOrPaymentRequired = booking.status === 'draft' || booking.status === 'pending'
         if (!isPendingOrPaymentRequired) return false
       } else if (booking.status !== filter) {
@@ -213,32 +220,31 @@ export default function ClientBookingsPage() {
 
         <section className="rounded-[1.5rem] border border-slate-200/80 bg-white/90 p-4 shadow-[0_18px_45px_rgba(11,33,78,0.08)] backdrop-blur-sm sm:p-6">
           <div className="space-y-3">
-            <div className="relative">
-              <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
-              <Input
-                value={query}
-                onChange={(event) => setQuery(event.target.value)}
-                placeholder="Search by cleaner, service, city, or postcode"
-                className="h-11 rounded-full border-slate-300 pl-9"
-              />
-            </div>
-            <div className="flex flex-wrap gap-2">
-              {STATUS_FILTERS.map((status) => (
-                <button
-                  key={status.key}
-                  onClick={() => {
-                    setDashboardFilter(null)
-                    setFilter(status.key)
-                  }}
-                  className={`rounded-full px-3 py-1.5 text-xs font-semibold transition ${
-                    filter === status.key
-                      ? 'bg-[#0d4bc9] text-white shadow-[0_8px_16px_rgba(13,75,201,0.32)]'
-                      : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
-                  }`}
-                >
-                  {status.label}
-                </button>
-              ))}
+            <div className="flex items-center gap-2">
+              <div className="relative min-w-0 flex-1">
+                <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+                <Input
+                  value={query}
+                  onChange={(event) => setQuery(event.target.value)}
+                  placeholder="Search by cleaner, service, city, or postcode"
+                  className="h-11 rounded-full border-slate-300 pl-9"
+                />
+              </div>
+              <Select
+                value={filter}
+                onChange={(event) => {
+                  setDashboardFilter(null)
+                  setFilter(event.target.value as ClientStatusFilter)
+                }}
+                className="h-11 w-[180px] shrink-0 rounded-full border-slate-300 bg-white px-4"
+                aria-label="Filter bookings by status"
+              >
+                {STATUS_FILTERS.map((status) => (
+                  <option key={status.key} value={status.key}>
+                    {status.label}
+                  </option>
+                ))}
+              </Select>
             </div>
           </div>
 

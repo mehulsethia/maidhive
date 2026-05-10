@@ -22,11 +22,15 @@ export function sanitizeBookingsForRole<T extends Record<string, any>>(bookings:
 function sanitizeBookingForCleaner<T extends Record<string, any>>(booking: T): T {
   const copy: Record<string, any> = { ...booking }
   const status = String(copy.status ?? '')
+  const cancelledBeforeConfirmation =
+    status === 'cancelled' &&
+    !copy.acceptedAt &&
+    !copy.confirmedAt
   const scheduledStartMs = copy.scheduledStart ? new Date(copy.scheduledStart).getTime() : 0
   const scheduledEndMs = copy.scheduledEnd ? new Date(copy.scheduledEnd).getTime() : 0
   const phoneVisibleAtMs = scheduledStartMs - 6 * 60 * 60 * 1000
   const phoneVisibleUntilMs = scheduledEndMs + 30 * 60 * 1000
-  const isAddressVisible = ADDRESS_VISIBLE_STATUSES.has(status)
+  const isAddressVisible = ADDRESS_VISIBLE_STATUSES.has(status) && !cancelledBeforeConfirmation
   const isPhoneVisible = isAddressVisible && Date.now() >= phoneVisibleAtMs && Date.now() <= phoneVisibleUntilMs
 
   const fullClientName = String(copy?.client?.user?.name ?? '').trim()

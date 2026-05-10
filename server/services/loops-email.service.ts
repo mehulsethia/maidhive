@@ -27,6 +27,10 @@ const CLIENT_ALT_TIME_PROPOSED_TRANSACTIONAL_ID =
   process.env.LOOPS_CLIENT_ALT_TIME_PROPOSED_TRANSACTIONAL_ID ?? 'cmoy0itw205fk0ix97hljg7jz'
 const CLEANER_CLIENT_ALT_TIME_PROPOSED_TRANSACTIONAL_ID =
   process.env.LOOPS_CLEANER_CLIENT_ALT_TIME_PROPOSED_TRANSACTIONAL_ID ?? 'cmoy0pn5w06x10iz4k8dxu3gl'
+const CLIENT_PROPOSAL_DECLINED_CLOSED_TRANSACTIONAL_ID =
+  process.env.LOOPS_CLIENT_PROPOSAL_DECLINED_CLOSED_TRANSACTIONAL_ID ?? 'cmozyqayi0xof0iyuyxodgpci'
+const CLEANER_CLIENT_DECLINED_PROPOSAL_TRANSACTIONAL_ID =
+  process.env.LOOPS_CLEANER_CLIENT_DECLINED_PROPOSAL_TRANSACTIONAL_ID ?? 'cmozyuhtd2ej10iyplagxg614'
 
 function appUrl() {
   return (process.env.NEXT_PUBLIC_APP_URL ?? 'http://localhost:3000').replace(/\/+$/, '')
@@ -426,6 +430,39 @@ export const loopsEmailService = {
         clientName: args.clientName,
         originalDate: formatBookingDate(args.originalStart),
         originalTime: formatBookingTime(args.originalStart),
+        proposedDate: formatBookingDate(args.proposedStart),
+        proposedTime: formatBookingTime(args.proposedStart),
+      },
+    })
+  },
+
+  async sendClientProposalDeclinedClosed(args: {
+    email: string
+    clientName: string
+    cleanerName: string
+  }) {
+    return sendTransactionalEmail({
+      transactionalId: CLIENT_PROPOSAL_DECLINED_CLOSED_TRANSACTIONAL_ID,
+      email: args.email,
+      dataVariables: {
+        clientName: args.clientName,
+        cleanerName: args.cleanerName,
+      },
+    })
+  },
+
+  async sendCleanerClientDeclinedProposal(args: {
+    email: string
+    cleanerName: string
+    clientName: string
+    proposedStart: Date
+  }) {
+    return sendTransactionalEmail({
+      transactionalId: CLEANER_CLIENT_DECLINED_PROPOSAL_TRANSACTIONAL_ID,
+      email: args.email,
+      dataVariables: {
+        cleanerName: args.cleanerName,
+        clientName: args.clientName,
         proposedDate: formatBookingDate(args.proposedStart),
         proposedTime: formatBookingTime(args.proposedStart),
       },

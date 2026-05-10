@@ -343,6 +343,7 @@ export default function CleanerDashboardPage() {
                     ? new Date(memberSinceRaw).toLocaleDateString('en-IE', { month: 'short', year: 'numeric' })
                     : null
                   const completedBookingsCount = Number(trust?.completedBookingsCount ?? 0)
+                  const waitingForClientResponse = b.proposal_by === 'cleaner'
                   return (
                 <div key={b.id} className="rounded-xl border border-slate-200 bg-slate-50/60 p-3">
                   <div className="flex flex-wrap items-center justify-between gap-2">
@@ -387,14 +388,24 @@ export default function CleanerDashboardPage() {
                       >
                         Decline
                       </Button>
-                        <Button
-                          size="sm"
-                          onClick={() => handleAction(b.id, 'accept')}
-                          disabled={!stripeConnected}
-                          loading={actionLoading === `${b.id}-accept`}
-                        >
-                          Accept
-                        </Button>
+                        {waitingForClientResponse ? (
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            disabled
+                          >
+                            Waiting for client
+                          </Button>
+                        ) : (
+                          <Button
+                            size="sm"
+                            onClick={() => handleAction(b.id, 'accept')}
+                            disabled={!stripeConnected}
+                            loading={actionLoading === `${b.id}-accept`}
+                          >
+                            Accept
+                          </Button>
+                        )}
                       </div>
                     </div>
                   </div>

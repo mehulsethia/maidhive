@@ -79,7 +79,7 @@ function DisputeCard({
   return (
     <Card>
       <CardContent className="px-5 pb-5 pt-6">
-        <div className="flex items-start justify-between gap-4 mb-3">
+        <div className="mb-3 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-2 flex-wrap mb-1">
               <span className="font-mono text-xs text-muted-foreground">
@@ -99,7 +99,7 @@ function DisputeCard({
             </p>
           </div>
 
-          <div className="flex gap-2 shrink-0">
+          <div className="flex w-full flex-wrap gap-2 sm:w-auto sm:shrink-0">
             {dispute.status === 'open' && (
               <>
                 <Button
@@ -107,17 +107,18 @@ function DisputeCard({
                   variant="outline"
                   onClick={onMarkUnderReview}
                   disabled={actionLoading}
+                  className="w-full sm:w-auto"
                 >
                   <Clock className="h-3.5 w-3.5 mr-1" />
                   Start review
                 </Button>
-                <Button size="sm" onClick={onResolve} disabled={actionLoading}>
+                <Button size="sm" onClick={onResolve} disabled={actionLoading} className="w-full sm:w-auto">
                   Resolve
                 </Button>
               </>
             )}
             {dispute.status === 'under_review' && (
-              <Button size="sm" onClick={onResolve} disabled={actionLoading}>
+              <Button size="sm" onClick={onResolve} disabled={actionLoading} className="w-full sm:w-auto">
                 <CheckCircle2 className="h-3.5 w-3.5 mr-1" />
                 Resolve
               </Button>
@@ -266,7 +267,7 @@ export default function AdminDisputesPage() {
         </div>
       )}
       <Tabs value={activeFilter} onValueChange={(v) => setActiveFilter(v as DisputeFilter)}>
-        <TabsList>
+        <TabsList className="scrollbar-hide h-auto w-full justify-start gap-1 overflow-x-auto whitespace-nowrap pb-1 [-webkit-overflow-scrolling:touch]">
           {DISPUTE_FILTERS.map((filter) => (
             <TabsTrigger key={filter} value={filter} className="gap-1.5">
               {DISPUTE_FILTER_LABELS[filter]}

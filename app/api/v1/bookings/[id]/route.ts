@@ -19,16 +19,5 @@ export const GET = requireAuth(async (_req, ctx, user) => {
 
   if (!isParty) return err('Forbidden', 403)
 
-  if (
-    user.role === 'cleaner' &&
-    booking.status === 'cancelled' &&
-    (
-      !booking.payment ||
-      !['authorized', 'captured', 'transferred'].includes(String(booking.payment.status ?? ''))
-    )
-  ) {
-    return err('Booking not found', 404)
-  }
-
   return ok(sanitizeBookingForRole(booking as any, user.role as 'client' | 'cleaner' | 'admin'))
 })

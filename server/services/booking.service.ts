@@ -667,6 +667,16 @@ export const bookingService = {
 
       const proposalContext = booking.proposalContext ?? (booking.status === 'pending' ? 'pre_confirmation' : 'post_confirmation')
       if (proposalContext === 'pre_confirmation') {
+        const declinedByClientFromCleanerProposal = isClient && booking.proposalBy === 'cleaner'
+        const proposedStartLabel = (booking.proposedStart ?? booking.scheduledStart).toLocaleString('en-IE', {
+          day: 'numeric',
+          month: 'short',
+          year: 'numeric',
+          hour: '2-digit',
+          minute: '2-digit',
+          hour12: false,
+          timeZone: 'Europe/Nicosia',
+        })
         const updated = await bookingRepo.update(bookingId, {
           status: 'declined',
           ...clearedProposalState(),
@@ -675,16 +685,32 @@ export const bookingService = {
         await pushInAppNotification({
           userId: isClient ? booking.cleaner.userId : booking.client.userId,
           type: 'booking_request_declined',
-          title: 'Booking request declined',
-          body: 'This booking request was declined.',
+          title: declinedByClientFromCleanerProposal ? 'Client declined your proposed time' : 'Booking request declined',
+          body: declinedByClientFromCleanerProposal
+            ? `Client declined your proposed time for ${proposedStartLabel}. The booking request has been closed.`
+            : 'This booking request was declined.',
           data: { booking_id: bookingId },
         })
         try {
-          await loopsEmailService.sendClientBookingRejectedOrExpired({
-            email: booking.client.user.email,
-            fullName: booking.client.user.name ?? 'Client',
-            cleanerName: booking.cleaner.user.name ?? 'Cleaner',
-          })
+          if (declinedByClientFromCleanerProposal) {
+            await loopsEmailService.sendClientProposalDeclinedClosed({
+              email: booking.client.user.email,
+              clientName: booking.client.user.name ?? 'Client',
+              cleanerName: booking.cleaner.user.name ?? 'Cleaner',
+            })
+            await loopsEmailService.sendCleanerClientDeclinedProposal({
+              email: booking.cleaner.user.email,
+              cleanerName: booking.cleaner.user.name ?? 'Cleaner',
+              clientName: booking.client.user.name ?? 'Client',
+              proposedStart: booking.proposedStart ?? booking.scheduledStart,
+            })
+          } else {
+            await loopsEmailService.sendClientBookingRejectedOrExpired({
+              email: booking.client.user.email,
+              fullName: booking.client.user.name ?? 'Client',
+              cleanerName: booking.cleaner.user.name ?? 'Cleaner',
+            })
+          }
         } catch (emailError) {
           console.error('Failed to send client proposal-declined email via Loops:', emailError)
         }
@@ -834,8 +860,10 @@ export const bookingService = {
       await pushInAppNotification({
         userId: notifyUserId,
         type: 'booking_cancelled',
-        title: 'Booking Cancelled',
-        body: 'A booking has been cancelled',
+        title: isClientCancelling ? 'Client cancelled booking request' : 'Booking cancelled',
+        body: isClientCancelling
+          ? 'The client cancelled this booking request before confirmation.'
+          : 'A booking has been cancelled',
         data: { booking_id: bookingId },
       })
       void googleCalendarService.removeCleanerBookingEvent(updated.id).catch((e) => {

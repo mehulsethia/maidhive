@@ -102,8 +102,8 @@ export default function CleanerChatsPage() {
 
   return (
     <div className="space-y-6">
-      <div className="grid gap-4 lg:h-[calc(100vh-12.5rem)] lg:grid-cols-[340px_1fr]">
-      <Card className="border-slate-200 lg:h-full">
+      <div className="grid gap-4 md:h-[calc(100vh-12.5rem)] md:grid-cols-[300px_1fr] lg:grid-cols-[340px_1fr]">
+      <Card className="border-slate-200 md:h-full">
         <CardHeader className="pb-3">
           <CardTitle className="text-lg">Conversations</CardTitle>
         </CardHeader>
@@ -156,10 +156,10 @@ export default function CleanerChatsPage() {
         </CardContent>
       </Card>
 
-      <Card className="border-slate-200 lg:h-full">
+      <Card className="border-slate-200 md:h-full">
         <CardContent className="h-full p-0">
           {!selected ? (
-            <div className="flex h-full min-h-[22rem] flex-col items-center justify-center gap-3 text-center text-slate-500 sm:min-h-[26rem] md:min-h-[30rem] lg:min-h-0">
+            <div className="flex h-full min-h-[22rem] flex-col items-center justify-center gap-3 text-center text-slate-500 sm:min-h-[26rem] md:min-h-0">
               <MessageCircleMore className="h-9 w-9 text-slate-300" />
               <p className="text-sm">Select a conversation to start chatting.</p>
             </div>

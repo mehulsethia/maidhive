@@ -14,6 +14,7 @@ import { Card, CardContent } from '@/components/ui/card'
 import { Dialog, DialogTitle } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { Select } from '@/components/ui/select'
 import {
   ALTERNATIVE_PROPOSAL_WINDOW_DAYS,
   getCleanerProposalEligibility,
@@ -301,28 +302,28 @@ export default function CleanerBookingsPage() {
 
       <Card className="border-slate-200">
         <CardContent className="space-y-4 px-5 pb-5 pt-6 sm:space-y-5 sm:px-6 sm:pb-6 sm:pt-6">
-          <div className="relative">
-            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
-            <Input
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
-              placeholder="Search by city, postcode, or service"
-              className="pl-9"
-            />
-          </div>
-
-          <div className="flex flex-wrap gap-2">
-            {STATUS_FILTERS.map((f) => (
-              <button
-                key={f.key}
-                onClick={() => setFilter(f.key)}
-                className={`rounded-full px-3 py-1.5 text-xs font-medium ${
-                  filter === f.key ? 'bg-primary text-white shadow-[0_8px_16px_rgba(39,70,250,0.3)]' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
-                }`}
-              >
-                {f.label}
-              </button>
-            ))}
+          <div className="flex items-center gap-2">
+            <div className="relative min-w-0 flex-1">
+              <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+              <Input
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+                placeholder="Search by city, postcode, or service"
+                className="pl-9"
+              />
+            </div>
+            <Select
+              value={filter}
+              onChange={(e) => setFilter(e.target.value as 'all' | BookingStatus)}
+              className="w-[180px] shrink-0 rounded-full border-slate-300 bg-white px-4"
+              aria-label="Filter bookings by status"
+            >
+              {STATUS_FILTERS.map((f) => (
+                <option key={f.key} value={f.key}>
+                  {f.label}
+                </option>
+              ))}
+            </Select>
           </div>
 
           {filtered.length === 0 ? (
@@ -393,14 +394,20 @@ export default function CleanerBookingsPage() {
 
                     {b.status === 'pending' && (
                       <>
-                        <Button
-                          size="sm"
-                          onClick={() => action(b.id, 'accept')}
-                          disabled={!stripeConnected || eligibility.isCleanerProposal}
-                          loading={actionLoading === `${b.id}-accept`}
-                        >
-                          Accept
-                        </Button>
+                        {eligibility.isCleanerProposal ? (
+                          <Button size="sm" variant="outline" disabled>
+                            Waiting for client
+                          </Button>
+                        ) : (
+                          <Button
+                            size="sm"
+                            onClick={() => action(b.id, 'accept')}
+                            disabled={!stripeConnected}
+                            loading={actionLoading === `${b.id}-accept`}
+                          >
+                            Accept
+                          </Button>
+                        )}
                         {!stripeConnected && (
                           <p className="text-xs font-medium text-amber-700">
                             Connect Stripe to accept bookings and receive payouts. Go to: Profile → Payments to complete setup.

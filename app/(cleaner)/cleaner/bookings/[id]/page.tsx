@@ -300,6 +300,7 @@ export default function CleanerBookingDetailPage() {
   } | undefined
   const canRevealPhone = ['confirmed', 'in_progress', 'completed', 'disputed'].includes(booking.status) && Boolean(cleanerPrivacy?.phoneVisible)
   const clientPhone = booking.client?.user?.phone ?? ''
+  const isCancelledPreConfirmation = booking.status === 'cancelled' && !booking.accepted_at && !booking.confirmed_at
 
   return (
     <div className="w-full space-y-5">
@@ -379,7 +380,9 @@ export default function CleanerBookingDetailPage() {
               <div>
                 <p className="text-sm text-muted-foreground">You will earn</p>
                 <p className="text-2xl font-bold text-green-700">{formatCurrency(booking.cleaner_payout)}</p>
-                <p className="text-xs text-muted-foreground mt-0.5">Released 24h after job completion</p>
+                <p className="text-xs text-muted-foreground mt-0.5">
+                  {isCancelledPreConfirmation ? 'Informational only — this request was cancelled before confirmation.' : 'Released 24h after job completion'}
+                </p>
               </div>
               <div className="text-right text-sm text-muted-foreground">
                 <p>{formatCurrency(booking.hourly_rate)}/hr</p>
@@ -392,24 +395,29 @@ export default function CleanerBookingDetailPage() {
 
       {/* Actions */}
       <div className="flex flex-col gap-2">
+        {isCancelledPreConfirmation && (
+          <p className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">
+            This booking request was cancelled by the client before confirmation.
+          </p>
+        )}
         {!stripeConnected && (
           <p className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">
             Connect Stripe to accept bookings and receive payouts. Go to: Profile → Payments to complete setup.
           </p>
         )}
-        {booking.status === 'pending' && hasProposal && (
+        {!isCancelledPreConfirmation && booking.status === 'pending' && hasProposal && (
           <p className="rounded-xl border border-blue-200 bg-blue-50 px-3 py-2 text-sm text-blue-700">
             {isCleanerProposal
               ? `You proposed a new time (${formatDate(booking.proposed_start!)}). Waiting for client response.`
               : `Client countered with ${formatDate(booking.proposed_start!)}. Accept or decline before request expiry.`}
           </p>
         )}
-        {booking.status === 'pending' && (
+        {!isCancelledPreConfirmation && booking.status === 'pending' && (
           <p className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-700">
             {pendingValidityLabel}
           </p>
         )}
-        {canAcceptPending && (
+        {!isCancelledPreConfirmation && canAcceptPending && (
           <>
             <Button size="lg" onClick={() => handleBookingAction('accept')} loading={actionLoading === 'accept'} disabled={!stripeConnected || isCleanerProposal}>
               Accept booking
@@ -430,12 +438,12 @@ export default function CleanerBookingDetailPage() {
             <Button variant="destructive" onClick={() => setCancelOpen(true)}>Decline</Button>
           </>
         )}
-        {isPending && !canProposeAlternative && !canRespondToCounter && proposeAlternativeDisabledReason && (
+        {!isCancelledPreConfirmation && isPending && !canProposeAlternative && !canRespondToCounter && proposeAlternativeDisabledReason && (
           <p className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-600">
             {proposeAlternativeDisabledReason}
           </p>
         )}
-        {canRespondToCounter && (
+        {!isCancelledPreConfirmation && canRespondToCounter && (
           <>
             <Button size="lg" onClick={() => handleBookingAction('accept_proposal')} loading={actionLoading === 'accept_proposal'} disabled={!stripeConnected}>
               Accept counter-offer
@@ -445,27 +453,27 @@ export default function CleanerBookingDetailPage() {
             </Button>
           </>
         )}
-        {(booking.status === 'accepted' || booking.status === 'confirmed') && (
+        {!isCancelledPreConfirmation && (booking.status === 'accepted' || booking.status === 'confirmed') && (
           <Button size="lg" onClick={() => handleAction('start')} loading={actionLoading === 'start'} disabled={!canStartJobNow}>
             Start job
           </Button>
         )}
-        {(booking.status === 'accepted' || booking.status === 'confirmed') && !canStartJobNow && (
+        {!isCancelledPreConfirmation && (booking.status === 'accepted' || booking.status === 'confirmed') && !canStartJobNow && (
           <p className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-600">
             Start job unlocks 15 minutes before the scheduled time.
           </p>
         )}
-        {booking.status === 'in_progress' && !canCompleteJob && (
+        {!isCancelledPreConfirmation && booking.status === 'in_progress' && !canCompleteJob && (
           <p className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-600">
             Complete Job unlocks 5 minutes before the scheduled end time.
           </p>
         )}
-        {canCompleteJob && (
+        {!isCancelledPreConfirmation && canCompleteJob && (
           <Button size="lg" onClick={handleComplete} loading={actionLoading === 'complete'}>
             Complete Job
           </Button>
         )}
-        {canReportProblem && (
+        {!isCancelledPreConfirmation && canReportProblem && (
           <Button
             variant="outline"
             size="lg"
@@ -475,7 +483,7 @@ export default function CleanerBookingDetailPage() {
             Report a problem
           </Button>
         )}
-        {!canReportProblem && (
+        {!isCancelledPreConfirmation && !canReportProblem && (
           <p className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-600">
             Report a problem is available during the job and up to 24 hours after scheduled completion.
           </p>
