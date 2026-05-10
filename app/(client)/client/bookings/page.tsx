@@ -220,7 +220,7 @@ export default function ClientBookingsPage() {
 
         <section className="rounded-[1.5rem] border border-slate-200/80 bg-white/90 p-4 shadow-[0_18px_45px_rgba(11,33,78,0.08)] backdrop-blur-sm sm:p-6">
           <div className="space-y-3">
-            <div className="flex items-center gap-2">
+            <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
               <div className="relative min-w-0 flex-1">
                 <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
                 <Input
@@ -236,7 +236,7 @@ export default function ClientBookingsPage() {
                   setDashboardFilter(null)
                   setFilter(event.target.value as ClientStatusFilter)
                 }}
-                className="h-11 w-[180px] shrink-0 rounded-full border-slate-300 bg-white px-4"
+                className="h-11 w-full rounded-full border-slate-300 bg-white px-4 sm:w-[220px] sm:shrink-0"
                 aria-label="Filter bookings by status"
               >
                 {STATUS_FILTERS.map((status) => (
