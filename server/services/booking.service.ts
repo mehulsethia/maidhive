@@ -16,7 +16,6 @@ const BOOKING_ACCEPT_TTL_MINUTES = Number(process.env.BOOKING_ACCEPT_TTL_MINUTES
 const BOOKING_PAY_TTL_MINUTES = Number(process.env.BOOKING_PAY_TTL_MINUTES ?? 15)
 const RESCHEDULE_CUTOFF_HOURS = 24
 const MAX_BOOKING_WINDOW_DAYS = 28
-const PRE_CONFIRM_RESCHEDULE_WINDOW_DAYS = 14
 const POST_CONFIRM_RESCHEDULE_WINDOW_DAYS = 14
 const AMEND_WITHIN_HOURS = 24
 const AMEND_MAX_SHIFT_HOURS = 3
@@ -308,13 +307,16 @@ export const bookingService = {
         throw new ServiceError('Proposed time must be different from current booking time', 400)
       }
       const proposedEnd = new Date(proposedStart.getTime() + Number(booking.durationHours) * 60 * 60 * 1000)
-      await validateBookingWindow(booking.cleanerId, proposedStart, proposedEnd)
+      await validateBookingWindow(
+        booking.cleanerId,
+        proposedStart,
+        proposedEnd,
+        { enforceMaxAdvanceWindow: isPreConfirmation },
+      )
 
       if (isPreConfirmation) {
         assertWithinRequestWindow(requestAcceptBy)
         assertRescheduleWindow(booking.scheduledStart)
-        const originalStart = booking.originalScheduledStart ?? booking.scheduledStart
-        assertPreConfirmationDateLimit(originalStart, proposedStart)
         if (booking.proposalBy) {
           throw new ServiceError('A proposal is already active for this booking', 400)
         }
@@ -365,6 +367,7 @@ export const bookingService = {
         return updated
       }
 
+      assertPostConfirmationRescheduleNotUsed(booking)
       assertPostConfirmationRescheduleWindow(booking.scheduledStart)
       const originalStart = booking.originalScheduledStart ?? booking.scheduledStart
       assertPostConfirmationDateLimit(originalStart, proposedStart)
@@ -414,14 +417,17 @@ export const bookingService = {
       const proposedStart = parseProposedStart(payload.proposed_start)
       assertHalfHourBoundary(proposedStart)
       const proposedEnd = new Date(proposedStart.getTime() + Number(booking.durationHours) * 60 * 60 * 1000)
-      await validateBookingWindow(booking.cleanerId, proposedStart, proposedEnd)
-
       const isPreConfirmation = booking.status === 'pending' && booking.proposalContext !== 'post_confirmation'
+      await validateBookingWindow(
+        booking.cleanerId,
+        proposedStart,
+        proposedEnd,
+        { enforceMaxAdvanceWindow: isPreConfirmation },
+      )
+
       if (isPreConfirmation) {
         assertWithinRequestWindow(requestAcceptBy)
         assertRescheduleWindow(booking.scheduledStart)
-        const originalStart = booking.originalScheduledStart ?? booking.scheduledStart
-        assertPreConfirmationDateLimit(originalStart, proposedStart)
         if (actor === 'client' && booking.clientProposals >= 1) {
           throw new ServiceError('Client can only counter once', 400)
         }
@@ -469,6 +475,7 @@ export const bookingService = {
         return updated
       }
 
+      assertPostConfirmationRescheduleNotUsed(booking)
       assertPostConfirmationRescheduleWindow(booking.scheduledStart)
       if (booking.proposalContext === 'amend_start') {
         throw new ServiceError('Counter-proposals are not allowed for Amend Start Time requests', 400)
@@ -620,7 +627,15 @@ export const bookingService = {
       const updated = await bookingRepo.update(bookingId, {
         scheduledStart: booking.proposedStart,
         scheduledEnd: booking.proposedEnd,
-        ...clearedProposalState(),
+        proposedStart: null,
+        proposedEnd: null,
+        proposalBy: null,
+        proposalContext: null,
+        proposalExpiresAt: null,
+        cleanerProposals: 0,
+        clientProposals: 0,
+        postCleanerProposals: 1,
+        postClientProposals: 1,
       })
       await resetAuthorizationAfterReschedule(updated.id)
       await pushInAppNotification({
@@ -980,21 +995,19 @@ function assertPostConfirmationProposalOpen(proposalExpiresAt: Date | null) {
   }
 }
 
+function assertPostConfirmationRescheduleNotUsed(booking: BookingWithRelations) {
+  const originalStart = booking.originalScheduledStart
+  if (!originalStart) return
+  if (booking.scheduledStart.getTime() !== originalStart.getTime()) {
+    throw new ServiceError('This booking has already been rescheduled once. No further reschedules are allowed for this booking.', 400)
+  }
+}
+
 function maxProposalDateFromOriginal(originalScheduledStart: Date, windowDays: number): Date {
   const originalStartDay = startOfDayCyprus(originalScheduledStart)
   const maxAllowedDay = new Date(originalStartDay)
   maxAllowedDay.setUTCDate(maxAllowedDay.getUTCDate() + windowDays)
   return endOfDayCyprus(maxAllowedDay)
-}
-
-function assertPreConfirmationDateLimit(originalScheduledStart: Date, proposedStart: Date) {
-  const maxAllowed = maxProposalDateFromOriginal(originalScheduledStart, PRE_CONFIRM_RESCHEDULE_WINDOW_DAYS)
-  if (proposedStart.getTime() > maxAllowed.getTime()) {
-    throw new ServiceError(
-      `Alternative proposals must be within ${PRE_CONFIRM_RESCHEDULE_WINDOW_DAYS} days of the original booking date`,
-      400,
-    )
-  }
 }
 
 function assertPostConfirmationDateLimit(originalScheduledStart: Date, proposedStart: Date) {
@@ -1375,7 +1388,12 @@ function endOfDayCyprus(date: Date): Date {
   return d
 }
 
-async function validateBookingWindow(cleanerId: string, scheduledStart: Date, scheduledEnd: Date) {
+async function validateBookingWindow(
+  cleanerId: string,
+  scheduledStart: Date,
+  scheduledEnd: Date,
+  options?: { enforceMaxAdvanceWindow?: boolean },
+) {
   if (Number.isNaN(scheduledStart.getTime())) {
     throw new ServiceError('Invalid scheduled_start datetime', 422)
   }
@@ -1394,9 +1412,12 @@ async function validateBookingWindow(cleanerId: string, scheduledStart: Date, sc
     throw new ServiceError('Selected time must be at least 2 hours from now', 422)
   }
 
-  const maxAdvanceWindow = now + MAX_BOOKING_WINDOW_DAYS * 24 * 60 * 60 * 1000
-  if (scheduledStart.getTime() > maxAdvanceWindow) {
-    throw new ServiceError(`Bookings can only be made up to ${MAX_BOOKING_WINDOW_DAYS} days in advance`, 422)
+  const enforceMaxAdvanceWindow = options?.enforceMaxAdvanceWindow ?? true
+  if (enforceMaxAdvanceWindow) {
+    const maxAdvanceWindow = now + MAX_BOOKING_WINDOW_DAYS * 24 * 60 * 60 * 1000
+    if (scheduledStart.getTime() > maxAdvanceWindow) {
+      throw new ServiceError(`Bookings can only be made up to ${MAX_BOOKING_WINDOW_DAYS} days in advance`, 422)
+    }
   }
 
   const dayStart = startOfDayCyprus(scheduledStart)

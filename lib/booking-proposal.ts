@@ -127,8 +127,13 @@ export function maxAlternativeProposalDateInputValue(originalStartLike: string |
   if (Number.isNaN(originalStart.getTime())) return ''
 
   const maxFromOriginal = new Date(originalStart.getTime() + ALTERNATIVE_PROPOSAL_WINDOW_DAYS * MS_PER_DAY)
-  const maxFromPlatformWindow = new Date(Date.now() + PLATFORM_BOOKING_WINDOW_DAYS * MS_PER_DAY)
-  const maxAllowed = maxFromOriginal.getTime() < maxFromPlatformWindow.getTime() ? maxFromOriginal : maxFromPlatformWindow
+  return toDateInputValueCyprus(maxFromOriginal)
+}
+
+export function maxPreConfirmationProposalDateInputValue(nowLike: string | Date = new Date()): string {
+  const base = new Date(nowLike)
+  if (Number.isNaN(base.getTime())) return ''
+  const maxAllowed = new Date(base.getTime() + PLATFORM_BOOKING_WINDOW_DAYS * MS_PER_DAY)
   return toDateInputValueCyprus(maxAllowed)
 }
 

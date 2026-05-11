@@ -20,6 +20,7 @@ import { Input } from '@/components/ui/input'
 import {
   ALTERNATIVE_PROPOSAL_WINDOW_DAYS,
   maxAlternativeProposalDateInputValue,
+  maxPreConfirmationProposalDateInputValue,
   toDateInputValueCyprus,
   toIsoFromDateAndTimeInCyprus,
   toTimeInputValueCyprus,
@@ -291,9 +292,13 @@ export default function ClientBookingDetailPage() {
   const hasStarted = Number.isFinite(scheduledStartMs) && millisUntilStart <= 0
   const moreThan24HoursAway = Number.isFinite(scheduledStartMs) && millisUntilStart > RESCHEDULE_CUTOFF_MS
   const within24HoursBeforeStart = Number.isFinite(scheduledStartMs) && millisUntilStart > 0 && millisUntilStart <= RESCHEDULE_CUTOFF_MS
-  const canRescheduleBooking = booking.status === 'confirmed' && moreThan24HoursAway && !hasStarted && !hasProposal
+  const hasAlreadyRescheduled = Boolean(
+    booking.original_scheduled_start &&
+    new Date(booking.original_scheduled_start).getTime() !== scheduledStartMs,
+  )
+  const canRescheduleBooking = booking.status === 'confirmed' && moreThan24HoursAway && !hasStarted && !hasProposal && !hasAlreadyRescheduled
   const canAmendStartTime = booking.status === 'confirmed' && within24HoursBeforeStart && !hasProposal
-  const canCancelConfirmedBooking = booking.status === 'confirmed'
+  const canCancelConfirmedBooking = booking.status === 'confirmed' && moreThan24HoursAway
   const proposalContext =
     booking.proposal_context ??
     (booking.status === 'pending' ? 'pre_confirmation' : booking.status === 'accepted' || booking.status === 'confirmed' ? 'post_confirmation' : null)
@@ -311,8 +316,11 @@ export default function ClientBookingDetailPage() {
   const canReportInProgress = booking.status === 'in_progress'
   const isCompletedAwaitingRelease = booking.status === 'completed' && paymentStatus !== 'transferred'
   const isCompletedReleased = booking.status === 'completed' && paymentStatus === 'transferred'
+  const isPostConfirmationRescheduleDecline = proposalContext === 'post_confirmation' && cleanerProposed && ['accepted', 'confirmed'].includes(booking.status)
   const counterMinDate = toDateInputValueCyprus(new Date())
-  const counterMaxDate = maxAlternativeProposalDateInputValue(booking.original_scheduled_start ?? booking.scheduled_start)
+  const counterMaxDate = proposalContext === 'post_confirmation'
+    ? maxAlternativeProposalDateInputValue(booking.original_scheduled_start ?? booking.scheduled_start)
+    : maxPreConfirmationProposalDateInputValue()
   const proposalMinDate = proposalAction === 'amend_start_time'
     ? toDateInputValueCyprus(booking.scheduled_start)
     : toDateInputValueCyprus(new Date())
@@ -584,6 +592,11 @@ export default function ClientBookingDetailPage() {
                       Less than 24 hours remain before start. Cancellation charges may apply under the cancellation policy.
                     </p>
                   )}
+                  {booking.status === 'confirmed' && moreThan24HoursAway && hasAlreadyRescheduled && !hasProposal && (
+                    <p className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-600">
+                      This booking has already been rescheduled once. Further rescheduling is not available for MVP.
+                    </p>
+                  )}
                   {(booking.status === 'expired' || booking.status === 'cancelled' || booking.status === 'declined' || overdueUnpaidDraftLike) && (
                     <>
                       <Button className="w-full sm:w-auto" onClick={() => router.push(`/client/book/${booking.cleaner_id}?reset=1&step=1`)}>
@@ -721,9 +734,20 @@ export default function ClientBookingDetailPage() {
         <div className="space-y-3">
           <p className="text-sm text-muted-foreground">
             {proposalAction === 'propose_alternative'
-              ? `Choose an available slot. The new time must stay within ${ALTERNATIVE_PROPOSAL_WINDOW_DAYS} days of the original booking date and be fully agreed before the 24-hour cutoff.`
+              ? 'You can request a new date or time for this booking. The other party must accept before the booking changes. If they decline or do not respond before the 24-hour cutoff, the original booking time will remain unchanged.'
               : 'Choose an available slot on the same day. Cleaner can only accept or decline this amendment request.'}
           </p>
+          {proposalAction === 'propose_alternative' && (
+            <ul className="list-disc space-y-1 pl-5 text-xs text-slate-600">
+              <li>Only available more than 24h before booking start</li>
+              <li>New time must be within 14 days of original booking date</li>
+              <li>Must fit cleaner availability, booking duration, and buffer rules</li>
+              <li>Other party can accept, decline, or counter once</li>
+              <li>If no agreement before 24h cutoff, original booking remains</li>
+              <li>No penalty applies if reschedule fails</li>
+              <li>Once reschedule is successfully agreed, no further reschedule is allowed for MVP</li>
+            </ul>
+          )}
           <div>
             <Label>{proposalAction === 'propose_alternative' ? 'Proposed start time' : 'Amended start time'}</Label>
             <div className="mt-1 grid gap-2 sm:grid-cols-2">
@@ -747,6 +771,11 @@ export default function ClientBookingDetailPage() {
               </select>
             </div>
             <p className="mt-2 text-xs text-slate-500">Only valid availability slots are shown for the selected date and duration.</p>
+            {proposalAction === 'propose_alternative' && (
+              <p className="mt-2 text-xs text-slate-600">
+                If this request is declined or expires, the original booking time will remain unchanged.
+              </p>
+            )}
           </div>
           <Button
             className="w-full"
@@ -773,22 +802,26 @@ export default function ClientBookingDetailPage() {
           setDeclineProposalConfirmOpen(false)
         }}
       >
-        <DialogTitle>Decline proposed time?</DialogTitle>
+        <DialogTitle>{isPostConfirmationRescheduleDecline ? 'Decline reschedule request?' : 'Decline proposed time?'}</DialogTitle>
         <div className="space-y-3">
           <p className="text-sm text-muted-foreground">
-            Declining this proposed time will close the booking request. Your card authorisation will be released if no booking is confirmed.
+            {isPostConfirmationRescheduleDecline
+              ? 'Declining this request will keep the original booking date and time unchanged. The booking will continue as originally scheduled unless one side later cancels under the standard cancellation policy.'
+              : 'Declining this proposed time will close the booking request. Your card authorisation will be released if no booking is confirmed.'}
           </p>
-          <p className="text-sm text-muted-foreground">
-            If you still want this booking, you can accept the proposed time or counter once with another available time.
-          </p>
-          <div className="flex gap-2">
+          {!isPostConfirmationRescheduleDecline && (
+            <p className="text-sm text-muted-foreground">
+              If you still want this booking, you can accept the proposed time or counter once with another available time.
+            </p>
+          )}
+          <div className="flex flex-col gap-2 sm:flex-row">
             <Button
               variant="outline"
               className="w-full"
               onClick={() => setDeclineProposalConfirmOpen(false)}
               disabled={Boolean(actionLoading)}
             >
-              Keep booking request
+              {isPostConfirmationRescheduleDecline ? 'Keep reviewing' : 'Keep booking request'}
             </Button>
             <Button
               variant="destructive"
@@ -797,7 +830,7 @@ export default function ClientBookingDetailPage() {
               loading={actionLoading === 'decline_proposal'}
               disabled={Boolean(actionLoading) && actionLoading !== 'decline_proposal'}
             >
-              Decline & close request
+              {isPostConfirmationRescheduleDecline ? 'Decline request' : 'Decline & close request'}
             </Button>
           </div>
         </div>
@@ -809,7 +842,7 @@ export default function ClientBookingDetailPage() {
             ? 'Cancel draft booking'
             : canCancelBookingRequest
               ? 'Cancel booking request'
-              : 'Cancel booking'}
+              : 'Cancel booking?'}
         </DialogTitle>
         <div className="space-y-3">
           <p className="text-sm text-muted-foreground">
@@ -817,19 +850,9 @@ export default function ClientBookingDetailPage() {
               ? 'Are you sure you want to cancel this draft booking?'
               : canCancelBookingRequest
                 ? 'Are you sure you want to cancel this booking request?'
-                : 'Are you sure you want to cancel this confirmed booking?'}
+                : 'Are you sure you want to cancel this booking? Cancellation rules may apply depending on how close the booking is to the scheduled start time.'}
           </p>
-          {canCancelConfirmedBooking && (
-            <p className="text-sm text-muted-foreground">
-              {moreThan24HoursAway
-                ? 'Free cancellation applies when cancelled more than 24 hours before scheduled start.'
-                : 'You are within 24 hours of the scheduled start time. Cancellation charges may apply.'}
-            </p>
-          )}
-          <p className="text-xs text-slate-500">
-            Reschedule booking is available only while more than 24 hours remain before the scheduled start time.
-          </p>
-          <div className="flex gap-2">
+          <div className="flex flex-col gap-2 sm:flex-row">
             <Button variant="outline" className="w-full" onClick={() => setCancelConfirmOpen(false)} disabled={Boolean(actionLoading)}>
               {canCancelDraft ? 'Keep draft' : canCancelBookingRequest ? 'Keep request' : 'Keep booking'}
             </Button>

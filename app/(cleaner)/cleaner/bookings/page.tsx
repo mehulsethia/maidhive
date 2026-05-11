@@ -17,10 +17,10 @@ import { Label } from '@/components/ui/label'
 import { Select } from '@/components/ui/select'
 import { UserAvatar } from '@/components/ui/user-avatar'
 import {
-  ALTERNATIVE_PROPOSAL_WINDOW_DAYS,
   getCleanerProposalEligibility,
+  PLATFORM_BOOKING_WINDOW_DAYS,
   RESCHEDULE_CUTOFF_HOURS,
-  maxAlternativeProposalDateInputValue,
+  maxPreConfirmationProposalDateInputValue,
   toDateInputValueCyprus,
   toIsoFromDateAndTimeInCyprus,
   toTimeInputValueCyprus,
@@ -64,7 +64,7 @@ export default function CleanerBookingsPage() {
   const [, setNowTick] = useState(() => Date.now())
   const START_JOB_EARLY_WINDOW_MS = 15 * 60 * 1000
   const proposalMinDate = toDateInputValueCyprus(new Date())
-  const proposalMaxDate = proposalBooking ? maxAlternativeProposalDateInputValue(proposalBooking.scheduled_start) : ''
+  const proposalMaxDate = maxPreConfirmationProposalDateInputValue()
 
   function getStartJobAvailability(scheduledStart: string) {
     const startsAt = new Date(scheduledStart).getTime()
@@ -203,7 +203,7 @@ export default function CleanerBookingsPage() {
     }
 
     if (proposalMaxDate && proposalDate > proposalMaxDate) {
-      toast.error(`Alternative proposals must be within ${ALTERNATIVE_PROPOSAL_WINDOW_DAYS} days of the original booking date.`)
+      toast.error(`Alternative proposals during request stage must stay within ${PLATFORM_BOOKING_WINDOW_DAYS} days from today.`)
       return
     }
 
@@ -513,7 +513,7 @@ export default function CleanerBookingsPage() {
         <DialogTitle>Propose alternative time</DialogTitle>
         <div className="space-y-4">
           <p className="text-sm text-muted-foreground">
-            You can propose one alternative time for bookings scheduled more than 24 hours away, within the booking window, and up to {ALTERNATIVE_PROPOSAL_WINDOW_DAYS} days after the original booking date.
+            You can propose one alternative time for bookings scheduled more than 24 hours away, within cleaner availability and up to {PLATFORM_BOOKING_WINDOW_DAYS} days from today.
           </p>
           {proposalBooking && (
             <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-600">
@@ -572,7 +572,7 @@ export default function CleanerBookingsPage() {
           <p className="text-sm text-muted-foreground">
             This will close the booking request and notify the client. This booking request will close without cancellation penalties.
           </p>
-          <div className="flex gap-2">
+          <div className="flex flex-col gap-2 sm:flex-row">
             <Button
               variant="outline"
               className="w-full"

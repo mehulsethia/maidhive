@@ -19,8 +19,10 @@ import { Textarea } from '@/components/ui/textarea'
 import { UserAvatar } from '@/components/ui/user-avatar'
 import {
   ALTERNATIVE_PROPOSAL_WINDOW_DAYS,
+  PLATFORM_BOOKING_WINDOW_DAYS,
   getCleanerProposalEligibility,
   maxAlternativeProposalDateInputValue,
+  maxPreConfirmationProposalDateInputValue,
   toDateInputValueCyprus,
   toIsoFromDateAndTimeInCyprus,
   toTimeInputValueCyprus,
@@ -58,6 +60,7 @@ export default function CleanerBookingDetailPage() {
   const [loading, setLoading] = useState(true)
   const [actionLoading, setActionLoading] = useState<string | null>(null)
   const [cancelOpen, setCancelOpen] = useState(false)
+  const [cancelBookingOpen, setCancelBookingOpen] = useState(false)
   const [declineCounterOfferOpen, setDeclineCounterOfferOpen] = useState(false)
   const [proposalOpen, setProposalOpen] = useState(false)
   const [proposalAction, setProposalAction] = useState<'propose_alternative' | 'counter_proposal'>('propose_alternative')
@@ -71,7 +74,6 @@ export default function CleanerBookingDetailPage() {
   const [phoneRevealed, setPhoneRevealed] = useState(false)
   const [, setNowTick] = useState(() => Date.now())
   const proposalMinDate = toDateInputValueCyprus(new Date())
-  const proposalMaxDate = booking ? maxAlternativeProposalDateInputValue(booking.scheduled_start) : ''
 
   const refresh = () =>
     bookingsApi.getById(id)
@@ -196,6 +198,25 @@ export default function CleanerBookingDetailPage() {
     }
   }
 
+  async function handleCancelBooking() {
+    if (!booking) return
+    setActionLoading('cancel')
+    try {
+      const reason = moreThan24HoursAway
+        ? 'Cancelled by cleaner more than 24 hours before scheduled start'
+        : 'Cancelled by cleaner within 24 hours of scheduled start'
+      await bookingsApi.cancel(booking.id, reason)
+      toast.success('Booking cancelled.')
+      setCancelBookingOpen(false)
+      await refresh()
+      router.push('/cleaner/bookings')
+    } catch (err: any) {
+      toast.error(err.message ?? 'Failed to cancel booking')
+    } finally {
+      setActionLoading(null)
+    }
+  }
+
   async function handleBookingAction(
     action: 'accept' | 'propose_alternative' | 'counter_proposal' | 'accept_proposal' | 'decline_proposal',
     customProposedStart?: string,
@@ -315,6 +336,10 @@ export default function CleanerBookingDetailPage() {
   const clientPhone = booking.client?.user?.phone ?? ''
   const isCancelledPreConfirmation = booking.status === 'cancelled' && !booking.accepted_at && !booking.confirmed_at
   const isConfirmed = booking.status === 'confirmed'
+  const hasAlreadyRescheduled = Boolean(
+    booking.original_scheduled_start &&
+    new Date(booking.original_scheduled_start).getTime() !== bookingStartsAtMs,
+  )
   const proposalContext =
     booking.proposal_context ??
     (booking.status === 'pending' ? 'pre_confirmation' : booking.status === 'accepted' || booking.status === 'confirmed' ? 'post_confirmation' : null)
@@ -325,6 +350,7 @@ export default function CleanerBookingDetailPage() {
     isConfirmed &&
     moreThan24HoursAway &&
     !hasProposal &&
+    !hasAlreadyRescheduled &&
     (booking.post_cleaner_proposals ?? 0) < 1
   const canPostConfirmCounterClientProposal =
     isClientPostConfirmationProposal &&
@@ -333,6 +359,11 @@ export default function CleanerBookingDetailPage() {
   const canRespondToClientPostConfirmationProposal =
     isClientPostConfirmationProposal &&
     moreThan24HoursAway
+  const isPostConfirmationDecline = proposalContext === 'post_confirmation' && booking.proposal_by === 'client' && ['accepted', 'confirmed'].includes(booking.status)
+  const canCancelConfirmedBooking = isConfirmed && moreThan24HoursAway
+  const proposalMaxDate = proposalContext === 'post_confirmation'
+    ? maxAlternativeProposalDateInputValue(booking.original_scheduled_start ?? booking.scheduled_start)
+    : maxPreConfirmationProposalDateInputValue()
 
   return (
     <div className="w-full space-y-5">
@@ -504,7 +535,17 @@ export default function CleanerBookingDetailPage() {
             }}
             disabled={Boolean(actionLoading)}
           >
-            Propose alternative time
+            Reschedule booking
+          </Button>
+        )}
+        {!isCancelledPreConfirmation && canCancelConfirmedBooking && (
+          <Button
+            variant="outline"
+            className="border-red-300 text-red-700 hover:bg-red-50"
+            onClick={() => setCancelBookingOpen(true)}
+            disabled={Boolean(actionLoading)}
+          >
+            Cancel booking
           </Button>
         )}
         {!isCancelledPreConfirmation && canRespondToClientPostConfirmationProposal && (
@@ -548,7 +589,9 @@ export default function CleanerBookingDetailPage() {
         )}
         {!isCancelledPreConfirmation && isConfirmed && !hasProposal && !canPostConfirmProposeAlternative && (
           <p className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-600">
-            Reschedule proposals can only be started more than 24 hours before the scheduled start.
+            {hasAlreadyRescheduled
+              ? 'This booking has already been rescheduled once. Further rescheduling is not available for MVP.'
+              : 'Reschedule proposals can only be started more than 24 hours before the scheduled start.'}
           </p>
         )}
         {!isCancelledPreConfirmation && canRespondToCounter && (
@@ -644,9 +687,20 @@ export default function CleanerBookingDetailPage() {
         <div className="space-y-4">
           <p className="text-sm text-muted-foreground">
             {proposalAction === 'propose_alternative'
-              ? `You can propose one alternative time for bookings scheduled more than 24 hours away, within the booking window, and up to ${ALTERNATIVE_PROPOSAL_WINDOW_DAYS} days after the original booking date.`
+              ? 'You can request a new date or time for this booking. The other party must accept before the booking changes. If they decline or do not respond before the 24-hour cutoff, the original booking time will remain unchanged.'
               : 'You can counter once. After both sides use their counter, only accept or decline is allowed.'}
           </p>
+          {proposalAction === 'propose_alternative' && (
+            <ul className="list-disc space-y-1 pl-5 text-xs text-slate-600">
+              <li>Only available more than 24h before booking start</li>
+              <li>New time must be within 14 days of original booking date</li>
+              <li>Must fit cleaner availability, booking duration, and buffer rules</li>
+              <li>Other party can accept, decline, or counter once</li>
+              <li>If no agreement before 24h cutoff, original booking remains</li>
+              <li>No penalty applies if reschedule fails</li>
+              <li>Once reschedule is successfully agreed, no further reschedule is allowed for MVP</li>
+            </ul>
+          )}
           <div className="rounded-xl border border-slate-200 bg-slate-50/70 p-3">
             <Label className="text-sm font-semibold text-slate-700">
               {proposalAction === 'propose_alternative' ? 'Proposed start time' : 'Counter start time'}
@@ -674,6 +728,11 @@ export default function CleanerBookingDetailPage() {
             <p className="mt-2 text-xs text-slate-500">
               Only valid availability slots are shown for the selected date and duration.
             </p>
+            {proposalAction === 'propose_alternative' && (
+              <p className="mt-2 text-xs text-slate-600">
+                If this request is declined or expires, the original booking time will remain unchanged.
+              </p>
+            )}
           </div>
           <Button
             className="w-full"
@@ -684,7 +743,11 @@ export default function CleanerBookingDetailPage() {
                 return
               }
               if (proposalMaxDate && proposalDate > proposalMaxDate) {
-                toast.error(`Alternative proposals must be within ${ALTERNATIVE_PROPOSAL_WINDOW_DAYS} days of the original booking date.`)
+                if (proposalContext === 'post_confirmation') {
+                  toast.error(`Alternative proposals must be within ${ALTERNATIVE_PROPOSAL_WINDOW_DAYS} days of the original booking date.`)
+                } else {
+                  toast.error(`Alternative proposals during request stage must stay within ${PLATFORM_BOOKING_WINDOW_DAYS} days from today.`)
+                }
                 return
               }
               handleBookingAction(proposalAction, proposedStartIso)
@@ -704,22 +767,26 @@ export default function CleanerBookingDetailPage() {
           setDeclineCounterOfferOpen(false)
         }}
       >
-        <DialogTitle>Decline counter-offer</DialogTitle>
+        <DialogTitle>{isPostConfirmationDecline ? 'Decline reschedule request?' : 'Decline counter-offer'}</DialogTitle>
         <div className="space-y-3">
           <p className="text-sm text-muted-foreground">
-            Are you sure you want to decline this counter-offer?
+            {isPostConfirmationDecline
+              ? 'Declining this request will keep the original booking date and time unchanged. The booking will continue as originally scheduled unless one side later cancels under the standard cancellation policy.'
+              : 'Are you sure you want to decline this counter-offer?'}
           </p>
-          <p className="text-sm text-muted-foreground">
-            This will close the booking request and notify the client. This booking request will close without cancellation penalties.
-          </p>
-          <div className="flex gap-2">
+          {!isPostConfirmationDecline && (
+            <p className="text-sm text-muted-foreground">
+              This will close the booking request and notify the client. This booking request will close without cancellation penalties.
+            </p>
+          )}
+          <div className="flex flex-col gap-2 sm:flex-row">
             <Button
               variant="outline"
               className="w-full"
               onClick={() => setDeclineCounterOfferOpen(false)}
               disabled={Boolean(actionLoading)}
             >
-              Keep request
+              {isPostConfirmationDecline ? 'Keep reviewing' : 'Keep request'}
             </Button>
             <Button
               variant="destructive"
@@ -728,7 +795,41 @@ export default function CleanerBookingDetailPage() {
               loading={actionLoading === 'decline_proposal'}
               disabled={Boolean(actionLoading) && actionLoading !== 'decline_proposal'}
             >
-              Decline counter-offer
+              {isPostConfirmationDecline ? 'Decline request' : 'Decline counter-offer'}
+            </Button>
+          </div>
+        </div>
+      </Dialog>
+
+      <Dialog
+        open={cancelBookingOpen}
+        onClose={() => {
+          if (actionLoading === 'cancel') return
+          setCancelBookingOpen(false)
+        }}
+      >
+        <DialogTitle>Cancel booking?</DialogTitle>
+        <div className="space-y-3">
+          <p className="text-sm text-muted-foreground">
+            Are you sure you want to cancel this booking? This may affect your reliability record depending on timing and platform rules.
+          </p>
+          <div className="flex flex-col gap-2 sm:flex-row">
+            <Button
+              variant="outline"
+              className="w-full"
+              onClick={() => setCancelBookingOpen(false)}
+              disabled={Boolean(actionLoading)}
+            >
+              Keep booking
+            </Button>
+            <Button
+              variant="destructive"
+              className="w-full"
+              onClick={handleCancelBooking}
+              loading={actionLoading === 'cancel'}
+              disabled={Boolean(actionLoading) && actionLoading !== 'cancel'}
+            >
+              Cancel booking
             </Button>
           </div>
         </div>
