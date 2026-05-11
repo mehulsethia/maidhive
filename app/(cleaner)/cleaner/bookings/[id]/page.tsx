@@ -16,6 +16,7 @@ import { Label } from '@/components/ui/label'
 import { Input } from '@/components/ui/input'
 import { Select } from '@/components/ui/select'
 import { Textarea } from '@/components/ui/textarea'
+import { UserAvatar } from '@/components/ui/user-avatar'
 import {
   ALTERNATIVE_PROPOSAL_WINDOW_DAYS,
   getCleanerProposalEligibility,
@@ -56,6 +57,7 @@ export default function CleanerBookingDetailPage() {
   const [loading, setLoading] = useState(true)
   const [actionLoading, setActionLoading] = useState<string | null>(null)
   const [cancelOpen, setCancelOpen] = useState(false)
+  const [declineCounterOfferOpen, setDeclineCounterOfferOpen] = useState(false)
   const [proposalOpen, setProposalOpen] = useState(false)
   const [proposalDate, setProposalDate] = useState('')
   const [proposalTime, setProposalTime] = useState('')
@@ -211,6 +213,9 @@ export default function CleanerBookingDetailPage() {
         setProposalDate('')
         setProposalTime('')
       }
+      if (action === 'decline_proposal') {
+        setDeclineCounterOfferOpen(false)
+      }
       await refresh()
     } catch (err: any) {
       toast.error(err.message ?? 'Action failed')
@@ -294,6 +299,8 @@ export default function CleanerBookingDetailPage() {
     ? new Date(memberSinceRaw).toLocaleDateString('en-IE', { month: 'short', year: 'numeric' })
     : null
   const completedBookingsCount = Number(clientTrust?.completedBookingsCount ?? 0)
+  const clientDisplayName = booking.client?.user?.name?.trim() || 'Client'
+  const clientAvatarUrl = booking.client?.user?.avatar_url ?? null
   const cleanerPrivacy = (booking as any)?.cleanerPrivacy as {
     phoneVisible?: boolean
     phoneVisibleAt?: string | null
@@ -317,6 +324,19 @@ export default function CleanerBookingDetailPage() {
           <span className="font-semibold">{resolveJobTypeTitle(booking)}</span>
           <Separator />
           <div className="space-y-2 text-sm text-muted-foreground">
+            <div className="flex items-center gap-2 rounded-xl border border-slate-200 bg-slate-50 px-2.5 py-2">
+              <UserAvatar
+                name={clientDisplayName}
+                imageUrl={clientAvatarUrl}
+                className="h-9 w-9 shrink-0 border border-white object-cover shadow-sm"
+                textClassName="text-xs"
+                fallback="C"
+              />
+              <div className="min-w-0">
+                <p className="text-[11px] font-medium uppercase tracking-wide text-slate-500">Client</p>
+                <p className="truncate text-sm font-semibold text-slate-800">{clientDisplayName}</p>
+              </div>
+            </div>
             <p className="flex items-center gap-2"><Calendar className="h-4 w-4" />{formatDate(booking.scheduled_start)}</p>
             <p className="flex items-center gap-2"><Clock className="h-4 w-4" />{booking.duration_hours} hours</p>
             <p className="flex items-center gap-2"><MapPin className="h-4 w-4" />{booking.address}, {booking.city}, {booking.postcode}</p>
@@ -448,7 +468,7 @@ export default function CleanerBookingDetailPage() {
             <Button size="lg" onClick={() => handleBookingAction('accept_proposal')} loading={actionLoading === 'accept_proposal'} disabled={!stripeConnected}>
               Accept counter-offer
             </Button>
-            <Button variant="destructive" onClick={() => handleBookingAction('decline_proposal')} loading={actionLoading === 'decline_proposal'}>
+            <Button variant="destructive" onClick={() => setDeclineCounterOfferOpen(true)} loading={actionLoading === 'decline_proposal'}>
               Decline counter-offer
             </Button>
           </>
@@ -573,6 +593,43 @@ export default function CleanerBookingDetailPage() {
           >
             Send proposal
           </Button>
+        </div>
+      </Dialog>
+
+      <Dialog
+        open={declineCounterOfferOpen}
+        onClose={() => {
+          if (actionLoading === 'decline_proposal') return
+          setDeclineCounterOfferOpen(false)
+        }}
+      >
+        <DialogTitle>Decline counter-offer</DialogTitle>
+        <div className="space-y-3">
+          <p className="text-sm text-muted-foreground">
+            Are you sure you want to decline this counter-offer?
+          </p>
+          <p className="text-sm text-muted-foreground">
+            This will close the booking request and notify the client. This booking request will close without cancellation penalties.
+          </p>
+          <div className="flex gap-2">
+            <Button
+              variant="outline"
+              className="w-full"
+              onClick={() => setDeclineCounterOfferOpen(false)}
+              disabled={Boolean(actionLoading)}
+            >
+              Keep request
+            </Button>
+            <Button
+              variant="destructive"
+              className="w-full"
+              onClick={() => handleBookingAction('decline_proposal')}
+              loading={actionLoading === 'decline_proposal'}
+              disabled={Boolean(actionLoading) && actionLoading !== 'decline_proposal'}
+            >
+              Decline counter-offer
+            </Button>
+          </div>
         </div>
       </Dialog>
 

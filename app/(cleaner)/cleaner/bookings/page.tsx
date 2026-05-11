@@ -15,6 +15,7 @@ import { Dialog, DialogTitle } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Select } from '@/components/ui/select'
+import { UserAvatar } from '@/components/ui/user-avatar'
 import {
   ALTERNATIVE_PROPOSAL_WINDOW_DAYS,
   getCleanerProposalEligibility,
@@ -56,6 +57,7 @@ export default function CleanerBookingsPage() {
   const [filter, setFilter] = useState<'all' | BookingStatus>('all')
   const [query, setQuery] = useState('')
   const [proposalBooking, setProposalBooking] = useState<BookingRead | null>(null)
+  const [declineConfirmBooking, setDeclineConfirmBooking] = useState<BookingRead | null>(null)
   const [proposalDate, setProposalDate] = useState('')
   const [proposalTime, setProposalTime] = useState('')
   const [proposalTimeOptions, setProposalTimeOptions] = useState<Array<{ value: string; label: string }>>([])
@@ -215,6 +217,12 @@ export default function CleanerBookingsPage() {
     await action(id, 'decline')
   }
 
+  async function confirmDeclineBookingRequest() {
+    if (!declineConfirmBooking) return
+    await decline(declineConfirmBooking.id)
+    setDeclineConfirmBooking(null)
+  }
+
   function resolveJobTypeTitle(booking: BookingRead) {
     const snapshotMatch = booking.special_instructions?.match(/(?:^|\n)Job type:\s*([^\n]+)/i)
     const snapshotJobType = snapshotMatch?.[1]?.trim()
@@ -342,12 +350,23 @@ export default function CleanerBookingsPage() {
                   : null
                 const completedBookingsCount = Number(trust?.completedBookingsCount ?? 0)
                 const startJobState = getStartJobAvailability(b.scheduled_start)
+                const clientName = b.client?.user?.name?.trim() || 'Client'
+                const clientAvatarUrl = b.client?.user?.avatar_url ?? null
                 return (
                   <div key={b.id} className="rounded-2xl border border-slate-200 bg-white p-4 transition-all duration-200 hover:-translate-y-0.5 hover:shadow-[0_10px_26px_rgba(15,23,42,0.08)] sm:p-5">
                   <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
                     <div>
                       <p className="text-base font-semibold text-slate-900">{resolveJobTypeTitle(b)}</p>
-                      <p className="text-sm text-slate-600">Client: {b.client?.user?.name ?? 'Client'}</p>
+                      <div className="mt-1 flex items-center gap-2">
+                        <UserAvatar
+                          name={clientName}
+                          imageUrl={clientAvatarUrl}
+                          className="h-7 w-7 border border-white object-cover shadow-sm"
+                          textClassName="text-[10px]"
+                          fallback="C"
+                        />
+                        <p className="text-sm text-slate-600">Client: {clientName}</p>
+                      </div>
                       <div className="mt-1 flex flex-wrap items-center gap-2">
                         {memberSinceLabel && (
                           <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-medium text-slate-600">
@@ -429,7 +448,7 @@ export default function CleanerBookingsPage() {
                         <Button
                           size="sm"
                           variant="outline"
-                          onClick={() => decline(b.id)}
+                          onClick={() => setDeclineConfirmBooking(b)}
                           loading={actionLoading === `${b.id}-decline`}
                         >
                           Decline
@@ -535,6 +554,43 @@ export default function CleanerBookingsPage() {
           >
             Send proposal
           </Button>
+        </div>
+      </Dialog>
+
+      <Dialog
+        open={Boolean(declineConfirmBooking)}
+        onClose={() => {
+          if (declineConfirmBooking && actionLoading === `${declineConfirmBooking.id}-decline`) return
+          setDeclineConfirmBooking(null)
+        }}
+      >
+        <DialogTitle>Decline booking request</DialogTitle>
+        <div className="space-y-3">
+          <p className="text-sm text-muted-foreground">
+            Are you sure you want to decline this booking request?
+          </p>
+          <p className="text-sm text-muted-foreground">
+            This will close the booking request and notify the client. This booking request will close without cancellation penalties.
+          </p>
+          <div className="flex gap-2">
+            <Button
+              variant="outline"
+              className="w-full"
+              onClick={() => setDeclineConfirmBooking(null)}
+              disabled={Boolean(declineConfirmBooking && actionLoading === `${declineConfirmBooking.id}-decline`)}
+            >
+              Keep request
+            </Button>
+            <Button
+              variant="destructive"
+              className="w-full"
+              onClick={confirmDeclineBookingRequest}
+              loading={Boolean(declineConfirmBooking && actionLoading === `${declineConfirmBooking.id}-decline`)}
+              disabled={!declineConfirmBooking}
+            >
+              Decline booking request
+            </Button>
+          </div>
         </div>
       </Dialog>
     </div>

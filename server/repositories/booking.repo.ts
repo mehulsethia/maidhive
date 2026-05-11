@@ -188,7 +188,15 @@ export const bookingRepo = {
               },
             ],
           },
-          { scheduledStart: { lt: end }, scheduledEnd: { gt: start } },
+          {
+            OR: [
+              { scheduledStart: { lt: end }, scheduledEnd: { gt: start } },
+              {
+                proposedStart: { not: null, lt: end },
+                proposedEnd: { not: null, gt: start },
+              },
+            ],
+          },
         ],
       },
     }),

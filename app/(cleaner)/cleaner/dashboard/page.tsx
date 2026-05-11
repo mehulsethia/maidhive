@@ -7,6 +7,8 @@ import { bookingsApi, cleanersApi } from '@/lib/api'
 import { BookingStatusBadge } from '@/components/booking-status-badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { Dialog, DialogTitle } from '@/components/ui/dialog'
+import { UserAvatar } from '@/components/ui/user-avatar'
 import { DashboardPageSkeleton } from '@/components/page-skeletons'
 import { EmptyState } from '@/components/empty-state'
 import { formatCurrency, formatDate } from '@/lib/utils'
@@ -47,6 +49,7 @@ export default function CleanerDashboardPage() {
   const [loading, setLoading] = useState(true)
   const [actionLoading, setActionLoading] = useState<string | null>(null)
   const [submittingApproval, setSubmittingApproval] = useState(false)
+  const [declineConfirmBooking, setDeclineConfirmBooking] = useState<BookingRead | null>(null)
 
   async function refresh() {
     try {
@@ -127,6 +130,12 @@ export default function CleanerDashboardPage() {
     } finally {
       setActionLoading(null)
     }
+  }
+
+  async function confirmDeclineBookingRequest() {
+    if (!declineConfirmBooking) return
+    await declineBooking(declineConfirmBooking.id)
+    setDeclineConfirmBooking(null)
   }
 
   async function submitForApproval() {
@@ -343,6 +352,8 @@ export default function CleanerDashboardPage() {
                     ? new Date(memberSinceRaw).toLocaleDateString('en-IE', { month: 'short', year: 'numeric' })
                     : null
                   const completedBookingsCount = Number(trust?.completedBookingsCount ?? 0)
+                  const clientName = b.client?.user?.name?.trim() || 'Client'
+                  const clientAvatarUrl = b.client?.user?.avatar_url ?? null
                   const waitingForClientResponse = b.proposal_by === 'cleaner'
                   return (
                 <div key={b.id} className="rounded-xl border border-slate-200 bg-slate-50/60 p-3">
@@ -350,6 +361,16 @@ export default function CleanerDashboardPage() {
                     <div>
                       <p className="font-semibold text-slate-900">{resolveJobTypeTitle(b)}</p>
                       <p className="text-xs text-slate-500">{formatDate(b.scheduled_start)}</p>
+                      <div className="mt-1 flex items-center gap-2">
+                        <UserAvatar
+                          name={clientName}
+                          imageUrl={clientAvatarUrl}
+                          className="h-7 w-7 border border-white object-cover shadow-sm"
+                          textClassName="text-[10px]"
+                          fallback="C"
+                        />
+                        <p className="text-sm text-slate-600">Client: {clientName}</p>
+                      </div>
                       <div className="mt-1 flex flex-wrap items-center gap-2">
                         {memberSinceLabel && (
                           <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-medium text-slate-600">
@@ -383,7 +404,7 @@ export default function CleanerDashboardPage() {
                       <Button
                         size="sm"
                         variant="outline"
-                        onClick={() => declineBooking(b.id)}
+                        onClick={() => setDeclineConfirmBooking(b)}
                         loading={actionLoading === `${b.id}-decline`}
                       >
                         Decline
@@ -498,6 +519,43 @@ export default function CleanerDashboardPage() {
           )}
         </CardContent>
       </Card>
+
+      <Dialog
+        open={Boolean(declineConfirmBooking)}
+        onClose={() => {
+          if (declineConfirmBooking && actionLoading === `${declineConfirmBooking.id}-decline`) return
+          setDeclineConfirmBooking(null)
+        }}
+      >
+        <DialogTitle>Decline booking request</DialogTitle>
+        <div className="space-y-3">
+          <p className="text-sm text-muted-foreground">
+            Are you sure you want to decline this booking request?
+          </p>
+          <p className="text-sm text-muted-foreground">
+            This will close the booking request and notify the client. This booking request will close without cancellation penalties.
+          </p>
+          <div className="flex gap-2">
+            <Button
+              variant="outline"
+              className="w-full"
+              onClick={() => setDeclineConfirmBooking(null)}
+              disabled={Boolean(declineConfirmBooking && actionLoading === `${declineConfirmBooking.id}-decline`)}
+            >
+              Keep request
+            </Button>
+            <Button
+              variant="destructive"
+              className="w-full"
+              onClick={confirmDeclineBookingRequest}
+              loading={Boolean(declineConfirmBooking && actionLoading === `${declineConfirmBooking.id}-decline`)}
+              disabled={!declineConfirmBooking}
+            >
+              Decline booking request
+            </Button>
+          </div>
+        </div>
+      </Dialog>
 
       <style jsx>{`
         .client-stage {
