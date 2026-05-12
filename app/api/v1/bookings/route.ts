@@ -19,14 +19,22 @@ export const GET = requireAuth(async (req: NextRequest, _ctx, user) => {
   if (user.role === 'client') {
     let client = await clientRepo.findByUserId(user.id)
     if (!client) client = await clientRepo.create(user.id)
-    const [bookings, total] = await bookingRepo.findByClient(client.id, { page, pageSize: page_size, status })
+    let [bookings, total] = await bookingRepo.findByClient(client.id, { page, pageSize: page_size, status })
+    const changed = await bookingService.reconcileDeadlinesForBookings(bookings.map((b) => b.id))
+    if (changed) {
+      ;[bookings, total] = await bookingRepo.findByClient(client.id, { page, pageSize: page_size, status })
+    }
     return ok({ bookings, total, page, page_size })
   }
 
   if (user.role === 'cleaner') {
     let cleaner = await cleanerRepo.findByUserId(user.id)
     if (!cleaner) cleaner = await cleanerRepo.create(user.id)
-    const [bookings, total] = await bookingRepo.findByCleaner(cleaner.id, { page, pageSize: page_size, status })
+    let [bookings, total] = await bookingRepo.findByCleaner(cleaner.id, { page, pageSize: page_size, status })
+    const changed = await bookingService.reconcileDeadlinesForBookings(bookings.map((b) => b.id))
+    if (changed) {
+      ;[bookings, total] = await bookingRepo.findByCleaner(cleaner.id, { page, pageSize: page_size, status })
+    }
     return ok({ bookings: sanitizeBookingsForRole(bookings as any[], 'cleaner'), total, page, page_size })
   }
 

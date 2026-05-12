@@ -63,7 +63,7 @@ export default function CleanerBookingDetailPage() {
   const [cancelBookingOpen, setCancelBookingOpen] = useState(false)
   const [declineCounterOfferOpen, setDeclineCounterOfferOpen] = useState(false)
   const [proposalOpen, setProposalOpen] = useState(false)
-  const [proposalAction, setProposalAction] = useState<'propose_alternative' | 'counter_proposal'>('propose_alternative')
+  const [proposalAction, setProposalAction] = useState<'propose_alternative' | 'counter_proposal' | 'amend_start_time'>('propose_alternative')
   const [proposalDate, setProposalDate] = useState('')
   const [proposalTime, setProposalTime] = useState('')
   const [proposalTimeOptions, setProposalTimeOptions] = useState<Array<{ value: string; label: string }>>([])
@@ -72,8 +72,7 @@ export default function CleanerBookingDetailPage() {
   const [reportExplanation, setReportExplanation] = useState('')
   const [reportLoading, setReportLoading] = useState(false)
   const [phoneRevealed, setPhoneRevealed] = useState(false)
-  const [, setNowTick] = useState(() => Date.now())
-  const proposalMinDate = toDateInputValueCyprus(new Date())
+  const [nowTick, setNowTick] = useState(() => Date.now())
 
   const refresh = () =>
     bookingsApi.getById(id)
@@ -218,21 +217,25 @@ export default function CleanerBookingDetailPage() {
   }
 
   async function handleBookingAction(
-    action: 'accept' | 'propose_alternative' | 'counter_proposal' | 'accept_proposal' | 'decline_proposal',
+    action: 'accept' | 'propose_alternative' | 'counter_proposal' | 'accept_proposal' | 'decline_proposal' | 'amend_start_time',
     customProposedStart?: string,
   ) {
     setActionLoading(action)
     try {
       await bookingsApi.action(id, action, customProposedStart)
+      const isLiveScheduleRequest = booking?.proposal_context === 'post_confirmation' || booking?.proposal_context === 'amend_start'
       const labels: Record<string, string> = {
         accept: 'Booking accepted.',
         propose_alternative: 'Alternative time sent to client.',
         counter_proposal: 'Counter-offer sent to client.',
+        amend_start_time: 'Amend Start Time request sent to client.',
         accept_proposal: 'Counter-offer accepted. Booking confirmed.',
-        decline_proposal: 'Counter-offer declined. Request closed.',
+        decline_proposal: isLiveScheduleRequest
+          ? 'Request declined. Original booking time kept.'
+          : 'Counter-offer declined. Request closed.',
       }
       toast.success(labels[action])
-      if (action === 'propose_alternative' || action === 'counter_proposal') {
+      if (action === 'propose_alternative' || action === 'counter_proposal' || action === 'amend_start_time') {
         setProposalOpen(false)
         setProposalDate('')
         setProposalTime('')
@@ -336,14 +339,12 @@ export default function CleanerBookingDetailPage() {
   const clientPhone = booking.client?.user?.phone ?? ''
   const isCancelledPreConfirmation = booking.status === 'cancelled' && !booking.accepted_at && !booking.confirmed_at
   const isConfirmed = booking.status === 'confirmed'
-  const hasAlreadyRescheduled = Boolean(
-    booking.original_scheduled_start &&
-    new Date(booking.original_scheduled_start).getTime() !== bookingStartsAtMs,
-  )
+  const hasAlreadyRescheduled = (booking.post_cleaner_proposals ?? 0) >= 1 && (booking.post_client_proposals ?? 0) >= 1
   const proposalContext =
     booking.proposal_context ??
     (booking.status === 'pending' ? 'pre_confirmation' : booking.status === 'accepted' || booking.status === 'confirmed' ? 'post_confirmation' : null)
   const isPostConfirmationProposal = Boolean(hasProposal && proposalContext === 'post_confirmation')
+  const isAmendProposal = Boolean(hasProposal && proposalContext === 'amend_start')
   const isClientPostConfirmationProposal = isPostConfirmationProposal && booking.proposal_by === 'client'
   const isCleanerPostConfirmationProposal = isPostConfirmationProposal && booking.proposal_by === 'cleaner'
   const canPostConfirmProposeAlternative =
@@ -352,18 +353,39 @@ export default function CleanerBookingDetailPage() {
     !hasProposal &&
     !hasAlreadyRescheduled &&
     (booking.post_cleaner_proposals ?? 0) < 1
-  const canPostConfirmCounterClientProposal =
-    isClientPostConfirmationProposal &&
-    moreThan24HoursAway &&
-    (booking.post_cleaner_proposals ?? 0) < 1
   const canRespondToClientPostConfirmationProposal =
     isClientPostConfirmationProposal &&
     moreThan24HoursAway
+  const canRespondToClientAmendProposal =
+    isAmendProposal &&
+    booking.proposal_by === 'client' &&
+    ['accepted', 'confirmed'].includes(booking.status)
+  const canAmendStartTime =
+    isConfirmed &&
+    millisUntilStart > 0 &&
+    millisUntilStart <= RESCHEDULE_CUTOFF_MS &&
+    !hasProposal
   const isPostConfirmationDecline = proposalContext === 'post_confirmation' && booking.proposal_by === 'client' && ['accepted', 'confirmed'].includes(booking.status)
-  const canCancelConfirmedBooking = isConfirmed && moreThan24HoursAway
-  const proposalMaxDate = proposalContext === 'post_confirmation'
-    ? maxAlternativeProposalDateInputValue(booking.original_scheduled_start ?? booking.scheduled_start)
-    : maxPreConfirmationProposalDateInputValue()
+  const canCancelConfirmedBooking = isConfirmed && millisUntilStart > 0
+  const isAmendDateFlow =
+    proposalAction === 'amend_start_time' ||
+    (proposalAction === 'counter_proposal' && proposalContext === 'amend_start')
+  const proposalMinDate = isAmendDateFlow ? toDateInputValueCyprus(booking.scheduled_start) : toDateInputValueCyprus(new Date())
+  const proposalMaxDate = isAmendDateFlow
+    ? toDateInputValueCyprus(booking.scheduled_start)
+    : proposalContext === 'post_confirmation'
+      ? maxAlternativeProposalDateInputValue(booking.original_scheduled_start ?? booking.scheduled_start)
+      : maxPreConfirmationProposalDateInputValue()
+  const canCounterClientProposal =
+    isClientPostConfirmationProposal
+      ? (booking.post_cleaner_proposals ?? 0) < 1
+      : isAmendProposal
+        ? (booking.cleaner_proposals ?? 0) < 1
+        : false
+  const proposalExpiresMs = booking.proposal_expires_at ? new Date(booking.proposal_expires_at).getTime() : null
+  const proposalCountdownLabel = proposalExpiresMs && proposalExpiresMs > nowTick
+    ? `${Math.ceil((proposalExpiresMs - nowTick) / 60_000)} min`
+    : null
 
   return (
     <div className="w-full space-y-5">
@@ -490,12 +512,27 @@ export default function CleanerBookingDetailPage() {
         )}
         {!isCancelledPreConfirmation && isCleanerPostConfirmationProposal && (
           <p className="rounded-xl border border-blue-200 bg-blue-50 px-3 py-2 text-sm text-blue-700">
-            You proposed a reschedule ({formatDate(booking.proposed_start!)}). Waiting for client response before the 24-hour cutoff.
+            You proposed a reschedule: {formatDate(booking.scheduled_start)} → {formatDate(booking.proposed_start!)}. Waiting for client response before the 24-hour cutoff.
           </p>
         )}
         {!isCancelledPreConfirmation && isClientPostConfirmationProposal && (
           <p className="rounded-xl border border-blue-200 bg-blue-50 px-3 py-2 text-sm text-blue-700">
-            Client proposed a reschedule ({formatDate(booking.proposed_start!)}). Accept, decline, or counter once before the 24-hour cutoff.
+            Client proposed a reschedule: {formatDate(booking.scheduled_start)} → {formatDate(booking.proposed_start!)}. Accept, decline, or counter once before the 24-hour cutoff.
+          </p>
+        )}
+        {!isCancelledPreConfirmation && isAmendProposal && booking.proposal_by === 'cleaner' && (
+          <p className="rounded-xl border border-blue-200 bg-blue-50 px-3 py-2 text-sm text-blue-700">
+            You requested Amend Start Time: {formatDate(booking.scheduled_start)} → {formatDate(booking.proposed_start!)}. Waiting for client response.
+          </p>
+        )}
+        {!isCancelledPreConfirmation && canRespondToClientAmendProposal && (
+          <p className="rounded-xl border border-blue-200 bg-blue-50 px-3 py-2 text-sm text-blue-700">
+            Client requested Amend Start Time: {formatDate(booking.scheduled_start)} → {formatDate(booking.proposed_start!)}. Accept, decline, or counter once.
+          </p>
+        )}
+        {!isCancelledPreConfirmation && (canRespondToClientPostConfirmationProposal || canRespondToClientAmendProposal) && proposalCountdownLabel && (
+          <p className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
+            Response window: {proposalCountdownLabel} remaining.
           </p>
         )}
         {!isCancelledPreConfirmation && booking.status === 'pending' && (
@@ -538,6 +575,26 @@ export default function CleanerBookingDetailPage() {
             Reschedule booking
           </Button>
         )}
+        {!isCancelledPreConfirmation && canAmendStartTime && (
+          <>
+            <Button
+              variant="outline"
+              onClick={() => {
+                const seed = booking.scheduled_start
+                setProposalAction('amend_start_time')
+                setProposalDate(toDateInputValueCyprus(seed))
+                setProposalTime(toTimeInputValueCyprus(seed))
+                setProposalOpen(true)
+              }}
+              disabled={Boolean(actionLoading)}
+            >
+              Amend Start Time
+            </Button>
+            <p className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-600">
+              Small same-day adjustment only (up to +/-3 hours).
+            </p>
+          </>
+        )}
         {!isCancelledPreConfirmation && canCancelConfirmedBooking && (
           <Button
             variant="outline"
@@ -548,7 +605,7 @@ export default function CleanerBookingDetailPage() {
             Cancel booking
           </Button>
         )}
-        {!isCancelledPreConfirmation && canRespondToClientPostConfirmationProposal && (
+        {!isCancelledPreConfirmation && (canRespondToClientPostConfirmationProposal || canRespondToClientAmendProposal) && (
           <>
             <Button
               size="lg"
@@ -556,15 +613,15 @@ export default function CleanerBookingDetailPage() {
               loading={actionLoading === 'accept_proposal'}
               disabled={!stripeConnected}
             >
-              Accept client proposal
+              Accept proposal
             </Button>
-            {canPostConfirmCounterClientProposal && (
+            {canCounterClientProposal && (
               <Button
                 variant="outline"
                 onClick={() => {
                   const seed = booking.proposed_start ?? booking.scheduled_start
                   setProposalAction('counter_proposal')
-                  setProposalDate(toDateInputValueCyprus(seed))
+                  setProposalDate(toDateInputValueCyprus(isAmendProposal ? booking.scheduled_start : seed))
                   setProposalTime(toTimeInputValueCyprus(seed))
                   setProposalOpen(true)
                 }}
@@ -578,7 +635,7 @@ export default function CleanerBookingDetailPage() {
               onClick={() => setDeclineCounterOfferOpen(true)}
               loading={actionLoading === 'decline_proposal'}
             >
-              Decline client proposal
+              Decline proposal
             </Button>
           </>
         )}
@@ -683,12 +740,20 @@ export default function CleanerBookingDetailPage() {
           setProposalTimeOptions([])
         }}
       >
-        <DialogTitle>{proposalAction === 'propose_alternative' ? 'Propose alternative time' : 'Counter with another time'}</DialogTitle>
+        <DialogTitle>
+          {proposalAction === 'propose_alternative'
+            ? 'Propose alternative time'
+            : proposalAction === 'amend_start_time'
+              ? 'Amend Start Time'
+              : 'Counter with another time'}
+        </DialogTitle>
         <div className="space-y-4">
           <p className="text-sm text-muted-foreground">
             {proposalAction === 'propose_alternative'
               ? 'You can request a new date or time for this booking. The other party must accept before the booking changes. If they decline or do not respond before the 24-hour cutoff, the original booking time will remain unchanged.'
-              : 'You can counter once. After both sides use their counter, only accept or decline is allowed.'}
+              : proposalAction === 'amend_start_time'
+                ? 'Small same-day adjustment only (up to +/-3 hours). The other party can accept, decline, or counter once.'
+                : 'You can counter once. After both sides use their counter, only accept or decline is allowed.'}
           </p>
           {proposalAction === 'propose_alternative' && (
             <ul className="list-disc space-y-1 pl-5 text-xs text-slate-600">
@@ -712,6 +777,7 @@ export default function CleanerBookingDetailPage() {
                 onChange={(e) => setProposalDate(e.target.value)}
                 min={proposalMinDate}
                 max={proposalMaxDate || undefined}
+                disabled={isAmendDateFlow}
                 className="h-10 rounded-lg border-slate-200 bg-white"
               />
               <select
@@ -731,6 +797,11 @@ export default function CleanerBookingDetailPage() {
             {proposalAction === 'propose_alternative' && (
               <p className="mt-2 text-xs text-slate-600">
                 If this request is declined or expires, the original booking time will remain unchanged.
+              </p>
+            )}
+            {proposalAction === 'amend_start_time' && (
+              <p className="mt-2 text-xs text-slate-600">
+                Small same-day adjustment only (up to +/-3 hours).
               </p>
             )}
           </div>
@@ -755,7 +826,11 @@ export default function CleanerBookingDetailPage() {
             disabled={!proposalDate || !proposalTime}
             loading={actionLoading === proposalAction}
           >
-            {proposalAction === 'propose_alternative' ? 'Send proposal' : 'Send counter-offer'}
+            {proposalAction === 'propose_alternative'
+              ? 'Send proposal'
+              : proposalAction === 'amend_start_time'
+                ? 'Send amendment request'
+                : 'Send counter-offer'}
           </Button>
         </div>
       </Dialog>
@@ -767,14 +842,14 @@ export default function CleanerBookingDetailPage() {
           setDeclineCounterOfferOpen(false)
         }}
       >
-        <DialogTitle>{isPostConfirmationDecline ? 'Decline reschedule request?' : 'Decline counter-offer'}</DialogTitle>
+        <DialogTitle>{(isPostConfirmationDecline || isAmendProposal) ? 'Decline request?' : 'Decline counter-offer'}</DialogTitle>
         <div className="space-y-3">
           <p className="text-sm text-muted-foreground">
-            {isPostConfirmationDecline
-              ? 'Declining this request will keep the original booking date and time unchanged. The booking will continue as originally scheduled unless one side later cancels under the standard cancellation policy.'
+            {(isPostConfirmationDecline || isAmendProposal)
+              ? 'Declining this request will keep the original booking date and time unchanged. The booking will continue as originally scheduled unless one side later cancels.'
               : 'Are you sure you want to decline this counter-offer?'}
           </p>
-          {!isPostConfirmationDecline && (
+          {!(isPostConfirmationDecline || isAmendProposal) && (
             <p className="text-sm text-muted-foreground">
               This will close the booking request and notify the client. This booking request will close without cancellation penalties.
             </p>
@@ -786,7 +861,7 @@ export default function CleanerBookingDetailPage() {
               onClick={() => setDeclineCounterOfferOpen(false)}
               disabled={Boolean(actionLoading)}
             >
-              {isPostConfirmationDecline ? 'Keep reviewing' : 'Keep request'}
+              Keep request
             </Button>
             <Button
               variant="destructive"
@@ -795,7 +870,7 @@ export default function CleanerBookingDetailPage() {
               loading={actionLoading === 'decline_proposal'}
               disabled={Boolean(actionLoading) && actionLoading !== 'decline_proposal'}
             >
-              {isPostConfirmationDecline ? 'Decline request' : 'Decline counter-offer'}
+              {(isPostConfirmationDecline || isAmendProposal) ? 'Decline request' : 'Decline counter-offer'}
             </Button>
           </div>
         </div>

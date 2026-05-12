@@ -12,6 +12,7 @@ export const POST = requireAuth(async (req: NextRequest, ctx, user) => {
   if (!parsed.success) return err(parsed.error.message, 422)
 
   try {
+    await bookingService.reconcileSingleBookingDeadline(id)
     const booking = await bookingService.applyAction(id, user, parsed.data)
     return ok(sanitizeBookingForRole(booking as any, user.role as 'client' | 'cleaner' | 'admin'))
   } catch (e) {

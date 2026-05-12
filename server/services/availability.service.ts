@@ -58,8 +58,7 @@ export const availabilityService = {
     dateStr: string,
     durationHours: number,
   ): Promise<TimeSlot[]> {
-    const date = new Date(dateStr + 'T00:00:00Z')
-    const dayOfWeek = isoWeekday(date) // 1=Mon...7=Sun
+    const dayOfWeek = isoWeekdayForCyprusDate(dateStr) // 1=Mon...7=Sun
 
     // Query range covers the full Cyprus day in UTC
     const dayStartUTC = cyprusToUTC(dateStr, 0, 0)
@@ -187,10 +186,10 @@ export const availabilityService = {
     const dates: string[] = []
 
     for (const dateStr of dateStrings) {
-      const d = new Date(dateStr + 'T00:00:00Z')
+      const dayOfWeek = isoWeekdayForCyprusDate(dateStr)
 
       const daySchedules = schedules
-        .filter((s) => s.dayOfWeek === isoWeekday(d) && s.isActive)
+        .filter((s) => s.dayOfWeek === dayOfWeek && s.isActive)
         .sort((a, b) => a.startTime.localeCompare(b.startTime))
 
       if (daySchedules.length === 0) continue
@@ -254,4 +253,9 @@ export const availabilityService = {
 function isoWeekday(date: Date): number {
   const d = date.getUTCDay() // 0=Sun...6=Sat
   return d === 0 ? 7 : d
+}
+
+function isoWeekdayForCyprusDate(dateStr: string): number {
+  const atNoonUtc = cyprusToUTC(dateStr, 12, 0)
+  return isoWeekday(atNoonUtc)
 }

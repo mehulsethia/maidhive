@@ -261,7 +261,7 @@ export default function ClientDashboardPage() {
                     <div className="flex min-w-[11rem] flex-col items-end gap-1">
                       <BookingStatusBadge status={booking.status} paymentStatus={booking.payment?.status} proposalBy={booking.proposal_by} />
                       {booking.status === 'pending' && booking.proposal_by === 'cleaner' && (
-                        <p className="text-right text-xs font-semibold text-blue-700">Cleaner proposed a new time</p>
+                        <p className="text-right text-xs font-semibold text-blue-700">Cleaner proposed {formatDate(booking.scheduled_start)} → {formatDate(booking.proposed_start ?? booking.scheduled_start)}</p>
                       )}
                     </div>
                   </Link>

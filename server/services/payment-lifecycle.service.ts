@@ -350,6 +350,7 @@ export const paymentLifecycleService = {
     })
 
     for (const booking of expiredRescheduleNegotiations) {
+      const preserveRescheduleUsage = booking.proposalContext === 'amend_start'
       await db.booking.update({
         where: { id: booking.id },
         data: {
@@ -358,6 +359,10 @@ export const paymentLifecycleService = {
           proposalBy: null,
           proposalContext: null,
           proposalExpiresAt: null,
+          cleanerProposals: 0,
+          clientProposals: 0,
+          postCleanerProposals: preserveRescheduleUsage ? undefined : 0,
+          postClientProposals: preserveRescheduleUsage ? undefined : 0,
         },
       })
       await pushInAppNotification({

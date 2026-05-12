@@ -388,8 +388,8 @@ export default function CleanerBookingsPage() {
                       {b.status === 'pending' && b.proposed_start && b.proposal_by && (
                         <p className="mt-1 rounded-lg border border-blue-200 bg-blue-50 px-2 py-1 text-xs text-blue-700">
                           {b.proposal_by === 'cleaner'
-                            ? `You proposed ${formatDate(b.proposed_start)}. Waiting for client response.`
-                            : `Client proposed ${formatDate(b.proposed_start)}. Review and respond before expiry.`}
+                            ? `You proposed ${formatDate(b.scheduled_start)} → ${formatDate(b.proposed_start)}. Waiting for client response.`
+                            : `Client proposed ${formatDate(b.scheduled_start)} → ${formatDate(b.proposed_start)}. Review and respond before expiry.`}
                         </p>
                       )}
                     </div>

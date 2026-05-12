@@ -169,35 +169,55 @@ export const bookingRepo = {
   },
 
   findActiveForCleaner: (cleanerId: string, start: Date, end: Date) =>
-    db.booking.findMany({
-      where: {
-        cleanerId,
-        AND: [
-          {
-            OR: [
-              {
-                status: { in: ['accepted', 'confirmed', 'in_progress', 'completed', 'disputed'] },
-              },
-              {
-                status: 'pending',
-                payment: {
-                  is: {
-                    status: { in: ['authorized', 'captured', 'transferred'] },
+    {
+      const now = new Date()
+      return db.booking.findMany({
+        where: {
+          cleanerId,
+          AND: [
+            {
+              OR: [
+                {
+                  status: { in: ['accepted', 'confirmed', 'in_progress', 'completed', 'disputed'] },
+                },
+                {
+                  status: 'pending',
+                  acceptBy: { gt: now },
+                  payment: {
+                    is: {
+                      status: { in: ['authorized', 'captured', 'transferred'] },
+                    },
                   },
                 },
-              },
-            ],
-          },
-          {
-            OR: [
-              { scheduledStart: { lt: end }, scheduledEnd: { gt: start } },
-              {
-                proposedStart: { not: null, lt: end },
-                proposedEnd: { not: null, gt: start },
-              },
-            ],
-          },
-        ],
-      },
-    }),
+              ],
+            },
+            {
+              OR: [
+                { scheduledStart: { lt: end }, scheduledEnd: { gt: start } },
+                {
+                  proposedStart: { not: null, lt: end },
+                  proposedEnd: { not: null, gt: start },
+                  OR: [
+                    {
+                      status: 'pending',
+                      acceptBy: { gt: now },
+                      payment: {
+                        is: {
+                          status: { in: ['authorized', 'captured', 'transferred'] },
+                        },
+                      },
+                    },
+                    {
+                      status: { in: ['accepted', 'confirmed'] },
+                      proposalContext: { in: ['post_confirmation', 'amend_start'] },
+                      proposalExpiresAt: { gt: now },
+                    },
+                  ],
+                },
+              ],
+            },
+          ],
+        },
+      })
+    },
 }

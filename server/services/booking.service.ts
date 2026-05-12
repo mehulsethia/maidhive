@@ -47,6 +47,89 @@ export const bookingService = {
     }
   },
 
+  async reconcileSingleBookingDeadline(bookingId: string) {
+    const booking = await bookingRepo.findById(bookingId)
+    if (!booking) return null
+
+    const nowMs = Date.now()
+    const requestAcceptBy = resolveRequestAcceptBy(booking)
+    const hasAuthorizedPayment = isPaymentAuthorizedStatus(booking.payment?.status)
+
+    if (
+      booking.status === 'pending' &&
+      hasAuthorizedPayment &&
+      requestAcceptBy &&
+      requestAcceptBy.getTime() < nowMs
+    ) {
+      const expired = await db.booking.updateMany({
+        where: { id: bookingId, status: 'pending' },
+        data: {
+          status: 'expired',
+          ...clearedProposalState(),
+        },
+      })
+
+      if (expired.count > 0) {
+        await releasePaymentAuthorization(
+          booking.payment?.id,
+          booking.payment?.stripePaymentIntentId,
+          booking.payment?.status,
+        )
+        await notifyPendingRequestExpired(booking)
+        return bookingRepo.findById(bookingId)
+      }
+    }
+
+    const proposalContext = booking.proposalContext ?? null
+    const postConfirmationProposalExpired = (
+      booking.status === 'accepted' || booking.status === 'confirmed'
+    ) &&
+      (proposalContext === 'post_confirmation' || proposalContext === 'amend_start') &&
+      Boolean(booking.proposalExpiresAt) &&
+      booking.proposalExpiresAt!.getTime() < nowMs
+
+    if (postConfirmationProposalExpired) {
+      const shouldPreserveRescheduleUsage = proposalContext === 'amend_start'
+      const cleared = await db.booking.updateMany({
+        where: {
+          id: bookingId,
+          status: { in: ['accepted', 'confirmed'] },
+          proposalContext: { in: ['post_confirmation', 'amend_start'] },
+          proposalExpiresAt: { lt: new Date(nowMs) },
+        },
+        data: clearedProposalState({ preserveRescheduleUsage: shouldPreserveRescheduleUsage }),
+      })
+      if (cleared.count > 0) {
+        await notifyPostConfirmationProposalExpired(booking)
+        return bookingRepo.findById(bookingId)
+      }
+    }
+
+    return booking
+  },
+
+  async reconcileDeadlinesForBookings(bookingIds: string[]) {
+    const uniqueIds = Array.from(new Set(bookingIds.filter(Boolean)))
+    if (uniqueIds.length === 0) return false
+    let changed = false
+    for (const id of uniqueIds) {
+      const before = await bookingRepo.findById(id)
+      if (!before) continue
+      const after = await bookingService.reconcileSingleBookingDeadline(id)
+      if (!after) continue
+      if (
+        before.status !== after.status ||
+        before.proposalBy !== after.proposalBy ||
+        before.proposalContext !== after.proposalContext ||
+        before.proposedStart?.getTime() !== after.proposedStart?.getTime() ||
+        before.proposalExpiresAt?.getTime() !== after.proposalExpiresAt?.getTime()
+      ) {
+        changed = true
+      }
+    }
+    return changed
+  },
+
   async create(user: User, data: {
     cleaner_id: string
     service_type: string
@@ -174,7 +257,7 @@ export const bookingService = {
       }
     },
   ) {
-    const booking = await bookingRepo.findById(bookingId)
+    let booking = await bookingRepo.findById(bookingId)
     if (!booking) throw new ServiceError('Booking not found', 404)
 
     const cleaner = await cleanerRepo.findByUserId(user.id)
@@ -182,6 +265,9 @@ export const bookingService = {
     const isCleaner = Boolean(cleaner && booking.cleanerId === cleaner.id)
     const isClient = Boolean(client && booking.clientId === client.id)
     if (!isCleaner && !isClient) throw new ServiceError('Forbidden', 403)
+
+    const reconciled = await bookingService.reconcileSingleBookingDeadline(bookingId)
+    if (reconciled) booking = reconciled
 
     const action = payload.action
     const requestAcceptBy = resolveRequestAcceptBy(booking)
@@ -340,7 +426,7 @@ export const bookingService = {
           userId: actor === 'cleaner' ? booking.client.userId : booking.cleaner.userId,
           type: 'booking_proposed_new_time',
           title: `${actor === 'cleaner' ? 'Cleaner' : 'Client'} proposed a new time`,
-          body: 'Review and accept, decline, or counter once before the request expires.',
+          body: `${actor === 'cleaner' ? 'Cleaner' : 'Client'} requested ${formatBookingTimeForMessage(proposedStart)} (original ${formatBookingTimeForMessage(booking.scheduledStart)}). Review and respond before request expiry.`,
           data: { booking_id: bookingId },
         })
         try {
@@ -395,9 +481,30 @@ export const bookingService = {
         userId: actor === 'cleaner' ? booking.client.userId : booking.cleaner.userId,
         type: 'booking_proposed_new_time',
         title: `${actor === 'cleaner' ? 'Cleaner' : 'Client'} proposed a reschedule`,
-        body: 'Accept or decline before the 24-hour cutoff; otherwise original booking remains active.',
+        body: `${actor === 'cleaner' ? 'Cleaner' : 'Client'} requested ${formatBookingTimeForMessage(proposedStart)} (original ${formatBookingTimeForMessage(booking.scheduledStart)}). Accept, decline, or counter once before cutoff.`,
         data: { booking_id: bookingId },
       })
+      try {
+        if (actor === 'cleaner') {
+          await loopsEmailService.sendClientAlternateTimeProposed({
+            email: booking.client.user.email,
+            clientName: booking.client.user.name ?? 'Client',
+            cleanerName: booking.cleaner.user.name ?? 'Cleaner',
+            originalStart: booking.scheduledStart,
+            proposedStart,
+          })
+        } else {
+          await loopsEmailService.sendCleanerClientAlternateTimeProposed({
+            email: booking.cleaner.user.email,
+            cleanerName: booking.cleaner.user.name ?? 'Cleaner',
+            clientName: booking.client.user.name ?? 'Client',
+            originalStart: booking.scheduledStart,
+            proposedStart,
+          })
+        }
+      } catch (emailError) {
+        console.error('Failed to send post-confirmation reschedule proposal email via Loops:', emailError)
+      }
       return updated
     }
 
@@ -448,7 +555,7 @@ export const bookingService = {
           userId: actor === 'cleaner' ? booking.client.userId : booking.cleaner.userId,
           type: 'booking_counter_proposal',
           title: `${actor === 'cleaner' ? 'Cleaner' : 'Client'} sent a counter-offer`,
-          body: 'Accept or decline this counter-offer before the request expires.',
+          body: `${actor === 'cleaner' ? 'Cleaner' : 'Client'} proposed ${formatBookingTimeForMessage(proposedStart)} (original ${formatBookingTimeForMessage(booking.scheduledStart)}). Accept, decline, or counter once before expiry.`,
           data: { booking_id: bookingId },
         })
         try {
@@ -475,11 +582,58 @@ export const bookingService = {
         return updated
       }
 
+      const isAmendRequest = booking.proposalContext === 'amend_start'
+      if (isAmendRequest) {
+        assertAmendRequestStillValid(booking)
+        assertAmendWindow(booking.scheduledStart, proposedStart)
+        if (actor === 'client' && booking.clientProposals >= 1) {
+          throw new ServiceError('Client can only counter once for this amendment', 400)
+        }
+        if (actor === 'cleaner' && booking.cleanerProposals >= 1) {
+          throw new ServiceError('Cleaner can only counter once for this amendment', 400)
+        }
+        const updated = await bookingRepo.update(bookingId, {
+          proposedStart,
+          proposedEnd,
+          proposalBy: actor,
+          proposalContext: 'amend_start',
+          proposalExpiresAt: booking.proposalExpiresAt,
+          cleanerProposals: actor === 'cleaner' ? { increment: 1 } : undefined,
+          clientProposals: actor === 'client' ? { increment: 1 } : undefined,
+        })
+        await pushInAppNotification({
+          userId: actor === 'cleaner' ? booking.client.userId : booking.cleaner.userId,
+          type: 'booking_counter_proposal',
+          title: 'Amend Start Time counter-offer received',
+          body: `${actor === 'cleaner' ? 'Cleaner' : 'Client'} proposed ${formatBookingTimeForMessage(proposedStart)} instead of ${formatBookingTimeForMessage(booking.scheduledStart)}.`,
+          data: { booking_id: bookingId },
+        })
+        try {
+          if (actor === 'cleaner') {
+            await loopsEmailService.sendClientAlternateTimeProposed({
+              email: booking.client.user.email,
+              clientName: booking.client.user.name ?? 'Client',
+              cleanerName: booking.cleaner.user.name ?? 'Cleaner',
+              originalStart: booking.scheduledStart,
+              proposedStart,
+            })
+          } else {
+            await loopsEmailService.sendCleanerClientAlternateTimeProposed({
+              email: booking.cleaner.user.email,
+              cleanerName: booking.cleaner.user.name ?? 'Cleaner',
+              clientName: booking.client.user.name ?? 'Client',
+              originalStart: booking.scheduledStart,
+              proposedStart,
+            })
+          }
+        } catch (emailError) {
+          console.error('Failed to send amend counter-proposal email via Loops:', emailError)
+        }
+        return updated
+      }
+
       assertPostConfirmationRescheduleNotUsed(booking)
       assertPostConfirmationRescheduleWindow(booking.scheduledStart)
-      if (booking.proposalContext === 'amend_start') {
-        throw new ServiceError('Counter-proposals are not allowed for Amend Start Time requests', 400)
-      }
       const originalStart = booking.originalScheduledStart ?? booking.scheduledStart
       assertPostConfirmationDateLimit(originalStart, proposedStart)
       if (actor === 'client' && booking.postClientProposals >= 1) {
@@ -504,9 +658,30 @@ export const bookingService = {
         userId: actor === 'cleaner' ? booking.client.userId : booking.cleaner.userId,
         type: 'booking_counter_proposal',
         title: 'Reschedule counter-offer received',
-        body: 'No further countering is allowed once both sides used their single counter.',
+        body: `${actor === 'cleaner' ? 'Cleaner' : 'Client'} proposed ${formatBookingTimeForMessage(proposedStart)} (original ${formatBookingTimeForMessage(booking.scheduledStart)}).`,
         data: { booking_id: bookingId },
       })
+      try {
+        if (actor === 'cleaner') {
+          await loopsEmailService.sendClientAlternateTimeProposed({
+            email: booking.client.user.email,
+            clientName: booking.client.user.name ?? 'Client',
+            cleanerName: booking.cleaner.user.name ?? 'Cleaner',
+            originalStart: booking.scheduledStart,
+            proposedStart,
+          })
+        } else {
+          await loopsEmailService.sendCleanerClientAlternateTimeProposed({
+            email: booking.cleaner.user.email,
+            cleanerName: booking.cleaner.user.name ?? 'Cleaner',
+            clientName: booking.client.user.name ?? 'Client',
+            originalStart: booking.scheduledStart,
+            proposedStart,
+          })
+        }
+      } catch (emailError) {
+        console.error('Failed to send post-confirmation reschedule counter email via Loops:', emailError)
+      }
       return updated
     }
 
@@ -589,7 +764,7 @@ export const bookingService = {
         const updated = await bookingRepo.update(bookingId, {
           scheduledStart: booking.proposedStart,
           scheduledEnd: booking.proposedEnd,
-          ...clearedProposalState(),
+          ...clearedProposalState({ preserveRescheduleUsage: true }),
         })
         await pushInAppNotification({
           userId: isClient ? booking.cleaner.userId : booking.client.userId,
@@ -627,15 +802,8 @@ export const bookingService = {
       const updated = await bookingRepo.update(bookingId, {
         scheduledStart: booking.proposedStart,
         scheduledEnd: booking.proposedEnd,
-        proposedStart: null,
-        proposedEnd: null,
-        proposalBy: null,
-        proposalContext: null,
-        proposalExpiresAt: null,
-        cleanerProposals: 0,
-        clientProposals: 0,
-        postCleanerProposals: 1,
-        postClientProposals: 1,
+        ...clearedProposalState(),
+        ...appliedRescheduleUsageMarker(),
       })
       await resetAuthorizationAfterReschedule(updated.id)
       await pushInAppNotification({
@@ -736,7 +904,7 @@ export const bookingService = {
       }
 
       const updated = await bookingRepo.update(bookingId, {
-        ...clearedProposalState(),
+        ...clearedProposalState({ preserveRescheduleUsage: proposalContext === 'amend_start' }),
       })
       await pushInAppNotification({
         userId: isClient ? booking.cleaner.userId : booking.client.userId,
@@ -783,14 +951,37 @@ export const bookingService = {
         proposalBy: actor,
         proposalContext: 'amend_start',
         proposalExpiresAt,
+        cleanerProposals: actor === 'cleaner' ? 1 : 0,
+        clientProposals: actor === 'client' ? 1 : 0,
       })
       await pushInAppNotification({
         userId: actor === 'cleaner' ? booking.client.userId : booking.cleaner.userId,
         type: 'booking_proposed_new_time',
         title: 'Start time amendment requested',
-        body: `Respond within ${ttlMinutes} minutes. Counter-offers are not allowed for this amendment.`,
+        body: `${actor === 'cleaner' ? 'Cleaner' : 'Client'} proposed ${formatBookingTimeForMessage(proposedStart)} (original ${formatBookingTimeForMessage(booking.scheduledStart)}). Respond within ${ttlMinutes} minutes.`,
         data: { booking_id: bookingId },
       })
+      try {
+        if (actor === 'cleaner') {
+          await loopsEmailService.sendClientAlternateTimeProposed({
+            email: booking.client.user.email,
+            clientName: booking.client.user.name ?? 'Client',
+            cleanerName: booking.cleaner.user.name ?? 'Cleaner',
+            originalStart: booking.scheduledStart,
+            proposedStart,
+          })
+        } else {
+          await loopsEmailService.sendCleanerClientAlternateTimeProposed({
+            email: booking.cleaner.user.email,
+            cleanerName: booking.cleaner.user.name ?? 'Cleaner',
+            clientName: booking.client.user.name ?? 'Client',
+            originalStart: booking.scheduledStart,
+            proposedStart,
+          })
+        }
+      } catch (emailError) {
+        console.error('Failed to send amend request email via Loops:', emailError)
+      }
       return updated
     }
 
@@ -996,9 +1187,11 @@ function assertPostConfirmationProposalOpen(proposalExpiresAt: Date | null) {
 }
 
 function assertPostConfirmationRescheduleNotUsed(booking: BookingWithRelations) {
-  const originalStart = booking.originalScheduledStart
-  if (!originalStart) return
-  if (booking.scheduledStart.getTime() !== originalStart.getTime()) {
+  if (
+    !booking.proposalBy &&
+    booking.postCleanerProposals >= 1 &&
+    booking.postClientProposals >= 1
+  ) {
     throw new ServiceError('This booking has already been rescheduled once. No further reschedules are allowed for this booking.', 400)
   }
 }
@@ -1043,7 +1236,8 @@ function assertAmendRequestStillValid(booking: Awaited<ReturnType<typeof booking
   }
 }
 
-function clearedProposalState() {
+function clearedProposalState(options?: { preserveRescheduleUsage?: boolean }) {
+  const preserveRescheduleUsage = Boolean(options?.preserveRescheduleUsage)
   return {
     proposedStart: null,
     proposedEnd: null,
@@ -1052,9 +1246,28 @@ function clearedProposalState() {
     proposalExpiresAt: null,
     cleanerProposals: 0,
     clientProposals: 0,
-    postCleanerProposals: 0,
-    postClientProposals: 0,
+    postCleanerProposals: preserveRescheduleUsage ? undefined : 0,
+    postClientProposals: preserveRescheduleUsage ? undefined : 0,
   }
+}
+
+function appliedRescheduleUsageMarker() {
+  return {
+    postCleanerProposals: 1,
+    postClientProposals: 1,
+  }
+}
+
+function formatBookingTimeForMessage(value: Date) {
+  return value.toLocaleString('en-IE', {
+    day: 'numeric',
+    month: 'short',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false,
+    timeZone: 'Europe/Nicosia',
+  })
 }
 
 async function resetAuthorizationAfterReschedule(bookingId: string) {
@@ -1120,6 +1333,67 @@ async function releasePaymentAuthorization(
   await paymentRepo.update(paymentId, {
     status: 'failed',
     failedAt: new Date(),
+  })
+}
+
+async function notifyPendingRequestExpired(booking: BookingWithRelations) {
+  const isCleanerProposal = booking.proposalBy === 'cleaner'
+  const isClientProposal = booking.proposalBy === 'client'
+  const cleanerBody = isCleanerProposal
+    ? 'Client did not respond before expiry. The request expired and availability is released.'
+    : isClientProposal
+      ? 'Your request expired because no agreement was reached in time.'
+      : 'This request expired before confirmation.'
+  const clientBody = isCleanerProposal
+    ? 'You did not respond before expiry. The request expired and your card authorization was released.'
+    : isClientProposal
+      ? 'Cleaner did not respond before expiry. The request expired and your card authorization was released.'
+      : 'This request expired because the cleaner did not accept in time.'
+
+  await pushInAppNotification({
+    userId: booking.client.userId,
+    type: 'booking_request_expired',
+    title: 'Booking request expired',
+    body: clientBody,
+    data: { booking_id: booking.id },
+  })
+  await pushInAppNotification({
+    userId: booking.cleaner.userId,
+    type: 'booking_request_expired',
+    title: 'Booking request expired',
+    body: cleanerBody,
+    data: { booking_id: booking.id },
+  })
+  try {
+    await loopsEmailService.sendClientBookingRejectedOrExpired({
+      email: booking.client.user.email,
+      fullName: booking.client.user.name ?? 'Client',
+      cleanerName: booking.cleaner.user.name ?? 'Cleaner',
+    })
+  } catch (emailError) {
+    console.error('Failed to send client booking expired email via Loops:', emailError)
+  }
+}
+
+async function notifyPostConfirmationProposalExpired(booking: BookingWithRelations) {
+  const title = booking.proposalContext === 'amend_start'
+    ? 'Amend Start Time expired'
+    : 'Reschedule request expired'
+  const body = 'No agreement was reached before the cutoff. Original booking remains active.'
+
+  await pushInAppNotification({
+    userId: booking.client.userId,
+    type: 'booking_request_expired',
+    title,
+    body,
+    data: { booking_id: booking.id },
+  })
+  await pushInAppNotification({
+    userId: booking.cleaner.userId,
+    type: 'booking_request_expired',
+    title,
+    body,
+    data: { booking_id: booking.id },
   })
 }
 

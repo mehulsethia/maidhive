@@ -2,11 +2,13 @@ import { requireAuth } from '@/server/auth'
 import { bookingRepo } from '@/server/repositories/booking.repo'
 import { clientRepo } from '@/server/repositories/client.repo'
 import { cleanerRepo } from '@/server/repositories/cleaner.repo'
+import { bookingService } from '@/server/services/booking.service'
 import { sanitizeBookingForRole } from '@/server/services/booking-visibility.service'
 import { ok, err } from '@/server/response'
 
 export const GET = requireAuth(async (_req, ctx, user) => {
   const { id } = await ctx.params
+  await bookingService.reconcileSingleBookingDeadline(id)
   const booking = await bookingRepo.findById(id)
   if (!booking) return err('Booking not found', 404)
 
