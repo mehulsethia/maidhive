@@ -345,6 +345,7 @@ export default function CleanerBookingDetailPage() {
     (booking.status === 'pending' ? 'pre_confirmation' : booking.status === 'accepted' || booking.status === 'confirmed' ? 'post_confirmation' : null)
   const isPostConfirmationProposal = Boolean(hasProposal && proposalContext === 'post_confirmation')
   const isAmendProposal = Boolean(hasProposal && proposalContext === 'amend_start')
+  const hasOpenProposalFlow = hasProposal && ['pending', 'accepted', 'confirmed'].includes(booking.status)
   const isClientPostConfirmationProposal = isPostConfirmationProposal && booking.proposal_by === 'client'
   const isCleanerPostConfirmationProposal = isPostConfirmationProposal && booking.proposal_by === 'cleaner'
   const canPostConfirmProposeAlternative =
@@ -530,7 +531,7 @@ export default function CleanerBookingDetailPage() {
             Client requested Amend Start Time: {formatDate(booking.scheduled_start)} → {formatDate(booking.proposed_start!)}. Accept, decline, or counter once.
           </p>
         )}
-        {!isCancelledPreConfirmation && (canRespondToClientPostConfirmationProposal || canRespondToClientAmendProposal) && proposalCountdownLabel && (
+        {!isCancelledPreConfirmation && hasOpenProposalFlow && proposalCountdownLabel && (
           <p className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
             Response window: {proposalCountdownLabel} remaining.
           </p>

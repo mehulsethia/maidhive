@@ -474,16 +474,28 @@ export default function CleanerDashboardPage() {
               {stats.upcoming.length === 0 ? (
                 <p className="text-sm text-slate-500">No upcoming jobs yet.</p>
               ) : (
-                stats.upcoming.slice(0, 3).map((b) => (
-                  <Link key={b.id} href={`/cleaner/bookings/${b.id}`} className="block rounded-xl border border-slate-200 bg-slate-50 p-3 hover:bg-slate-100">
-                    <div className="mb-1 flex items-center justify-between">
-                      <p className="text-sm font-semibold text-slate-900">{resolveJobTypeTitle(b)}</p>
-                      <BookingStatusBadge status={b.status} proposalBy={b.proposal_by} showPaymentRequiredForUnpaid={false} />
-                    </div>
-                    <p className="text-xs text-slate-500">{formatDate(b.scheduled_start)}</p>
-                    <p className="mt-1 text-sm text-emerald-700 font-semibold">{formatCurrency(b.cleaner_payout)}</p>
-                  </Link>
-                ))
+                stats.upcoming.slice(0, 3).map((b) => {
+                  const hasProposal = Boolean(b.proposed_start && b.proposal_by)
+                  const isActiveProposal = hasProposal && ['pending', 'accepted', 'confirmed'].includes(b.status)
+                  const isAmendProposal = b.proposal_context === 'amend_start'
+                  const proposalActor = b.proposal_by === 'client' ? 'Client' : 'You'
+                  const proposalSummary = isAmendProposal
+                    ? `${proposalActor} requested Amend Start Time: ${formatDate(b.scheduled_start)} → ${formatDate(b.proposed_start ?? b.scheduled_start)}`
+                    : `${proposalActor} proposed: ${formatDate(b.scheduled_start)} → ${formatDate(b.proposed_start ?? b.scheduled_start)}`
+                  return (
+                    <Link key={b.id} href={`/cleaner/bookings/${b.id}`} className="block rounded-xl border border-slate-200 bg-slate-50 p-3 hover:bg-slate-100">
+                      <div className="mb-1 flex items-center justify-between">
+                        <p className="text-sm font-semibold text-slate-900">{resolveJobTypeTitle(b)}</p>
+                        <BookingStatusBadge status={b.status} proposalBy={b.proposal_by} showPaymentRequiredForUnpaid={false} />
+                      </div>
+                      <p className="text-xs text-slate-500">{formatDate(b.scheduled_start)}</p>
+                      {isActiveProposal && (
+                        <p className="mt-1 text-xs font-semibold text-blue-700">{proposalSummary}</p>
+                      )}
+                      <p className="mt-1 text-sm font-semibold text-emerald-700">{formatCurrency(b.cleaner_payout)}</p>
+                    </Link>
+                  )
+                })
               )}
             </CardContent>
           </Card>
@@ -504,17 +516,29 @@ export default function CleanerDashboardPage() {
             <EmptyState title="No bookings yet" description="Your jobs will appear here as clients book services." />
           ) : (
             <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
-              {bookings.slice(0, 6).map((b) => (
-                <Link key={b.id} href={`/cleaner/bookings/${b.id}`} className="rounded-xl border border-slate-200 bg-white p-3 hover:border-primary/40 hover:shadow-sm">
-                  <p className="font-medium text-slate-900">{resolveJobTypeTitle(b)}</p>
-                  <p className="mt-1 text-xs text-slate-500">{formatDate(b.scheduled_start)}</p>
-                  <p className="mt-2 text-xs text-slate-500">{b.city}, {b.postcode}</p>
-                  <div className="mt-2 flex items-center justify-between">
-                    <BookingStatusBadge status={b.status} proposalBy={b.proposal_by} showPaymentRequiredForUnpaid={false} />
-                    <p className="text-sm font-semibold text-slate-900">{formatCurrency(b.cleaner_payout)}</p>
-                  </div>
-                </Link>
-              ))}
+              {bookings.slice(0, 6).map((b) => {
+                const hasProposal = Boolean(b.proposed_start && b.proposal_by)
+                const isActiveProposal = hasProposal && ['pending', 'accepted', 'confirmed'].includes(b.status)
+                const isAmendProposal = b.proposal_context === 'amend_start'
+                const proposalActor = b.proposal_by === 'client' ? 'Client' : 'You'
+                const proposalSummary = isAmendProposal
+                  ? `${proposalActor} requested Amend Start Time: ${formatDate(b.scheduled_start)} → ${formatDate(b.proposed_start ?? b.scheduled_start)}`
+                  : `${proposalActor} proposed: ${formatDate(b.scheduled_start)} → ${formatDate(b.proposed_start ?? b.scheduled_start)}`
+                return (
+                  <Link key={b.id} href={`/cleaner/bookings/${b.id}`} className="rounded-xl border border-slate-200 bg-white p-3 hover:border-primary/40 hover:shadow-sm">
+                    <p className="font-medium text-slate-900">{resolveJobTypeTitle(b)}</p>
+                    <p className="mt-1 text-xs text-slate-500">{formatDate(b.scheduled_start)}</p>
+                    <p className="mt-2 text-xs text-slate-500">{b.city}, {b.postcode}</p>
+                    {isActiveProposal && (
+                      <p className="mt-2 text-xs font-semibold text-blue-700">{proposalSummary}</p>
+                    )}
+                    <div className="mt-2 flex items-center justify-between">
+                      <BookingStatusBadge status={b.status} proposalBy={b.proposal_by} showPaymentRequiredForUnpaid={false} />
+                      <p className="text-sm font-semibold text-slate-900">{formatCurrency(b.cleaner_payout)}</p>
+                    </div>
+                  </Link>
+                )
+              })}
             </div>
           )}
         </CardContent>

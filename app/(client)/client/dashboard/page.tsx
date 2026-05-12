@@ -242,7 +242,15 @@ export default function ClientDashboardPage() {
               </div>
             ) : (
               <div className="space-y-2">
-                {recent.map((booking, index) => (
+                {recent.map((booking, index) => {
+                  const hasProposal = Boolean(booking.proposed_start && booking.proposal_by)
+                  const isActiveProposal = hasProposal && ['pending', 'accepted', 'confirmed'].includes(booking.status)
+                  const isAmendProposal = booking.proposal_context === 'amend_start'
+                  const proposalActor = booking.proposal_by === 'cleaner' ? 'Cleaner' : 'You'
+                  const proposalSummary = isAmendProposal
+                    ? `${proposalActor} requested Amend Start Time: ${formatDate(booking.scheduled_start)} → ${formatDate(booking.proposed_start ?? booking.scheduled_start)}`
+                    : `${proposalActor} proposed: ${formatDate(booking.scheduled_start)} → ${formatDate(booking.proposed_start ?? booking.scheduled_start)}`
+                  return (
                   <Link
                     key={booking.id}
                     href={`/client/bookings/${booking.id}`}
@@ -260,14 +268,15 @@ export default function ClientDashboardPage() {
                     </div>
                     <div className="flex min-w-0 flex-col items-start gap-1 text-left sm:min-w-[11rem] sm:items-end sm:text-right">
                       <BookingStatusBadge status={booking.status} paymentStatus={booking.payment?.status} proposalBy={booking.proposal_by} />
-                      {booking.status === 'pending' && booking.proposal_by === 'cleaner' && (
+                      {isActiveProposal && (
                         <p className="text-xs font-semibold text-blue-700">
-                          Cleaner proposed {formatDate(booking.scheduled_start)} → {formatDate(booking.proposed_start ?? booking.scheduled_start)}
+                          {proposalSummary}
                         </p>
                       )}
                     </div>
                   </Link>
-                ))}
+                  )
+                })}
               </div>
             )}
           </div>

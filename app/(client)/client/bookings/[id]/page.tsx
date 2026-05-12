@@ -296,6 +296,7 @@ export default function ClientBookingDetailPage() {
   const isPending = booking.status === 'pending'
   const hasProposal = Boolean(booking.proposed_start && booking.proposal_by)
   const cleanerProposed = booking.proposal_by === 'cleaner'
+  const clientProposed = booking.proposal_by === 'client'
   const scheduledStartMs = new Date(booking.scheduled_start).getTime()
   const millisUntilStart = scheduledStartMs - Date.now()
   const hasStarted = Number.isFinite(scheduledStartMs) && millisUntilStart <= 0
@@ -319,7 +320,8 @@ export default function ClientBookingDetailPage() {
             ? (booking.client_proposals ?? 0) < 1
             : false
     )
-  const canRespondToCleanerProposal = hasProposal && cleanerProposed && ['pending', 'accepted', 'confirmed'].includes(booking.status)
+  const hasOpenProposalFlow = hasProposal && ['pending', 'accepted', 'confirmed'].includes(booking.status)
+  const canRespondToCleanerProposal = hasOpenProposalFlow && cleanerProposed
   const canReportInProgress = booking.status === 'in_progress'
   const isCompletedAwaitingRelease = booking.status === 'completed' && paymentStatus !== 'transferred'
   const isCompletedReleased = booking.status === 'completed' && paymentStatus === 'transferred'
@@ -464,16 +466,18 @@ export default function ClientBookingDetailPage() {
               </CardContent>
             </Card>
 
-            {canRespondToCleanerProposal && (
+            {hasOpenProposalFlow && (
               <p className="rounded-xl border border-blue-200 bg-blue-50 px-3 py-2 text-sm text-blue-700">
                 {cleanerProposed
                   ? isAmendProposal
                     ? `Cleaner requested Amend Start Time: ${formatDate(booking.scheduled_start)} → ${formatDate(booking.proposed_start!)}. Accept, decline, or counter once before expiry.`
                     : `Cleaner proposed ${formatDate(booking.scheduled_start)} → ${formatDate(booking.proposed_start!)}. Accept, decline, or counter once before expiry.`
-                  : `You proposed ${formatDate(booking.proposed_start!)}. Waiting for cleaner response.`}
+                  : clientProposed && isAmendProposal
+                    ? `You requested Amend Start Time: ${formatDate(booking.scheduled_start)} → ${formatDate(booking.proposed_start!)}. Waiting for cleaner response.`
+                    : `You proposed a reschedule: ${formatDate(booking.scheduled_start)} → ${formatDate(booking.proposed_start!)}. Waiting for cleaner response before the 24-hour cutoff.`}
               </p>
             )}
-            {canRespondToCleanerProposal && proposalCountdownLabel && (
+            {hasOpenProposalFlow && proposalCountdownLabel && (
               <p className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
                 Response window: {proposalCountdownLabel} remaining.
               </p>
