@@ -8,12 +8,13 @@ export type CleanerLifecycleStatus =
 export function deriveCleanerLifecycleStatus(input: {
   status?: string | null
   stripeOnboardingComplete?: boolean | null
+  profileComplete?: boolean | null
 }): CleanerLifecycleStatus {
   const status = String(input.status ?? '').toLowerCase()
   if (status === 'rejected') return 'rejected'
   if (status === 'suspended') return 'suspended'
   if (status === 'approved') {
-    return input.stripeOnboardingComplete ? 'live' : 'approved'
+    return input.stripeOnboardingComplete && input.profileComplete ? 'live' : 'approved'
   }
   return 'pending_approval'
 }

@@ -23,7 +23,7 @@ export const GET = requireAdmin(async () => {
     db.cleaner.count(),
     db.cleaner.count({ where: { status: 'pending' } }),
     db.cleaner.count({ where: { status: 'approved' } }),
-    db.cleaner.count({ where: { status: 'approved', stripeOnboardingComplete: true } }),
+    db.cleaner.count({ where: { status: 'approved', stripeOnboardingComplete: true, profileComplete: true } }),
     db.cleaner.count({ where: { status: 'rejected' } }),
     db.cleaner.count({ where: { status: 'suspended' } }),
     db.booking.count(),

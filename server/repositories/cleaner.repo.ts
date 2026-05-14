@@ -118,9 +118,12 @@ export const cleanerRepo = {
         : params.status === 'pending_approval'
           ? { status: 'pending' }
           : params.status === 'live'
-            ? { status: 'approved', stripeOnboardingComplete: true }
+            ? { status: 'approved', stripeOnboardingComplete: true, profileComplete: true }
             : params.status === 'approved'
-              ? { status: 'approved', stripeOnboardingComplete: false }
+              ? {
+                  status: 'approved',
+                  OR: [{ stripeOnboardingComplete: false }, { profileComplete: false }],
+                }
               : { status: params.status }
     return Promise.all([
       db.cleaner.findMany({

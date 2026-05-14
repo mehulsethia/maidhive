@@ -65,6 +65,7 @@ export default function CleanerDashboardPage() {
             deriveCleanerLifecycleStatus({
               status: cleaner?.status,
               stripeOnboardingComplete: cleaner?.stripe_onboarding_complete ?? cleaner?.stripeOnboardingComplete,
+              profileComplete: cleaner?.profile_complete ?? cleaner?.profileComplete,
             }),
         )
         setStripeConnected(Boolean(cleaner?.stripe_onboarding_complete ?? cleaner?.stripeOnboardingComplete))

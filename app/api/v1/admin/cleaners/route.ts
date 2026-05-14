@@ -45,6 +45,7 @@ export const GET = requireAdmin(async (req: NextRequest) => {
     const lifecycleStatus = deriveCleanerLifecycleStatus({
       status: cleaner.status,
       stripeOnboardingComplete: cleaner.stripeOnboardingComplete,
+      profileComplete: cleaner.profileComplete,
     })
     const completedJobs = completedJobsByCleanerId.get(cleaner.id) ?? 0
     return {

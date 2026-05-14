@@ -3,6 +3,8 @@ import { db } from '../db'
 import { ServiceError } from './booking.service'
 import { loopsEmailService } from './loops-email.service'
 import { pushInAppNotification } from './in-app-notification.service'
+import { availabilityRepo } from '../repositories/availability.repo'
+import { validateCleanerSubmissionRequirements } from './cleaner-onboarding.service'
 import type { User } from '@prisma/client'
 import {
   CleanerRejectionReasonCode,
@@ -24,6 +26,20 @@ export const cleanerService = {
     const cleaner = await cleanerRepo.findById(cleanerId)
     if (!cleaner) throw new ServiceError('Cleaner not found', 404)
     if (cleaner.status !== 'pending') throw new ServiceError('Cleaner is not in pending status', 400)
+    if (action === 'approve') {
+      const schedules = await availabilityRepo.getSchedule(cleaner.id)
+      const hasAvailabilitySlots = schedules.some((s) => s.isActive)
+      const submissionValidation = validateCleanerSubmissionRequirements({ cleaner, hasAvailabilitySlots })
+      if (!submissionValidation.valid) {
+        throw new ServiceError(
+          `Cleaner profile is incomplete and cannot be approved. Missing: ${submissionValidation.missingFields.join(', ')}.`,
+          400,
+        )
+      }
+      if (!cleaner.profileComplete) {
+        throw new ServiceError('Cleaner profile is not submitted yet. Ask the cleaner to submit onboarding first.', 400)
+      }
+    }
     const resolvedRejectionMessage = composeCleanerRejectionMessage({
       reasonCode: rejectionReasonCode,
       customMessage: rejectionCustomMessage ?? rejectionReason,

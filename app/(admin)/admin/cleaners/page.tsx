@@ -76,6 +76,7 @@ function cleanerLifecycle(cleaner: AdminCleaner): Tab {
   return deriveCleanerLifecycleStatus({
     status: cleaner.status,
     stripeOnboardingComplete: cleaner.stripe_onboarding_complete,
+    profileComplete: cleaner.profile_complete,
   }) as Tab
 }
 
@@ -340,6 +341,7 @@ export default function AdminCleanersPage() {
       const newLifecycle = deriveCleanerLifecycleStatus({
         status: res.data?.status,
         stripeOnboardingComplete: cleaner.stripe_onboarding_complete,
+        profileComplete: cleaner.profile_complete,
       })
       toast.success(
         newLifecycle === 'suspended'

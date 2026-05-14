@@ -149,6 +149,7 @@ function CleanerProfilePageContent() {
           deriveCleanerLifecycleStatus({
             status: c.status,
             stripeOnboardingComplete: c.stripe_onboarding_complete ?? c.stripeOnboardingComplete,
+            profileComplete: c.profile_complete ?? c.profileComplete,
           }),
       )
       setRejectionReason(c.rejection_reason ?? '')

@@ -92,6 +92,7 @@ export const GET = requireCleaner(async (_req, _ctx, user) => {
       lifecycle_status: deriveCleanerLifecycleStatus({
         status: cleaner.status,
         stripeOnboardingComplete: cleaner.stripeOnboardingComplete,
+        profileComplete: cleaner.profileComplete,
       }),
     },
     onboarding,
@@ -215,6 +216,7 @@ export const PATCH = requireCleaner(async (req: NextRequest, _ctx, user) => {
       lifecycle_status: deriveCleanerLifecycleStatus({
         status: updated.status,
         stripeOnboardingComplete: updated.stripeOnboardingComplete,
+        profileComplete: updated.profileComplete,
       }),
     },
     onboarding,
