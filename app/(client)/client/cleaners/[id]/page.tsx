@@ -164,6 +164,7 @@ export default function CleanerProfilePage() {
   const location = cleaner.service_areas?.[0]?.city ?? ''
   const nextAvailable = closestSlots[0]
   const cleanerImageUrl = (cleaner as any)?.profile_image_url ?? (cleaner as any)?.profileImageUrl ?? cleaner.user?.avatar_url
+  const showNewCleanerBadge = cleaner.new_cleaner_badge ?? cleaner.total_jobs < 5
 
   function suppliesText(value?: string) {
     if (value === 'own_supplies') return 'Brings own supplies'
@@ -202,6 +203,14 @@ export default function CleanerProfilePage() {
                 <h1 className={`${displayFont.className} text-xl font-extrabold tracking-[-0.03em] text-white sm:text-3xl lg:text-4xl`}>
                   {cleanerName}
                 </h1>
+                {showNewCleanerBadge && (
+                  <span
+                    title="Newly approved cleaner on MaidHive."
+                    className="inline-flex items-center rounded-full border border-white/35 bg-white/15 px-2.5 py-1 text-[11px] font-semibold tracking-[0.01em] text-white/90"
+                  >
+                    New Cleaner
+                  </span>
+                )}
                 <button
                   type="button"
                   onClick={toggleFavorite}
@@ -229,6 +238,9 @@ export default function CleanerProfilePage() {
                   {formatCurrency(cleaner.hourly_rate)} / hr
                 </p>
                 <p className="mt-1 text-sm text-white/80">{deferredReviews.length} reviews · {cleaner.total_jobs} jobs completed</p>
+                {showNewCleanerBadge && (
+                  <p className="mt-1 text-xs text-white/70">Newly approved cleaner on MaidHive.</p>
+                )}
                 <div className="mt-3 flex flex-col gap-2 sm:flex-row">
                   <Button onClick={() => router.push(`/client/book/${id}?reset=1&step=1`)} className="h-9 rounded-full bg-[#f4b400] px-4 text-slate-950 hover:bg-[#ffca3a]">
                     Book Service

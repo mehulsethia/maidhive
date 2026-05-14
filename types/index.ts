@@ -90,6 +90,7 @@ export interface CleanerRead {
   stripe_onboarding_complete: boolean
   stripe_account_id?: string
   total_jobs: number
+  new_cleaner_badge?: boolean
   average_rating?: number
   created_at: string
   user?: UserRead
@@ -101,6 +102,7 @@ export interface CleanerSummary {
   user_id: string
   hourly_rate: number
   total_jobs: number
+  new_cleaner_badge?: boolean
   average_rating?: number
   years_experience?: number
   transport_mode?: 'own_car' | 'bus_walk' | 'requires_pickup'

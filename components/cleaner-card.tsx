@@ -42,6 +42,7 @@ export function CleanerCard({ cleaner, isFavorite, onToggleFavorite }: CleanerCa
   const hasRating = averageRating > 0
   const displayRating = hasRating ? averageRating.toFixed(1) : null
   const displayCount = hasRating ? `(${reviewCount})` : '(0)'
+  const showNewCleanerBadge = cleaner.new_cleaner_badge ?? reviewCount < 5
 
   return (
     <Card className="rounded-[20px] border-[#ecedf3] bg-white shadow-[0_1px_2px_rgba(15,23,51,0.04),0_12px_32px_-12px_rgba(15,23,51,0.10)]">
@@ -58,9 +59,19 @@ export function CleanerCard({ cleaner, isFavorite, onToggleFavorite }: CleanerCa
             <div className="min-w-0 flex-1">
               <div className="flex items-start justify-between gap-2.5 sm:gap-3">
                 <div className="min-w-0 pr-2">
-                  <h3 className="truncate text-[18px] leading-[1.15] font-bold tracking-[-0.01em] text-[#0f1733]">
-                    {name}
-                  </h3>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <h3 className="truncate text-[18px] leading-[1.15] font-bold tracking-[-0.01em] text-[#0f1733]">
+                      {name}
+                    </h3>
+                    {showNewCleanerBadge && (
+                      <span
+                        title="Newly approved cleaner on MaidHive."
+                        className="inline-flex shrink-0 items-center rounded-full border border-[#dbe1f3] bg-[#f5f7ff] px-2 py-0.5 text-[11px] font-semibold text-[#51608a]"
+                      >
+                        New Cleaner
+                      </span>
+                    )}
+                  </div>
                   <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
                     <span className="inline-flex items-center gap-0.5 text-[#f5b400]">
                       {Array.from({ length: 5 }).map((_, index) => {

@@ -1,6 +1,7 @@
 import { cleanerRepo } from '@/server/repositories/cleaner.repo'
 import { db } from '@/server/db'
 import { ok, err } from '@/server/response'
+import { isNewCleanerByCompletedJobs } from '@/lib/cleaner-badges'
 
 export async function GET(_req: Request, ctx: { params: Promise<{ id: string }> }) {
   const { id } = await ctx.params
@@ -21,6 +22,7 @@ export async function GET(_req: Request, ctx: { params: Promise<{ id: string }> 
         status: { in: ['completed', 'disputed'] },
       },
       select: {
+        status: true,
         scheduledStart: true,
         startedAt: true,
       },
@@ -56,6 +58,7 @@ export async function GET(_req: Request, ctx: { params: Promise<{ id: string }> 
   }, 0)
   const avgResponseMinutes =
     respondedBookings.length > 0 ? Math.round(totalResponseMinutes / respondedBookings.length) : 0
+  const completedOnlyJobs = completedBookings.filter((booking) => booking.status === 'completed').length
 
   const sanitizedUser = cleaner.user
     ? {
@@ -70,6 +73,7 @@ export async function GET(_req: Request, ctx: { params: Promise<{ id: string }> 
   return ok({
     ...cleaner,
     totalJobs: completedBookings.length,
+    newCleanerBadge: isNewCleanerByCompletedJobs(completedOnlyJobs),
     averageRating: reviewAgg._avg.rating ?? null,
     user: sanitizedUser,
     on_time_percentage: onTimePercentage,

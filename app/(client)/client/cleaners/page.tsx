@@ -28,6 +28,7 @@ type CleanerVM = CleanerSummary & {
   skills: string[]
   transport_mode?: 'own_car' | 'bus_walk' | 'requires_pickup'
   cleaning_supplies?: 'own_supplies' | 'client_supplies'
+  new_cleaner_badge?: boolean
 }
 
 const displayFont = Bricolage_Grotesque({ subsets: ['latin'], weight: ['400', '500', '700', '800'] })
@@ -323,9 +324,19 @@ export default function ClientCleanersPage() {
                       fallback="C"
                     />
                     <div className="min-w-0">
-                      <h3 className={`${displayFont.className} truncate text-[20px] font-bold tracking-[-0.02em] text-[#0f1733]`}>
-                        {cleaner.name}
-                      </h3>
+                      <div className="flex flex-wrap items-center gap-2">
+                        <h3 className={`${displayFont.className} truncate text-[20px] font-bold tracking-[-0.02em] text-[#0f1733]`}>
+                          {cleaner.name}
+                        </h3>
+                        {(cleaner.new_cleaner_badge ?? Number(cleaner.total_jobs ?? 0) < 5) && (
+                          <span
+                            title="Newly approved cleaner on MaidHive."
+                            className="inline-flex shrink-0 items-center rounded-full border border-[#dbe1f3] bg-[#f5f7ff] px-2 py-0.5 text-[11px] font-semibold text-[#51608a]"
+                          >
+                            New Cleaner
+                          </span>
+                        )}
+                      </div>
                       <div className="mt-1 flex items-center gap-2">
                         <span className="inline-flex items-center gap-0.5 text-[#f5b400]">
                           {Array.from({ length: 5 }).map((_, idx) => {
