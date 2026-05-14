@@ -1,5 +1,8 @@
 import type { Metadata } from 'next'
 
+export const dynamic = 'force-static'
+export const revalidate = false
+
 export const metadata: Metadata = {
   title: 'Responsible Disclosure Policy — MaidHive',
   description: 'MaidHive\u2019s policy for responsible security vulnerability disclosure.',
