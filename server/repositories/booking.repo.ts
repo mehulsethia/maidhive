@@ -168,12 +168,13 @@ export const bookingRepo = {
     ])
   },
 
-  findActiveForCleaner: (cleanerId: string, start: Date, end: Date) =>
+  findActiveForCleaner: (cleanerId: string, start: Date, end: Date, excludeBookingId?: string) =>
     {
       const now = new Date()
       return db.booking.findMany({
         where: {
           cleanerId,
+          ...(excludeBookingId ? { NOT: { id: excludeBookingId } } : {}),
           AND: [
             {
               OR: [

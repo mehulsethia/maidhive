@@ -57,6 +57,10 @@ export const availabilityService = {
     cleanerId: string,
     dateStr: string,
     durationHours: number,
+    options?: {
+      excludeBookingId?: string
+      allowShortNotice?: boolean
+    },
   ): Promise<TimeSlot[]> {
     const dayOfWeek = isoWeekdayForCyprusDate(dateStr) // 1=Mon...7=Sun
 
@@ -68,7 +72,7 @@ export const availabilityService = {
     const [schedules, blockedTimes, existingBookings] = await Promise.all([
       availabilityRepo.getSchedule(cleanerId),
       availabilityRepo.getBlockedTimesInRange(cleanerId, dayStartUTC, dayEndUTC),
-      bookingRepo.findActiveForCleaner(cleanerId, dayStartUTC, dayEndUTC),
+      bookingRepo.findActiveForCleaner(cleanerId, dayStartUTC, dayEndUTC, options?.excludeBookingId),
     ])
 
     const daySchedules = schedules
@@ -80,6 +84,7 @@ export const availabilityService = {
     const durationMs = durationHours * 60 * 60 * 1000
     const now = Date.now()
     const minBookableStart = now + 2 * 60 * 60 * 1000
+    const enforceLeadTime = !options?.allowShortNotice
     const allSlots: TimeSlot[] = []
 
     for (const schedule of daySchedules) {
@@ -106,7 +111,7 @@ export const availabilityService = {
         const overflows = slotEnd.getTime() > windowEndTime
 
         // Lead time check (2h from now)
-        const isTooSoon = cursor < minBookableStart
+        const isTooSoon = enforceLeadTime ? cursor < minBookableStart : cursor < now
 
         // End buffer check (1h before window end)
         const isTooLate = cursor > maxBookableStart
@@ -116,6 +121,7 @@ export const availabilityService = {
           !overflows &&
           (blockedTimes.some((b) => b.startDatetime < slotEnd && b.endDatetime > slotStart) ||
             existingBookings.some((b) => {
+              if (options?.excludeBookingId && b.id === options.excludeBookingId) return false
               const existingBufferedStart = new Date(b.scheduledStart.getTime() - BOOKING_PRE_BUFFER_MS)
               const existingBufferedEnd = new Date(b.scheduledEnd.getTime() + BOOKING_POST_BUFFER_MS)
               const overlapsScheduled = existingBufferedStart < slotBufferedEnd && existingBufferedEnd > slotBufferedStart

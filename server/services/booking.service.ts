@@ -90,6 +90,7 @@ export const bookingService = {
 
     if (postConfirmationProposalExpired) {
       const shouldPreserveRescheduleUsage = proposalContext === 'amend_start'
+      const shouldPreserveAmendUsage = proposalContext === 'amend_start'
       const cleared = await db.booking.updateMany({
         where: {
           id: bookingId,
@@ -97,7 +98,10 @@ export const bookingService = {
           proposalContext: { in: ['post_confirmation', 'amend_start'] },
           proposalExpiresAt: { lt: new Date(nowMs) },
         },
-        data: clearedProposalState({ preserveRescheduleUsage: shouldPreserveRescheduleUsage }),
+        data: clearedProposalState({
+          preserveRescheduleUsage: shouldPreserveRescheduleUsage,
+          preserveAmendUsage: shouldPreserveAmendUsage,
+        }),
       })
       if (cleared.count > 0) {
         await notifyPostConfirmationProposalExpired(booking)
@@ -584,52 +588,7 @@ export const bookingService = {
 
       const isAmendRequest = booking.proposalContext === 'amend_start'
       if (isAmendRequest) {
-        assertAmendRequestStillValid(booking)
-        assertAmendWindow(booking.scheduledStart, proposedStart)
-        if (actor === 'client' && booking.clientProposals >= 1) {
-          throw new ServiceError('Client can only counter once for this amendment', 400)
-        }
-        if (actor === 'cleaner' && booking.cleanerProposals >= 1) {
-          throw new ServiceError('Cleaner can only counter once for this amendment', 400)
-        }
-        const updated = await bookingRepo.update(bookingId, {
-          proposedStart,
-          proposedEnd,
-          proposalBy: actor,
-          proposalContext: 'amend_start',
-          proposalExpiresAt: booking.proposalExpiresAt,
-          cleanerProposals: actor === 'cleaner' ? { increment: 1 } : undefined,
-          clientProposals: actor === 'client' ? { increment: 1 } : undefined,
-        })
-        await pushInAppNotification({
-          userId: actor === 'cleaner' ? booking.client.userId : booking.cleaner.userId,
-          type: 'booking_counter_proposal',
-          title: 'Amend Start Time counter-offer received',
-          body: `${actor === 'cleaner' ? 'Cleaner' : 'Client'} proposed ${formatBookingTimeForMessage(proposedStart)} instead of ${formatBookingTimeForMessage(booking.scheduledStart)}.`,
-          data: { booking_id: bookingId },
-        })
-        try {
-          if (actor === 'cleaner') {
-            await loopsEmailService.sendClientAlternateTimeProposed({
-              email: booking.client.user.email,
-              clientName: booking.client.user.name ?? 'Client',
-              cleanerName: booking.cleaner.user.name ?? 'Cleaner',
-              originalStart: booking.scheduledStart,
-              proposedStart,
-            })
-          } else {
-            await loopsEmailService.sendCleanerClientAlternateTimeProposed({
-              email: booking.cleaner.user.email,
-              cleanerName: booking.cleaner.user.name ?? 'Cleaner',
-              clientName: booking.client.user.name ?? 'Client',
-              originalStart: booking.scheduledStart,
-              proposedStart,
-            })
-          }
-        } catch (emailError) {
-          console.error('Failed to send amend counter-proposal email via Loops:', emailError)
-        }
-        return updated
+        throw new ServiceError('Counter-offers are not allowed for Amend Start Time. Accept or decline this amendment request.', 400)
       }
 
       assertPostConfirmationRescheduleNotUsed(booking)
@@ -764,7 +723,9 @@ export const bookingService = {
         const updated = await bookingRepo.update(bookingId, {
           scheduledStart: booking.proposedStart,
           scheduledEnd: booking.proposedEnd,
-          ...clearedProposalState({ preserveRescheduleUsage: true }),
+          ...clearedProposalState({ preserveRescheduleUsage: true, preserveAmendUsage: true }),
+          cleanerProposals: 1,
+          clientProposals: 1,
         })
         await pushInAppNotification({
           userId: isClient ? booking.cleaner.userId : booking.client.userId,
@@ -904,7 +865,10 @@ export const bookingService = {
       }
 
       const updated = await bookingRepo.update(bookingId, {
-        ...clearedProposalState({ preserveRescheduleUsage: proposalContext === 'amend_start' }),
+        ...clearedProposalState({
+          preserveRescheduleUsage: proposalContext === 'amend_start',
+          preserveAmendUsage: proposalContext === 'amend_start',
+        }),
       })
       await pushInAppNotification({
         userId: isClient ? booking.cleaner.userId : booking.client.userId,
@@ -935,24 +899,42 @@ export const bookingService = {
       if (booking.proposalBy) {
         throw new ServiceError('Another proposal is already active for this booking', 400)
       }
+      const actor = isCleaner ? 'cleaner' : 'client'
+      if (booking.cleanerProposals >= 1 && booking.clientProposals >= 1) {
+        throw new ServiceError('Amend Start Time has already been finalised for this booking. No further amendments are allowed in MVP.', 400)
+      }
+      if (actor === 'cleaner' && booking.cleanerProposals >= 1) {
+        throw new ServiceError('Cleaner has already used the single Amend Start Time request for this booking.', 400)
+      }
+      if (actor === 'client' && booking.clientProposals >= 1) {
+        throw new ServiceError('Client has already used the single Amend Start Time request for this booking.', 400)
+      }
       const proposedStart = parseProposedStart(payload.proposed_start)
       assertHalfHourBoundary(proposedStart)
       assertAmendWindow(booking.scheduledStart, proposedStart)
       const proposedEnd = new Date(proposedStart.getTime() + Number(booking.durationHours) * 60 * 60 * 1000)
-      await validateBookingWindow(booking.cleanerId, proposedStart, proposedEnd)
+      await validateBookingWindow(
+        booking.cleanerId,
+        proposedStart,
+        proposedEnd,
+        {
+          enforceMaxAdvanceWindow: false,
+          excludeBookingId: booking.id,
+          skipMinLeadTime: true,
+        },
+      )
 
       const hoursUntilBooking = (booking.scheduledStart.getTime() - Date.now()) / (60 * 60 * 1000)
       const ttlMinutes = hoursUntilBooking < 2 ? AMEND_FAST_RESPONSE_MINUTES : AMEND_STANDARD_RESPONSE_MINUTES
       const proposalExpiresAt = new Date(Date.now() + ttlMinutes * 60 * 1000)
-      const actor = isCleaner ? 'cleaner' : 'client'
       const updated = await bookingRepo.update(bookingId, {
         proposedStart,
         proposedEnd,
         proposalBy: actor,
         proposalContext: 'amend_start',
         proposalExpiresAt,
-        cleanerProposals: actor === 'cleaner' ? 1 : 0,
-        clientProposals: actor === 'client' ? 1 : 0,
+        cleanerProposals: actor === 'cleaner' ? { increment: 1 } : undefined,
+        clientProposals: actor === 'client' ? { increment: 1 } : undefined,
       })
       await pushInAppNotification({
         userId: actor === 'cleaner' ? booking.client.userId : booking.cleaner.userId,
@@ -1225,7 +1207,7 @@ function assertAmendWindow(currentStart: Date, proposedStart: Date) {
 
   const shiftHours = Math.abs(proposedStart.getTime() - currentStart.getTime()) / (60 * 60 * 1000)
   if (shiftHours > AMEND_MAX_SHIFT_HOURS) {
-    throw new ServiceError(`Amend Start Time can only shift by +/-${AMEND_MAX_SHIFT_HOURS} hours`, 400)
+    throw new ServiceError('Amend Start Time can only shift by up to 3 hours from the current scheduled start time.', 400)
   }
 }
 
@@ -1236,16 +1218,17 @@ function assertAmendRequestStillValid(booking: Awaited<ReturnType<typeof booking
   }
 }
 
-function clearedProposalState(options?: { preserveRescheduleUsage?: boolean }) {
+function clearedProposalState(options?: { preserveRescheduleUsage?: boolean; preserveAmendUsage?: boolean }) {
   const preserveRescheduleUsage = Boolean(options?.preserveRescheduleUsage)
+  const preserveAmendUsage = Boolean(options?.preserveAmendUsage)
   return {
     proposedStart: null,
     proposedEnd: null,
     proposalBy: null,
     proposalContext: null,
     proposalExpiresAt: null,
-    cleanerProposals: 0,
-    clientProposals: 0,
+    cleanerProposals: preserveAmendUsage ? undefined : 0,
+    clientProposals: preserveAmendUsage ? undefined : 0,
     postCleanerProposals: preserveRescheduleUsage ? undefined : 0,
     postClientProposals: preserveRescheduleUsage ? undefined : 0,
   }
@@ -1666,7 +1649,11 @@ async function validateBookingWindow(
   cleanerId: string,
   scheduledStart: Date,
   scheduledEnd: Date,
-  options?: { enforceMaxAdvanceWindow?: boolean },
+  options?: {
+    enforceMaxAdvanceWindow?: boolean
+    excludeBookingId?: string
+    skipMinLeadTime?: boolean
+  },
 ) {
   if (Number.isNaN(scheduledStart.getTime())) {
     throw new ServiceError('Invalid scheduled_start datetime', 422)
@@ -1682,7 +1669,7 @@ async function validateBookingWindow(
   }
 
   const leadTimeCutoff = now + 2 * 60 * 60 * 1000
-  if (scheduledStart.getTime() < leadTimeCutoff) {
+  if (!options?.skipMinLeadTime && scheduledStart.getTime() < leadTimeCutoff) {
     throw new ServiceError('Selected time must be at least 2 hours from now', 422)
   }
 
@@ -1701,7 +1688,7 @@ async function validateBookingWindow(
   const [schedules, blockedTimes, existingBookings] = await Promise.all([
     availabilityRepo.getSchedule(cleanerId),
     availabilityRepo.getBlockedTimesInRange(cleanerId, dayStart, dayEnd),
-    bookingRepo.findActiveForCleaner(cleanerId, dayStart, dayEnd),
+    bookingRepo.findActiveForCleaner(cleanerId, dayStart, dayEnd, options?.excludeBookingId),
   ])
 
   const dayOfWeek = isoWeekday(new Date(dateStr + 'T00:00:00Z'))

@@ -77,6 +77,7 @@ export const addBlockedTimeSchema = z.object({
 export const availableSlotsQuerySchema = z.object({
   date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Must be YYYY-MM-DD'),
   duration_hours: z.coerce.number().min(1),
+  exclude_booking_id: z.string().uuid().optional(),
 })
 
 export const availableDatesQuerySchema = z.object({

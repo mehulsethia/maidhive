@@ -309,8 +309,14 @@ export const availabilityApi = {
     request<APIResponse<any>>('/availability/me/blocked', { method: 'POST', body: JSON.stringify(body) }),
   deleteBlocked: (id: string) =>
     request<APIResponse<null>>(`/availability/me/blocked/${id}`, { method: 'DELETE' }),
-  getSlots: (cleanerId: string, date: string, durationHours: number) => {
+  getSlots: (
+    cleanerId: string,
+    date: string,
+    durationHours: number,
+    options?: { excludeBookingId?: string },
+  ) => {
     const qs = new URLSearchParams({ date, duration_hours: String(durationHours) })
+    if (options?.excludeBookingId) qs.set('exclude_booking_id', options.excludeBookingId)
     return request<{ success: boolean; data: { start: string; end: string; disabled?: boolean }[] }>(
       `/availability/${cleanerId}/slots?${qs}`,
     )

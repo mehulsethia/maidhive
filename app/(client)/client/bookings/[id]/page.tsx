@@ -44,6 +44,9 @@ const SERVICE_LABELS: Record<string, string> = {
 }
 const RESCHEDULE_CUTOFF_HOURS = 24
 const RESCHEDULE_CUTOFF_MS = RESCHEDULE_CUTOFF_HOURS * 60 * 60 * 1000
+const AMEND_MAX_SHIFT_MS = 3 * 60 * 60 * 1000
+const PHONE_REVEAL_PRE_START_MS = 6 * 60 * 60 * 1000
+const PHONE_REVEAL_POST_END_MS = 30 * 60 * 1000
 const DISPUTE_WINDOW_HOURS = Number(process.env.NEXT_PUBLIC_DISPUTE_WINDOW_HOURS ?? 24)
 const DISPUTE_WINDOW_MS = DISPUTE_WINDOW_HOURS * 60 * 60 * 1000
 
@@ -70,6 +73,10 @@ function pendingValidityLabel(booking: BookingRead) {
     year: 'numeric',
   })
   return `This request expires on ${validUntilText}. If the cleaner does not respond, the booking request will expire automatically and your card authorisation will be released.`
+}
+
+function cyprusDateStr(date: Date) {
+  return new Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/Nicosia' }).format(date)
 }
 
 export default function ClientBookingDetailPage() {
@@ -138,8 +145,14 @@ export default function ClientBookingDetailPage() {
       return
     }
 
+    const isAmendContext = booking.proposal_context === 'amend_start'
     availabilityApi
-      .getSlots(booking.cleaner_id, counterDate, booking.duration_hours)
+      .getSlots(
+        booking.cleaner_id,
+        counterDate,
+        booking.duration_hours,
+        isAmendContext ? { excludeBookingId: booking.id } : undefined,
+      )
       .then((res) => {
         const options = (res.data ?? [])
           .filter((slot) => !slot.disabled)
@@ -167,7 +180,12 @@ export default function ClientBookingDetailPage() {
     }
 
     availabilityApi
-      .getSlots(booking.cleaner_id, proposalDate, booking.duration_hours)
+      .getSlots(
+        booking.cleaner_id,
+        proposalDate,
+        booking.duration_hours,
+        proposalAction === 'amend_start_time' ? { excludeBookingId: booking.id } : undefined,
+      )
       .then((res) => {
         const options = (res.data ?? [])
           .filter((slot) => !slot.disabled)
@@ -304,7 +322,9 @@ export default function ClientBookingDetailPage() {
   const within24HoursBeforeStart = Number.isFinite(scheduledStartMs) && millisUntilStart > 0 && millisUntilStart <= RESCHEDULE_CUTOFF_MS
   const hasAlreadyRescheduled = (booking.post_cleaner_proposals ?? 0) >= 1 && (booking.post_client_proposals ?? 0) >= 1
   const canRescheduleBooking = booking.status === 'confirmed' && moreThan24HoursAway && !hasStarted && !hasProposal && !hasAlreadyRescheduled
-  const canAmendStartTime = booking.status === 'confirmed' && within24HoursBeforeStart && !hasProposal
+  const clientAmendRequestUsed = (booking.client_proposals ?? 0) >= 1
+  const amendFinalised = (booking.client_proposals ?? 0) >= 1 && (booking.cleaner_proposals ?? 0) >= 1
+  const canAmendStartTime = booking.status === 'confirmed' && within24HoursBeforeStart && !hasProposal && !clientAmendRequestUsed && !amendFinalised
   const canCancelConfirmedBooking = booking.status === 'confirmed' && !hasStarted
   const proposalContext =
     booking.proposal_context ??
@@ -317,7 +337,7 @@ export default function ClientBookingDetailPage() {
         : proposalContext === 'post_confirmation'
           ? moreThan24HoursAway && (booking.post_client_proposals ?? 0) < 1
           : proposalContext === 'amend_start'
-            ? (booking.client_proposals ?? 0) < 1
+            ? false
             : false
     )
   const hasOpenProposalFlow = hasProposal && ['pending', 'accepted', 'confirmed'].includes(booking.status)
@@ -341,10 +361,20 @@ export default function ClientBookingDetailPage() {
     : maxAlternativeProposalDateInputValue(booking.original_scheduled_start ?? booking.scheduled_start)
   const showChat = isChatActiveForBooking(booking)
   const chatIsReadOnly = isChatReadOnly(booking.scheduled_end)
-  const sixHoursBeforeStart = Date.now() >= new Date(booking.scheduled_start).getTime() - 6 * 60 * 60 * 1000
+  const scheduledEndMs = new Date(booking.scheduled_end).getTime()
+  const createdAtMs = new Date(booking.created_at).getTime()
+  const sixHoursBeforeStart = nowTick >= scheduledStartMs - PHONE_REVEAL_PRE_START_MS
+  const sameDayCreated =
+    Number.isFinite(createdAtMs) &&
+    Number.isFinite(scheduledStartMs) &&
+    cyprusDateStr(new Date(createdAtMs)) === cyprusDateStr(new Date(scheduledStartMs))
+  const createdWithinSixHoursOfStart = sameDayCreated && scheduledStartMs - createdAtMs < PHONE_REVEAL_PRE_START_MS
+  const revealUnlockReached = sixHoursBeforeStart || createdWithinSixHoursOfStart
+  const revealExpired = Number.isFinite(scheduledEndMs) && nowTick > scheduledEndMs + PHONE_REVEAL_POST_END_MS
   const canRevealCleanerPhone =
-    ['confirmed', 'in_progress', 'completed', 'disputed'].includes(booking.status) &&
-    sixHoursBeforeStart
+    ['accepted', 'confirmed', 'in_progress', 'completed', 'disputed'].includes(booking.status) &&
+    revealUnlockReached &&
+    !revealExpired
   const cleanerPhone = booking.cleaner?.user?.phone ?? ''
   const completedAtMs = booking.completed_at ? new Date(booking.completed_at).getTime() : 0
   const reportDeadlineMs = completedAtMs ? completedAtMs + DISPUTE_WINDOW_MS : 0
@@ -448,7 +478,9 @@ export default function ClientBookingDetailPage() {
                 <h2 className={`${displayFont.className} text-lg font-semibold tracking-[-0.02em] text-slate-900`}>
                   Cleaner contact
                 </h2>
-                {canRevealCleanerPhone ? (
+                {revealExpired ? (
+                  <p className="text-sm text-slate-500">Phone access for this booking has expired.</p>
+                ) : canRevealCleanerPhone ? (
                   cleanerPhone ? (
                     phoneRevealed ? (
                       <p className="text-sm text-slate-600">{cleanerPhone}</p>
@@ -461,7 +493,7 @@ export default function ClientBookingDetailPage() {
                     <p className="text-sm text-slate-500">Cleaner phone is not available yet.</p>
                   )
                 ) : (
-                  <p className="text-sm text-slate-500">Chat becomes available once the booking is confirmed. Cleaner phone number is revealed 6 hours before the booking start time.</p>
+                  <p className="text-sm text-slate-500">Cleaner number becomes available 6 hours before the booking.</p>
                 )}
               </CardContent>
             </Card>
@@ -470,7 +502,7 @@ export default function ClientBookingDetailPage() {
               <p className="rounded-xl border border-blue-200 bg-blue-50 px-3 py-2 text-sm text-blue-700">
                 {cleanerProposed
                   ? isAmendProposal
-                    ? `Cleaner requested Amend Start Time: ${formatDate(booking.scheduled_start)} → ${formatDate(booking.proposed_start!)}. Accept, decline, or counter once before expiry.`
+                    ? `Cleaner requested Amend Start Time: ${formatDate(booking.scheduled_start)} → ${formatDate(booking.proposed_start!)}. The other party can accept or decline this amendment request.`
                     : `Cleaner proposed ${formatDate(booking.scheduled_start)} → ${formatDate(booking.proposed_start!)}. Accept, decline, or counter once before expiry.`
                   : clientProposed && isAmendProposal
                     ? `You requested Amend Start Time: ${formatDate(booking.scheduled_start)} → ${formatDate(booking.proposed_start!)}. Waiting for cleaner response.`
@@ -627,6 +659,16 @@ export default function ClientBookingDetailPage() {
                       This booking has already been rescheduled once. Further rescheduling is not available for MVP.
                     </p>
                   )}
+                  {booking.status === 'confirmed' && within24HoursBeforeStart && !hasProposal && clientAmendRequestUsed && !amendFinalised && (
+                    <p className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-600">
+                      You have already used your single Amend Start Time request for this booking.
+                    </p>
+                  )}
+                  {booking.status === 'confirmed' && within24HoursBeforeStart && !hasProposal && amendFinalised && (
+                    <p className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-600">
+                      Amend Start Time has already been finalised for this booking.
+                    </p>
+                  )}
                   {(booking.status === 'expired' || booking.status === 'cancelled' || booking.status === 'declined' || overdueUnpaidDraftLike) && (
                     <>
                       <Button className="w-full sm:w-auto" onClick={() => router.push(`/client/book/${booking.cleaner_id}?reset=1&step=1`)}>
@@ -707,9 +749,7 @@ export default function ClientBookingDetailPage() {
         <DialogTitle>Counter with one new time</DialogTitle>
         <div className="space-y-3">
           <p className="text-sm text-muted-foreground">
-            {isAmendProposal
-              ? 'You can counter once for this amendment. Booking date remains unchanged.'
-              : 'You can counter once. Cleaner will then only be able to accept or decline.'}
+            You can counter once. Cleaner will then only be able to accept or decline.
           </p>
           <div>
             <Label>Counter start time</Label>
@@ -823,6 +863,14 @@ export default function ClientBookingDetailPage() {
               if (!iso) {
                 toast.error('Select a valid date and time.')
                 return
+              }
+              if (proposalAction === 'amend_start_time') {
+                const proposedMs = new Date(iso).getTime()
+                const currentMs = new Date(booking.scheduled_start).getTime()
+                if (Math.abs(proposedMs - currentMs) > AMEND_MAX_SHIFT_MS) {
+                  toast.error('Amend Start Time can only shift by up to 3 hours from the current scheduled start time.')
+                  return
+                }
               }
               handleBookingAction(proposalAction, iso)
             }}

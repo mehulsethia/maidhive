@@ -14,6 +14,10 @@ export const GET = requireAuth(async (req: NextRequest, ctx) => {
     cleanerId,
     parsed.data.date,
     parsed.data.duration_hours,
+    {
+      excludeBookingId: parsed.data.exclude_booking_id,
+      allowShortNotice: Boolean(parsed.data.exclude_booking_id),
+    },
   )
   return ok(slots)
 })

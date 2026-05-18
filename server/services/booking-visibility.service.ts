@@ -28,10 +28,19 @@ function sanitizeBookingForCleaner<T extends Record<string, any>>(booking: T): T
     !copy.confirmedAt
   const scheduledStartMs = copy.scheduledStart ? new Date(copy.scheduledStart).getTime() : 0
   const scheduledEndMs = copy.scheduledEnd ? new Date(copy.scheduledEnd).getTime() : 0
+  const createdAtMs = copy.createdAt ? new Date(copy.createdAt).getTime() : Number.NaN
   const phoneVisibleAtMs = scheduledStartMs - 6 * 60 * 60 * 1000
   const phoneVisibleUntilMs = scheduledEndMs + 30 * 60 * 1000
+  const sameCyprusDayCreated =
+    Number.isFinite(createdAtMs) &&
+    Number.isFinite(scheduledStartMs) &&
+    cyprusDateStr(new Date(createdAtMs)) === cyprusDateStr(new Date(scheduledStartMs))
+  const createdWithinSixHoursOfStart =
+    sameCyprusDayCreated &&
+    scheduledStartMs - createdAtMs < 6 * 60 * 60 * 1000
+  const unlockedByRule = Date.now() >= phoneVisibleAtMs || createdWithinSixHoursOfStart
   const isAddressVisible = ADDRESS_VISIBLE_STATUSES.has(status) && !cancelledBeforeConfirmation
-  const isPhoneVisible = isAddressVisible && Date.now() >= phoneVisibleAtMs && Date.now() <= phoneVisibleUntilMs
+  const isPhoneVisible = isAddressVisible && unlockedByRule && Date.now() <= phoneVisibleUntilMs
 
   const fullClientName = String(copy?.client?.user?.name ?? '').trim()
   const firstName = fullClientName ? fullClientName.split(/\s+/)[0] : 'Client'
@@ -78,4 +87,8 @@ function sanitizeBookingForCleaner<T extends Record<string, any>>(booking: T): T
   }
 
   return copy as T
+}
+
+function cyprusDateStr(date: Date): string {
+  return new Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/Nicosia' }).format(date)
 }

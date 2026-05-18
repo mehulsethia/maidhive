@@ -43,12 +43,19 @@ const SERVICE_LABELS: Record<string, string> = {
 }
 const START_JOB_EARLY_WINDOW_MS = 15 * 60 * 1000
 const RESCHEDULE_CUTOFF_MS = 24 * 60 * 60 * 1000
+const AMEND_MAX_SHIFT_MS = 3 * 60 * 60 * 1000
+const PHONE_REVEAL_PRE_START_MS = 6 * 60 * 60 * 1000
+const PHONE_REVEAL_POST_END_MS = 30 * 60 * 1000
 
 function resolveJobTypeTitle(booking: BookingRead) {
   const snapshotMatch = booking.special_instructions?.match(/(?:^|\n)Job type:\s*([^\n]+)/i)
   const snapshotJobType = snapshotMatch?.[1]?.trim()
   if (snapshotJobType) return snapshotJobType
   return SERVICE_LABELS[booking.service_type] ?? booking.service_type
+}
+
+function cyprusDateStr(date: Date) {
+  return new Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/Nicosia' }).format(date)
 }
 
 export default function CleanerBookingDetailPage() {
@@ -108,8 +115,16 @@ export default function CleanerBookingDetailPage() {
       return
     }
 
+    const isAmendContext =
+      proposalAction === 'amend_start_time' ||
+      (proposalAction === 'counter_proposal' && booking.proposal_context === 'amend_start')
     availabilityApi
-      .getSlots(booking.cleaner_id, proposalDate, booking.duration_hours)
+      .getSlots(
+        booking.cleaner_id,
+        proposalDate,
+        booking.duration_hours,
+        isAmendContext ? { excludeBookingId: booking.id } : undefined,
+      )
       .then((res) => {
         const options = (res.data ?? [])
           .filter((slot) => !slot.disabled)
@@ -331,11 +346,20 @@ export default function CleanerBookingDetailPage() {
   const completedBookingsCount = Number(clientTrust?.completedBookingsCount ?? 0)
   const clientDisplayName = booking.client?.user?.name?.trim() || 'Client'
   const clientAvatarUrl = booking.client?.user?.avatar_url ?? null
-  const cleanerPrivacy = (booking as any)?.cleanerPrivacy as {
-    phoneVisible?: boolean
-    phoneVisibleAt?: string | null
-  } | undefined
-  const canRevealPhone = ['confirmed', 'in_progress', 'completed', 'disputed'].includes(booking.status) && Boolean(cleanerPrivacy?.phoneVisible)
+  const createdAtMs = new Date(booking.created_at).getTime()
+  const scheduledEndMs = new Date(booking.scheduled_end).getTime()
+  const unlockAtMs = bookingStartsAtMs - PHONE_REVEAL_PRE_START_MS
+  const sameDayCreated =
+    Number.isFinite(createdAtMs) &&
+    Number.isFinite(bookingStartsAtMs) &&
+    cyprusDateStr(new Date(createdAtMs)) === cyprusDateStr(new Date(bookingStartsAtMs))
+  const createdWithinSixHoursOfStart = sameDayCreated && bookingStartsAtMs - createdAtMs < PHONE_REVEAL_PRE_START_MS
+  const revealUnlocked = nowTick >= unlockAtMs || createdWithinSixHoursOfStart
+  const revealExpired = Number.isFinite(scheduledEndMs) && nowTick > scheduledEndMs + PHONE_REVEAL_POST_END_MS
+  const canRevealPhone =
+    ['accepted', 'confirmed', 'in_progress', 'completed', 'disputed'].includes(booking.status) &&
+    revealUnlocked &&
+    !revealExpired
   const clientPhone = booking.client?.user?.phone ?? ''
   const isCancelledPreConfirmation = booking.status === 'cancelled' && !booking.accepted_at && !booking.confirmed_at
   const isConfirmed = booking.status === 'confirmed'
@@ -365,7 +389,9 @@ export default function CleanerBookingDetailPage() {
     isConfirmed &&
     millisUntilStart > 0 &&
     millisUntilStart <= RESCHEDULE_CUTOFF_MS &&
-    !hasProposal
+    !hasProposal &&
+    (booking.cleaner_proposals ?? 0) < 1 &&
+    !((booking.cleaner_proposals ?? 0) >= 1 && (booking.client_proposals ?? 0) >= 1)
   const isPostConfirmationDecline = proposalContext === 'post_confirmation' && booking.proposal_by === 'client' && ['accepted', 'confirmed'].includes(booking.status)
   const canCancelConfirmedBooking = isConfirmed && millisUntilStart > 0
   const isAmendDateFlow =
@@ -381,7 +407,7 @@ export default function CleanerBookingDetailPage() {
     isClientPostConfirmationProposal
       ? (booking.post_cleaner_proposals ?? 0) < 1
       : isAmendProposal
-        ? (booking.cleaner_proposals ?? 0) < 1
+        ? false
         : false
   const proposalExpiresMs = booking.proposal_expires_at ? new Date(booking.proposal_expires_at).getTime() : null
   const proposalCountdownLabel = proposalExpiresMs && proposalExpiresMs > nowTick
@@ -441,23 +467,28 @@ export default function CleanerBookingDetailPage() {
             {booking.access_notes && (
               <p className="text-xs text-slate-500">Access notes: {booking.access_notes}</p>
             )}
-            {canRevealPhone ? (
-              phoneRevealed ? (
-                <p className="text-xs text-slate-500">Phone: {clientPhone}</p>
+            {revealExpired ? (
+              <p className="text-xs text-slate-500">Phone access for this booking has expired.</p>
+            ) : canRevealPhone ? (
+              clientPhone ? (
+                phoneRevealed ? (
+                  <p className="text-xs text-slate-500">Phone: {clientPhone}</p>
+                ) : (
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="h-8 w-fit px-3 text-xs"
+                    onClick={() => setPhoneRevealed(true)}
+                  >
+                    Reveal number
+                  </Button>
+                )
               ) : (
-                <Button
-                  size="sm"
-                  variant="outline"
-                  className="h-8 w-fit px-3 text-xs"
-                  onClick={() => setPhoneRevealed(true)}
-                >
-                  Reveal number
-                </Button>
+                <p className="text-xs text-slate-500">Client phone is not available yet.</p>
               )
             ) : (
               <p className="text-xs text-slate-500">
-                Client phone can be revealed only inside confirmed bookings.
-                {cleanerPrivacy?.phoneVisibleAt ? ` Available from ${formatDate(cleanerPrivacy.phoneVisibleAt)}.` : ''}
+                Client number becomes available 6 hours before the booking.
               </p>
             )}
           </div>
@@ -528,7 +559,7 @@ export default function CleanerBookingDetailPage() {
         )}
         {!isCancelledPreConfirmation && canRespondToClientAmendProposal && (
           <p className="rounded-xl border border-blue-200 bg-blue-50 px-3 py-2 text-sm text-blue-700">
-            Client requested Amend Start Time: {formatDate(booking.scheduled_start)} → {formatDate(booking.proposed_start!)}. Accept, decline, or counter once.
+            Client requested Amend Start Time: {formatDate(booking.scheduled_start)} → {formatDate(booking.proposed_start!)}. The other party can accept or decline this amendment request.
           </p>
         )}
         {!isCancelledPreConfirmation && hasOpenProposalFlow && proposalCountdownLabel && (
@@ -652,6 +683,16 @@ export default function CleanerBookingDetailPage() {
               : 'Reschedule proposals can only be started more than 24 hours before the scheduled start.'}
           </p>
         )}
+        {!isCancelledPreConfirmation && isConfirmed && millisUntilStart > 0 && millisUntilStart <= RESCHEDULE_CUTOFF_MS && !hasProposal && (booking.cleaner_proposals ?? 0) >= 1 && (booking.client_proposals ?? 0) < 1 && (
+          <p className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-600">
+            You have already used your single Amend Start Time request for this booking.
+          </p>
+        )}
+        {!isCancelledPreConfirmation && isConfirmed && millisUntilStart > 0 && millisUntilStart <= RESCHEDULE_CUTOFF_MS && !hasProposal && (booking.cleaner_proposals ?? 0) >= 1 && (booking.client_proposals ?? 0) >= 1 && (
+          <p className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-600">
+            Amend Start Time has already been finalised for this booking.
+          </p>
+        )}
         {!isCancelledPreConfirmation && canRespondToCounter && (
           <>
             <Button size="lg" onClick={() => handleBookingAction('accept_proposal')} loading={actionLoading === 'accept_proposal'} disabled={!stripeConnected}>
@@ -734,7 +775,7 @@ export default function CleanerBookingDetailPage() {
       <Dialog
         open={proposalOpen}
         onClose={() => {
-          if (actionLoading === 'propose_alternative' || actionLoading === 'counter_proposal') return
+          if (actionLoading === 'propose_alternative' || actionLoading === 'counter_proposal' || actionLoading === 'amend_start_time') return
           setProposalOpen(false)
           setProposalDate('')
           setProposalTime('')
@@ -753,7 +794,7 @@ export default function CleanerBookingDetailPage() {
             {proposalAction === 'propose_alternative'
               ? 'You can request a new date or time for this booking. The other party must accept before the booking changes. If they decline or do not respond before the 24-hour cutoff, the original booking time will remain unchanged.'
               : proposalAction === 'amend_start_time'
-                ? 'Small same-day adjustment only (up to +/-3 hours). The other party can accept, decline, or counter once.'
+                ? 'Small same-day adjustment only (up to +/-3 hours). The other party can accept or decline this amendment request.'
                 : 'You can counter once. After both sides use their counter, only accept or decline is allowed.'}
           </p>
           {proposalAction === 'propose_alternative' && (
@@ -821,6 +862,14 @@ export default function CleanerBookingDetailPage() {
                   toast.error(`Alternative proposals during request stage must stay within ${PLATFORM_BOOKING_WINDOW_DAYS} days from today.`)
                 }
                 return
+              }
+              if (proposalAction === 'amend_start_time') {
+                const proposedMs = new Date(proposedStartIso).getTime()
+                const currentMs = new Date(booking.scheduled_start).getTime()
+                if (Math.abs(proposedMs - currentMs) > AMEND_MAX_SHIFT_MS) {
+                  toast.error('Amend Start Time can only shift by up to 3 hours from the current scheduled start time.')
+                  return
+                }
               }
               handleBookingAction(proposalAction, proposedStartIso)
             }}
