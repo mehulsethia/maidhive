@@ -90,17 +90,18 @@ export default function ClientProfilePage() {
   useEffect(() => {
     ;(async () => {
       try {
-        const [clientRes, bookingRes, addressesRes] = await Promise.all([
+        const [clientRes, bookingRes, addressesRes] = await Promise.allSettled([
           clientsApi.me(),
           bookingsApi.my(),
-          clientsApi.listAddresses().catch(() => ({ data: [] as ClientAddressRead[] })),
+          clientsApi.listAddresses(),
         ])
-        const client = clientRes.data as any
+        const client = (clientRes.status === 'fulfilled' ? clientRes.value.data : null) as any
         const user = client?.user ?? {}
         const fullName = String(user?.name ?? '').trim()
         const parts = fullName.split(' ').filter(Boolean)
-        const loadedAddresses = ((addressesRes as any)?.data ?? []) as ClientAddressRead[]
+        const loadedAddresses = ((addressesRes.status === 'fulfilled' ? addressesRes.value?.data : []) ?? []) as ClientAddressRead[]
         const defaultEntry = loadedAddresses.find((entry) => entry.is_default) ?? loadedAddresses[0]
+        const bookingItems = bookingRes.status === 'fulfilled' ? bookingRes.value.data?.items ?? [] : []
 
         startTransition(() => {
           setFirstName(parts[0] ?? '')
@@ -123,10 +124,14 @@ export default function ClientProfilePage() {
           setSavedAddresses(loadedAddresses.sort((a, b) => Number(b.is_default) - Number(a.is_default)))
           setEmailVerified(Boolean(user?.email_confirmed_at))
           setPhoneVerified(Boolean(user?.phone_verified_at))
-          setBookings(bookingRes.data?.items ?? [])
+          setBookings(bookingItems)
           setLoading(false)
         })
-        resetLoadError('client-profile')
+        if (clientRes.status === 'fulfilled') {
+          resetLoadError('client-profile')
+        } else {
+          reportLoadError('client-profile', 'Failed to load profile.')
+        }
       } catch {
         reportLoadError('client-profile', 'Failed to load profile.')
         setLoading(false)

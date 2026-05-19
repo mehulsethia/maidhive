@@ -20,9 +20,16 @@ export const GET = requireAuth(async (req: NextRequest, _ctx, user) => {
     let client = await clientRepo.findByUserId(user.id)
     if (!client) client = await clientRepo.create(user.id)
     let [bookings, total] = await bookingRepo.findByClient(client.id, { page, pageSize: page_size, status })
-    const changed = await bookingService.reconcileDeadlinesForBookings(bookings.map((b) => b.id))
-    if (changed) {
-      ;[bookings, total] = await bookingRepo.findByClient(client.id, { page, pageSize: page_size, status })
+    try {
+      const changed = await bookingService.reconcileDeadlinesForBookings(bookings.map((b) => b.id))
+      if (changed) {
+        ;[bookings, total] = await bookingRepo.findByClient(client.id, { page, pageSize: page_size, status })
+      }
+    } catch (error) {
+      console.error('bookings.list.client.reconcile failed', {
+        userId: user.id,
+        message: error instanceof Error ? error.message : String(error),
+      })
     }
     return ok({ bookings, total, page, page_size })
   }
@@ -31,9 +38,16 @@ export const GET = requireAuth(async (req: NextRequest, _ctx, user) => {
     let cleaner = await cleanerRepo.findByUserId(user.id)
     if (!cleaner) cleaner = await cleanerRepo.create(user.id)
     let [bookings, total] = await bookingRepo.findByCleaner(cleaner.id, { page, pageSize: page_size, status })
-    const changed = await bookingService.reconcileDeadlinesForBookings(bookings.map((b) => b.id))
-    if (changed) {
-      ;[bookings, total] = await bookingRepo.findByCleaner(cleaner.id, { page, pageSize: page_size, status })
+    try {
+      const changed = await bookingService.reconcileDeadlinesForBookings(bookings.map((b) => b.id))
+      if (changed) {
+        ;[bookings, total] = await bookingRepo.findByCleaner(cleaner.id, { page, pageSize: page_size, status })
+      }
+    } catch (error) {
+      console.error('bookings.list.cleaner.reconcile failed', {
+        userId: user.id,
+        message: error instanceof Error ? error.message : String(error),
+      })
     }
     return ok({ bookings: sanitizeBookingsForRole(bookings as any[], 'cleaner'), total, page, page_size })
   }

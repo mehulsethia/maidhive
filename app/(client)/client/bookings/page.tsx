@@ -77,9 +77,11 @@ export default function ClientBookingsPage() {
 
   async function loadBookings() {
     try {
-      const [res, disputesRes] = await Promise.all([bookingsApi.my(1), disputesApi.listMine()])
+      const [bookingsRes, disputesRes] = await Promise.allSettled([bookingsApi.my(1), disputesApi.listMine()])
+      const res = bookingsRes.status === 'fulfilled' ? bookingsRes.value : null
+      const disputes = disputesRes.status === 'fulfilled' ? disputesRes.value : null
       const disputeMap = new Map<string, string>()
-      for (const dispute of disputesRes.data?.items ?? []) {
+      for (const dispute of disputes?.data?.items ?? []) {
         if (dispute?.booking_id) disputeMap.set(dispute.booking_id, dispute.status)
       }
       startTransition(() => {
@@ -87,7 +89,11 @@ export default function ClientBookingsPage() {
         setBookingDisputeStatus(disputeMap)
         setLoading(false)
       })
-      resetLoadError('client-bookings')
+      if (res) {
+        resetLoadError('client-bookings')
+      } else {
+        reportLoadError('client-bookings', 'Failed to load bookings.')
+      }
     } catch {
       reportLoadError('client-bookings', 'Failed to load bookings.')
       setLoading(false)

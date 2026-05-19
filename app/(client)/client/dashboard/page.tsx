@@ -65,16 +65,27 @@ export default function ClientDashboardPage() {
 
     ;(async () => {
       try {
-        const [meRes, bookingRes, favoritesRes] = await Promise.all([authApi.me(), bookingsApi.my(), favoritesApi.list()])
+        const [meRes, bookingRes, favoritesRes] = await Promise.allSettled([
+          authApi.me(),
+          bookingsApi.my(),
+          favoritesApi.list(),
+        ])
         if (!active) return
 
         startTransition(() => {
-          setName((meRes.data?.name ?? '').trim())
-          setBookings(bookingRes.data?.items ?? [])
-          setFavorites(favoritesRes.data ?? [])
+          const me = meRes.status === 'fulfilled' ? meRes.value : null
+          const booking = bookingRes.status === 'fulfilled' ? bookingRes.value : null
+          const favorites = favoritesRes.status === 'fulfilled' ? favoritesRes.value : null
+          setName((me?.data?.name ?? '').trim())
+          setBookings(booking?.data?.items ?? [])
+          setFavorites(favorites?.data ?? [])
           setLoading(false)
         })
-        resetLoadError('client-dashboard')
+        if (bookingRes.status === 'fulfilled') {
+          resetLoadError('client-dashboard')
+        } else {
+          reportLoadError('client-dashboard', 'Failed to load dashboard data.')
+        }
       } catch {
         if (!active) return
         reportLoadError('client-dashboard', 'Failed to load dashboard data.')

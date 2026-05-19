@@ -82,9 +82,9 @@ function ClientReportPageContent() {
   async function load() {
     setLoading(true)
     try {
-      const [bookingRes, disputeRes] = await Promise.all([bookingsApi.my(), disputesApi.listMine()])
-      const bookingItems = bookingRes.data?.items ?? []
-      const disputeItems = (disputeRes.data?.items ?? []) as ClientDispute[]
+      const [bookingRes, disputeRes] = await Promise.allSettled([bookingsApi.my(), disputesApi.listMine()])
+      const bookingItems = bookingRes.status === 'fulfilled' ? bookingRes.value.data?.items ?? [] : []
+      const disputeItems = (disputeRes.status === 'fulfilled' ? disputeRes.value.data?.items ?? [] : []) as ClientDispute[]
 
       startTransition(() => {
         setBookings(bookingItems)
@@ -98,7 +98,11 @@ function ClientReportPageContent() {
 
         setLoading(false)
       })
-      resetLoadError('client-report')
+      if (bookingRes.status === 'fulfilled') {
+        resetLoadError('client-report')
+      } else {
+        reportLoadError('client-report', 'Failed to load reports.')
+      }
     } catch {
       reportLoadError('client-report', 'Failed to load reports.')
       setLoading(false)
