@@ -6,7 +6,7 @@ import { useRouter } from 'next/navigation'
 import { ChevronUp, LogOut, Settings, User } from 'lucide-react'
 import { createClient } from '@/lib/supabase'
 import { clearAuthCache } from '@/lib/auth-cache'
-import { clearApiCache, clientsApi, cleanersApi } from '@/lib/api'
+import { authApi, clearApiCache, clientsApi, cleanersApi } from '@/lib/api'
 import { cn } from '@/lib/utils'
 import { UserAvatar } from '@/components/ui/user-avatar'
 
@@ -25,25 +25,23 @@ export function SidebarProfile({ profileHref, role }: SidebarProfileProps) {
   const ref = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
-    const supabase = createClient()
     const fetchUser = async () => {
       try {
-        const [{ data: authData }, profileRes] = await Promise.all([
-          supabase.auth.getUser(),
+        const [meRes, profileRes] = await Promise.all([
+          authApi.me().catch(() => null),
           (role === 'cleaner' ? cleanersApi.me() : clientsApi.me()).catch(() => null),
         ])
 
-        const authUser = authData.user
+        const authUser = meRes?.data
         const profileData = (profileRes?.data ?? null) as any
         const profileUser = role === 'cleaner'
           ? profileData?.cleaner?.user
           : profileData?.user
         const dbName = String(profileUser?.name ?? '').trim()
-        const metaName = String(authUser?.user_metadata?.name ?? '').trim()
         const fallbackName = authUser?.email?.split('@')[0] || 'User'
 
         setUser({
-          name: dbName || metaName || fallbackName,
+          name: dbName || fallbackName,
           email: profileUser?.email ?? authUser?.email ?? '',
           avatarUrl: profileUser?.avatar_url ?? profileData?.cleaner?.profile_image_url ?? null,
         })

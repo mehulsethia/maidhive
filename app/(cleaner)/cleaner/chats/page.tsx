@@ -4,7 +4,6 @@ import { useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
 import { MessageCircleMore } from 'lucide-react'
 import { authApi, bookingsApi } from '@/lib/api'
-import { createClient } from '@/lib/supabase'
 import { Chat } from '@/components/chat'
 import { SplitChatPageSkeleton } from '@/components/page-skeletons'
 import { Input } from '@/components/ui/input'
@@ -39,9 +38,8 @@ export default function CleanerChatsPage() {
   useEffect(() => {
     ;(async () => {
       try {
-        const [bookingsRes, userRes, meRes] = await Promise.allSettled([
+        const [bookingsRes, meRes] = await Promise.allSettled([
           bookingsApi.my(),
-          createClient().auth.getUser(),
           authApi.me(),
         ])
 
@@ -56,11 +54,9 @@ export default function CleanerChatsPage() {
           reportLoadError('cleaner-chats', 'Failed to load chats.')
         }
 
-        const supabaseUserId =
-          userRes.status === 'fulfilled' ? userRes.value.data.user?.id : null
         const apiUserId =
           meRes.status === 'fulfilled' ? meRes.value.data?.id : null
-        setCurrentUserId(supabaseUserId ?? apiUserId ?? null)
+        setCurrentUserId(apiUserId ?? null)
       } catch {
         reportLoadError('cleaner-chats', 'Failed to load chats.')
       } finally {

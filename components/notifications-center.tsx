@@ -3,11 +3,12 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
 import { Check, CheckCheck, Inbox, Trash2 } from 'lucide-react'
-import { notificationsApi } from '@/lib/api'
+import { authApi, notificationsApi } from '@/lib/api'
 import { getNotificationHref } from '@/lib/notification-links'
 import { createClient } from '@/lib/supabase'
 import { cn } from '@/lib/utils'
 import { triggerCountsRefresh } from '@/lib/counts-sync'
+import { reportLoadError, resetLoadError } from '@/lib/load-error-policy'
 import type { NotificationRead } from '@/types'
 import { toast } from 'sonner'
 
@@ -32,20 +33,23 @@ export function NotificationsCenter({ role }: { role: NotificationRole }) {
     return notifications
   }, [filter, notifications])
 
-  const load = useCallback(async () => {
-    setLoading(true)
+  const load = useCallback(async (background = false) => {
+    if (!background) setLoading(true)
     try {
       const res = await notificationsApi.list({ page_size: 250 })
       setNotifications(res.data?.notifications ?? [])
+      resetLoadError(`notifications-center-${role}`)
     } catch {
-      toast.error('Failed to load notifications.')
+      if (!background) {
+        reportLoadError(`notifications-center-${role}`, 'Failed to load notifications.')
+      }
     } finally {
-      setLoading(false)
+      if (!background) setLoading(false)
     }
-  }, [])
+  }, [role])
 
   useEffect(() => {
-    load()
+    load(false)
   }, [load])
 
   useEffect(() => {
@@ -55,8 +59,8 @@ export function NotificationsCenter({ role }: { role: NotificationRole }) {
     let active = true
 
     ;(async () => {
-      const user = await supabase.auth.getUser()
-      const userId = user.data.user?.id
+      const me = await authApi.me().catch(() => null)
+      const userId = me?.data?.id
       if (!userId || !active) return
 
       channel = supabase
@@ -65,12 +69,12 @@ export function NotificationsCenter({ role }: { role: NotificationRole }) {
           'postgres_changes',
           { event: '*', schema: 'public', table: 'notifications', filter: `user_id=eq.${userId}` },
           () => {
-            load()
+            load(true)
           },
         )
         .subscribe()
 
-      interval = setInterval(load, 20000)
+      interval = setInterval(() => load(true), 20000)
 
     })()
 

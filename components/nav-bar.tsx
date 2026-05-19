@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { LogOut } from 'lucide-react'
+import { authApi } from '@/lib/api'
 import { createClient } from '@/lib/supabase'
 import { NotificationBell } from '@/components/notification-bell'
 import { useRouter } from 'next/navigation'
@@ -18,8 +19,7 @@ export function NavBar({ links }: NavBarProps) {
   const router = useRouter()
 
   useEffect(() => {
-    const supabase = createClient()
-    supabase.auth.getUser().then(({ data }) => setUserId(data.user?.id ?? null))
+    authApi.me().then((res) => setUserId(res.data?.id ?? null)).catch(() => setUserId(null))
   }, [])
 
   async function signOut() {

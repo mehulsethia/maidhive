@@ -6,7 +6,6 @@ import { useSearchParams } from 'next/navigation'
 import { Bricolage_Grotesque, IBM_Plex_Mono } from 'next/font/google'
 import { MessageCircleMore, Search } from 'lucide-react'
 import { authApi, bookingsApi } from '@/lib/api'
-import { createClient } from '@/lib/supabase'
 import { Chat } from '@/components/chat'
 import { SplitChatPageSkeleton } from '@/components/page-skeletons'
 import { Input } from '@/components/ui/input'
@@ -39,9 +38,8 @@ function ClientChatsPageContent() {
   useEffect(() => {
     ;(async () => {
       try {
-        const [{ data }, userRes, meRes] = await Promise.all([
+        const [{ data }, meRes] = await Promise.all([
           bookingsApi.my(),
-          createClient().auth.getUser(),
           authApi.me().catch(() => null),
         ])
 
@@ -58,7 +56,7 @@ function ClientChatsPageContent() {
             chatBookings[0]?.id ??
             null
           setSelectedBookingId(initialSelection)
-          setCurrentUserId(userRes.data.user?.id ?? meRes?.data?.id ?? null)
+          setCurrentUserId(meRes?.data?.id ?? null)
           setLoading(false)
         })
         resetLoadError('client-chats')

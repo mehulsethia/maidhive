@@ -32,7 +32,6 @@ import {
 import { isChatActiveForBooking, isChatReadOnly } from '@/lib/chat-window'
 import { reportLoadError, resetLoadError } from '@/lib/load-error-policy'
 import { formatCurrency, formatDate } from '@/lib/utils'
-import { createClient } from '@/lib/supabase'
 import type { BookingRead } from '@/types'
 import { toast } from 'sonner'
 
@@ -93,9 +92,7 @@ export default function CleanerBookingDetailPage() {
 
   useEffect(() => {
     refresh()
-    Promise.all([createClient().auth.getUser(), authApi.me().catch(() => null)]).then(([userRes, meRes]) => {
-      setCurrentUserId(userRes.data.user?.id ?? meRes?.data?.id ?? null)
-    })
+    authApi.me().then((meRes) => setCurrentUserId(meRes.data?.id ?? null)).catch(() => setCurrentUserId(null))
     cleanersApi.me()
       .then((cleanerRes) => {
         const cleaner = cleanerRes.data?.cleaner as any

@@ -7,6 +7,7 @@ import { messagesApi } from '@/lib/api'
 import { Skeleton } from '@/components/ui/skeleton'
 import { cn } from '@/lib/utils'
 import { triggerCountsRefresh } from '@/lib/counts-sync'
+import { reportLoadError, resetLoadError } from '@/lib/load-error-policy'
 import type { MessageRead } from '@/types'
 import { toast } from 'sonner'
 
@@ -50,11 +51,14 @@ export function Chat({
         const next = response.data ?? []
         setMessages((prev) => (background ? mergeMessages(prev, next) : next))
         if (!background) {
+          resetLoadError(`chat-${bookingId}`)
+        }
+        if (!background) {
           triggerCountsRefresh()
         }
       } catch {
         if (!background) {
-          toast.error('Failed to load messages')
+          reportLoadError(`chat-${bookingId}`, 'Failed to load messages')
         }
       } finally {
         if (!background) setLoading(false)

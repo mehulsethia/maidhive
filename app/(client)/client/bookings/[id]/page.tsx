@@ -29,7 +29,6 @@ import {
 } from '@/lib/booking-proposal'
 import { reportLoadError, resetLoadError } from '@/lib/load-error-policy'
 import { formatDate } from '@/lib/utils'
-import { createClient } from '@/lib/supabase'
 import { isChatActiveForBooking, isChatReadOnly } from '@/lib/chat-window'
 import type { BookingRead } from '@/types'
 import { toast } from 'sonner'
@@ -126,9 +125,7 @@ export default function ClientBookingDetailPage() {
 
   useEffect(() => {
     refresh()
-    Promise.all([createClient().auth.getUser(), authApi.me().catch(() => null)]).then(([userRes, meRes]) => {
-      setCurrentUserId(userRes.data.user?.id ?? meRes?.data?.id ?? null)
-    })
+    authApi.me().then((meRes) => setCurrentUserId(meRes.data?.id ?? null)).catch(() => setCurrentUserId(null))
   }, [id])
 
   useEffect(() => {

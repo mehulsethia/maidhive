@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { cn } from '@/lib/utils'
 import { dateOnlyLabel, endOfUtcDate, startOfUtcDate, todayUtcDateOnly, toUtcDateOnly } from '@/lib/datetime'
+import { reportLoadError, resetLoadError } from '@/lib/load-error-policy'
 import { toast } from 'sonner'
 
 // ─── Constants ───────────────────────────────────────────────────────────────
@@ -237,12 +238,13 @@ export function ScheduleEditor({ compact, onSave, onSaveExternal, saveRef }: Sch
           setGoogleConnected(Boolean(gcalRes.data?.connected))
         }
       }
+      resetLoadError(`schedule-editor-${compact ? 'compact' : 'full'}`)
     } catch {
-      toast.error('Failed to load availability.')
+      reportLoadError(`schedule-editor-${compact ? 'compact' : 'full'}`, 'Failed to load availability.')
     } finally {
       setLoading(false)
     }
-  }, [])
+  }, [compact])
 
   useEffect(() => {
     load()
