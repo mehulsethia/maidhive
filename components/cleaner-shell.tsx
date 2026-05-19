@@ -1,15 +1,16 @@
 'use client'
 
 import Link from 'next/link'
-import { useEffect, useState } from 'react'
+import { useEffect } from 'react'
 import { usePathname, useRouter } from 'next/navigation'
 import { Bricolage_Grotesque, IBM_Plex_Mono } from 'next/font/google'
 import { LayoutGrid, CalendarDays, MessagesSquare, Bell, User, Flag } from 'lucide-react'
 import { createClient } from '@/lib/supabase'
 import { clearAuthCache } from '@/lib/auth-cache'
-import { clearApiCache, cleanersApi } from '@/lib/api'
+import { clearApiCache } from '@/lib/api'
 import { cn } from '@/lib/utils'
 import { useCounts } from '@/hooks/use-counts'
+import { useSession } from '@/components/providers/session-provider'
 import { SidebarProfile } from '@/components/sidebar-profile'
 
 const NAV_ITEMS = [
@@ -108,39 +109,19 @@ function cleanerStageCopy(pathname: string) {
 export function CleanerShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname()
   const router = useRouter()
+  const session = useSession()
   const isOnboardingRoute = pathname === '/cleaner/onboarding'
   const hideShellBanner = pathname.startsWith('/cleaner/report') || pathname.startsWith('/cleaner/dashboard')
-  const [gateChecked, setGateChecked] = useState(false)
   const stage = cleanerStageCopy(pathname)
+  const onboardingCompletionPct = session.cleanerProfile?.onboarding_completion_pct ?? 0
 
+  // Server-bootstrapped: redirect happens client-side based on data already loaded.
   useEffect(() => {
-    let mounted = true
-
-    async function runGate() {
-      if (isOnboardingRoute) {
-        if (mounted) setGateChecked(true)
-        return
-      }
-
-      try {
-        const me = await cleanersApi.me()
-        const completion = me.data?.onboarding?.completion_pct ?? 0
-        if (completion < 100) {
-          router.replace('/cleaner/onboarding')
-          return
-        }
-      } catch {
-        // If gate check fails, keep current route behavior and let page-level auth handle it.
-      } finally {
-        if (mounted) setGateChecked(true)
-      }
+    if (isOnboardingRoute) return
+    if (onboardingCompletionPct < 100) {
+      router.replace('/cleaner/onboarding')
     }
-
-    runGate()
-    return () => {
-      mounted = false
-    }
-  }, [isOnboardingRoute, router])
+  }, [isOnboardingRoute, onboardingCompletionPct, router])
 
   const { data: counts } = useCounts()
 
@@ -222,12 +203,6 @@ export function CleanerShell({ children }: { children: React.ReactNode }) {
           }
         `}</style>
       </div>
-    )
-  }
-
-  if (!gateChecked) {
-    return (
-      <div className="min-h-screen bg-slate-50" />
     )
   }
 

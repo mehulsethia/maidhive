@@ -3,12 +3,13 @@
 import { useEffect, useRef, useState } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
-import { ChevronUp, LogOut, Settings, User } from 'lucide-react'
+import { ChevronUp, LogOut, Settings } from 'lucide-react'
 import { createClient } from '@/lib/supabase'
 import { clearAuthCache } from '@/lib/auth-cache'
-import { authApi, clearApiCache, clientsApi, cleanersApi } from '@/lib/api'
+import { clearApiCache } from '@/lib/api'
 import { cn } from '@/lib/utils'
 import { UserAvatar } from '@/components/ui/user-avatar'
+import { useSession } from '@/components/providers/session-provider'
 
 interface SidebarProfileProps {
   /** e.g. '/cleaner/profile' or '/client/profile' */
@@ -19,39 +20,19 @@ interface SidebarProfileProps {
 
 export function SidebarProfile({ profileHref, role }: SidebarProfileProps) {
   const router = useRouter()
+  const session = useSession()
   const [open, setOpen] = useState(false)
-  const [loading, setLoading] = useState(true)
-  const [user, setUser] = useState<{ name: string; email: string; avatarUrl: string | null } | null>(null)
   const ref = useRef<HTMLDivElement>(null)
 
-  useEffect(() => {
-    const fetchUser = async () => {
-      try {
-        const [meRes, profileRes] = await Promise.all([
-          authApi.me().catch(() => null),
-          (role === 'cleaner' ? cleanersApi.me() : clientsApi.me()).catch(() => null),
-        ])
-
-        const authUser = meRes?.data
-        const profileData = (profileRes?.data ?? null) as any
-        const profileUser = role === 'cleaner'
-          ? profileData?.cleaner?.user
-          : profileData?.user
-        const dbName = String(profileUser?.name ?? '').trim()
-        const fallbackName = authUser?.email?.split('@')[0] || 'User'
-
-        setUser({
-          name: dbName || fallbackName,
-          email: profileUser?.email ?? authUser?.email ?? '',
-          avatarUrl: profileUser?.avatar_url ?? profileData?.cleaner?.profile_image_url ?? null,
-        })
-      } finally {
-        setLoading(false)
-      }
-    }
-
-    fetchUser()
-  }, [role])
+  const fallbackName = session.appUser.email?.split('@')[0] || 'User'
+  const user = {
+    name: (session.appUser.name && session.appUser.name.trim()) || fallbackName,
+    email: session.appUser.email,
+    avatarUrl:
+      role === 'cleaner'
+        ? session.cleanerProfile?.profile_image_url ?? session.appUser.avatar_url ?? null
+        : session.appUser.avatar_url ?? null,
+  }
 
   // Close on outside click
   useEffect(() => {
@@ -142,14 +123,8 @@ export function SidebarProfile({ profileHref, role }: SidebarProfileProps) {
           textClassName="text-xs font-bold"
         />
         <div className="min-w-0 text-left">
-          {loading ? (
-            <span className="block h-4 w-36 animate-pulse rounded bg-slate-200" />
-          ) : (
-            <>
-              <p className="truncate text-sm font-semibold text-slate-900">{user?.name ?? 'User'}</p>
-              <p className="text-[11px] text-slate-500">{roleLabel}</p>
-            </>
-          )}
+          <p className="truncate text-sm font-semibold text-slate-900">{user?.name ?? 'User'}</p>
+          <p className="text-[11px] text-slate-500">{roleLabel}</p>
         </div>
         <ChevronUp
           className={cn(

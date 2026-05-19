@@ -36,10 +36,10 @@ import type {
 
 const BASE = getApiBaseUrl()
 const GET_CACHE_TTL_MS = Number(process.env.NEXT_PUBLIC_API_CLIENT_CACHE_TTL_MS ?? 30000)
-const REQUEST_TIMEOUT_MS = Number(process.env.NEXT_PUBLIC_API_REQUEST_TIMEOUT_MS ?? 20000)
-const GET_REQUEST_TIMEOUT_MS = Number(process.env.NEXT_PUBLIC_API_GET_REQUEST_TIMEOUT_MS ?? 30000)
-const RETRY_REQUEST_TIMEOUT_MS = Number(process.env.NEXT_PUBLIC_API_RETRY_TIMEOUT_MS ?? 45000)
-const GET_RETRY_BACKOFF_MS = Number(process.env.NEXT_PUBLIC_API_GET_RETRY_BACKOFF_MS ?? 350)
+const REQUEST_TIMEOUT_MS = Number(process.env.NEXT_PUBLIC_API_REQUEST_TIMEOUT_MS ?? 5000)
+const GET_REQUEST_TIMEOUT_MS = Number(process.env.NEXT_PUBLIC_API_GET_REQUEST_TIMEOUT_MS ?? 6000)
+const RETRY_REQUEST_TIMEOUT_MS = Number(process.env.NEXT_PUBLIC_API_RETRY_TIMEOUT_MS ?? 10000)
+const GET_RETRY_BACKOFF_MS = Number(process.env.NEXT_PUBLIC_API_GET_RETRY_BACKOFF_MS ?? 250)
 
 type AnyObj = Record<string, any>
 type CachedResponse = { expiresAt: number; data: unknown }
@@ -103,15 +103,19 @@ async function sleep(ms: number) {
   await new Promise((resolve) => setTimeout(resolve, ms))
 }
 
+// Statuses we retry once. 401 stays in here because it triggers the
+// "force-refresh token + retry" flow that recovers from a stale JWT.
+// 403 is NOT here — Forbidden is a real permission failure, not transient.
 function isTransientStatus(status: number) {
-  return status === 401 || status === 403 || status === 408 || status === 429 || status >= 500
+  return status === 401 || status === 408 || status === 429 || status >= 500
 }
 
+// Retry only on genuine network/fetch failures and aborts. Anything else surfaces.
 function isTransientFetchError(error: unknown) {
   if (!(error instanceof Error)) return false
   if (error.name === 'AbortError') return true
-  const msg = error.message.toLowerCase()
-  return msg.includes('network') || msg.includes('fetch') || msg.includes('timeout') || msg.includes('aborted')
+  if (error.name === 'TypeError') return true // browser fetch network error
+  return false
 }
 
 async function executeRequest<T>(path: string, options: RequestInit, method: string): Promise<T> {

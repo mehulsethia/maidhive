@@ -17,6 +17,7 @@ import { clearApiCache } from '@/lib/api'
 import { cn } from '@/lib/utils'
 import { useCounts } from '@/hooks/use-counts'
 import { SidebarProfile } from '@/components/sidebar-profile'
+import { useSession } from '@/components/providers/session-provider'
 
 const NAV_ITEMS = [
   { href: '/client/dashboard', label: 'Dashboard', icon: LayoutGrid },
@@ -31,6 +32,9 @@ const NAV_ITEMS = [
 export function ClientShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname()
   const router = useRouter()
+  // useSession is required to be mounted under SessionProvider (set up in (client)/layout.tsx).
+  // It's not used directly here but ensures the provider exists in the tree for child components.
+  useSession()
 
   const { data: counts } = useCounts()
 

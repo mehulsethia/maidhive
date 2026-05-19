@@ -85,7 +85,7 @@ export default function ClientBookingsPage() {
         if (dispute?.booking_id) disputeMap.set(dispute.booking_id, dispute.status)
       }
       startTransition(() => {
-        setBookings(res.data?.items ?? [])
+        setBookings(res?.data?.items ?? [])
         setBookingDisputeStatus(disputeMap)
         setLoading(false)
       })

@@ -29,15 +29,26 @@ function createRequestSupabaseClient(req: NextRequest) {
   )
 }
 
-export async function getAuthSessionUser(req: NextRequest) {
-  try {
-    const supabase = createRequestSupabaseClient(req)
-    const { data, error } = await supabase.auth.getUser()
-    if (error || !data.user) return null
-    return data.user
-  } catch {
-    return null
-  }
+// Request-scoped cache so the same supabase.auth.getUser() roundtrip isn't
+// repeated across requireAuth + downstream handlers (e.g. /clients/me).
+type CachedSessionUser = Awaited<ReturnType<ReturnType<typeof createRequestSupabaseClient>['auth']['getUser']>>['data']['user']
+const sessionUserByRequest = new WeakMap<NextRequest, Promise<CachedSessionUser | null>>()
+
+export function getAuthSessionUser(req: NextRequest): Promise<CachedSessionUser | null> {
+  const cached = sessionUserByRequest.get(req)
+  if (cached) return cached
+  const promise = (async () => {
+    try {
+      const supabase = createRequestSupabaseClient(req)
+      const { data, error } = await supabase.auth.getUser()
+      if (error || !data.user) return null
+      return data.user
+    } catch {
+      return null
+    }
+  })()
+  sessionUserByRequest.set(req, promise)
+  return promise
 }
 
 export async function getAuthUser(req: NextRequest): Promise<User | null> {
@@ -65,6 +76,7 @@ export async function getAuthUser(req: NextRequest): Promise<User | null> {
   //    The Next.js middleware already refreshes tokens and forwards updated
   //    cookies on the request, so we can safely read them here. setAll is a
   //    no-op because we only need to read the (already-refreshed) cookies.
+  //    getAuthSessionUser is request-scoped cached so subsequent calls reuse it.
   try {
     const authSessionUser = await getAuthSessionUser(req)
     if (!authSessionUser) return null
