@@ -7,9 +7,9 @@ import { ListPageSkeleton } from '@/components/page-skeletons'
 import { EmptyState } from '@/components/empty-state'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Separator } from '@/components/ui/separator'
+import { reportLoadError, resetLoadError } from '@/lib/load-error-policy'
 import { formatCurrency, formatDate } from '@/lib/utils'
 import type { BookingRead } from '@/types'
-import { toast } from 'sonner'
 
 export default function EarningsPage() {
   const [bookings, setBookings] = useState<BookingRead[]>([])
@@ -17,8 +17,11 @@ export default function EarningsPage() {
 
   useEffect(() => {
     bookingsApi.my()
-      .then(r => setBookings(r.data?.items ?? []))
-      .catch(() => toast.error('Failed to load earnings'))
+      .then((r) => {
+        setBookings(r.data?.items ?? [])
+        resetLoadError('cleaner-earnings')
+      })
+      .catch(() => reportLoadError('cleaner-earnings', 'Failed to load earnings'))
       .finally(() => setLoading(false))
   }, [])
 

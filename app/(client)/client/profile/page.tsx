@@ -17,6 +17,7 @@ import { PhoneInput } from '@/components/phone-input'
 import { formatCurrency } from '@/lib/utils'
 import { getAccessToken } from '@/lib/auth-cache'
 import { toApiV1Url } from '@/lib/api-base'
+import { reportLoadError, resetLoadError } from '@/lib/load-error-policy'
 import { createClient } from '@/lib/supabase'
 import type { BookingRead, ClientAddressRead } from '@/types'
 import { toast } from 'sonner'
@@ -89,10 +90,9 @@ export default function ClientProfilePage() {
   useEffect(() => {
     ;(async () => {
       try {
-        const [clientRes, bookingRes, authUserRes, addressesRes] = await Promise.all([
+        const [clientRes, bookingRes, addressesRes] = await Promise.all([
           clientsApi.me(),
           bookingsApi.my(),
-          createClient().auth.getUser(),
           clientsApi.listAddresses().catch(() => ({ data: [] as ClientAddressRead[] })),
         ])
         const client = clientRes.data as any
@@ -121,13 +121,14 @@ export default function ClientProfilePage() {
           setBio('')
           setAvatarUrl(user?.avatar_url ?? null)
           setSavedAddresses(loadedAddresses.sort((a, b) => Number(b.is_default) - Number(a.is_default)))
-          setEmailVerified(Boolean(authUserRes.data.user?.email_confirmed_at))
+          setEmailVerified(Boolean(user?.email_confirmed_at))
           setPhoneVerified(Boolean(user?.phone_verified_at))
           setBookings(bookingRes.data?.items ?? [])
           setLoading(false)
         })
+        resetLoadError('client-profile')
       } catch {
-        toast.error('Failed to load profile.')
+        reportLoadError('client-profile', 'Failed to load profile.')
         setLoading(false)
       }
     })()

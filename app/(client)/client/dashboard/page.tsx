@@ -14,10 +14,10 @@ import {
 import { authApi, bookingsApi, favoritesApi } from '@/lib/api'
 import { BookingStatusBadge } from '@/components/booking-status-badge'
 import { DashboardPageSkeleton } from '@/components/page-skeletons'
+import { reportLoadError, resetLoadError } from '@/lib/load-error-policy'
 import { UserAvatar } from '@/components/ui/user-avatar'
 import { formatCurrency, formatDate } from '@/lib/utils'
 import type { BookingRead, BookingStatus, FavoriteCleaner } from '@/types'
-import { toast } from 'sonner'
 
 const displayFont = Bricolage_Grotesque({ subsets: ['latin'], weight: ['400', '500', '700', '800'] })
 const monoFont = IBM_Plex_Mono({ subsets: ['latin'], weight: ['400', '500', '600'] })
@@ -74,9 +74,10 @@ export default function ClientDashboardPage() {
           setFavorites(favoritesRes.data ?? [])
           setLoading(false)
         })
+        resetLoadError('client-dashboard')
       } catch {
         if (!active) return
-        toast.error('Failed to load dashboard data.')
+        reportLoadError('client-dashboard', 'Failed to load dashboard data.')
         setLoading(false)
       }
     })()

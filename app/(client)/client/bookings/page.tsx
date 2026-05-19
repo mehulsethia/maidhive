@@ -13,6 +13,7 @@ import { Dialog, DialogTitle } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import { Select } from '@/components/ui/select'
 import { getDisputeWindowMs, isChatActiveForBooking } from '@/lib/chat-window'
+import { reportLoadError, resetLoadError } from '@/lib/load-error-policy'
 import { formatCurrency, formatDate } from '@/lib/utils'
 import type { BookingRead, BookingStatus } from '@/types'
 import { toast } from 'sonner'
@@ -86,8 +87,9 @@ export default function ClientBookingsPage() {
         setBookingDisputeStatus(disputeMap)
         setLoading(false)
       })
+      resetLoadError('client-bookings')
     } catch {
-      toast.error('Failed to load bookings.')
+      reportLoadError('client-bookings', 'Failed to load bookings.')
       setLoading(false)
     }
   }

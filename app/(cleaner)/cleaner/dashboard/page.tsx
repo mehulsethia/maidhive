@@ -11,6 +11,7 @@ import { Dialog, DialogTitle } from '@/components/ui/dialog'
 import { UserAvatar } from '@/components/ui/user-avatar'
 import { DashboardPageSkeleton } from '@/components/page-skeletons'
 import { EmptyState } from '@/components/empty-state'
+import { reportLoadError, resetLoadError } from '@/lib/load-error-policy'
 import { formatCurrency, formatDate } from '@/lib/utils'
 import type { BookingRead, BookingStatus, CleanerOnboardingProgress } from '@/types'
 import { deriveCleanerLifecycleStatus } from '@/lib/cleaner-status'
@@ -72,18 +73,20 @@ export default function CleanerDashboardPage() {
         setRejectionReason(cleaner?.rejection_reason ?? '')
         setProfileComplete(cleaner?.profile_complete ?? false)
         setAvgRating(cleaner?.average_rating ?? null)
+        resetLoadError('cleaner-dashboard-profile')
       } catch {
-        toast.error('Failed to load profile data.')
+        reportLoadError('cleaner-dashboard-profile', 'Failed to load profile data.')
       }
 
       try {
         const bookingRes = await bookingsApi.my()
         setBookings(bookingRes.data?.items ?? [])
+        resetLoadError('cleaner-dashboard-bookings')
       } catch {
-        toast.error('Failed to load bookings.')
+        reportLoadError('cleaner-dashboard-bookings', 'Failed to load bookings.')
       }
     } catch {
-      toast.error('Failed to load dashboard data.')
+      reportLoadError('cleaner-dashboard-root', 'Failed to load dashboard data.')
     } finally {
       setLoading(false)
     }

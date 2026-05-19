@@ -16,6 +16,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Select } from '@/components/ui/select'
 import { UserAvatar } from '@/components/ui/user-avatar'
+import { reportLoadError, resetLoadError } from '@/lib/load-error-policy'
 import {
   getCleanerProposalEligibility,
   PLATFORM_BOOKING_WINDOW_DAYS,
@@ -95,8 +96,9 @@ export default function CleanerBookingsPage() {
       }
       const res = await bookingsApi.my()
       setBookings(res.data?.items ?? [])
+      resetLoadError('cleaner-bookings')
     } catch {
-      toast.error('Failed to load bookings.')
+      reportLoadError('cleaner-bookings', 'Failed to load bookings.')
     } finally {
       setLoading(false)
     }

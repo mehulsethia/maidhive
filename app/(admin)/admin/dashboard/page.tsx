@@ -19,9 +19,9 @@ import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { UserAvatar } from '@/components/ui/user-avatar'
 import { LoadingSpinner } from '@/components/loading-spinner'
+import { reportLoadError, resetLoadError } from '@/lib/load-error-policy'
 import { formatDate } from '@/lib/utils'
 import type { AdminOpsQueues, AdminStats } from '@/types'
-import { toast } from 'sonner'
 
 function KpiCard({
   label,
@@ -104,8 +104,9 @@ export default function AdminDashboard() {
       const [statsRes, queuesRes] = await Promise.all([adminApi.getStats(), adminApi.getOpsQueues()])
       setStats(statsRes.data ?? null)
       setQueues(queuesRes.data ?? null)
+      resetLoadError('admin-dashboard')
     } catch {
-      toast.error('Failed to load dashboard data.')
+      reportLoadError('admin-dashboard', 'Failed to load dashboard data.')
     } finally {
       setLoading(false)
     }

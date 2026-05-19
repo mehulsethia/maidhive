@@ -21,6 +21,7 @@ export interface PaginatedResponse<T> {
 export interface UserRead {
   id: string
   email: string
+  email_confirmed_at?: string | null
   name: string
   phone?: string
   phone_verified_at?: string | null

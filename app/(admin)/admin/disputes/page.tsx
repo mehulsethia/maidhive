@@ -14,6 +14,7 @@ import { Input } from '@/components/ui/input'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { LoadingSpinner } from '@/components/loading-spinner'
 import { EmptyState } from '@/components/empty-state'
+import { reportLoadError, resetLoadError } from '@/lib/load-error-policy'
 import { formatDate, formatCurrency } from '@/lib/utils'
 import type { AdminDispute } from '@/types'
 import { toast } from 'sonner'
@@ -169,8 +170,9 @@ export default function AdminDisputesPage() {
     try {
       const res = await adminApi.listDisputes()
       setDisputes(res.data ?? [])
+      resetLoadError('admin-disputes')
     } catch {
-      toast.error('Failed to load disputes.')
+      reportLoadError('admin-disputes', 'Failed to load disputes.')
     } finally {
       setLoading(false)
     }

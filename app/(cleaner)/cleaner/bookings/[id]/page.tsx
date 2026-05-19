@@ -30,6 +30,7 @@ import {
   toTimeValueInCyprus,
 } from '@/lib/booking-proposal'
 import { isChatActiveForBooking, isChatReadOnly } from '@/lib/chat-window'
+import { reportLoadError, resetLoadError } from '@/lib/load-error-policy'
 import { formatCurrency, formatDate } from '@/lib/utils'
 import { createClient } from '@/lib/supabase'
 import type { BookingRead } from '@/types'
@@ -83,8 +84,11 @@ export default function CleanerBookingDetailPage() {
 
   const refresh = () =>
     bookingsApi.getById(id)
-      .then(r => setBooking(r.data ?? null))
-      .catch(() => toast.error('Failed to load booking'))
+      .then((r) => {
+        setBooking(r.data ?? null)
+        resetLoadError('cleaner-booking-detail')
+      })
+      .catch(() => reportLoadError('cleaner-booking-detail', 'Failed to load booking'))
       .finally(() => setLoading(false))
 
   useEffect(() => {

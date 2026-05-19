@@ -20,6 +20,7 @@ import { DetailPageSkeleton } from '@/components/page-skeletons'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
 import { UserAvatar } from '@/components/ui/user-avatar'
+import { reportLoadError, resetLoadError } from '@/lib/load-error-policy'
 import { isChatActiveForBooking } from '@/lib/chat-window'
 import { formatCurrency, formatDate } from '@/lib/utils'
 import { pickupFullLabel } from '@/lib/transport-pickup'
@@ -69,9 +70,10 @@ export default function CleanerProfilePage() {
           }
           setLoading(false)
         })
+        resetLoadError('client-cleaner-detail')
       })
       .catch(() => {
-        toast.error('Failed to load cleaner profile')
+        reportLoadError('client-cleaner-detail', 'Failed to load cleaner profile')
         setLoading(false)
       })
   }, [id])

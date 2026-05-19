@@ -1,18 +1,47 @@
 import jwt from 'jsonwebtoken'
 import { createServerClient } from '@supabase/ssr'
 import { NextRequest, NextResponse } from 'next/server'
-import { db, ensureDbSchema } from './db'
+import { db } from './db'
 import type { User } from '@prisma/client'
 
 export type RouteContext = { params: Promise<Record<string, string>> }
 type AuthedHandler = (req: NextRequest, ctx: RouteContext, user: User) => Promise<NextResponse>
 type Handler = (req: NextRequest, ctx: RouteContext) => Promise<NextResponse>
 
-export async function getAuthUser(req: NextRequest): Promise<User | null> {
-  await ensureDbSchema()
-
+function getBearerToken(req: NextRequest): string | null {
   const authHeader = req.headers.get('authorization')
   const token = authHeader?.replace('Bearer ', '').trim()
+  return token || null
+}
+
+function createRequestSupabaseClient(req: NextRequest) {
+  return createServerClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+    {
+      cookies: {
+        getAll: () => req.cookies.getAll(),
+        setAll: () => {
+          /* no-op - middleware handles cookie refresh */
+        },
+      },
+    },
+  )
+}
+
+export async function getAuthSessionUser(req: NextRequest) {
+  try {
+    const supabase = createRequestSupabaseClient(req)
+    const { data, error } = await supabase.auth.getUser()
+    if (error || !data.user) return null
+    return data.user
+  } catch {
+    return null
+  }
+}
+
+export async function getAuthUser(req: NextRequest): Promise<User | null> {
+  const token = getBearerToken(req)
 
   // 1) Primary path: Bearer token verification (for explicit API auth headers).
   if (token && process.env.SUPABASE_JWT_SECRET) {
@@ -37,23 +66,9 @@ export async function getAuthUser(req: NextRequest): Promise<User | null> {
   //    cookies on the request, so we can safely read them here. setAll is a
   //    no-op because we only need to read the (already-refreshed) cookies.
   try {
-    const supabase = createServerClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL!,
-      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-      {
-        cookies: {
-          getAll: () => req.cookies.getAll(),
-          setAll: () => {
-            /* no-op — middleware handles cookie refresh */
-          },
-        },
-      },
-    )
-
-    const { data, error } = await supabase.auth.getUser()
-    if (error || !data.user) return null
-
-    const user = await db.user.findUnique({ where: { id: data.user.id } })
+    const authSessionUser = await getAuthSessionUser(req)
+    if (!authSessionUser) return null
+    const user = await db.user.findUnique({ where: { id: authSessionUser.id } })
     if (!user || !user.isActive || user.deletedAt) return null
     return user
   } catch {

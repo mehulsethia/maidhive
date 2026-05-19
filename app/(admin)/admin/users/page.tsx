@@ -9,6 +9,7 @@ import { Badge } from '@/components/ui/badge'
 import { Select } from '@/components/ui/select'
 import { LoadingSpinner } from '@/components/loading-spinner'
 import { EmptyState } from '@/components/empty-state'
+import { reportLoadError, resetLoadError } from '@/lib/load-error-policy'
 import { formatDate } from '@/lib/utils'
 import { cn } from '@/lib/utils'
 import type { AdminUser } from '@/types'
@@ -41,8 +42,9 @@ export default function AdminUsersPage() {
       setUsers(res.data?.items ?? [])
       setTotal(res.data?.total ?? 0)
       setHasNext(res.data?.has_next ?? false)
+      resetLoadError('admin-users')
     } catch {
-      toast.error('Failed to load users.')
+      reportLoadError('admin-users', 'Failed to load users.')
     } finally {
       setLoading(false)
     }

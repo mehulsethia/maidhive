@@ -27,6 +27,7 @@ import {
   toTimeLabelInCyprus,
   toTimeValueInCyprus,
 } from '@/lib/booking-proposal'
+import { reportLoadError, resetLoadError } from '@/lib/load-error-policy'
 import { formatDate } from '@/lib/utils'
 import { createClient } from '@/lib/supabase'
 import { isChatActiveForBooking, isChatReadOnly } from '@/lib/chat-window'
@@ -116,8 +117,11 @@ export default function ClientBookingDetailPage() {
   const refresh = () =>
     bookingsApi
       .getById(id)
-      .then((response) => setBooking(response.data ?? null))
-      .catch(() => toast.error('Failed to load booking'))
+      .then((response) => {
+        setBooking(response.data ?? null)
+        resetLoadError('client-booking-detail')
+      })
+      .catch(() => reportLoadError('client-booking-detail', 'Failed to load booking'))
       .finally(() => setLoading(false))
 
   useEffect(() => {

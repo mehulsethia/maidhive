@@ -4,21 +4,30 @@ let cachedToken: string | null = null
 let cachedExpiry = 0 // unix ms
 let inflightTokenPromise: Promise<string | null> | null = null
 
+type AccessTokenOptions = {
+  forceRefresh?: boolean
+}
+
 /**
  * Returns a valid access token, using cache when possible.
  * Only calls getUser() (network) if token expires within 5 min.
  */
-export async function getAccessToken(): Promise<string | null> {
+export async function getAccessToken(options: AccessTokenOptions = {}): Promise<string | null> {
   const now = Date.now()
   const REFRESH_BUFFER = 30 * 1000 // only proactively refresh when truly near expiry
+  const forceRefresh = Boolean(options.forceRefresh)
 
   // If cache is fresh, return immediately
-  if (cachedToken && cachedExpiry - now > REFRESH_BUFFER) {
+  if (!forceRefresh && cachedToken && cachedExpiry - now > REFRESH_BUFFER) {
     return cachedToken
   }
 
-  if (inflightTokenPromise) {
+  if (!forceRefresh && inflightTokenPromise) {
     return inflightTokenPromise
+  }
+
+  if (forceRefresh) {
+    inflightTokenPromise = null
   }
 
   inflightTokenPromise = (async () => {
@@ -30,7 +39,7 @@ export async function getAccessToken(): Promise<string | null> {
 
     if (session) {
       const expiresAt = (session.expires_at ?? 0) * 1000 // convert to ms
-      if (expiresAt - now > REFRESH_BUFFER) {
+      if (!forceRefresh && expiresAt - now > REFRESH_BUFFER) {
         // Token still valid, cache and return
         cachedToken = session.access_token
         cachedExpiry = expiresAt
@@ -38,7 +47,7 @@ export async function getAccessToken(): Promise<string | null> {
       }
 
       // Avoid blocking app navigation on proactive refresh if token is still valid.
-      if (expiresAt > now) {
+      if (!forceRefresh && expiresAt > now) {
         cachedToken = session.access_token
         cachedExpiry = expiresAt
         return cachedToken
@@ -69,6 +78,10 @@ export async function getAccessToken(): Promise<string | null> {
   } finally {
     inflightTokenPromise = null
   }
+}
+
+export async function refreshAccessToken(): Promise<string | null> {
+  return getAccessToken({ forceRefresh: true })
 }
 
 /** Clear cache on logout */

@@ -11,6 +11,7 @@ import { UserAvatar } from '@/components/ui/user-avatar'
 import { Input } from '@/components/ui/input'
 import { Select } from '@/components/ui/select'
 import { CleanerCard } from '@/components/cleaner-card'
+import { reportLoadError, resetLoadError } from '@/lib/load-error-policy'
 import { formatCurrency } from '@/lib/utils'
 import type { CleanerSummary } from '@/types'
 import { toast } from 'sonner'
@@ -117,8 +118,9 @@ export default function ClientCleanersPage() {
         setFavoriteCleanerIds(favoriteIds)
         setLoading(false)
       })
+      resetLoadError('client-cleaners')
     } catch {
-      toast.error('Failed to load cleaners.')
+      reportLoadError('client-cleaners', 'Failed to load cleaners.')
       setCleaners([])
       setLoading(false)
     }

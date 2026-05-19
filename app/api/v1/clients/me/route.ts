@@ -1,6 +1,6 @@
 import { NextRequest } from 'next/server'
 import { z } from 'zod'
-import { requireClient } from '@/server/auth'
+import { getAuthSessionUser, requireClient } from '@/server/auth'
 import { clientRepo } from '@/server/repositories/client.repo'
 import { userRepo } from '@/server/repositories/user.repo'
 import { ok, err } from '@/server/response'
@@ -16,12 +16,21 @@ const updateClientMeSchema = z.object({
   default_country: z.string().trim().length(2).nullable().optional().refine((value) => value == null || value.toUpperCase() === MVP_COUNTRY_CODE, `${MVP_COUNTRY_CODE} only for MVP`),
 })
 
-export const GET = requireClient(async (_req, _ctx, user) => {
+export const GET = requireClient(async (req, _ctx, user) => {
   let client = await clientRepo.findByUserId(user.id)
   if (!client) {
     client = await clientRepo.create(user.id)
   }
-  return ok(client)
+  const authSessionUser = await getAuthSessionUser(req)
+  return ok({
+    ...client,
+    user: client.user
+      ? {
+          ...client.user,
+          email_confirmed_at: authSessionUser?.email_confirmed_at ?? null,
+        }
+      : undefined,
+  })
 })
 
 export const PATCH = requireClient(async (req: NextRequest, _ctx, user) => {

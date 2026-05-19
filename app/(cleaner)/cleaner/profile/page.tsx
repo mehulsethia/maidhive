@@ -17,6 +17,7 @@ import { PhoneInput } from '@/components/phone-input'
 import { ScheduleEditor } from '@/components/schedule-editor'
 import { getAccessToken } from '@/lib/auth-cache'
 import { toApiV1Url } from '@/lib/api-base'
+import { reportLoadError, resetLoadError } from '@/lib/load-error-policy'
 import { createClient } from '@/lib/supabase'
 import { formatCurrency } from '@/lib/utils'
 import type { BookingRead, ReviewRead, CleanerOnboardingProgress } from '@/types'
@@ -131,11 +132,10 @@ function CleanerProfilePageContent() {
   async function loadAll(showSkeleton = true) {
     if (showSkeleton) setLoading(true)
     try {
-      const [meRes, bookingRes, stripeRes, authUserRes] = await Promise.all([
+      const [meRes, bookingRes, stripeRes] = await Promise.all([
         cleanersApi.me(),
         bookingsApi.my(),
         paymentsApi.getConnectStatus(),
-        createClient().auth.getUser().catch(() => null),
       ])
 
       const c = (meRes.data?.cleaner ?? {}) as any
@@ -158,7 +158,7 @@ function CleanerProfilePageContent() {
       setCleanerId(c.id ?? '')
       setFullName(user.name ?? '')
       setEmail(user.email ?? '')
-      setEmailVerified(Boolean((authUserRes as any)?.data?.user?.email_confirmed_at))
+      setEmailVerified(Boolean(user.email_confirmed_at))
       setPhone(user.phone ?? '')
       setPersistedPhone(user.phone ?? '')
       setPhoneVerified(Boolean(user.phone_verified_at))
@@ -205,8 +205,9 @@ function CleanerProfilePageContent() {
       } else {
         setReviews([])
       }
+      resetLoadError('cleaner-profile')
     } catch {
-      toast.error('Failed to load profile.')
+      reportLoadError('cleaner-profile', 'Failed to load profile.')
     } finally {
       if (showSkeleton) setLoading(false)
     }

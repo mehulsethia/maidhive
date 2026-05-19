@@ -27,6 +27,7 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
 import { LoadingSpinner } from '@/components/loading-spinner'
 import { EmptyState } from '@/components/empty-state'
 import { UserAvatar } from '@/components/ui/user-avatar'
+import { reportLoadError, resetLoadError } from '@/lib/load-error-policy'
 import { formatCurrency, formatDate } from '@/lib/utils'
 import type { AdminCleaner } from '@/types'
 import {
@@ -285,8 +286,9 @@ export default function AdminCleanersPage() {
     try {
       const res = await adminApi.listCleaners({ status })
       setCleaners((prev) => ({ ...prev, [status]: res.data?.items ?? [] }))
+      resetLoadError(`admin-cleaners-${status}`)
     } catch {
-      toast.error(`Failed to load ${status.replace('_', ' ')} cleaners.`)
+      reportLoadError(`admin-cleaners-${status}`, `Failed to load ${status.replace('_', ' ')} cleaners.`)
     } finally {
       setLoading(false)
     }

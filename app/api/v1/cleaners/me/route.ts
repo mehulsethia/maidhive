@@ -1,5 +1,5 @@
 import { NextRequest } from 'next/server'
-import { requireCleaner } from '@/server/auth'
+import { getAuthSessionUser, requireCleaner } from '@/server/auth'
 import { db } from '@/server/db'
 import { cleanerRepo } from '@/server/repositories/cleaner.repo'
 import { availabilityRepo } from '@/server/repositories/availability.repo'
@@ -60,7 +60,7 @@ function toLegacyIdType(value: string | null | undefined): string | null | undef
   return value
 }
 
-export const GET = requireCleaner(async (_req, _ctx, user) => {
+export const GET = requireCleaner(async (req, _ctx, user) => {
   let cleaner = await cleanerRepo.findByUserId(user.id)
 
   // Auto-create the cleaner profile if it doesn't exist yet (e.g. sync race condition)
@@ -83,10 +83,17 @@ export const GET = requireCleaner(async (_req, _ctx, user) => {
       _avg: { rating: true },
     }),
   ])
+  const authSessionUser = await getAuthSessionUser(req)
 
   return ok({
     cleaner: {
       ...withCleanerAliases(cleaner),
+      user: cleaner.user
+        ? {
+            ...cleaner.user,
+            email_confirmed_at: authSessionUser?.email_confirmed_at ?? null,
+          }
+        : undefined,
       totalJobs: completedJobsCount,
       averageRating: reviewAgg._avg.rating ?? null,
       lifecycle_status: deriveCleanerLifecycleStatus({

@@ -9,9 +9,9 @@ import { Button } from '@/components/ui/button'
 import { LoadingSpinner } from '@/components/loading-spinner'
 import { EmptyState } from '@/components/empty-state'
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
+import { reportLoadError, resetLoadError } from '@/lib/load-error-policy'
 import { formatCurrency, formatDate } from '@/lib/utils'
 import type { BookingRead, BookingStatus } from '@/types'
-import { toast } from 'sonner'
 
 // ── Status groupings ──────────────────────────────────────────────────────────
 
@@ -128,8 +128,9 @@ export default function AdminBookingsPage() {
       setBookings(res.data?.items ?? [])
       setTotal(res.data?.total ?? 0)
       setHasNext(res.data?.has_next ?? false)
+      resetLoadError('admin-bookings')
     } catch {
-      toast.error('Failed to load bookings.')
+      reportLoadError('admin-bookings', 'Failed to load bookings.')
     } finally {
       setLoading(false)
     }

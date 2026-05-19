@@ -1,8 +1,8 @@
 /**
- * Typed API client for the MaidHive FastAPI backend.
+ * Typed API client for the MaidHive API routes.
  * Every request attaches the Supabase JWT from the current session.
  */
-import { getAccessToken } from '@/lib/auth-cache'
+import { getAccessToken, refreshAccessToken } from '@/lib/auth-cache'
 import { getApiBaseUrl } from '@/lib/api-base'
 import type {
   AdminCleaner,
@@ -36,9 +36,20 @@ import type {
 
 const BASE = getApiBaseUrl()
 const GET_CACHE_TTL_MS = Number(process.env.NEXT_PUBLIC_API_CLIENT_CACHE_TTL_MS ?? 30000)
+const REQUEST_TIMEOUT_MS = Number(process.env.NEXT_PUBLIC_API_REQUEST_TIMEOUT_MS ?? 9000)
+const GET_RETRY_BACKOFF_MS = Number(process.env.NEXT_PUBLIC_API_GET_RETRY_BACKOFF_MS ?? 350)
 
 type AnyObj = Record<string, any>
 type CachedResponse = { expiresAt: number; data: unknown }
+
+class ApiRequestError extends Error {
+  constructor(
+    message: string,
+    readonly status: number,
+  ) {
+    super(message)
+  }
+}
 
 const getResponseCache = new Map<string, CachedResponse>()
 const inFlightGetRequests = new Map<string, Promise<unknown>>()
@@ -73,8 +84,8 @@ function normalizePaginated<T>(payload: AnyObj, key: string): PaginatedResponse<
   }
 }
 
-async function getAuthHeaders(): Promise<HeadersInit> {
-  const token = await getAccessToken()
+async function getAuthHeaders(forceRefresh = false): Promise<HeadersInit> {
+  const token = forceRefresh ? await refreshAccessToken() : await getAccessToken()
   return {
     'Content-Type': 'application/json',
     ...(token ? { Authorization: `Bearer ${token}` } : {}),
@@ -86,14 +97,56 @@ export function clearApiCache() {
   inFlightGetRequests.clear()
 }
 
+async function sleep(ms: number) {
+  await new Promise((resolve) => setTimeout(resolve, ms))
+}
+
+function isTransientStatus(status: number) {
+  return status === 401 || status === 403 || status === 408 || status === 429 || status >= 500
+}
+
+function isTransientFetchError(error: unknown) {
+  if (!(error instanceof Error)) return false
+  if (error.name === 'AbortError') return true
+  const msg = error.message.toLowerCase()
+  return msg.includes('network') || msg.includes('fetch') || msg.includes('timeout') || msg.includes('aborted')
+}
+
 async function executeRequest<T>(path: string, options: RequestInit, method: string): Promise<T> {
-  const headers = await getAuthHeaders()
-  const res = await fetch(`${BASE}/api/v1${path}`, {
-    ...options,
-    cache: 'no-store',
-    credentials: 'include',
-    headers: { ...headers, ...options.headers },
-  })
+  const runRequest = async (forceRefresh = false) => {
+    const headers = await getAuthHeaders(forceRefresh)
+    const controller = new AbortController()
+    const timeout = setTimeout(() => controller.abort('request-timeout'), REQUEST_TIMEOUT_MS)
+    try {
+      return await fetch(`${BASE}/api/v1${path}`, {
+        ...options,
+        cache: 'no-store',
+        credentials: 'include',
+        headers: { ...headers, ...options.headers },
+        signal: controller.signal,
+      })
+    } finally {
+      clearTimeout(timeout)
+    }
+  }
+
+  let res: Response
+  try {
+    res = await runRequest(false)
+  } catch (error) {
+    if (method === 'GET' && isTransientFetchError(error)) {
+      await sleep(GET_RETRY_BACKOFF_MS)
+      res = await runRequest(true)
+    } else {
+      throw error
+    }
+  }
+
+  if (method === 'GET' && !res.ok && isTransientStatus(res.status)) {
+    await sleep(GET_RETRY_BACKOFF_MS)
+    res = await runRequest(true)
+  }
+
   if (!res.ok) {
     if (method !== 'GET') {
       // A failed mutation can still change server state (e.g. idempotent endpoints).
@@ -120,7 +173,7 @@ async function executeRequest<T>(path: string, options: RequestInit, method: str
             ? detail.message ?? detail.error ?? null
             : null
     const rawMessage = String(detailMessage ?? parsedError?.message ?? `Request failed: ${res.status}`)
-    throw new Error(toUserFriendlyErrorMessage(rawMessage, res.status))
+    throw new ApiRequestError(toUserFriendlyErrorMessage(rawMessage, res.status), res.status)
   }
 
   const json = (await res.json()) as T

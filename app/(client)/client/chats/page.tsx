@@ -12,9 +12,9 @@ import { SplitChatPageSkeleton } from '@/components/page-skeletons'
 import { Input } from '@/components/ui/input'
 import { UserAvatar } from '@/components/ui/user-avatar'
 import { isChatActiveForBooking, isChatReadOnly } from '@/lib/chat-window'
+import { reportLoadError, resetLoadError } from '@/lib/load-error-policy'
 import { formatDate } from '@/lib/utils'
 import type { BookingRead } from '@/types'
-import { toast } from 'sonner'
 
 const displayFont = Bricolage_Grotesque({ subsets: ['latin'], weight: ['400', '500', '700', '800'] })
 const monoFont = IBM_Plex_Mono({ subsets: ['latin'], weight: ['400', '500', '600'] })
@@ -61,8 +61,9 @@ function ClientChatsPageContent() {
           setCurrentUserId(userRes.data.user?.id ?? meRes?.data?.id ?? null)
           setLoading(false)
         })
+        resetLoadError('client-chats')
       } catch {
-        toast.error('Failed to load chats.')
+        reportLoadError('client-chats', 'Failed to load chats.')
         setLoading(false)
       }
     })()

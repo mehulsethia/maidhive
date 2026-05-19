@@ -11,9 +11,9 @@ import { Input } from '@/components/ui/input'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { UserAvatar } from '@/components/ui/user-avatar'
 import { isChatActiveForBooking, isChatReadOnly } from '@/lib/chat-window'
+import { reportLoadError, resetLoadError } from '@/lib/load-error-policy'
 import { formatDate } from '@/lib/utils'
 import type { BookingRead } from '@/types'
-import { toast } from 'sonner'
 
 const SERVICE_LABELS: Record<string, string> = {
   standard: 'Standard Clean',
@@ -51,8 +51,9 @@ export default function CleanerChatsPage() {
           })
           setBookings(chatBookings)
           setSelectedBookingId(chatBookings[0]?.id ?? null)
+          resetLoadError('cleaner-chats')
         } else {
-          toast.error('Failed to load chats.')
+          reportLoadError('cleaner-chats', 'Failed to load chats.')
         }
 
         const supabaseUserId =
@@ -61,7 +62,7 @@ export default function CleanerChatsPage() {
           meRes.status === 'fulfilled' ? meRes.value.data?.id : null
         setCurrentUserId(supabaseUserId ?? apiUserId ?? null)
       } catch {
-        toast.error('Failed to load chats.')
+        reportLoadError('cleaner-chats', 'Failed to load chats.')
       } finally {
         setLoading(false)
       }

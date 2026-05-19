@@ -13,6 +13,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Select } from '@/components/ui/select'
 import { Textarea } from '@/components/ui/textarea'
+import { reportLoadError, resetLoadError } from '@/lib/load-error-policy'
 import { formatDate } from '@/lib/utils'
 import type { BookingRead, ClientDispute } from '@/types'
 import { toast } from 'sonner'
@@ -79,8 +80,9 @@ function CleanerReportPageContent() {
         }
         setLoading(false)
       })
+      resetLoadError('cleaner-report')
     } catch {
-      toast.error('Failed to load reports.')
+      reportLoadError('cleaner-report', 'Failed to load reports.')
       setLoading(false)
     }
   }

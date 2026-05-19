@@ -18,12 +18,12 @@ import { Separator } from '@/components/ui/separator'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { BookableCalendar } from '@/components/ui/bookable-calendar'
 import { UserAvatar } from '@/components/ui/user-avatar'
+import { reportLoadError, resetLoadError } from '@/lib/load-error-policy'
 import { formatCurrency, cn, APP_TIMEZONE } from '@/lib/utils'
 import { MAX_SAVED_ADDRESSES, MVP_CITY, normalizeCyprusPostcode } from '@/lib/location-policy'
 import { pickupFullLabel } from '@/lib/transport-pickup'
 import type { CleanerRead, PriceBreakdown, BookingRead, ClientProfileRead, ClientAddressRead } from '@/types'
 import { toast } from 'sonner'
-import { createClient } from '@/lib/supabase'
 
 const stripePromise = loadStripe(process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY!)
 const displayFont = Bricolage_Grotesque({ subsets: ['latin'], weight: ['400', '500', '700', '800'] })
@@ -1003,12 +1003,8 @@ export default function BookingFlowPage() {
 
   async function refreshVerificationStatus() {
     try {
-      const [authUserRes, clientRes] = await Promise.all([
-        createClient().auth.getUser(),
-        clientsApi.me().catch(() => null),
-      ])
-      const authUser = authUserRes.data.user
-      const nextEmailVerified = Boolean(authUser?.email_confirmed_at)
+      const clientRes = await clientsApi.me().catch(() => null)
+      const nextEmailVerified = Boolean((clientRes as any)?.data?.user?.email_confirmed_at)
       const nextPhoneVerified = Boolean((clientRes as any)?.data?.user?.phone_verified_at)
       setEmailVerified(nextEmailVerified)
       setPhoneVerified(nextPhoneVerified)
@@ -1065,9 +1061,8 @@ export default function BookingFlowPage() {
       cleanersApi.getById(cleanerId),
       clientsApi.me().catch(() => null),
       clientsApi.listAddresses().catch(() => null),
-      createClient().auth.getUser().catch(() => null),
     ])
-      .then(([cleanerRes, clientRes, addressRes, authUserRes]) => {
+      .then(([cleanerRes, clientRes, addressRes]) => {
         setCleaner(cleanerRes.data ?? null)
         const cp = (clientRes as any)?.data ?? null
         const cpAny = (cp ?? {}) as any
@@ -1106,11 +1101,11 @@ export default function BookingFlowPage() {
           setApartmentDetails(defaultAddress.apartment_details ?? '')
           setAccessNotes(defaultAddress.access_notes ?? '')
         }
-        const authUser = (authUserRes as any)?.data?.user
-        setEmailVerified(Boolean(authUser?.email_confirmed_at))
+        setEmailVerified(Boolean(user?.email_confirmed_at))
         setPhoneVerified(Boolean(user?.phone_verified_at))
+        resetLoadError(`client-book-flow-${cleanerId}`)
       })
-      .catch(() => toast.error('Failed to load data'))
+      .catch(() => reportLoadError(`client-book-flow-${cleanerId}`, 'Failed to load data'))
       .finally(() => { setLoading(false) })
   }, [cleanerId])
 

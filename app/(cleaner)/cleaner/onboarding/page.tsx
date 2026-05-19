@@ -15,6 +15,7 @@ import { FormPageSkeleton } from '@/components/page-skeletons'
 import { ScheduleEditor } from '@/components/schedule-editor'
 import { getAccessToken } from '@/lib/auth-cache'
 import { toApiV1Url } from '@/lib/api-base'
+import { reportLoadError, resetLoadError } from '@/lib/load-error-policy'
 import { cn } from '@/lib/utils'
 import type { CleanerOnboardingProgress, CleanerRead } from '@/types'
 import { toast } from 'sonner'
@@ -369,8 +370,9 @@ function CleanerOnboardingPageContent() {
       }
 
       setStripeConnected(Boolean(stripeRes.data?.connected))
+      resetLoadError('cleaner-onboarding')
     } catch (err: any) {
-      toast.error(err?.message ?? 'Failed to load onboarding.')
+      reportLoadError('cleaner-onboarding', err?.message ?? 'Failed to load onboarding.')
     } finally {
       setLoading(false)
     }
