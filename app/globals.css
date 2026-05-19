@@ -181,3 +181,12 @@ textarea {
 .scrollbar-hide::-webkit-scrollbar {
   display: none;
 }
+
+/* Keep stage/header banners static across the app (no sweeping grain animation). */
+.client-stage__grain,
+.cleaner-stage__grain,
+.admin-stage__grain,
+.dashboard-stage__grain {
+  animation: none !important;
+  transform: none !important;
+}
