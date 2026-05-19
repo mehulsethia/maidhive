@@ -1,4 +1,4 @@
-import { NextRequest } from 'next/server'
+import { NextRequest, after } from 'next/server'
 import { requireAuth, requireClient } from '@/server/auth'
 import { bookingRepo } from '@/server/repositories/booking.repo'
 import { clientRepo } from '@/server/repositories/client.repo'
@@ -19,36 +19,38 @@ export const GET = requireAuth(async (req: NextRequest, _ctx, user) => {
   if (user.role === 'client') {
     let client = await clientRepo.findByUserId(user.id)
     if (!client) client = await clientRepo.create(user.id)
-    let [bookings, total] = await bookingRepo.findByClient(client.id, { page, pageSize: page_size, status })
-    try {
-      const changed = await bookingService.reconcileDeadlinesForBookings(bookings.map((b) => b.id))
-      if (changed) {
-        ;[bookings, total] = await bookingRepo.findByClient(client.id, { page, pageSize: page_size, status })
+    const [bookings, total] = await bookingRepo.findByClient(client.id, { page, pageSize: page_size, status })
+    const bookingIds = bookings.map((b) => b.id)
+    // Reconcile deadlines AFTER the response is sent so it doesn't add to user-visible latency.
+    // Any state changes will be visible on the next refresh.
+    after(async () => {
+      try {
+        await bookingService.reconcileDeadlinesForBookings(bookingIds)
+      } catch (error) {
+        console.error('bookings.list.client.reconcile failed', {
+          userId: user.id,
+          message: error instanceof Error ? error.message : String(error),
+        })
       }
-    } catch (error) {
-      console.error('bookings.list.client.reconcile failed', {
-        userId: user.id,
-        message: error instanceof Error ? error.message : String(error),
-      })
-    }
+    })
     return ok({ bookings, total, page, page_size })
   }
 
   if (user.role === 'cleaner') {
     let cleaner = await cleanerRepo.findByUserId(user.id)
     if (!cleaner) cleaner = await cleanerRepo.create(user.id)
-    let [bookings, total] = await bookingRepo.findByCleaner(cleaner.id, { page, pageSize: page_size, status })
-    try {
-      const changed = await bookingService.reconcileDeadlinesForBookings(bookings.map((b) => b.id))
-      if (changed) {
-        ;[bookings, total] = await bookingRepo.findByCleaner(cleaner.id, { page, pageSize: page_size, status })
+    const [bookings, total] = await bookingRepo.findByCleaner(cleaner.id, { page, pageSize: page_size, status })
+    const bookingIds = bookings.map((b) => b.id)
+    after(async () => {
+      try {
+        await bookingService.reconcileDeadlinesForBookings(bookingIds)
+      } catch (error) {
+        console.error('bookings.list.cleaner.reconcile failed', {
+          userId: user.id,
+          message: error instanceof Error ? error.message : String(error),
+        })
       }
-    } catch (error) {
-      console.error('bookings.list.cleaner.reconcile failed', {
-        userId: user.id,
-        message: error instanceof Error ? error.message : String(error),
-      })
-    }
+    })
     return ok({ bookings: sanitizeBookingsForRole(bookings as any[], 'cleaner'), total, page, page_size })
   }
 
