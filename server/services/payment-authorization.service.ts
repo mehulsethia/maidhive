@@ -116,6 +116,7 @@ export const paymentAuthorizationService = {
         await loopsEmailService.sendClientBookingConfirmed({
           email: booking.client.user.email,
           fullName: booking.client.user.name ?? 'Client',
+          cleanerId: booking.cleanerId,
           cleanerName: booking.cleaner.user.name ?? 'Cleaner',
           scheduledStart: booking.scheduledStart,
           durationHours: Number(booking.durationHours),

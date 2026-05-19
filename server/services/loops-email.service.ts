@@ -1,3 +1,5 @@
+import { cleanerRepo } from '../repositories/cleaner.repo'
+
 const LOOPS_TRANSACTIONAL_ENDPOINT =
   process.env.LOOPS_TRANSACTIONAL_ENDPOINT ?? 'https://app.loops.so/api/v1/transactional'
 const LOOPS_API_KEY = process.env.LOOPS_API_KEY ?? ''
@@ -108,6 +110,42 @@ function firstName(fullName: string) {
   return trimmed.split(/\s+/)[0] ?? 'there'
 }
 
+async function resolveBookingConfirmationNotes(args: {
+  cleanerId: string
+  cleanerName: string
+  transportMode?: string | null
+  transportPickupLocation?: string | null
+  cleaningSupplies?: string | null
+}) {
+  let transportMode = args.transportMode ?? null
+  let transportPickupLocation = args.transportPickupLocation ?? null
+  let cleaningSupplies = args.cleaningSupplies ?? null
+
+  if (
+    !transportMode ||
+    !cleaningSupplies ||
+    (transportMode === 'requires_pickup' && !transportPickupLocation)
+  ) {
+    const cleaner = await cleanerRepo.findById(args.cleanerId)
+    transportMode = transportMode ?? cleaner?.transportMode ?? null
+    transportPickupLocation = transportPickupLocation ?? cleaner?.transportPickupLocation ?? null
+    cleaningSupplies = cleaningSupplies ?? cleaner?.cleaningSupplies ?? null
+  }
+
+  const pickupLocation = (transportPickupLocation ?? '').trim() || 'the agreed pickup location'
+  const transportNote =
+    transportMode === 'requires_pickup'
+      ? `${args.cleanerName} requires a pickup and drop-off. Please arrange transport to: ${pickupLocation}`
+      : `${args.cleanerName} will make their own way to you.`
+
+  const suppliesNote =
+    cleaningSupplies !== 'own_supplies'
+      ? 'Please ensure cleaning supplies are available before the session starts.'
+      : `${args.cleanerName} will bring their own supplies.`
+
+  return { transportNote, suppliesNote }
+}
+
 export const loopsEmailService = {
   async sendAdminNewCleanerApplication(args: { cleanerName: string; cleanerEmail: string }) {
     return sendTransactionalEmail({
@@ -154,11 +192,23 @@ export const loopsEmailService = {
   async sendClientBookingConfirmed(args: {
     email: string
     fullName: string
+    cleanerId: string
     cleanerName: string
     scheduledStart: Date
     durationHours: number
     bookingId: string
+    transportMode?: string | null
+    transportPickupLocation?: string | null
+    cleaningSupplies?: string | null
   }) {
+    const { transportNote, suppliesNote } = await resolveBookingConfirmationNotes({
+      cleanerId: args.cleanerId,
+      cleanerName: args.cleanerName,
+      transportMode: args.transportMode,
+      transportPickupLocation: args.transportPickupLocation,
+      cleaningSupplies: args.cleaningSupplies,
+    })
+
     return sendTransactionalEmail({
       transactionalId: CLIENT_BOOKING_CONFIRMED_TRANSACTIONAL_ID,
       email: args.email,
@@ -168,6 +218,8 @@ export const loopsEmailService = {
         booking_date: formatBookingDate(args.scheduledStart),
         booking_time: formatBookingTime(args.scheduledStart),
         booking_duration: `${args.durationHours} hour${args.durationHours === 1 ? '' : 's'}`,
+        transport_note: transportNote,
+        supplies_note: suppliesNote,
         booking_link: `${appUrl()}/client/bookings/${args.bookingId}`,
       },
     })
