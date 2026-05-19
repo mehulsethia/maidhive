@@ -426,108 +426,116 @@ export default function CleanerBookingDetailPage() {
         <BookingStatusBadge status={booking.status} proposalBy={booking.proposal_by} showPaymentRequiredForUnpaid={false} />
       </div>
 
-      {/* Job info */}
-      <Card>
-        <CardContent className="space-y-3 px-5 pb-5 pt-6">
-          <span className="font-semibold">{resolveJobTypeTitle(booking)}</span>
-          <Separator />
-          <div className="space-y-2 text-sm text-muted-foreground">
-            <div className="flex items-center gap-2 rounded-xl border border-slate-200 bg-slate-50 px-2.5 py-2">
-              <UserAvatar
-                name={clientDisplayName}
-                imageUrl={clientAvatarUrl}
-                className="h-9 w-9 shrink-0 border border-white object-cover shadow-sm"
-                textClassName="text-xs"
-                fallback="C"
-              />
-              <div className="min-w-0">
-                <p className="text-[11px] font-medium uppercase tracking-wide text-slate-500">Client</p>
-                <p className="truncate text-sm font-semibold text-slate-800">{clientDisplayName}</p>
-              </div>
-            </div>
-            <p className="flex items-center gap-2"><Calendar className="h-4 w-4" />{formatDate(booking.scheduled_start)}</p>
-            <p className="flex items-center gap-2"><Clock className="h-4 w-4" />{booking.duration_hours} hours</p>
-            <p className="flex items-center gap-2"><MapPin className="h-4 w-4" />{booking.address}, {booking.city}, {booking.postcode}</p>
-            {((booking.client as any)?.idFileUrl || (booking.client as any)?.id_file_url) && (
-              <p className="text-xs font-medium text-emerald-700">Client trust badge: ID provided</p>
-            )}
-            <div className="flex flex-wrap items-center gap-2">
-              {memberSinceLabel && (
-                <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-medium text-slate-600">
-                  Member since {memberSinceLabel}
-                </span>
-              )}
-              <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-medium text-slate-600">
-                {completedBookingsCount} completed bookings
-              </span>
-            </div>
-            {booking.status === 'pending' && (
-              <p className="text-xs text-slate-500">Only approximate location details are shown before acceptance to protect client privacy.</p>
-            )}
-            {booking.apartment_details && (
-              <p className="text-xs text-slate-500">Apartment details: {booking.apartment_details}</p>
-            )}
-            {booking.access_notes && (
-              <p className="text-xs text-slate-500">Access notes: {booking.access_notes}</p>
-            )}
-            {revealExpired ? (
-              <p className="text-xs text-slate-500">Phone access for this booking has expired.</p>
-            ) : canRevealPhone ? (
-              clientPhone ? (
-                phoneRevealed ? (
-                  <p className="text-xs text-slate-500">Phone: {clientPhone}</p>
-                ) : (
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    className="h-8 w-fit px-3 text-xs"
-                    onClick={() => setPhoneRevealed(true)}
-                  >
-                    Reveal number
-                  </Button>
-                )
-              ) : (
-                <p className="text-xs text-slate-500">Client phone is not available yet.</p>
-              )
-            ) : (
-              <p className="text-xs text-slate-500">
-                Client number becomes available 6 hours before the booking.
-              </p>
-            )}
-          </div>
-          {booking.special_instructions && (
-            <>
+      <section className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,0.9fr)]">
+        <div className="min-w-0 space-y-4">
+          {/* Job info */}
+          <Card>
+            <CardContent className="space-y-3 px-5 pb-5 pt-6">
+              <span className="font-semibold">{resolveJobTypeTitle(booking)}</span>
               <Separator />
-              <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Special instructions</p>
-              <BookingInstructions value={booking.special_instructions} />
-            </>
-          )}
-        </CardContent>
-      </Card>
-
-      {/* Earnings */}
-      <Card>
-        <CardContent className="px-5 pb-5 pt-6">
-          <div className="space-y-2">
-            <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-              <div>
-                <p className="text-sm text-muted-foreground">You will earn</p>
-                <p className="text-2xl font-bold text-green-700">{formatCurrency(booking.cleaner_payout)}</p>
-                <p className="text-xs text-muted-foreground mt-0.5">
-                  {isCancelledPreConfirmation ? 'Informational only — this request was cancelled before confirmation.' : 'Released 24h after job completion'}
-                </p>
+              <div className="space-y-2 text-sm text-muted-foreground">
+                <div className="flex items-center gap-2 rounded-xl border border-slate-200 bg-slate-50 px-2.5 py-2">
+                  <UserAvatar
+                    name={clientDisplayName}
+                    imageUrl={clientAvatarUrl}
+                    className="h-9 w-9 shrink-0 border border-white object-cover shadow-sm"
+                    textClassName="text-xs"
+                    fallback="C"
+                  />
+                  <div className="min-w-0">
+                    <p className="text-[11px] font-medium uppercase tracking-wide text-slate-500">Client</p>
+                    <p className="truncate text-sm font-semibold text-slate-800">{clientDisplayName}</p>
+                  </div>
+                </div>
+                <p className="flex items-center gap-2"><Calendar className="h-4 w-4" />{formatDate(booking.scheduled_start)}</p>
+                <p className="flex items-center gap-2"><Clock className="h-4 w-4" />{booking.duration_hours} hours</p>
+                <p className="flex items-center gap-2"><MapPin className="h-4 w-4" />{booking.address}, {booking.city}, {booking.postcode}</p>
+                {((booking.client as any)?.idFileUrl || (booking.client as any)?.id_file_url) && (
+                  <p className="text-xs font-medium text-emerald-700">Client trust badge: ID provided</p>
+                )}
+                <div className="flex flex-wrap items-center gap-2">
+                  {memberSinceLabel && (
+                    <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-medium text-slate-600">
+                      Member since {memberSinceLabel}
+                    </span>
+                  )}
+                  <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-medium text-slate-600">
+                    {completedBookingsCount} completed bookings
+                  </span>
+                </div>
+                {booking.status === 'pending' && (
+                  <p className="text-xs text-slate-500">Only approximate location details are shown before acceptance to protect client privacy.</p>
+                )}
+                {booking.apartment_details && (
+                  <p className="text-xs text-slate-500">Apartment details: {booking.apartment_details}</p>
+                )}
+                {booking.access_notes && (
+                  <p className="text-xs text-slate-500">Access notes: {booking.access_notes}</p>
+                )}
+                {revealExpired ? (
+                  <p className="text-xs text-slate-500">Phone access for this booking has expired.</p>
+                ) : canRevealPhone ? (
+                  clientPhone ? (
+                    phoneRevealed ? (
+                      <p className="text-xs text-slate-500">Phone: {clientPhone}</p>
+                    ) : (
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="h-8 w-fit px-3 text-xs"
+                        onClick={() => setPhoneRevealed(true)}
+                      >
+                        Reveal number
+                      </Button>
+                    )
+                  ) : (
+                    <p className="text-xs text-slate-500">Client phone is not available yet.</p>
+                  )
+                ) : (
+                  <p className="text-xs text-slate-500">
+                    Client number becomes available 6 hours before the booking.
+                  </p>
+                )}
               </div>
-              <div className="text-right text-sm text-muted-foreground">
-                <p>{formatCurrency(booking.hourly_rate)}/hr</p>
-                <p>{booking.duration_hours}h</p>
-              </div>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
+              {booking.special_instructions && (
+                <>
+                  <Separator />
+                  <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Special instructions</p>
+                  <BookingInstructions value={booking.special_instructions} />
+                </>
+              )}
+            </CardContent>
+          </Card>
 
-      {/* Actions */}
-      <div className="flex flex-col gap-2">
+          {/* Earnings */}
+          <Card>
+            <CardContent className="px-5 pb-5 pt-6">
+              <div className="space-y-2">
+                <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                  <div>
+                    <p className="text-sm text-muted-foreground">You will earn</p>
+                    <p className="text-2xl font-bold text-green-700">{formatCurrency(booking.cleaner_payout)}</p>
+                    <p className="text-xs text-muted-foreground mt-0.5">
+                      {isCancelledPreConfirmation ? 'Informational only — this request was cancelled before confirmation.' : 'Released 24h after job completion'}
+                    </p>
+                  </div>
+                  <div className="text-right text-sm text-muted-foreground">
+                    <p>{formatCurrency(booking.hourly_rate)}/hr</p>
+                    <p>{booking.duration_hours}h</p>
+                  </div>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+
+        <div className="min-w-0 space-y-4">
+          <Card>
+            <CardHeader className="pb-1">
+              <CardTitle className="text-base">Next actions</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-2">
+              <div className="flex flex-col gap-2">
         {isCancelledPreConfirmation && (
           <p className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">
             This booking request was cancelled by the client before confirmation.
@@ -743,27 +751,30 @@ export default function CleanerBookingDetailPage() {
             Report a problem is available during the job and up to 24 hours after scheduled completion.
           </p>
         )}
-      </div>
+              </div>
+            </CardContent>
+          </Card>
 
-      {/* Chat */}
-      {showChat && currentUserId ? (
-        <Card>
-          <CardHeader><CardTitle className="text-base">Messages</CardTitle></CardHeader>
-        <CardContent className="p-0">
-          <Chat
-            bookingId={id}
-            currentUserId={currentUserId}
-            readOnly={chatIsReadOnly}
-            readOnlyMessage="Chat closes 30 minutes after the scheduled end time."
-            autoScroll={false}
-          />
-        </CardContent>
-      </Card>
-      ) : !showChat ? (
-        <p className="text-xs text-center text-muted-foreground">
-          Chat is available for confirmed bookings and closes 30 minutes after scheduled end.
-        </p>
-      ) : null}
+          {showChat && currentUserId ? (
+            <Card>
+              <CardHeader><CardTitle className="text-base">Messages</CardTitle></CardHeader>
+              <CardContent className="p-0">
+                <Chat
+                  bookingId={id}
+                  currentUserId={currentUserId}
+                  readOnly={chatIsReadOnly}
+                  readOnlyMessage="Chat closes 30 minutes after the scheduled end time."
+                  autoScroll={false}
+                />
+              </CardContent>
+            </Card>
+          ) : !showChat ? (
+            <p className="text-xs text-center text-muted-foreground">
+              Chat is available for confirmed bookings and closes 30 minutes after scheduled end.
+            </p>
+          ) : null}
+        </div>
+      </section>
 
       {/* Decline dialog */}
       <Dialog open={cancelOpen} onClose={() => setCancelOpen(false)}>
