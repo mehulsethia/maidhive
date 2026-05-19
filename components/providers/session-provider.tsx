@@ -1,6 +1,6 @@
 'use client'
 
-import { createContext, useContext, useEffect } from 'react'
+import { createContext, useContext, useRef } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import type { InitialSession, SessionCounts } from '@/server/session-bootstrap'
 
@@ -14,12 +14,15 @@ export function SessionProvider({
   children: React.ReactNode
 }) {
   const queryClient = useQueryClient()
+  const seededRef = useRef(false)
 
-  // Seed the sidebar-counts cache so useCounts() returns instantly on mount
-  // and only background-refetches afterwards.
-  useEffect(() => {
+  // Seed the sidebar-counts cache synchronously during render, BEFORE child
+  // useCounts() effects fire. Using a ref guard prevents repeated overwrites
+  // on re-renders so background refetches aren't clobbered.
+  if (!seededRef.current) {
     queryClient.setQueryData<SessionCounts>(['sidebar-counts'], initialSession.counts)
-  }, [queryClient, initialSession.counts])
+    seededRef.current = true
+  }
 
   return <SessionContext.Provider value={initialSession}>{children}</SessionContext.Provider>
 }
