@@ -36,7 +36,9 @@ import type {
 
 const BASE = getApiBaseUrl()
 const GET_CACHE_TTL_MS = Number(process.env.NEXT_PUBLIC_API_CLIENT_CACHE_TTL_MS ?? 30000)
-const REQUEST_TIMEOUT_MS = Number(process.env.NEXT_PUBLIC_API_REQUEST_TIMEOUT_MS ?? 9000)
+const REQUEST_TIMEOUT_MS = Number(process.env.NEXT_PUBLIC_API_REQUEST_TIMEOUT_MS ?? 20000)
+const GET_REQUEST_TIMEOUT_MS = Number(process.env.NEXT_PUBLIC_API_GET_REQUEST_TIMEOUT_MS ?? 30000)
+const RETRY_REQUEST_TIMEOUT_MS = Number(process.env.NEXT_PUBLIC_API_RETRY_TIMEOUT_MS ?? 45000)
 const GET_RETRY_BACKOFF_MS = Number(process.env.NEXT_PUBLIC_API_GET_RETRY_BACKOFF_MS ?? 350)
 
 type AnyObj = Record<string, any>
@@ -113,10 +115,13 @@ function isTransientFetchError(error: unknown) {
 }
 
 async function executeRequest<T>(path: string, options: RequestInit, method: string): Promise<T> {
-  const runRequest = async (forceRefresh = false) => {
+  const runRequest = async (forceRefresh = false, timeoutMs = REQUEST_TIMEOUT_MS) => {
     const headers = await getAuthHeaders(forceRefresh)
     const controller = new AbortController()
-    const timeout = setTimeout(() => controller.abort('request-timeout'), REQUEST_TIMEOUT_MS)
+    const timeout =
+      timeoutMs > 0
+        ? setTimeout(() => controller.abort('request-timeout'), timeoutMs)
+        : null
     try {
       return await fetch(`${BASE}/api/v1${path}`, {
         ...options,
@@ -126,17 +131,20 @@ async function executeRequest<T>(path: string, options: RequestInit, method: str
         signal: controller.signal,
       })
     } finally {
-      clearTimeout(timeout)
+      if (timeout) clearTimeout(timeout)
     }
   }
 
+  const initialTimeoutMs = method === 'GET' ? GET_REQUEST_TIMEOUT_MS : REQUEST_TIMEOUT_MS
+  const retryTimeoutMs = Math.max(initialTimeoutMs, RETRY_REQUEST_TIMEOUT_MS)
+
   let res: Response
   try {
-    res = await runRequest(false)
+    res = await runRequest(false, initialTimeoutMs)
   } catch (error) {
     if (method === 'GET' && isTransientFetchError(error)) {
       await sleep(GET_RETRY_BACKOFF_MS)
-      res = await runRequest(true)
+      res = await runRequest(true, retryTimeoutMs)
     } else {
       throw error
     }
@@ -144,7 +152,7 @@ async function executeRequest<T>(path: string, options: RequestInit, method: str
 
   if (method === 'GET' && !res.ok && isTransientStatus(res.status)) {
     await sleep(GET_RETRY_BACKOFF_MS)
-    res = await runRequest(true)
+    res = await runRequest(true, retryTimeoutMs)
   }
 
   if (!res.ok) {

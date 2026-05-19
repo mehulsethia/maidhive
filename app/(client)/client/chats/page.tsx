@@ -56,7 +56,7 @@ function ClientChatsPageContent() {
             chatBookings[0]?.id ??
             null
           setSelectedBookingId(initialSelection)
-          setCurrentUserId(meRes?.data?.id ?? null)
+          setCurrentUserId(meRes?.data?.id ?? chatBookings[0]?.client?.user?.id ?? null)
           setLoading(false)
         })
         resetLoadError('client-chats')
@@ -84,10 +84,11 @@ function ClientChatsPageContent() {
   })
 
   const selected = deferredBookings.find((booking) => booking.id === selectedBookingId) ?? null
+  const effectiveCurrentUserId = currentUserId ?? selected?.client?.user?.id ?? null
 
   if (loading) return <SplitChatPageSkeleton />
 
-  if (!currentUserId) {
+  if (!effectiveCurrentUserId && selected) {
     return (
       <div className="rounded-2xl border border-slate-200 bg-white p-8 text-center text-slate-500">
         Unable to load your account for chat.
@@ -217,7 +218,7 @@ function ClientChatsPageContent() {
                 <div className="min-h-0 flex-1">
                   <Chat
                     bookingId={selected.id}
-                    currentUserId={currentUserId}
+                    currentUserId={effectiveCurrentUserId!}
                     fullHeight
                     readOnly={isChatReadOnly(selected.scheduled_end)}
                     readOnlyMessage="Chat closes 30 minutes after the scheduled end time."

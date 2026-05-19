@@ -38,13 +38,14 @@ export default function CleanerChatsPage() {
   useEffect(() => {
     ;(async () => {
       try {
+        let chatBookings: BookingRead[] = []
         const [bookingsRes, meRes] = await Promise.allSettled([
           bookingsApi.my(),
           authApi.me(),
         ])
 
         if (bookingsRes.status === 'fulfilled') {
-          const chatBookings = (bookingsRes.value.data?.items ?? []).filter((b) => {
+          chatBookings = (bookingsRes.value.data?.items ?? []).filter((b) => {
             return isChatActiveForBooking(b)
           })
           setBookings(chatBookings)
@@ -56,7 +57,7 @@ export default function CleanerChatsPage() {
 
         const apiUserId =
           meRes.status === 'fulfilled' ? meRes.value.data?.id : null
-        setCurrentUserId(apiUserId ?? null)
+        setCurrentUserId(apiUserId ?? chatBookings[0]?.cleaner?.user?.id ?? null)
       } catch {
         reportLoadError('cleaner-chats', 'Failed to load chats.')
       } finally {
@@ -87,7 +88,9 @@ export default function CleanerChatsPage() {
 
   if (loading) return <SplitChatPageSkeleton />
 
-  if (!currentUserId) {
+  const effectiveCurrentUserId = currentUserId ?? selected?.cleaner?.user?.id ?? null
+
+  if (!effectiveCurrentUserId && selected) {
     return (
       <div className="space-y-6">
         <div className="rounded-2xl border border-slate-200 bg-white p-8 text-center text-slate-500">
@@ -172,7 +175,7 @@ export default function CleanerChatsPage() {
               <div className="min-h-0 flex-1">
                 <Chat
                   bookingId={selected.id}
-                  currentUserId={currentUserId}
+                  currentUserId={effectiveCurrentUserId!}
                   fullHeight
                   readOnly={isChatReadOnly(selected.scheduled_end)}
                   readOnlyMessage="Chat closes 30 minutes after the scheduled end time."
