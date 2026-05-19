@@ -472,30 +472,6 @@ export default function CleanerBookingDetailPage() {
                 {booking.access_notes && (
                   <p className="text-xs text-slate-500">Access notes: {booking.access_notes}</p>
                 )}
-                {revealExpired ? (
-                  <p className="text-xs text-slate-500">Phone access for this booking has expired.</p>
-                ) : canRevealPhone ? (
-                  clientPhone ? (
-                    phoneRevealed ? (
-                      <p className="text-xs text-slate-500">Phone: {clientPhone}</p>
-                    ) : (
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        className="h-8 w-fit px-3 text-xs"
-                        onClick={() => setPhoneRevealed(true)}
-                      >
-                        Reveal number
-                      </Button>
-                    )
-                  ) : (
-                    <p className="text-xs text-slate-500">Client phone is not available yet.</p>
-                  )
-                ) : (
-                  <p className="text-xs text-slate-500">
-                    Client number becomes available 6 hours before the booking.
-                  </p>
-                )}
               </div>
               {booking.special_instructions && (
                 <>
@@ -530,6 +506,36 @@ export default function CleanerBookingDetailPage() {
         </div>
 
         <div className="min-w-0 space-y-4">
+          <Card>
+            <CardContent className="space-y-2 px-5 pb-5 pt-6 sm:px-6 sm:pb-6 sm:pt-6">
+              <h2 className="text-lg font-semibold tracking-[-0.02em] text-slate-900">
+                Client contact
+              </h2>
+              {revealExpired ? (
+                <p className="text-sm text-slate-500">Phone access for this booking has expired.</p>
+              ) : canRevealPhone ? (
+                clientPhone ? (
+                  phoneRevealed ? (
+                    <p className="text-sm text-slate-600">{clientPhone}</p>
+                  ) : (
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="h-8 px-3 text-xs"
+                      onClick={() => setPhoneRevealed(true)}
+                    >
+                      Reveal number
+                    </Button>
+                  )
+                ) : (
+                  <p className="text-sm text-slate-500">Client phone is not available yet.</p>
+                )
+              ) : (
+                <p className="text-sm text-slate-500">Client number becomes available 6 hours before the booking.</p>
+              )}
+            </CardContent>
+          </Card>
+
           <Card>
             <CardHeader className="pb-1">
               <CardTitle className="text-base">Next actions</CardTitle>
@@ -757,7 +763,7 @@ export default function CleanerBookingDetailPage() {
 
           {showChat && currentUserId ? (
             <Card>
-              <CardHeader><CardTitle className="text-base">Messages</CardTitle></CardHeader>
+              <CardHeader className="pb-2"><CardTitle className="text-base">Messages</CardTitle></CardHeader>
               <CardContent className="p-0">
                 <Chat
                   bookingId={id}

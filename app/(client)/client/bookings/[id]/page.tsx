@@ -716,7 +716,7 @@ export default function ClientBookingDetailPage() {
 
             {showChat && currentUserId ? (
               <Card className="border-slate-200 bg-white/90">
-                <CardHeader>
+                <CardHeader className="pb-2">
                   <CardTitle className="text-base">Messages</CardTitle>
                 </CardHeader>
                 <CardContent className="p-0">
