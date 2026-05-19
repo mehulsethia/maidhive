@@ -291,10 +291,30 @@ export const bookingService = {
       if (!Number.isFinite(startWindowClosesAtMs) || Date.now() > startWindowClosesAtMs) {
         throw new ServiceError('Start Job is unavailable more than 24 hours after scheduled end time.', 400)
       }
-      return bookingRepo.update(bookingId, {
+      const updated = await bookingRepo.update(bookingId, {
         status: 'in_progress',
         startedAt: new Date(),
       })
+      await pushInAppNotification({
+        userId: booking.client.userId,
+        type: 'booking_started',
+        title: 'Job started',
+        body: 'Cleaner has started your booking.',
+        data: { booking_id: bookingId },
+      })
+      try {
+        await loopsEmailService.sendClientBookingStarted({
+          email: booking.client.user.email,
+          fullName: booking.client.user.name ?? 'Client',
+          cleanerName: booking.cleaner.user.name ?? 'Cleaner',
+          scheduledStart: booking.scheduledStart,
+          durationHours: Number(booking.durationHours),
+          bookingId: booking.id,
+        })
+      } catch (emailError) {
+        console.error('Failed to send client job started email via Loops:', emailError)
+      }
+      return updated
     }
 
     if (action === 'accept') {

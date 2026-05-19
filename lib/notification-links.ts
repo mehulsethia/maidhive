@@ -16,6 +16,7 @@ export function getNotificationHref(role: UserRole, notification: NotificationRe
     case 'booking_request':
     case 'booking_created_pending':
     case 'booking_accepted':
+    case 'booking_started':
     case 'booking_proposed_new_time':
     case 'booking_counter_proposal':
     case 'booking_time_agreed':
