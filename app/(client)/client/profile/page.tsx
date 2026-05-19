@@ -576,7 +576,7 @@ export default function ClientProfilePage() {
           </div>
         </section>
 
-        <section className="grid gap-4 lg:grid-cols-[340px_1fr]">
+        <section className="grid gap-4 xl:grid-cols-[340px_1fr]">
           <div className="rounded-[1.5rem] border border-slate-200/80 bg-white/90 p-5 shadow-[0_18px_45px_rgba(11,33,78,0.08)] backdrop-blur-sm">
             <div className="flex items-start gap-4">
               <AvatarUpload

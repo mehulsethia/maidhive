@@ -173,9 +173,8 @@ export function Chat({
     <div
       className={cn(
         'flex flex-col overflow-hidden rounded-2xl border bg-background',
-        fullHeight ? 'h-full min-h-0' : '',
+        fullHeight ? 'h-full min-h-0' : 'h-[22rem] sm:h-[24rem] lg:h-[26rem]',
       )}
-      style={fullHeight ? undefined : { height: 420 }}
     >
       {/* Header */}
       <div className="px-4 py-3 border-b bg-muted/40 text-sm font-medium shrink-0">

@@ -540,7 +540,7 @@ function CleanerProfilePageContent() {
 
       {lifecycleStatus === 'rejected' ? (
         <div className="rounded-2xl border border-red-200 bg-gradient-to-r from-red-50 to-rose-50 px-4 py-3">
-          <div className="flex items-center justify-between gap-3">
+          <div className="flex flex-col items-start gap-3 sm:flex-row sm:items-center sm:justify-between">
             <div>
               <p className="text-sm font-semibold text-red-900">Your profile was not approved.</p>
               {rejectionReason && (
@@ -607,7 +607,7 @@ function CleanerProfilePageContent() {
         </div>
       ) : null}
 
-      <div className="grid gap-4 lg:grid-cols-[320px_1fr]">
+      <div className="grid gap-4 xl:grid-cols-[320px_1fr]">
         <div className="space-y-4">
           <Card className="border-slate-200">
             <CardContent className="p-5 !pt-6 text-center">

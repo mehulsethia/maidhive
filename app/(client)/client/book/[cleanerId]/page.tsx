@@ -1825,7 +1825,7 @@ export default function BookingFlowPage() {
             </p>
           )}
 
-          <div className={cn('grid gap-6', step < 4 ? 'lg:grid-cols-[1fr_320px]' : 'max-w-2xl mx-auto w-full')}>
+          <div className={cn('grid gap-6', step < 4 ? 'xl:grid-cols-[1fr_320px]' : 'max-w-2xl mx-auto w-full')}>
         {/* Main content */}
         <div>
           {/* ── Step 1: Service & Date ─────────────────────────────── */}
