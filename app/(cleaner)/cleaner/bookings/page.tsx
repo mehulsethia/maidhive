@@ -66,10 +66,18 @@ export default function CleanerBookingsPage() {
   const proposalMinDate = toDateInputValueCyprus(new Date())
   const proposalMaxDate = maxPreConfirmationProposalDateInputValue()
 
-  function getStartJobAvailability(scheduledStart: string) {
+  function getStartJobAvailability(scheduledStart: string, scheduledEnd: string) {
     const startsAt = new Date(scheduledStart).getTime()
+    const endsAt = new Date(scheduledEnd).getTime()
     if (!Number.isFinite(startsAt)) {
       return { canStart: false, reason: 'Start job is unavailable for this booking time.' }
+    }
+    if (!Number.isFinite(endsAt)) {
+      return { canStart: false, reason: 'Start job is unavailable for this booking time.' }
+    }
+    const lateCutoff = endsAt + 24 * 60 * 60 * 1000
+    if (Date.now() > lateCutoff) {
+      return { canStart: false, reason: 'Start Job is unavailable more than 24 hours after scheduled end time.' }
     }
     const unlocksAt = startsAt - START_JOB_EARLY_WINDOW_MS
     if (Date.now() >= unlocksAt) return { canStart: true, reason: '' }
@@ -257,7 +265,7 @@ export default function CleanerBookingsPage() {
 
   function pendingValidityLabel(bookingStart?: string, acceptBy?: string) {
     if (!acceptBy) {
-      return 'This request expires 24 hours after card authorisation. If the cleaner does not respond, the booking request will expire automatically and your card authorisation will be released.'
+      return 'This request expires 1 hour before the scheduled start time. If the cleaner does not respond, the booking request will expire automatically and your card authorisation will be released.'
     }
     const validUntilText = new Date(acceptBy).toLocaleString('en-IE', {
       hour: 'numeric',
@@ -349,7 +357,7 @@ export default function CleanerBookingsPage() {
                   ? new Date(memberSinceRaw).toLocaleDateString('en-IE', { month: 'short', year: 'numeric' })
                   : null
                 const completedBookingsCount = Number(trust?.completedBookingsCount ?? 0)
-                const startJobState = getStartJobAvailability(b.scheduled_start)
+                const startJobState = getStartJobAvailability(b.scheduled_start, b.scheduled_end)
                 const clientName = b.client?.user?.name?.trim() || 'Client'
                 const clientAvatarUrl = b.client?.user?.avatar_url ?? null
                 return (

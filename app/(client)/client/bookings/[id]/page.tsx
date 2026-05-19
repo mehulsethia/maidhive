@@ -62,7 +62,7 @@ function isOverdueUnpaidDraftLike(booking: BookingRead) {
 
 function pendingValidityLabel(booking: BookingRead) {
   if (!booking.accept_by) {
-    return 'This request expires 24 hours after card authorisation. If the cleaner does not respond, the booking request will expire automatically and your card authorisation will be released.'
+    return 'This request expires 1 hour before the scheduled start time. If the cleaner does not respond, the booking request will expire automatically and your card authorisation will be released.'
   }
   const validUntilText = new Date(booking.accept_by).toLocaleString('en-IE', {
     hour: 'numeric',

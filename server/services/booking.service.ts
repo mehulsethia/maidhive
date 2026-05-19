@@ -13,6 +13,7 @@ import type { User } from '@prisma/client'
 
 const PLATFORM_FEE_PCT = 10
 const BOOKING_ACCEPT_TTL_MINUTES = Number(process.env.BOOKING_ACCEPT_TTL_MINUTES ?? 1440)
+const BOOKING_ACCEPT_CUTOFF_BEFORE_START_MINUTES = Number(process.env.BOOKING_ACCEPT_CUTOFF_BEFORE_START_MINUTES ?? 60)
 const BOOKING_PAY_TTL_MINUTES = Number(process.env.BOOKING_PAY_TTL_MINUTES ?? 15)
 const RESCHEDULE_CUTOFF_HOURS = 24
 const MAX_BOOKING_WINDOW_DAYS = 28
@@ -29,6 +30,7 @@ const BOOKING_POST_BUFFER_MS = 15 * 60 * 1000
 const NO_SHOW_REPORT_DELAY_MINUTES = 30
 const COMPLETE_JOB_EARLY_MINUTES = 5
 const START_JOB_EARLY_MINUTES = 15
+const START_JOB_LATE_BUFFER_HOURS = 24
 
 export const bookingService = {
   previewPrice(hourlyRate: number, durationHours: number, platformFeePct = PLATFORM_FEE_PCT) {
@@ -161,8 +163,7 @@ export const bookingService = {
 
     await validateBookingWindow(cleaner.id, scheduledStart, scheduledEnd)
 
-    const requestWindowEndsAt = new Date(Date.now() + BOOKING_ACCEPT_TTL_MINUTES * 60 * 1000)
-    const acceptBy = new Date(Math.min(requestWindowEndsAt.getTime(), scheduledStart.getTime()))
+    const acceptBy = computePendingAcceptBy(Date.now(), scheduledStart)
 
     const pricing = bookingService.previewPrice(
       Number(cleaner.hourlyRate),
@@ -285,6 +286,10 @@ export const bookingService = {
       const startUnlockAtMs = new Date(booking.scheduledStart).getTime() - START_JOB_EARLY_MINUTES * 60 * 1000
       if (!Number.isFinite(startUnlockAtMs) || Date.now() < startUnlockAtMs) {
         throw new ServiceError('You can only start this job 15 minutes before the scheduled time.', 400)
+      }
+      const startWindowClosesAtMs = new Date(booking.scheduledEnd).getTime() + START_JOB_LATE_BUFFER_HOURS * 60 * 60 * 1000
+      if (!Number.isFinite(startWindowClosesAtMs) || Date.now() > startWindowClosesAtMs) {
+        throw new ServiceError('Start Job is unavailable more than 24 hours after scheduled end time.', 400)
       }
       return bookingRepo.update(bookingId, {
         status: 'in_progress',
@@ -1142,9 +1147,7 @@ function resolveRequestAcceptBy(booking: BookingWithRelations): Date | null {
     ?? null
   if (!anchor) return currentAcceptBy
 
-  const windowEnd = new Date(anchor.getTime() + BOOKING_ACCEPT_TTL_MINUTES * 60 * 1000)
-  const cappedAtScheduledStart = new Date(Math.min(windowEnd.getTime(), booking.scheduledStart.getTime()))
-  return cappedAtScheduledStart
+  return computePendingAcceptBy(anchor, booking.scheduledStart)
 }
 
 function assertRescheduleWindow(scheduledStart: Date) {
@@ -1297,6 +1300,13 @@ function assertPaymentAuthorized(paymentStatus: string | null | undefined, actio
       400,
     )
   }
+}
+
+function computePendingAcceptBy(anchorMsOrDate: number | Date, scheduledStart: Date): Date {
+  const anchorMs = anchorMsOrDate instanceof Date ? anchorMsOrDate.getTime() : anchorMsOrDate
+  const requestWindowEndsAtMs = anchorMs + BOOKING_ACCEPT_TTL_MINUTES * 60 * 1000
+  const startCutoffMs = scheduledStart.getTime() - BOOKING_ACCEPT_CUTOFF_BEFORE_START_MINUTES * 60 * 1000
+  return new Date(Math.min(requestWindowEndsAtMs, startCutoffMs))
 }
 
 async function releasePaymentAuthorization(

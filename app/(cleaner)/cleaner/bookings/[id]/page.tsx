@@ -308,7 +308,7 @@ export default function CleanerBookingDetailPage() {
   const chatIsReadOnly = isChatReadOnly(booking.scheduled_end)
   const pendingValidityLabel = (() => {
     if (!booking.accept_by) {
-      return 'This request expires 24 hours after card authorisation. If the cleaner does not respond, the booking request will expire automatically and your card authorisation will be released.'
+      return 'This request expires 1 hour before the scheduled start time. If the cleaner does not respond, the booking request will expire automatically and your card authorisation will be released.'
     }
     const validUntilText = new Date(booking.accept_by).toLocaleString('en-IE', {
       hour: 'numeric',
@@ -327,9 +327,11 @@ export default function CleanerBookingDetailPage() {
     Boolean(booking.started_at) &&
     Date.now() >= completeOpensAt
   const bookingStartsAtMs = new Date(booking.scheduled_start).getTime()
+  const bookingEndsAtMs = new Date(booking.scheduled_end).getTime()
   const millisUntilStart = bookingStartsAtMs - Date.now()
   const moreThan24HoursAway = Number.isFinite(bookingStartsAtMs) && millisUntilStart > RESCHEDULE_CUTOFF_MS
-  const canStartJobNow = Number.isFinite(bookingStartsAtMs) && Date.now() >= bookingStartsAtMs - START_JOB_EARLY_WINDOW_MS
+  const startWindowExpired = Number.isFinite(bookingEndsAtMs) && Date.now() > bookingEndsAtMs + 24 * 60 * 60 * 1000
+  const canStartJobNow = Number.isFinite(bookingStartsAtMs) && Date.now() >= bookingStartsAtMs - START_JOB_EARLY_WINDOW_MS && !startWindowExpired
   const cleanerReportWindowEndsAtMs = booking.scheduled_end
     ? new Date(booking.scheduled_end).getTime() + 24 * 60 * 60 * 1000
     : 0
@@ -710,7 +712,9 @@ export default function CleanerBookingDetailPage() {
         )}
         {!isCancelledPreConfirmation && (booking.status === 'accepted' || booking.status === 'confirmed') && !canStartJobNow && (
           <p className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-600">
-            Start job unlocks 15 minutes before the scheduled time.
+            {startWindowExpired
+              ? 'Start Job is unavailable more than 24 hours after scheduled end time.'
+              : 'Start job unlocks 15 minutes before the scheduled time.'}
           </p>
         )}
         {!isCancelledPreConfirmation && booking.status === 'in_progress' && !canCompleteJob && (
