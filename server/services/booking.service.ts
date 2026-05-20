@@ -1469,10 +1469,12 @@ async function completeBookingFlow(
   const dispute = await disputeRepo.findByBookingId(bookingId)
   const unresolvedDispute = Boolean(dispute && !['resolved', 'closed'].includes(String(dispute.status ?? '')))
 
+  const scheduledEndMs = booking.scheduledEnd ? booking.scheduledEnd.getTime() : Number.NaN
+  const completionAnchorAt = Number.isFinite(scheduledEndMs) ? new Date(scheduledEndMs) : args.completedAt
   const nextStatus = unresolvedDispute ? 'disputed' : 'completed'
   const updated = await bookingRepo.update(bookingId, {
     status: nextStatus,
-    completedAt: args.completedAt,
+    completedAt: completionAnchorAt,
   })
 
   await pushInAppNotification({

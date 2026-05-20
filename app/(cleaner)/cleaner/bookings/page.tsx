@@ -49,6 +49,8 @@ const SERVICE_LABELS: Record<string, string> = {
   end_of_tenancy: 'End of Tenancy',
   move_in: 'Move-in Clean',
 }
+const DISPUTE_WINDOW_HOURS = Number(process.env.NEXT_PUBLIC_DISPUTE_WINDOW_HOURS ?? 24)
+const DISPUTE_WINDOW_MS = DISPUTE_WINDOW_HOURS * 60 * 60 * 1000
 
 export default function CleanerBookingsPage() {
   const searchParams = useSearchParams()
@@ -361,6 +363,10 @@ export default function CleanerBookingsPage() {
                   : null
                 const completedBookingsCount = Number(trust?.completedBookingsCount ?? 0)
                 const startJobState = getStartJobAvailability(b.scheduled_start, b.scheduled_end)
+                const scheduledEndMs = new Date(b.scheduled_end).getTime()
+                const canReportProblem = ['in_progress', 'completed'].includes(b.status) &&
+                  Number.isFinite(scheduledEndMs) &&
+                  Date.now() <= scheduledEndMs + DISPUTE_WINDOW_MS
                 const clientName = b.client?.user?.name?.trim() || 'Client'
                 const clientAvatarUrl = b.client?.user?.avatar_url ?? null
                 return (
@@ -486,7 +492,7 @@ export default function CleanerBookingsPage() {
                       <p className="text-xs text-slate-500">{startJobState.reason}</p>
                     )}
 
-                    {['in_progress', 'completed'].includes(b.status) && (
+                    {canReportProblem && (
                       <Link
                         href={`/cleaner/report?booking=${b.id}`}
                         className="inline-flex h-8 items-center rounded-xl border border-slate-300 px-3 text-xs font-semibold text-slate-700 transition-all duration-200 hover:-translate-y-0.5 hover:bg-slate-50"

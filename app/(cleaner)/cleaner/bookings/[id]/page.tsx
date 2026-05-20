@@ -45,6 +45,8 @@ const RESCHEDULE_CUTOFF_MS = 24 * 60 * 60 * 1000
 const AMEND_MAX_SHIFT_MS = 3 * 60 * 60 * 1000
 const PHONE_REVEAL_PRE_START_MS = 6 * 60 * 60 * 1000
 const PHONE_REVEAL_POST_END_MS = 30 * 60 * 1000
+const DISPUTE_WINDOW_HOURS = Number(process.env.NEXT_PUBLIC_DISPUTE_WINDOW_HOURS ?? 24)
+const DISPUTE_WINDOW_MS = DISPUTE_WINDOW_HOURS * 60 * 60 * 1000
 
 function resolveJobTypeTitle(booking: BookingRead) {
   const snapshotMatch = booking.special_instructions?.match(/(?:^|\n)Job type:\s*([^\n]+)/i)
@@ -55,6 +57,12 @@ function resolveJobTypeTitle(booking: BookingRead) {
 
 function cyprusDateStr(date: Date) {
   return new Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/Nicosia' }).format(date)
+}
+
+function disputeWindowLabel() {
+  if (!Number.isFinite(DISPUTE_WINDOW_HOURS) || DISPUTE_WINDOW_HOURS <= 0) return '24 hours'
+  if (DISPUTE_WINDOW_HOURS >= 1) return `${DISPUTE_WINDOW_HOURS} hours`
+  return `${Math.round(DISPUTE_WINDOW_HOURS * 60)} minutes`
 }
 
 export default function CleanerBookingDetailPage() {
@@ -305,7 +313,7 @@ export default function CleanerBookingDetailPage() {
   const startWindowExpired = Number.isFinite(bookingEndsAtMs) && Date.now() > bookingEndsAtMs + 24 * 60 * 60 * 1000
   const canStartJobNow = Number.isFinite(bookingStartsAtMs) && Date.now() >= bookingStartsAtMs - START_JOB_EARLY_WINDOW_MS && !startWindowExpired
   const cleanerReportWindowEndsAtMs = booking.scheduled_end
-    ? new Date(booking.scheduled_end).getTime() + 24 * 60 * 60 * 1000
+    ? new Date(booking.scheduled_end).getTime() + DISPUTE_WINDOW_MS
     : 0
   const canReportProblem = ['in_progress', 'completed'].includes(booking.status) &&
     Date.now() <= cleanerReportWindowEndsAtMs
@@ -465,7 +473,7 @@ export default function CleanerBookingDetailPage() {
                     <p className="text-sm text-muted-foreground">You will earn</p>
                     <p className="text-2xl font-bold text-green-700">{formatCurrency(booking.cleaner_payout)}</p>
                     <p className="text-xs text-muted-foreground mt-0.5">
-                      {isCancelledPreConfirmation ? 'Informational only — this request was cancelled before confirmation.' : 'Released 24h after job completion'}
+                      {isCancelledPreConfirmation ? 'Informational only — this request was cancelled before confirmation.' : `Released after the ${disputeWindowLabel()} report window from scheduled completion`}
                     </p>
                   </div>
                   <div className="text-right text-sm text-muted-foreground">
@@ -741,7 +749,7 @@ export default function CleanerBookingDetailPage() {
         )}
         {!isCancelledPreConfirmation && booking.status !== 'disputed' && !canReportProblem && (
           <p className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-600">
-            Report issues during the booking and up to 24 hours after scheduled completion.
+            {`Report issues during the booking and up to ${disputeWindowLabel()} after scheduled completion.`}
           </p>
         )}
               </div>

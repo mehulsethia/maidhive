@@ -40,7 +40,8 @@ function sanitizeBookingForCleaner<T extends Record<string, any>>(booking: T): T
     scheduledStartMs - createdAtMs < 6 * 60 * 60 * 1000
   const unlockedByRule = Date.now() >= phoneVisibleAtMs || createdWithinSixHoursOfStart
   const isAddressVisible = ADDRESS_VISIBLE_STATUSES.has(status) && !cancelledBeforeConfirmation
-  const isPhoneVisible = isAddressVisible && unlockedByRule && Date.now() <= phoneVisibleUntilMs
+  const isPostCompletionPhoneLocked = status === 'completed' || status === 'disputed'
+  const isPhoneVisible = isAddressVisible && unlockedByRule && Date.now() <= phoneVisibleUntilMs && !isPostCompletionPhoneLocked
 
   const fullClientName = String(copy?.client?.user?.name ?? '').trim()
   const firstName = fullClientName ? fullClientName.split(/\s+/)[0] : 'Client'

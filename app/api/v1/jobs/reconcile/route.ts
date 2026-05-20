@@ -23,12 +23,11 @@ export async function POST(req: NextRequest) {
     return err('Unauthorized', 401)
   }
 
-  const [expirySummary, captureSummary, autoStartSummary, autoCompletionSummary] = await Promise.all([
-    paymentLifecycleService.expireBookingDeadlines(),
-    paymentLifecycleService.processDueCaptures(),
-    paymentLifecycleService.processAutoStarts(),
-    paymentLifecycleService.processAutoCompletions(),
-  ])
+  // Run in lifecycle order so downstream stages consume the latest booking state in the same pass.
+  const expirySummary = await paymentLifecycleService.expireBookingDeadlines()
+  const autoStartSummary = await paymentLifecycleService.processAutoStarts()
+  const autoCompletionSummary = await paymentLifecycleService.processAutoCompletions()
+  const captureSummary = await paymentLifecycleService.processDueCaptures()
 
   return ok({
     expiry: expirySummary,

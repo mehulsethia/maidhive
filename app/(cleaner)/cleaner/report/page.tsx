@@ -21,11 +21,12 @@ import { toast } from 'sonner'
 
 type ReportStatus = 'open' | 'under_review' | 'resolved' | 'closed'
 type ReportDashboardFilter = 'open' | 'under_review' | 'resolved'
-const CLEANER_WINDOW_MS = 24 * 60 * 60 * 1000
+const DISPUTE_WINDOW_HOURS = Number(process.env.NEXT_PUBLIC_DISPUTE_WINDOW_HOURS ?? 24)
+const CLEANER_WINDOW_MS = DISPUTE_WINDOW_HOURS * 60 * 60 * 1000
 const NO_SHOW_DELAY_MS = 30 * 60 * 1000
 const MAX_EVIDENCE_IMAGES = 5
 const MAX_EVIDENCE_SIZE_BYTES = 10 * 1024 * 1024
-const REPORT_AVAILABILITY_COPY = 'Report issues during the booking and up to 24 hours after scheduled completion.'
+const REPORT_AVAILABILITY_COPY = `Report issues during the booking and up to ${disputeWindowLabel()} after scheduled completion.`
 
 const STATUS_STYLES: Record<ReportStatus, string> = {
   open: 'bg-rose-100 text-rose-700',
@@ -46,6 +47,12 @@ const monoFont = IBM_Plex_Mono({ subsets: ['latin'], weight: ['400', '500', '600
 
 function getDisputeBookingId(dispute: any) {
   return dispute?.booking_id ?? dispute?.bookingId ?? ''
+}
+
+function disputeWindowLabel() {
+  if (!Number.isFinite(DISPUTE_WINDOW_HOURS) || DISPUTE_WINDOW_HOURS <= 0) return '24 hours'
+  if (DISPUTE_WINDOW_HOURS >= 1) return `${DISPUTE_WINDOW_HOURS} hours`
+  return `${Math.round(DISPUTE_WINDOW_HOURS * 60)} minutes`
 }
 
 function CleanerReportPageContent() {

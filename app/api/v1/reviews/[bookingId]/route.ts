@@ -10,7 +10,9 @@ export const POST = requireClient(async (req: NextRequest, ctx, user) => {
   const { bookingId } = await ctx.params
   const booking = await bookingRepo.findById(bookingId)
   if (!booking) return err('Booking not found', 404)
-  if (!booking.completedAt || !['completed', 'disputed'].includes(booking.status)) {
+  const scheduledEndMs = booking.scheduledEnd ? booking.scheduledEnd.getTime() : Number.NaN
+  const completionWindowOpened = Number.isFinite(scheduledEndMs) && Date.now() >= scheduledEndMs
+  if (!booking.completedAt || !['completed', 'disputed'].includes(booking.status) || !completionWindowOpened) {
     return err('Can only review completed bookings', 400)
   }
 

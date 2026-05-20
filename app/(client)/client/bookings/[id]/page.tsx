@@ -321,7 +321,8 @@ export default function ClientBookingDetailPage() {
   const canContinuePayment = !overdueUnpaidDraftLike && (booking.status === 'draft' || (booking.status === 'pending' && !isPaymentAuthorized(booking.payment?.status)))
   const canCancelDraft = !overdueUnpaidDraftLike && (booking.status === 'draft' || (booking.status === 'pending' && !isPaymentAuthorized(booking.payment?.status)))
   const canCancelBookingRequest = booking.status === 'pending' && isPaymentAuthorized(booking.payment?.status)
-  const canReview = Boolean(booking.completed_at) && ['completed', 'disputed'].includes(booking.status) && !booking.review
+  const reviewWindowOpened = Number.isFinite(new Date(booking.scheduled_end).getTime()) && Date.now() >= new Date(booking.scheduled_end).getTime()
+  const canReview = Boolean(booking.completed_at) && ['completed', 'disputed'].includes(booking.status) && !booking.review && reviewWindowOpened
   const isPending = booking.status === 'pending'
   const hasProposal = Boolean(booking.proposed_start && booking.proposal_by)
   const cleanerProposed = booking.proposal_by === 'cleaner'
