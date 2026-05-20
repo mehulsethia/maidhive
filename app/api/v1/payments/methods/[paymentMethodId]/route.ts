@@ -4,9 +4,10 @@ import { clientRepo } from '@/server/repositories/client.repo'
 import { paymentAuthorizationService } from '@/server/services/payment-authorization.service'
 import { stripe } from '@/server/stripe'
 import { db } from '@/server/db'
+import { config } from '@/server/config'
 import { ok, err } from '@/server/response'
 
-const DISPUTE_WINDOW_MS = 24 * 60 * 60 * 1000
+const DISPUTE_WINDOW_MS = config.DISPUTE_WINDOW_HOURS * 60 * 60 * 1000
 
 export const DELETE = requireClient(async (req: NextRequest, ctx, user) => {
   const { paymentMethodId } = await ctx.params
@@ -65,12 +66,12 @@ export const DELETE = requireClient(async (req: NextRequest, ctx, user) => {
   for (const booking of bookings) {
     if (!booking.payment?.stripePaymentIntentId) continue
 
-    const completedAtMs = booking.completedAt ? booking.completedAt.getTime() : 0
+    const scheduledEndMs = booking.scheduledEnd ? booking.scheduledEnd.getTime() : 0
     const withinCompletedProtection =
       booking.status === 'completed' &&
       (
-        !completedAtMs ||
-        now <= completedAtMs + DISPUTE_WINDOW_MS ||
+        !scheduledEndMs ||
+        now <= scheduledEndMs + DISPUTE_WINDOW_MS ||
         booking.payment.status !== 'captured'
       )
 

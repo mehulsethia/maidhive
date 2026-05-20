@@ -6,14 +6,7 @@ import { clientRepo } from '@/server/repositories/client.repo'
 import { cleanerRepo } from '@/server/repositories/cleaner.repo'
 import { ok, err } from '@/server/response'
 import { sendMessageSchema } from '@/server/schemas/message.schema'
-
-const CHAT_WINDOW_MINUTES = 30
-
-function isWithinChatWindow(booking: { scheduledEnd?: Date | null }) {
-  if (!booking.scheduledEnd) return false
-  const cutoff = booking.scheduledEnd.getTime() + CHAT_WINDOW_MINUTES * 60 * 1000
-  return Date.now() <= cutoff
-}
+import { canViewChatHistoryForBooking, isChatReadOnly } from '@/lib/chat-window'
 
 async function isParty(bookingId: string, userId: string, role: string) {
   const booking = await bookingRepo.findById(bookingId)
@@ -33,7 +26,7 @@ export const GET = requireAuth(async (_req, ctx, user) => {
   const { bookingId } = await ctx.params
   const booking = await isParty(bookingId, user.id, user.role)
   if (!booking) return err('Forbidden', 403)
-  if (!['confirmed', 'in_progress', 'completed', 'disputed'].includes(booking.status) || !isWithinChatWindow(booking)) {
+  if (!canViewChatHistoryForBooking({ status: booking.status, scheduled_end: booking.scheduledEnd })) {
     return err('Chat is unavailable for this booking.', 400)
   }
 
@@ -46,12 +39,12 @@ export const POST = requireAuth(async (req: NextRequest, ctx, user) => {
   const { bookingId } = await ctx.params
   const booking = await isParty(bookingId, user.id, user.role)
   if (!booking) return err('Forbidden', 403)
-  if (!['confirmed', 'in_progress', 'completed', 'disputed'].includes(booking.status)) {
-    return err('Chat is only available for confirmed bookings', 400)
+  if (!canViewChatHistoryForBooking({ status: booking.status, scheduled_end: booking.scheduledEnd })) {
+    return err('Chat is unavailable for this booking.', 400)
   }
-  if (!isWithinChatWindow(booking)) {
+  if (isChatReadOnly(booking.scheduledEnd)) {
     return err(
-      `Chat is unavailable after ${CHAT_WINDOW_MINUTES} minutes from the scheduled end time`,
+      'This booking chat is now closed. Messaging closed 30 minutes after scheduled booking completion.',
       400,
     )
   }

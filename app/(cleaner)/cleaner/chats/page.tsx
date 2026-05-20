@@ -9,7 +9,7 @@ import { SplitChatPageSkeleton } from '@/components/page-skeletons'
 import { Input } from '@/components/ui/input'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { UserAvatar } from '@/components/ui/user-avatar'
-import { isChatActiveForBooking, isChatReadOnly } from '@/lib/chat-window'
+import { canViewChatHistoryForBooking, isChatReadOnly } from '@/lib/chat-window'
 import { reportLoadError, resetLoadError } from '@/lib/load-error-policy'
 import { formatDate } from '@/lib/utils'
 import type { BookingRead } from '@/types'
@@ -46,7 +46,7 @@ export default function CleanerChatsPage() {
 
         if (bookingsRes.status === 'fulfilled') {
           chatBookings = (bookingsRes.value.data?.items ?? []).filter((b) => {
-            return isChatActiveForBooking(b)
+            return canViewChatHistoryForBooking(b)
           })
           setBookings(chatBookings)
           setSelectedBookingId(chatBookings[0]?.id ?? null)
@@ -102,8 +102,8 @@ export default function CleanerChatsPage() {
 
   return (
     <div className="space-y-6">
-      <div className="grid gap-4 lg:h-[calc(100vh-13rem)] lg:grid-cols-[300px_1fr] xl:grid-cols-[340px_1fr]">
-      <Card className="border-slate-200 lg:h-full">
+      <div className="grid gap-4 xl:h-[calc(100vh-13rem)] xl:grid-cols-[300px_1fr] 2xl:grid-cols-[340px_1fr]">
+      <Card className="min-w-0 border-slate-200 xl:h-full">
         <CardHeader className="pb-3">
           <CardTitle className="text-lg">Conversations</CardTitle>
         </CardHeader>
@@ -156,10 +156,10 @@ export default function CleanerChatsPage() {
         </CardContent>
       </Card>
 
-      <Card className="border-slate-200 lg:h-full">
+      <Card className="min-w-0 border-slate-200 xl:h-full">
         <CardContent className="h-full p-0">
           {!selected ? (
-            <div className="flex h-full min-h-[20rem] flex-col items-center justify-center gap-3 text-center text-slate-500 sm:min-h-[24rem] lg:min-h-0">
+            <div className="flex h-full min-h-[20rem] flex-col items-center justify-center gap-3 text-center text-slate-500 sm:min-h-[24rem] xl:min-h-0">
               <MessageCircleMore className="h-9 w-9 text-slate-300" />
               <p className="text-sm">Select a conversation to start chatting.</p>
             </div>
@@ -178,7 +178,7 @@ export default function CleanerChatsPage() {
                   currentUserId={effectiveCurrentUserId!}
                   fullHeight
                   readOnly={isChatReadOnly(selected.scheduled_end)}
-                  readOnlyMessage="Chat closes 30 minutes after the scheduled end time."
+                  readOnlyMessage="This booking chat is now closed. Messaging closed 30 minutes after scheduled booking completion."
                 />
               </div>
             </div>

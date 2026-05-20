@@ -9,6 +9,7 @@ import { loopsEmailService } from './loops-email.service'
 import { pushInAppNotification } from './in-app-notification.service'
 import { googleCalendarService } from './google-calendar.service'
 import { stripe } from '../stripe'
+import { config } from '../config'
 import type { User } from '@prisma/client'
 
 const PLATFORM_FEE_PCT = 10
@@ -29,6 +30,7 @@ const BOOKING_PRE_BUFFER_MS = 15 * 60 * 1000
 const BOOKING_POST_BUFFER_MS = 15 * 60 * 1000
 const NO_SHOW_REPORT_DELAY_MINUTES = 30
 const COMPLETE_JOB_EARLY_MINUTES = 5
+const COMPLETE_JOB_AUTO_GRACE_MINUTES = 5
 const START_JOB_EARLY_MINUTES = 15
 const START_JOB_LATE_BUFFER_HOURS = 24
 
@@ -50,7 +52,7 @@ export const bookingService = {
   },
 
   async reconcileSingleBookingDeadline(bookingId: string) {
-    const booking = await bookingRepo.findById(bookingId)
+    let booking = await bookingRepo.findById(bookingId)
     if (!booking) return null
 
     const nowMs = Date.now()
@@ -117,7 +119,16 @@ export const bookingService = {
       hasAuthorizedPayment &&
       booking.scheduledStart.getTime() <= nowMs
     if (shouldAutoStart) {
-      return bookingService.startBySystem(booking.id, booking.scheduledStart)
+      const started = await bookingService.startBySystem(booking.id, booking.scheduledStart)
+      if (started) booking = started
+    }
+
+    const shouldAutoComplete =
+      ['confirmed', 'in_progress', 'disputed'].includes(booking.status) &&
+      !booking.completedAt &&
+      booking.scheduledEnd.getTime() + COMPLETE_JOB_AUTO_GRACE_MINUTES * 60 * 1000 <= nowMs
+    if (shouldAutoComplete) {
+      return bookingService.completeBySystem(booking.id, booking.scheduledEnd)
     }
 
     return booking
@@ -1283,6 +1294,13 @@ function formatBookingTimeForMessage(value: Date) {
   })
 }
 
+function formatDisputeWindowLabel(hours: number) {
+  if (!Number.isFinite(hours) || hours <= 0) return '24 hours'
+  if (hours >= 1) return `${hours} hours`
+  const minutes = Math.round(hours * 60)
+  return `${minutes} minutes`
+}
+
 async function resetAuthorizationAfterReschedule(bookingId: string) {
   const booking = await bookingRepo.findById(bookingId)
   if (!booking) throw new ServiceError('Booking not found', 404)
@@ -1463,8 +1481,8 @@ async function completeBookingFlow(
     title: 'Booking completed',
     body:
       args.initiatedByRole === 'system'
-        ? 'Your booking has been marked as completed. If there was an issue, please report it within 24 hours.'
-        : 'Cleaner marked this booking as completed. If there was an issue, please report it within 24 hours.',
+        ? `Your booking has been marked as completed. If there was an issue, please report it within ${formatDisputeWindowLabel(config.DISPUTE_WINDOW_HOURS)} of scheduled completion.`
+        : `Cleaner marked this booking as completed. If there was an issue, please report it within ${formatDisputeWindowLabel(config.DISPUTE_WINDOW_HOURS)} of scheduled completion.`,
     data: { booking_id: bookingId },
   })
 
@@ -1474,8 +1492,8 @@ async function completeBookingFlow(
     title: 'Completed - awaiting release',
     body:
       args.initiatedByRole === 'system'
-        ? 'This booking was auto-completed at scheduled end time. Payout will release after the 24-hour report window if no issue is raised.'
-        : 'Booking marked complete. Payout will release after the 24-hour report window if no issue is raised.',
+        ? `This booking was auto-completed after scheduled end time. Payout will release after the ${formatDisputeWindowLabel(config.DISPUTE_WINDOW_HOURS)} report window from scheduled completion if no issue is raised.`
+        : `Booking marked complete. Payout will release after the ${formatDisputeWindowLabel(config.DISPUTE_WINDOW_HOURS)} report window from scheduled completion if no issue is raised.`,
     data: { booking_id: bookingId },
   })
 

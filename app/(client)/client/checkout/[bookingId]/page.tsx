@@ -228,8 +228,8 @@ export default function CheckoutPage() {
           </Button>
         </div>
 
-        <section className="mx-auto grid max-w-5xl gap-4 lg:grid-cols-[1fr_0.9fr]">
-          <div className="space-y-4">
+        <section className="mx-auto grid max-w-5xl gap-4 xl:grid-cols-[1fr_0.9fr]">
+          <div className="min-w-0 space-y-4">
             <Card className="border-slate-200 bg-white/90">
               <CardHeader>
                 <CardTitle>Booking summary</CardTitle>
@@ -287,7 +287,7 @@ export default function CheckoutPage() {
             </Card>
           </div>
 
-          <Card className="border-slate-200 bg-white/90">
+          <Card className="min-w-0 border-slate-200 bg-white/90">
             <CardHeader>
               <CardTitle>Card authorisation</CardTitle>
             </CardHeader>

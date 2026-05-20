@@ -9,9 +9,20 @@ import { createDisputeSchema } from '@/server/schemas/dispute.schema'
 import { loopsEmailService } from '@/server/services/loops-email.service'
 import { pushInAppNotification } from '@/server/services/in-app-notification.service'
 import { db } from '@/server/db'
+import { config } from '@/server/config'
 import { DISPUTE_REASON_LABELS } from '@/lib/dispute-issues'
 
 const NO_SHOW_DELAY_MINUTES = 30
+const DISPUTE_WINDOW_MS = config.DISPUTE_WINDOW_HOURS * 60 * 60 * 1000
+
+function disputeWindowLabel() {
+  const hours = config.DISPUTE_WINDOW_HOURS
+  if (hours >= 1) {
+    return `${hours} hours`
+  }
+  const minutes = Math.round(hours * 60)
+  return `${minutes} minutes`
+}
 
 export const POST = requireAuth(async (req: NextRequest, ctx, user) => {
   const { id } = await ctx.params
@@ -69,9 +80,9 @@ export const POST = requireAuth(async (req: NextRequest, ctx, user) => {
       return err('This report can only be raised during or after the cleaning', 400)
     }
 
-    const reportWindowEndsAt = booking.scheduledEnd.getTime() + 24 * 60 * 60 * 1000
+    const reportWindowEndsAt = booking.scheduledEnd.getTime() + DISPUTE_WINDOW_MS
     if (Date.now() > reportWindowEndsAt) {
-      return err('Reporting window has expired (24 hours after scheduled completion)', 400)
+      return err(`Reporting window has expired (${disputeWindowLabel()} after scheduled completion)`, 400)
     }
   }
 

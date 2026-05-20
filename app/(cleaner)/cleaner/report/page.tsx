@@ -299,7 +299,7 @@ function CleanerReportPageContent() {
         </div>
       </section>
 
-      <section className="grid gap-4 lg:grid-cols-[1fr_1fr]">
+      <section className="grid gap-4 xl:grid-cols-[1fr_1fr]">
         <div className="rounded-[1.5rem] border border-slate-200/80 bg-white/90 p-4 shadow-[0_18px_45px_rgba(11,33,78,0.08)] sm:p-5">
           <h2 className={`${displayFont.className} text-2xl font-bold tracking-[-0.02em] text-slate-900`}>Report a problem</h2>
           <p className="mt-1 text-sm text-slate-500">{REPORT_AVAILABILITY_COPY}</p>

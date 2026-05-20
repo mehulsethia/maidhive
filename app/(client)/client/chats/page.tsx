@@ -10,7 +10,7 @@ import { Chat } from '@/components/chat'
 import { SplitChatPageSkeleton } from '@/components/page-skeletons'
 import { Input } from '@/components/ui/input'
 import { UserAvatar } from '@/components/ui/user-avatar'
-import { isChatActiveForBooking, isChatReadOnly } from '@/lib/chat-window'
+import { canViewChatHistoryForBooking, isChatReadOnly } from '@/lib/chat-window'
 import { reportLoadError, resetLoadError } from '@/lib/load-error-policy'
 import { formatDate } from '@/lib/utils'
 import type { BookingRead } from '@/types'
@@ -44,7 +44,7 @@ function ClientChatsPageContent() {
         ])
 
         const chatBookings = (data?.items ?? []).filter((booking) => {
-          return isChatActiveForBooking(booking)
+          return canViewChatHistoryForBooking(booking)
         })
 
         startTransition(() => {
@@ -134,8 +134,8 @@ function ClientChatsPageContent() {
           </div>
         </section>
 
-        <section className="grid gap-4 lg:h-[calc(100vh-16rem)] lg:grid-cols-[300px_1fr] xl:grid-cols-[360px_1fr]">
-          <div className="flex min-h-[20rem] flex-col rounded-[1.5rem] border border-slate-200/80 bg-white/90 p-4 shadow-[0_18px_45px_rgba(11,33,78,0.08)] backdrop-blur-sm sm:min-h-[24rem] sm:p-5 lg:min-h-0">
+        <section className="grid gap-4 xl:h-[calc(100vh-16rem)] xl:grid-cols-[300px_1fr] 2xl:grid-cols-[360px_1fr]">
+          <div className="min-w-0 flex min-h-[20rem] flex-col rounded-[1.5rem] border border-slate-200/80 bg-white/90 p-4 shadow-[0_18px_45px_rgba(11,33,78,0.08)] backdrop-blur-sm sm:min-h-[24rem] sm:p-5 xl:min-h-0">
             <div>
               <h2 className={`${displayFont.className} text-2xl font-bold tracking-[-0.02em] text-slate-900`}>Conversations</h2>
               <p className="mt-1 text-sm text-slate-500">Search and switch between booking threads.</p>
@@ -195,9 +195,9 @@ function ClientChatsPageContent() {
             )}
           </div>
 
-          <div className="min-h-[20rem] rounded-[1.5rem] border border-slate-200/80 bg-white/90 p-0 shadow-[0_18px_45px_rgba(11,33,78,0.08)] backdrop-blur-sm sm:min-h-[24rem] lg:min-h-0">
+          <div className="min-w-0 min-h-[20rem] rounded-[1.5rem] border border-slate-200/80 bg-white/90 p-0 shadow-[0_18px_45px_rgba(11,33,78,0.08)] backdrop-blur-sm sm:min-h-[24rem] xl:min-h-0">
             {!selected ? (
-              <div className="flex h-full min-h-[20rem] flex-col items-center justify-center gap-3 text-center text-slate-500 sm:min-h-[24rem] lg:min-h-0">
+              <div className="flex h-full min-h-[20rem] flex-col items-center justify-center gap-3 text-center text-slate-500 sm:min-h-[24rem] xl:min-h-0">
                 <MessageCircleMore className="h-9 w-9 text-slate-300" />
                 <p className="text-sm">Select a conversation to start chatting.</p>
               </div>
@@ -221,7 +221,7 @@ function ClientChatsPageContent() {
                     currentUserId={effectiveCurrentUserId!}
                     fullHeight
                     readOnly={isChatReadOnly(selected.scheduled_end)}
-                    readOnlyMessage="Chat closes 30 minutes after the scheduled end time."
+                    readOnlyMessage="This booking chat is now closed. Messaging closed 30 minutes after scheduled booking completion."
                   />
                 </div>
               </div>

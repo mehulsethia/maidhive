@@ -13,7 +13,7 @@ import { Button } from '@/components/ui/button'
 import { Dialog, DialogTitle } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import { Select } from '@/components/ui/select'
-import { getDisputeWindowMs, isChatActiveForBooking } from '@/lib/chat-window'
+import { canViewChatHistoryForBooking, getDisputeWindowMs } from '@/lib/chat-window'
 import { reportLoadError, resetLoadError } from '@/lib/load-error-policy'
 import { formatCurrency, formatDate } from '@/lib/utils'
 import type { BookingRead, BookingStatus } from '@/types'
@@ -295,10 +295,11 @@ export default function ClientBookingsPage() {
               <div className="space-y-3">
                 {filtered.map((booking, index) => {
                   const disputeStatusForBooking = bookingDisputeStatus.get(booking.id)
-                  const completedAtMs = booking.completed_at ? new Date(booking.completed_at).getTime() : 0
-                  const isWithinDisputeWindow = completedAtMs > 0 && Date.now() <= completedAtMs + DISPUTE_WINDOW_MS
+                  const scheduledEndMs = new Date(booking.scheduled_end).getTime()
+                  const isWithinDisputeWindow =
+                    Number.isFinite(scheduledEndMs) && Date.now() <= scheduledEndMs + DISPUTE_WINDOW_MS
                   const canDispute = booking.status === 'completed' && isWithinDisputeWindow && !disputeStatusForBooking
-                  const canChat = isChatActiveForBooking(booking)
+                  const canChat = canViewChatHistoryForBooking(booking)
                   const isOverdueDraftState = isOverdueUnpaid(booking)
                   const canContinuePayment = !isOverdueDraftState && (booking.status === 'draft' || (booking.status === 'pending' && !isPaymentAuthorized(booking.payment?.status)))
                   const canCancelDraft = !isOverdueDraftState && (booking.status === 'draft' || (booking.status === 'pending' && !isPaymentAuthorized(booking.payment?.status)))

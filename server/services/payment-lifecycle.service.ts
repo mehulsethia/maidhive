@@ -5,6 +5,8 @@ import { loopsEmailService } from './loops-email.service'
 import { bookingService } from './booking.service'
 import { pushInAppNotification } from './in-app-notification.service'
 
+const AUTO_COMPLETION_GRACE_MINUTES = 5
+
 export const paymentLifecycleService = {
   async processAutoStarts(limit = 200) {
     const now = new Date()
@@ -52,14 +54,16 @@ export const paymentLifecycleService = {
   },
 
   async processAutoCompletions(limit = 200) {
+    const autoCompleteCutoff = new Date(Date.now() - AUTO_COMPLETION_GRACE_MINUTES * 60 * 1000)
     const overdue = await db.booking.findMany({
       where: {
         status: { in: ['confirmed', 'in_progress', 'disputed'] },
-        scheduledEnd: { lte: new Date() },
+        scheduledEnd: { lte: autoCompleteCutoff },
         completedAt: null,
       },
       select: {
         id: true,
+        status: true,
         scheduledEnd: true,
         dispute: {
           select: {
@@ -82,7 +86,7 @@ export const paymentLifecycleService = {
 
     for (const booking of overdue) {
       try {
-        if (booking.dispute && !['resolved', 'closed'].includes(String(booking.dispute.status ?? ''))) {
+        if (booking.status !== 'disputed' && booking.dispute && !['resolved', 'closed'].includes(String(booking.dispute.status ?? ''))) {
           summary.paused_by_dispute += 1
           continue
         }
@@ -106,7 +110,7 @@ export const paymentLifecycleService = {
         status: 'authorized',
         booking: {
           status: { in: ['completed', 'disputed'] },
-          completedAt: { lte: dueBefore },
+          scheduledEnd: { lte: dueBefore },
         },
       },
       include: {

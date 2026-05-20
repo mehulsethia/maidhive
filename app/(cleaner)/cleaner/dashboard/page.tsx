@@ -422,7 +422,7 @@ export default function CleanerDashboardPage() {
                             variant="outline"
                             disabled
                           >
-                            Waiting for client
+                            Awaiting client response
                           </Button>
                         ) : (
                           <Button

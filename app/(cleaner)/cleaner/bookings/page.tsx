@@ -426,7 +426,7 @@ export default function CleanerBookingsPage() {
                       <>
                         {eligibility.isCleanerProposal ? (
                           <Button size="sm" variant="outline" disabled>
-                            Waiting for client
+                            Awaiting client response
                           </Button>
                         ) : (
                           <Button

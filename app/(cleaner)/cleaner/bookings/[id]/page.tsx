@@ -28,7 +28,7 @@ import {
   toTimeLabelInCyprus,
   toTimeValueInCyprus,
 } from '@/lib/booking-proposal'
-import { isChatActiveForBooking, isChatReadOnly } from '@/lib/chat-window'
+import { canViewChatHistoryForBooking, isChatReadOnly } from '@/lib/chat-window'
 import { reportLoadError, resetLoadError } from '@/lib/load-error-policy'
 import { formatCurrency, formatDate } from '@/lib/utils'
 import type { BookingRead } from '@/types'
@@ -276,7 +276,7 @@ export default function CleanerBookingDetailPage() {
     canRespondToCounter,
   } = getCleanerProposalEligibility(booking)
 
-  const showChat = isChatActiveForBooking(booking)
+  const showChat = canViewChatHistoryForBooking(booking)
   const chatIsReadOnly = isChatReadOnly(booking.scheduled_end)
   const pendingValidityLabel = (() => {
     if (!booking.accept_by) {
@@ -329,10 +329,12 @@ export default function CleanerBookingDetailPage() {
     cyprusDateStr(new Date(createdAtMs)) === cyprusDateStr(new Date(bookingStartsAtMs))
   const createdWithinSixHoursOfStart = sameDayCreated && bookingStartsAtMs - createdAtMs < PHONE_REVEAL_PRE_START_MS
   const revealUnlocked = nowTick >= unlockAtMs || createdWithinSixHoursOfStart
+  const isPostCompletionPhoneLocked = ['completed', 'disputed'].includes(booking.status)
   const revealExpired = Number.isFinite(scheduledEndMs) && nowTick > scheduledEndMs + PHONE_REVEAL_POST_END_MS
   const canRevealPhone =
-    ['accepted', 'confirmed', 'in_progress', 'completed', 'disputed'].includes(booking.status) &&
+    ['accepted', 'confirmed', 'in_progress'].includes(booking.status) &&
     revealUnlocked &&
+    !isPostCompletionPhoneLocked &&
     !revealExpired
   const clientPhone = booking.client?.user?.phone ?? ''
   const isCancelledPreConfirmation = booking.status === 'cancelled' && !booking.accepted_at && !booking.confirmed_at
@@ -397,7 +399,7 @@ export default function CleanerBookingDetailPage() {
         <BookingStatusBadge status={booking.status} proposalBy={booking.proposal_by} showPaymentRequiredForUnpaid={false} />
       </div>
 
-      <section className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,0.9fr)]">
+      <section className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(0,0.9fr)]">
         <div className="min-w-0 space-y-4">
           {/* Job info */}
           <Card>
@@ -482,8 +484,8 @@ export default function CleanerBookingDetailPage() {
               <h2 className="text-lg font-semibold tracking-[-0.02em] text-slate-900">
                 Client contact
               </h2>
-              {revealExpired ? (
-                <p className="text-sm text-slate-500">Phone access for this booking has expired.</p>
+              {isPostCompletionPhoneLocked || revealExpired ? (
+                <p className="text-sm text-slate-500">Phone access is now closed for this booking.</p>
               ) : canRevealPhone ? (
                 clientPhone ? (
                   phoneRevealed ? (
@@ -754,14 +756,14 @@ export default function CleanerBookingDetailPage() {
                   bookingId={id}
                   currentUserId={currentUserId}
                   readOnly={chatIsReadOnly}
-                  readOnlyMessage="Chat closes 30 minutes after the scheduled end time."
+                  readOnlyMessage="This booking chat is now closed. Messaging closed 30 minutes after scheduled booking completion."
                   autoScroll={false}
                 />
               </CardContent>
             </Card>
           ) : !showChat ? (
             <p className="text-xs text-center text-muted-foreground">
-              Chat is available for confirmed bookings and closes 30 minutes after scheduled end.
+              Booking chat history is unavailable for this booking.
             </p>
           ) : null}
         </div>

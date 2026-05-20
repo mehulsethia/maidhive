@@ -1,7 +1,7 @@
 const DEFAULT_DISPUTE_WINDOW_HOURS = 24
 const CHAT_WINDOW_MINUTES = 30
 
-export const CHAT_ELIGIBLE_STATUSES = ['confirmed', 'in_progress', 'completed', 'disputed'] as const
+export const CHAT_HISTORY_STATUSES = ['confirmed', 'in_progress', 'completed', 'disputed'] as const
 
 export function getDisputeWindowHours() {
   const parsed = Number(process.env.NEXT_PUBLIC_DISPUTE_WINDOW_HOURS ?? DEFAULT_DISPUTE_WINDOW_HOURS)
@@ -23,11 +23,18 @@ export function isChatReadOnly(scheduledEnd?: string | Date | null, nowMs = Date
   return nowMs > getChatExpiryMs(scheduledEnd)
 }
 
+export function canViewChatHistoryForBooking(booking: {
+  status?: string | null
+  scheduled_end?: string | Date | null
+}) {
+  const status = String(booking.status ?? '')
+  return CHAT_HISTORY_STATUSES.includes(status as (typeof CHAT_HISTORY_STATUSES)[number])
+}
+
 export function isChatActiveForBooking(booking: {
   status?: string | null
   scheduled_end?: string | Date | null
 }, nowMs = Date.now()) {
-  const status = String(booking.status ?? '')
-  return CHAT_ELIGIBLE_STATUSES.includes(status as (typeof CHAT_ELIGIBLE_STATUSES)[number]) &&
+  return canViewChatHistoryForBooking(booking) &&
     !isChatReadOnly(booking.scheduled_end, nowMs)
 }

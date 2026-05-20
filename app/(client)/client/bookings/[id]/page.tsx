@@ -29,7 +29,7 @@ import {
 } from '@/lib/booking-proposal'
 import { reportLoadError, resetLoadError } from '@/lib/load-error-policy'
 import { formatDate } from '@/lib/utils'
-import { isChatActiveForBooking, isChatReadOnly } from '@/lib/chat-window'
+import { canViewChatHistoryForBooking, isChatReadOnly } from '@/lib/chat-window'
 import type { BookingRead } from '@/types'
 import { toast } from 'sonner'
 
@@ -77,6 +77,16 @@ function pendingValidityLabel(booking: BookingRead) {
 
 function cyprusDateStr(date: Date) {
   return new Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/Nicosia' }).format(date)
+}
+
+function formatReportWindowDeadline(valueMs: number) {
+  return new Date(valueMs).toLocaleString('en-IE', {
+    day: 'numeric',
+    month: 'short',
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false,
+  }).replace(',', ' at')
 }
 
 export default function ClientBookingDetailPage() {
@@ -360,7 +370,7 @@ export default function ClientBookingDetailPage() {
   const proposalMaxDate = proposalAction === 'amend_start_time'
     ? toDateInputValueCyprus(booking.scheduled_start)
     : maxAlternativeProposalDateInputValue(booking.original_scheduled_start ?? booking.scheduled_start)
-  const showChat = isChatActiveForBooking(booking)
+  const showChat = canViewChatHistoryForBooking(booking)
   const chatIsReadOnly = isChatReadOnly(booking.scheduled_end)
   const scheduledEndMs = new Date(booking.scheduled_end).getTime()
   const createdAtMs = new Date(booking.created_at).getTime()
@@ -371,16 +381,19 @@ export default function ClientBookingDetailPage() {
     cyprusDateStr(new Date(createdAtMs)) === cyprusDateStr(new Date(scheduledStartMs))
   const createdWithinSixHoursOfStart = sameDayCreated && scheduledStartMs - createdAtMs < PHONE_REVEAL_PRE_START_MS
   const revealUnlockReached = sixHoursBeforeStart || createdWithinSixHoursOfStart
+  const isPostCompletionPhoneLocked = ['completed', 'disputed'].includes(booking.status)
   const revealExpired = Number.isFinite(scheduledEndMs) && nowTick > scheduledEndMs + PHONE_REVEAL_POST_END_MS
   const canRevealCleanerPhone =
-    ['accepted', 'confirmed', 'in_progress', 'completed', 'disputed'].includes(booking.status) &&
+    ['accepted', 'confirmed', 'in_progress'].includes(booking.status) &&
     revealUnlockReached &&
+    !isPostCompletionPhoneLocked &&
     !revealExpired
   const cleanerPhone = booking.cleaner?.user?.phone ?? ''
-  const completedAtMs = booking.completed_at ? new Date(booking.completed_at).getTime() : 0
-  const reportDeadlineMs = completedAtMs ? completedAtMs + DISPUTE_WINDOW_MS : 0
-  const reportWindowActive = Boolean(completedAtMs && Date.now() <= reportDeadlineMs)
-  const reportWindowExpired = Boolean(completedAtMs && Date.now() > reportDeadlineMs)
+  const reportAnchorMs = Number.isFinite(scheduledEndMs) ? scheduledEndMs : 0
+  const reportDeadlineMs = reportAnchorMs ? reportAnchorMs + DISPUTE_WINDOW_MS : 0
+  const reportableStatus = booking.status === 'completed' || booking.status === 'disputed'
+  const reportWindowActive = Boolean(reportableStatus && reportAnchorMs && Date.now() <= reportDeadlineMs)
+  const reportWindowExpired = Boolean(reportableStatus && reportAnchorMs && Date.now() > reportDeadlineMs)
   const proposalExpiresMs = booking.proposal_expires_at ? new Date(booking.proposal_expires_at).getTime() : null
   const proposalCountdownLabel = proposalExpiresMs && proposalExpiresMs > nowTick
     ? `${Math.ceil((proposalExpiresMs - nowTick) / 60_000)} min`
@@ -434,8 +447,8 @@ export default function ClientBookingDetailPage() {
           </Button>
         </div>
 
-        <section className="grid gap-4 lg:grid-cols-[1fr_0.9fr]">
-          <div className="space-y-4">
+        <section className="grid gap-4 xl:grid-cols-[1fr_0.9fr]">
+          <div className="min-w-0 space-y-4">
             <Card className="border-slate-200 bg-white/90">
               <CardContent className="space-y-3 px-5 pb-5 pt-6 sm:px-6 sm:pb-6 sm:pt-6">
                 <h2 className={`${displayFont.className} text-xl font-semibold tracking-[-0.02em]`}>
@@ -473,14 +486,14 @@ export default function ClientBookingDetailPage() {
 
           </div>
 
-          <div className="space-y-4">
+          <div className="min-w-0 space-y-4">
             <Card className="border-slate-200 bg-white/90">
               <CardContent className="space-y-2 px-5 pb-5 pt-6 sm:px-6 sm:pb-6 sm:pt-6">
                 <h2 className={`${displayFont.className} text-lg font-semibold tracking-[-0.02em] text-slate-900`}>
                   Cleaner contact
                 </h2>
-                {revealExpired ? (
-                  <p className="text-sm text-slate-500">Phone access for this booking has expired.</p>
+                {isPostCompletionPhoneLocked || revealExpired ? (
+                  <p className="text-sm text-slate-500">Phone access is now closed for this booking.</p>
                 ) : canRevealCleanerPhone ? (
                   cleanerPhone ? (
                     phoneRevealed ? (
@@ -538,7 +551,7 @@ export default function ClientBookingDetailPage() {
                 <h2 className={`${displayFont.className} text-lg font-semibold tracking-[-0.02em] text-slate-900`}>
                   Next actions
                 </h2>
-                {Boolean(completedAtMs) && (
+                {Boolean(reportableStatus && reportAnchorMs) && (
                   <p
                     className={`rounded-xl border px-3 py-2 text-sm ${
                       reportWindowActive
@@ -547,8 +560,8 @@ export default function ClientBookingDetailPage() {
                     }`}
                   >
                     {reportWindowActive
-                      ? `Report window is active until ${new Date(reportDeadlineMs).toLocaleString('en-IE')}.`
-                      : `Report window closed on ${new Date(reportDeadlineMs).toLocaleString('en-IE')}.`}
+                      ? `Report window active until ${formatReportWindowDeadline(reportDeadlineMs)}.`
+                      : `Report window closed on ${formatReportWindowDeadline(reportDeadlineMs)}.`}
                   </p>
                 )}
                 <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap">
@@ -729,14 +742,14 @@ export default function ClientBookingDetailPage() {
                     bookingId={id}
                     currentUserId={currentUserId}
                     readOnly={chatIsReadOnly}
-                    readOnlyMessage="Chat closes 30 minutes after the scheduled end time."
+                    readOnlyMessage="This booking chat is now closed. Messaging closed 30 minutes after scheduled booking completion."
                     autoScroll={false}
                   />
                 </CardContent>
               </Card>
             ) : !showChat ? (
               <p className="text-center text-xs text-muted-foreground">
-                Chat is available for confirmed bookings and closes 30 minutes after scheduled end.
+                Booking chat history is unavailable for this booking.
               </p>
             ) : null}
           </div>
@@ -977,6 +990,7 @@ export default function ClientBookingDetailPage() {
                 </button>
               ))}
             </div>
+            <p className="mt-2 text-xs text-slate-500">1 = very poor, 5 = excellent</p>
           </div>
           <div>
             <Label>Comment (optional)</Label>

@@ -166,9 +166,9 @@ function ClientReportPageContent() {
     if (booking.status === 'in_progress') return true
 
     if (booking.status === 'completed' || booking.status === 'disputed') {
-      const completedAt = booking.completed_at ? new Date(booking.completed_at).getTime() : 0
-      if (!completedAt) return false
-      return Date.now() <= completedAt + DISPUTE_WINDOW_MS
+      const scheduledEndAt = new Date(booking.scheduled_end).getTime()
+      if (!Number.isFinite(scheduledEndAt)) return false
+      return Date.now() <= scheduledEndAt + DISPUTE_WINDOW_MS
     }
 
     if (booking.status === 'confirmed') {
@@ -340,7 +340,7 @@ function ClientReportPageContent() {
           </div>
         </section>
 
-        <section className="grid gap-4 lg:grid-cols-[1fr_1fr]">
+        <section className="grid gap-4 xl:grid-cols-[1fr_1fr]">
           <div className="rounded-[1.5rem] border border-slate-200/80 bg-white/90 p-5 shadow-[0_18px_45px_rgba(11,33,78,0.08)] backdrop-blur-sm">
             <h2 className={`${displayFont.className} text-2xl font-bold tracking-[-0.02em] text-slate-900`}>
               Report a problem
