@@ -29,6 +29,8 @@ import {
   toTimeValueInCyprus,
 } from '@/lib/booking-proposal'
 import { canViewChatHistoryForBooking, isChatReadOnly } from '@/lib/chat-window'
+import { subscribeBookingsRefresh, triggerBookingsRefresh } from '@/lib/booking-sync'
+import { showJobStartedToast } from '@/lib/job-start-toast'
 import { reportLoadError, resetLoadError } from '@/lib/load-error-policy'
 import { formatCurrency, formatDate } from '@/lib/utils'
 import type { BookingRead } from '@/types'
@@ -110,6 +112,13 @@ export default function CleanerBookingDetailPage() {
   }, [])
 
   useEffect(() => {
+    return subscribeBookingsRefresh((payload) => {
+      if (payload.bookingId && payload.bookingId !== id) return
+      refresh().catch(() => null)
+    })
+  }, [id])
+
+  useEffect(() => {
     setPhoneRevealed(false)
   }, [booking?.id, booking?.status, booking?.client?.user?.phone])
 
@@ -180,8 +189,9 @@ export default function CleanerBookingDetailPage() {
       }
 
       await bookingsApi.action(id, action, undefined, startLocation)
-      toast.success('Job started!')
+      showJobStartedToast(id)
       await refresh()
+      triggerBookingsRefresh({ bookingId: id, reason: 'cleaner-booking-detail:start' })
     } catch (err: any) {
       toast.error(err.message)
     } finally {

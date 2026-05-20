@@ -124,8 +124,13 @@ export const bookingService = {
     }
 
     const shouldAutoComplete =
-      ['confirmed', 'in_progress', 'disputed'].includes(booking.status) &&
-      !booking.completedAt &&
+      (
+        booking.status === 'in_progress' ||
+        (
+          ['confirmed', 'disputed'].includes(booking.status) &&
+          !booking.completedAt
+        )
+      ) &&
       booking.scheduledEnd.getTime() + COMPLETE_JOB_AUTO_GRACE_MINUTES * 60 * 1000 <= nowMs
     if (shouldAutoComplete) {
       return bookingService.completeBySystem(booking.id, booking.scheduledEnd)

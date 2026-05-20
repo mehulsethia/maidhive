@@ -29,6 +29,8 @@ import {
   toTimeValueInCyprus,
 } from '@/lib/booking-proposal'
 import { compareBookingsByOperationalPriority } from '@/lib/booking-priority'
+import { subscribeBookingsRefresh, triggerBookingsRefresh } from '@/lib/booking-sync'
+import { showJobStartedToast } from '@/lib/job-start-toast'
 import { formatCurrency, formatDate } from '@/lib/utils'
 import type { BookingRead, BookingStatus } from '@/types'
 import { toast } from 'sonner'
@@ -139,6 +141,12 @@ export default function CleanerBookingsPage() {
   }, [])
 
   useEffect(() => {
+    return subscribeBookingsRefresh(() => {
+      refresh().catch(() => null)
+    })
+  }, [])
+
+  useEffect(() => {
     if (!proposalBooking || !proposalDate) {
       setProposalTimeOptions([])
       setProposalTime('')
@@ -177,9 +185,10 @@ export default function CleanerBookingsPage() {
       await bookingsApi.action(id, type, customProposedStart)
       if (type === 'accept') toast.success('Booking accepted.')
       if (type === 'decline') toast.success('Booking request declined.')
-      if (type === 'start') toast.success('Job started.')
+      if (type === 'start') showJobStartedToast(id)
       if (type === 'propose_alternative') toast.success('Alternative time sent to client.')
       await refresh()
+      triggerBookingsRefresh({ bookingId: id, reason: `cleaner-bookings:${type}` })
     } catch (err: any) {
       toast.error(err.message ?? 'Action failed.')
     } finally {

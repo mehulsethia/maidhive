@@ -27,7 +27,9 @@ import {
   toTimeLabelInCyprus,
   toTimeValueInCyprus,
 } from '@/lib/booking-proposal'
+import { subscribeBookingsRefresh } from '@/lib/booking-sync'
 import { reportLoadError, resetLoadError } from '@/lib/load-error-policy'
+import { createClient } from '@/lib/supabase'
 import { formatDate } from '@/lib/utils'
 import { canViewChatHistoryForBooking, isChatReadOnly } from '@/lib/chat-window'
 import type { BookingRead } from '@/types'
@@ -225,6 +227,43 @@ export default function ClientBookingDetailPage() {
     const timer = setInterval(() => setNowTick(Date.now()), 60_000)
     return () => clearInterval(timer)
   }, [])
+
+  useEffect(() => {
+    return subscribeBookingsRefresh((payload) => {
+      if (payload.bookingId && payload.bookingId !== id) return
+      refresh().catch(() => null)
+    })
+  }, [id])
+
+  useEffect(() => {
+    const supabase = createClient()
+    let channel: ReturnType<typeof supabase.channel> | null = null
+    let active = true
+
+    ;(async () => {
+      const me = await authApi.me().catch(() => null)
+      const userId = me?.data?.id
+      if (!userId || !active) return
+
+      channel = supabase
+        .channel(`client-booking-detail-sync:${userId}:${id}`)
+        .on(
+          'postgres_changes',
+          { event: 'INSERT', schema: 'public', table: 'notifications', filter: `user_id=eq.${userId}` },
+          (payload: any) => {
+            const bookingId = payload?.new?.data?.booking_id
+            if (bookingId && bookingId !== id) return
+            refresh().catch(() => null)
+          },
+        )
+        .subscribe()
+    })()
+
+    return () => {
+      active = false
+      if (channel) supabase.removeChannel(channel)
+    }
+  }, [id])
 
   async function handleReview() {
     setActionLoading('review')

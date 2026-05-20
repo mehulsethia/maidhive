@@ -12,10 +12,12 @@ import {
   Sparkles,
 } from 'lucide-react'
 import { authApi, bookingsApi, favoritesApi } from '@/lib/api'
+import { subscribeBookingsRefresh } from '@/lib/booking-sync'
 import { compareBookingsByOperationalPriority } from '@/lib/booking-priority'
 import { BookingStatusBadge } from '@/components/booking-status-badge'
 import { DashboardPageSkeleton } from '@/components/page-skeletons'
 import { reportLoadError, resetLoadError } from '@/lib/load-error-policy'
+import { createClient } from '@/lib/supabase'
 import { UserAvatar } from '@/components/ui/user-avatar'
 import { formatCurrency, formatDate } from '@/lib/utils'
 import type { BookingRead, BookingStatus, FavoriteCleaner } from '@/types'
@@ -106,6 +108,40 @@ export default function ClientDashboardPage() {
     return () => {
       clearInterval(poll)
       window.removeEventListener('focus', onFocus)
+    }
+  }, [])
+
+  useEffect(() => {
+    return subscribeBookingsRefresh(() => {
+      refreshDashboard().catch(() => null)
+    })
+  }, [])
+
+  useEffect(() => {
+    const supabase = createClient()
+    let channel: ReturnType<typeof supabase.channel> | null = null
+    let active = true
+
+    ;(async () => {
+      const me = await authApi.me().catch(() => null)
+      const userId = me?.data?.id
+      if (!userId || !active) return
+
+      channel = supabase
+        .channel(`client-dashboard-booking-sync:${userId}`)
+        .on(
+          'postgres_changes',
+          { event: 'INSERT', schema: 'public', table: 'notifications', filter: `user_id=eq.${userId}` },
+          () => {
+            refreshDashboard().catch(() => null)
+          },
+        )
+        .subscribe()
+    })()
+
+    return () => {
+      active = false
+      if (channel) supabase.removeChannel(channel)
     }
   }, [])
 

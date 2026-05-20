@@ -4,7 +4,8 @@ import Link from 'next/link'
 import { useDeferredValue, useEffect, useState, startTransition } from 'react'
 import { Bricolage_Grotesque, IBM_Plex_Mono } from 'next/font/google'
 import { CalendarCheck2, CircleX, Clock3, Search } from 'lucide-react'
-import { bookingsApi, disputesApi } from '@/lib/api'
+import { authApi, bookingsApi, disputesApi } from '@/lib/api'
+import { subscribeBookingsRefresh } from '@/lib/booking-sync'
 import { compareBookingsByOperationalPriority } from '@/lib/booking-priority'
 import { BookingStatusBadge } from '@/components/booking-status-badge'
 import { EmptyState } from '@/components/empty-state'
@@ -15,6 +16,7 @@ import { Input } from '@/components/ui/input'
 import { Select } from '@/components/ui/select'
 import { canViewChatHistoryForBooking, getDisputeWindowMs } from '@/lib/chat-window'
 import { reportLoadError, resetLoadError } from '@/lib/load-error-policy'
+import { createClient } from '@/lib/supabase'
 import { formatCurrency, formatDate } from '@/lib/utils'
 import type { BookingRead, BookingStatus } from '@/types'
 import { toast } from 'sonner'
@@ -118,6 +120,40 @@ export default function ClientBookingsPage() {
     return () => {
       clearInterval(poll)
       window.removeEventListener('focus', onFocus)
+    }
+  }, [])
+
+  useEffect(() => {
+    return subscribeBookingsRefresh(() => {
+      loadBookings().catch(() => null)
+    })
+  }, [])
+
+  useEffect(() => {
+    const supabase = createClient()
+    let channel: ReturnType<typeof supabase.channel> | null = null
+    let active = true
+
+    ;(async () => {
+      const me = await authApi.me().catch(() => null)
+      const userId = me?.data?.id
+      if (!userId || !active) return
+
+      channel = supabase
+        .channel(`client-bookings-booking-sync:${userId}`)
+        .on(
+          'postgres_changes',
+          { event: 'INSERT', schema: 'public', table: 'notifications', filter: `user_id=eq.${userId}` },
+          () => {
+            loadBookings().catch(() => null)
+          },
+        )
+        .subscribe()
+    })()
+
+    return () => {
+      active = false
+      if (channel) supabase.removeChannel(channel)
     }
   }, [])
 

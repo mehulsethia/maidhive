@@ -57,9 +57,12 @@ export const paymentLifecycleService = {
     const autoCompleteCutoff = new Date(Date.now() - AUTO_COMPLETION_GRACE_MINUTES * 60 * 1000)
     const overdue = await db.booking.findMany({
       where: {
-        status: { in: ['confirmed', 'in_progress', 'disputed'] },
         scheduledEnd: { lte: autoCompleteCutoff },
-        completedAt: null,
+        OR: [
+          { status: 'in_progress' },
+          { status: 'confirmed', completedAt: null },
+          { status: 'disputed', completedAt: null },
+        ],
       },
       select: {
         id: true,

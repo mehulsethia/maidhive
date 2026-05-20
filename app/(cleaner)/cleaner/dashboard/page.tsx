@@ -4,6 +4,7 @@ import Link from 'next/link'
 import { useEffect, useMemo, useState } from 'react'
 import { CircleCheck, Clock3, Euro, Star, ArrowUpRight, CalendarClock, MessageSquare } from 'lucide-react'
 import { bookingsApi, cleanersApi } from '@/lib/api'
+import { subscribeBookingsRefresh, triggerBookingsRefresh } from '@/lib/booking-sync'
 import { compareBookingsByOperationalPriority } from '@/lib/booking-priority'
 import { BookingStatusBadge } from '@/components/booking-status-badge'
 import { Button } from '@/components/ui/button'
@@ -16,6 +17,7 @@ import { reportLoadError, resetLoadError } from '@/lib/load-error-policy'
 import { formatCurrency, formatDate } from '@/lib/utils'
 import type { BookingRead, BookingStatus, CleanerOnboardingProgress } from '@/types'
 import { deriveCleanerLifecycleStatus } from '@/lib/cleaner-status'
+import { showJobStartedToast } from '@/lib/job-start-toast'
 import { toast } from 'sonner'
 
 const REQUEST_STATUSES: BookingStatus[] = ['pending']
@@ -111,12 +113,20 @@ export default function CleanerDashboardPage() {
     }
   }, [])
 
+  useEffect(() => {
+    return subscribeBookingsRefresh(() => {
+      refresh().catch(() => null)
+    })
+  }, [])
+
   async function handleAction(bookingId: string, action: 'accept' | 'start') {
     setActionLoading(`${bookingId}-${action}`)
     try {
       await bookingsApi.action(bookingId, action)
-      toast.success(action === 'accept' ? 'Booking accepted.' : 'Job started.')
+      if (action === 'accept') toast.success('Booking accepted.')
+      if (action === 'start') showJobStartedToast(bookingId)
       await refresh()
+      triggerBookingsRefresh({ bookingId, reason: `cleaner-dashboard:${action}` })
     } catch (err: any) {
       toast.error(err.message ?? 'Action failed.')
     } finally {
