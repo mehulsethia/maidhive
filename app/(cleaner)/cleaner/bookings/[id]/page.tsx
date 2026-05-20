@@ -339,12 +339,13 @@ export default function CleanerBookingDetailPage() {
   const revealUnlocked = nowTick >= unlockAtMs || createdWithinSixHoursOfStart
   const isPostCompletionPhoneLocked = ['completed', 'disputed'].includes(booking.status)
   const revealExpired = Number.isFinite(scheduledEndMs) && nowTick > scheduledEndMs + PHONE_REVEAL_POST_END_MS
-  const canRevealPhone =
+  const canRevealPhoneWindow =
     ['accepted', 'confirmed', 'in_progress'].includes(booking.status) &&
     revealUnlocked &&
     !isPostCompletionPhoneLocked &&
     !revealExpired
   const clientPhone = booking.client?.user?.phone ?? ''
+  const canRevealPhone = canRevealPhoneWindow && Boolean(clientPhone)
   const isCancelledPreConfirmation = booking.status === 'cancelled' && !booking.accepted_at && !booking.confirmed_at
   const isConfirmed = booking.status === 'confirmed'
   const hasAlreadyRescheduled = (booking.post_cleaner_proposals ?? 0) >= 1 && (booking.post_client_proposals ?? 0) >= 1
@@ -494,22 +495,22 @@ export default function CleanerBookingDetailPage() {
               </h2>
               {isPostCompletionPhoneLocked || revealExpired ? (
                 <p className="text-sm text-slate-500">Phone access is now closed for this booking.</p>
-              ) : canRevealPhone ? (
-                clientPhone ? (
-                  phoneRevealed ? (
+              ) : canRevealPhoneWindow ? (
+                phoneRevealed ? (
+                  canRevealPhone ? (
                     <p className="text-sm text-slate-600">{clientPhone}</p>
                   ) : (
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      className="h-8 px-3 text-xs"
-                      onClick={() => setPhoneRevealed(true)}
-                    >
-                      Reveal number
-                    </Button>
+                    <p className="text-sm text-slate-500">Client has not added a phone number yet.</p>
                   )
                 ) : (
-                  <p className="text-sm text-slate-500">Client phone is not available yet.</p>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="h-8 px-3 text-xs"
+                    onClick={() => setPhoneRevealed(true)}
+                  >
+                    Reveal number
+                  </Button>
                 )
               ) : (
                 <p className="text-sm text-slate-500">Client number becomes available 6 hours before the booking.</p>
