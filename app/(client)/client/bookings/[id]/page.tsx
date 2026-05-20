@@ -496,6 +496,11 @@ export default function ClientBookingDetailPage() {
                 ) : (
                   <p className="text-sm text-slate-500">Cleaner number becomes available 6 hours before the booking.</p>
                 )}
+                {booking.status === 'in_progress' && (
+                  <p className="text-xs text-slate-500">
+                    Phone access automatically closes 30 minutes after scheduled booking end.
+                  </p>
+                )}
               </CardContent>
             </Card>
 

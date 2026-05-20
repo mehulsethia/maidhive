@@ -33,6 +33,7 @@ import type {
   UserRead,
   UserUpdate,
 } from '@/types'
+import type { DisputeIssueType } from '@/lib/dispute-issues'
 
 const BASE = getApiBaseUrl()
 const GET_CACHE_TTL_MS = Number(process.env.NEXT_PUBLIC_API_CLIENT_CACHE_TTL_MS ?? 30000)
@@ -707,7 +708,7 @@ export const disputesApi = {
   createForBooking: (
     bookingId: string,
     body: {
-      issue_type: 'cleaner_didnt_arrive' | 'client_no_show' | 'service_not_completed' | 'property_damage_safety' | 'other_issue'
+      issue_type: DisputeIssueType
       explanation: string
       evidence?: string[]
     },

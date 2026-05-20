@@ -17,6 +17,8 @@ const disputeSelect = {
   resolvedAt: true,
   createdAt: true,
   updatedAt: true,
+  reporterRole: true,
+  bookingStatusAtReport: true,
 } satisfies Prisma.DisputeSelect
 
 export const disputeRepo = {
@@ -40,13 +42,19 @@ export const disputeRepo = {
     issueType?: string
     explanation?: string
     evidence?: string[]
+    reporterRole?: string
+    bookingStatusAtReport?: string
   }) =>
     db.dispute.create({
       data: {
         bookingId: data.bookingId,
         raisedBy: data.raisedBy,
         reason: data.reason,
+        issueType: data.issueType,
+        explanation: data.explanation,
         evidence: data.evidence ? data.evidence : undefined,
+        reporterRole: data.reporterRole,
+        bookingStatusAtReport: data.bookingStatusAtReport,
       },
       select: disputeSelect,
     }),

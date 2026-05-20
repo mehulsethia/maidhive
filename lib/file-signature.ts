@@ -1,4 +1,10 @@
-export const IMAGE_MIME_TYPES: readonly string[] = ['image/jpeg', 'image/png', 'image/webp']
+export const IMAGE_MIME_TYPES: readonly string[] = [
+  'image/jpeg',
+  'image/png',
+  'image/webp',
+  'image/heic',
+  'image/heif',
+]
 export const DOCUMENT_MIME_TYPES: readonly string[] = ['application/pdf', ...IMAGE_MIME_TYPES]
 
 export function matchesFileSignature(bytes: Uint8Array, mime: string) {
@@ -36,6 +42,14 @@ export function matchesFileSignature(bytes: Uint8Array, mime: string) {
     const riff = String.fromCharCode(bytes[0], bytes[1], bytes[2], bytes[3])
     const webp = String.fromCharCode(bytes[8], bytes[9], bytes[10], bytes[11])
     return riff === 'RIFF' && webp === 'WEBP'
+  }
+
+  if (mime === 'image/heic' || mime === 'image/heif') {
+    if (bytes.length < 12) return false
+    const boxType = String.fromCharCode(bytes[4], bytes[5], bytes[6], bytes[7])
+    if (boxType !== 'ftyp') return false
+    const brand = String.fromCharCode(bytes[8], bytes[9], bytes[10], bytes[11])
+    return ['heic', 'heix', 'hevc', 'hevx', 'mif1', 'msf1'].includes(brand)
   }
 
   return false

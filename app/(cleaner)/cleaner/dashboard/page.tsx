@@ -4,6 +4,7 @@ import Link from 'next/link'
 import { useEffect, useMemo, useState } from 'react'
 import { CircleCheck, Clock3, Euro, Star, ArrowUpRight, CalendarClock, MessageSquare } from 'lucide-react'
 import { bookingsApi, cleanersApi } from '@/lib/api'
+import { compareBookingsByOperationalPriority } from '@/lib/booking-priority'
 import { BookingStatusBadge } from '@/components/booking-status-badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -158,24 +159,26 @@ export default function CleanerDashboardPage() {
 
   const stats = useMemo(() => {
     const requests = bookings.filter((b) => REQUEST_STATUSES.includes(b.status))
-    const upcoming = bookings.filter((b) => UPCOMING_STATUSES.includes(b.status))
+    const upcoming = bookings
+      .filter((b) => UPCOMING_STATUSES.includes(b.status) || ACTIVE_STATUSES.includes(b.status))
+      .sort(compareBookingsByOperationalPriority)
     const activeJobs = bookings.filter((b) => ACTIVE_STATUSES.includes(b.status) || UPCOMING_STATUSES.includes(b.status))
     const completed = bookings.filter((b) => COMPLETED_STATUSES.includes(b.status))
+    const prioritizedRecent = [...bookings].sort(compareBookingsByOperationalPriority)
 
     return {
       requests,
       upcoming,
       activeJobs,
       completed,
+      prioritizedRecent,
       totalRevenue: completed.reduce((sum, b) => sum + b.cleaner_payout, 0),
     }
   }, [bookings])
 
   const nextUpcoming = useMemo(() => {
     if (stats.upcoming.length === 0) return null
-    return [...stats.upcoming].sort(
-      (a, b) => new Date(a.scheduled_start).getTime() - new Date(b.scheduled_start).getTime(),
-    )[0] ?? null
+    return stats.upcoming[0] ?? null
   }, [stats.upcoming])
 
   const missingOnboardingParts = useMemo(() => {
@@ -520,7 +523,7 @@ export default function CleanerDashboardPage() {
             <EmptyState title="No bookings yet" description="Your jobs will appear here as clients book services." />
           ) : (
             <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
-              {bookings.slice(0, 6).map((b) => {
+              {stats.prioritizedRecent.slice(0, 6).map((b) => {
                 const hasProposal = Boolean(b.proposed_start && b.proposal_by)
                 const isActiveProposal = hasProposal && ['pending', 'accepted', 'confirmed'].includes(b.status)
                 const isAmendProposal = b.proposal_context === 'amend_start'

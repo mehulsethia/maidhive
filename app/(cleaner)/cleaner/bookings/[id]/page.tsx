@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import { Calendar, Clock, MapPin, ArrowLeft } from 'lucide-react'
-import { authApi, availabilityApi, bookingsApi, cleanersApi, disputesApi } from '@/lib/api'
+import { authApi, availabilityApi, bookingsApi, cleanersApi } from '@/lib/api'
 import { BookingStatusBadge } from '@/components/booking-status-badge'
 import { BookingInstructions } from '@/components/booking-instructions'
 import { Chat } from '@/components/chat'
@@ -15,7 +15,6 @@ import { Dialog, DialogTitle } from '@/components/ui/dialog'
 import { Label } from '@/components/ui/label'
 import { Input } from '@/components/ui/input'
 import { Select } from '@/components/ui/select'
-import { Textarea } from '@/components/ui/textarea'
 import { UserAvatar } from '@/components/ui/user-avatar'
 import {
   ALTERNATIVE_PROPOSAL_WINDOW_DAYS,
@@ -74,10 +73,6 @@ export default function CleanerBookingDetailPage() {
   const [proposalDate, setProposalDate] = useState('')
   const [proposalTime, setProposalTime] = useState('')
   const [proposalTimeOptions, setProposalTimeOptions] = useState<Array<{ value: string; label: string }>>([])
-  const [reportOpen, setReportOpen] = useState(false)
-  const [reportIssueType, setReportIssueType] = useState<'client_no_show' | 'service_not_completed' | 'property_damage_safety' | 'other_issue'>('other_issue')
-  const [reportExplanation, setReportExplanation] = useState('')
-  const [reportLoading, setReportLoading] = useState(false)
   const [phoneRevealed, setPhoneRevealed] = useState(false)
   const [nowTick, setNowTick] = useState(() => Date.now())
 
@@ -268,30 +263,6 @@ export default function CleanerBookingDetailPage() {
     }
   }
 
-  async function handleReportProblem() {
-    if (!booking) return
-    if (reportExplanation.trim().length < 20) {
-      toast.error('Please provide at least 20 characters in your explanation.')
-      return
-    }
-    setReportLoading(true)
-    try {
-      await disputesApi.createForBooking(booking.id, {
-        issue_type: reportIssueType,
-        explanation: reportExplanation.trim(),
-      })
-      toast.success('Report submitted. This booking is now under review.')
-      setReportOpen(false)
-      setReportExplanation('')
-      setReportIssueType('other_issue')
-      await refresh()
-    } catch (err: any) {
-      toast.error(err.message ?? 'Failed to submit report.')
-    } finally {
-      setReportLoading(false)
-    }
-  }
-
   if (loading) return <DetailPageSkeleton />
   if (!booking) return <div className="text-center py-16 text-muted-foreground">Booking not found.</div>
 
@@ -336,7 +307,7 @@ export default function CleanerBookingDetailPage() {
   const cleanerReportWindowEndsAtMs = booking.scheduled_end
     ? new Date(booking.scheduled_end).getTime() + 24 * 60 * 60 * 1000
     : 0
-  const canReportProblem = ['in_progress', 'completed', 'disputed'].includes(booking.status) &&
+  const canReportProblem = ['in_progress', 'completed'].includes(booking.status) &&
     Date.now() <= cleanerReportWindowEndsAtMs
   const clientTrust = (booking.client as any)?.trust as {
     memberSince?: string | null
@@ -533,6 +504,11 @@ export default function CleanerBookingDetailPage() {
               ) : (
                 <p className="text-sm text-slate-500">Client number becomes available 6 hours before the booking.</p>
               )}
+              {booking.status === 'in_progress' && (
+                <p className="text-xs text-slate-500">
+                  Phone access automatically closes 30 minutes after scheduled booking end.
+                </p>
+              )}
             </CardContent>
           </Card>
 
@@ -721,9 +697,14 @@ export default function CleanerBookingDetailPage() {
           </>
         )}
         {!isCancelledPreConfirmation && (booking.status === 'accepted' || booking.status === 'confirmed') && (
-          <Button size="lg" onClick={() => handleAction('start')} loading={actionLoading === 'start'} disabled={!canStartJobNow}>
-            Start job
-          </Button>
+          <>
+            <Button size="lg" onClick={() => handleAction('start')} loading={actionLoading === 'start'} disabled={!canStartJobNow}>
+              Start job
+            </Button>
+            <p className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-600">
+              Location access is only used when starting a booking for arrival verification and dispute protection.
+            </p>
+          </>
         )}
         {!isCancelledPreConfirmation && (booking.status === 'accepted' || booking.status === 'confirmed') && !canStartJobNow && (
           <p className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-600">
@@ -734,7 +715,7 @@ export default function CleanerBookingDetailPage() {
         )}
         {!isCancelledPreConfirmation && booking.status === 'in_progress' && !canCompleteJob && (
           <p className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-600">
-            Complete Job unlocks 5 minutes before the scheduled end time.
+            Complete Job unlocks 5 minutes before the scheduled end time. If you finish early, you can still use Report a problem for support, but early force-completion is blocked.
           </p>
         )}
         {!isCancelledPreConfirmation && canCompleteJob && (
@@ -746,15 +727,19 @@ export default function CleanerBookingDetailPage() {
           <Button
             variant="outline"
             size="lg"
-            onClick={() => setReportOpen(true)}
-            disabled={reportLoading}
+            onClick={() => router.push(`/cleaner/report?booking=${booking.id}`)}
           >
             Report a problem
           </Button>
         )}
-        {!isCancelledPreConfirmation && !canReportProblem && (
+        {!isCancelledPreConfirmation && booking.status === 'disputed' && (
+          <p className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-700">
+            This booking is currently under review.
+          </p>
+        )}
+        {!isCancelledPreConfirmation && booking.status !== 'disputed' && !canReportProblem && (
           <p className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-600">
-            Report a problem is available during the job and up to 24 hours after scheduled completion.
+            Report issues during the booking and up to 24 hours after scheduled completion.
           </p>
         )}
               </div>
@@ -982,56 +967,6 @@ export default function CleanerBookingDetailPage() {
         </div>
       </Dialog>
 
-      <Dialog
-        open={reportOpen}
-        onClose={() => {
-          setReportOpen(false)
-          setReportExplanation('')
-          setReportIssueType('other_issue')
-        }}
-      >
-        <DialogTitle>Report a problem</DialogTitle>
-        <div className="space-y-4">
-          <p className="text-sm text-muted-foreground">
-            Available during the booking and up to 24 hours after scheduled completion.
-          </p>
-          <div>
-            <Label>Issue type</Label>
-            <Select
-              value={reportIssueType}
-              onChange={(event) =>
-                setReportIssueType(
-                  event.target.value as 'client_no_show' | 'service_not_completed' | 'property_damage_safety' | 'other_issue',
-                )
-              }
-              className="mt-1"
-            >
-              <option value="client_no_show">Client no-show</option>
-              <option value="service_not_completed">Service not completed as expected</option>
-              <option value="property_damage_safety">Property damage or safety issue</option>
-              <option value="other_issue">Other issue</option>
-            </Select>
-          </div>
-          <div>
-            <Label>Explanation</Label>
-            <Textarea
-              value={reportExplanation}
-              onChange={(event) => setReportExplanation(event.target.value)}
-              rows={4}
-              className="mt-1"
-              placeholder="Describe what happened (minimum 20 characters)."
-            />
-          </div>
-          <Button
-            className="w-full"
-            onClick={handleReportProblem}
-            loading={reportLoading}
-            disabled={reportExplanation.trim().length < 20}
-          >
-            Submit report
-          </Button>
-        </div>
-      </Dialog>
     </div>
   )
 }

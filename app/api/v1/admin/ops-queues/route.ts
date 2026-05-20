@@ -105,7 +105,7 @@ export const GET = requireAdmin(async () => {
       db.dispute.findMany({
         where: {
           OR: [
-            { issueType: { in: ['cleaner_didnt_arrive', 'client_no_show'] } },
+            { issueType: { in: ['cleaner_no_show', 'client_no_show'] } },
             { reason: { contains: 'no-show', mode: 'insensitive' } },
           ],
           createdAt: { gte: new Date(Date.now() - 14 * 24 * 60 * 60 * 1000) },

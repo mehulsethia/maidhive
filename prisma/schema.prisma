@@ -251,6 +251,7 @@ model Booking {
   acceptedAt          DateTime? @map("accepted_at") @db.Timestamptz(6)
   confirmedAt         DateTime? @map("confirmed_at") @db.Timestamptz(6)
   startedAt           DateTime? @map("started_at") @db.Timestamptz(6)
+  startInitiatedBy    String?   @map("start_initiated_by")
   completedAt         DateTime? @map("completed_at") @db.Timestamptz(6)
   acceptBy            DateTime? @map("accept_by") @db.Timestamptz(6)
   payBy               DateTime? @map("pay_by") @db.Timestamptz(6)
@@ -369,6 +370,8 @@ model Dispute {
   explanation    String?
   evidence       Json?
   status         String    @default("open")
+  reporterRole   String?   @map("reporter_role")
+  bookingStatusAtReport String? @map("booking_status_at_report")
   resolutionType String?   @map("resolution_type")
   resolutionNote String?   @map("resolution_note")
   refundAmount   Decimal?  @map("refund_amount") @db.Decimal(10, 2)

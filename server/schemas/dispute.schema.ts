@@ -1,12 +1,5 @@
 import { z } from 'zod'
-
-export const DISPUTE_ISSUE_TYPES = [
-  'cleaner_didnt_arrive',
-  'client_no_show',
-  'service_not_completed',
-  'property_damage_safety',
-  'other_issue',
-] as const
+import { DISPUTE_ISSUE_TYPES } from '@/lib/dispute-issues'
 
 export const createDisputeSchema = z.object({
   issue_type: z.enum(DISPUTE_ISSUE_TYPES),

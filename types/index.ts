@@ -210,6 +210,7 @@ export interface BookingRead {
   accepted_at?: string
   confirmed_at?: string
   started_at?: string
+  start_initiated_by?: 'cleaner' | 'system' | null
   completed_at?: string
   cancelled_at?: string
   cancellation_reason?: string
@@ -547,6 +548,8 @@ export interface AdminDispute {
   issue_type?: string
   explanation?: string
   evidence?: string[] | null
+  reporter_role?: 'client' | 'cleaner' | 'admin' | null
+  booking_status_at_report?: string | null
   status: 'open' | 'under_review' | 'resolved' | 'closed'
   resolution_type?: string
   resolution_note?: string
@@ -563,6 +566,8 @@ export interface ClientDispute {
   issue_type?: string
   explanation?: string
   evidence?: string[] | null
+  reporter_role?: 'client' | 'cleaner' | 'admin' | null
+  booking_status_at_report?: string | null
   status: 'open' | 'under_review' | 'resolved' | 'closed'
   resolution_type?: string
   resolution_note?: string

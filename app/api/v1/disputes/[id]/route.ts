@@ -7,17 +7,9 @@ import { cleanerRepo } from '@/server/repositories/cleaner.repo'
 import { ok, err } from '@/server/response'
 import { createDisputeSchema } from '@/server/schemas/dispute.schema'
 import { loopsEmailService } from '@/server/services/loops-email.service'
-import { config } from '@/server/config'
 import { pushInAppNotification } from '@/server/services/in-app-notification.service'
 import { db } from '@/server/db'
-
-const ISSUE_LABELS: Record<string, string> = {
-  cleaner_didnt_arrive: "Cleaner didn't arrive",
-  client_no_show: 'Client no-show',
-  service_not_completed: 'Service not completed as expected',
-  property_damage_safety: 'Property damage or safety issue',
-  other_issue: 'Other issue',
-}
+import { DISPUTE_REASON_LABELS } from '@/lib/dispute-issues'
 
 const NO_SHOW_DELAY_MINUTES = 30
 
@@ -33,7 +25,7 @@ export const POST = requireAuth(async (req: NextRequest, ctx, user) => {
   if (!isClient && !isCleaner && user.role !== 'admin') return err('Forbidden', 403)
 
   const existing = await disputeRepo.findByBookingId(id)
-  if (existing?.status === 'under_review') {
+  if (existing && ['open', 'under_review'].includes(existing.status)) {
     return err('This booking is currently under review by MaidHive.', 409)
   }
   if (existing) return err('Dispute already exists for this booking', 409)
@@ -42,7 +34,15 @@ export const POST = requireAuth(async (req: NextRequest, ctx, user) => {
   const parsed = createDisputeSchema.safeParse(body)
   if (!parsed.success) return err(parsed.error.message, 422)
   const issueType = parsed.data.issue_type
-  const isNoShowIssue = issueType === 'cleaner_didnt_arrive' || issueType === 'client_no_show'
+  const allowedForClient = new Set(['cleaner_no_show', 'service_issue', 'safety_concern', 'property_issue_damage'])
+  const allowedForCleaner = new Set(['client_no_show', 'access_issue', 'safety_concern', 'service_dispute'])
+  if (isClient && !allowedForClient.has(issueType)) {
+    return err('Invalid report reason for client reporting.', 422)
+  }
+  if (isCleaner && !allowedForCleaner.has(issueType)) {
+    return err('Invalid report reason for cleaner reporting.', 422)
+  }
+  const isNoShowIssue = issueType === 'cleaner_no_show' || issueType === 'client_no_show'
 
   if (isNoShowIssue) {
     const noShowAvailableAt = booking.scheduledStart.getTime() + NO_SHOW_DELAY_MINUTES * 60 * 1000
@@ -50,7 +50,7 @@ export const POST = requireAuth(async (req: NextRequest, ctx, user) => {
       return err(`No-show reporting is available ${NO_SHOW_DELAY_MINUTES} minutes after scheduled start`, 400)
     }
 
-    if (issueType === 'cleaner_didnt_arrive' && !isClient) {
+    if (issueType === 'cleaner_no_show' && !isClient) {
       return err('Only the client can report cleaner no-show', 403)
     }
     if (issueType === 'client_no_show' && !isCleaner) {
@@ -69,28 +69,21 @@ export const POST = requireAuth(async (req: NextRequest, ctx, user) => {
       return err('This report can only be raised during or after the cleaning', 400)
     }
 
-    if (isCleaner) {
-      const cleanerWindowMs = 24 * 60 * 60 * 1000
-      const cleanerDeadlineMs = booking.scheduledEnd.getTime() + cleanerWindowMs
-      if (Date.now() > cleanerDeadlineMs) {
-        return err('Cleaner reporting window has expired (24 hours after scheduled completion)', 400)
-      }
-    } else if (booking.status !== 'in_progress') {
-      if (!booking.completedAt) return err('Completed timestamp missing for this booking', 400)
-      const disputeWindowMs = config.DISPUTE_WINDOW_HOURS * 60 * 60 * 1000
-      if (Date.now() > booking.completedAt.getTime() + disputeWindowMs) {
-        return err(`Dispute window has expired (${config.DISPUTE_WINDOW_HOURS} hours after completion)`, 400)
-      }
+    const reportWindowEndsAt = booking.scheduledEnd.getTime() + 24 * 60 * 60 * 1000
+    if (Date.now() > reportWindowEndsAt) {
+      return err('Reporting window has expired (24 hours after scheduled completion)', 400)
     }
   }
 
   const created = await disputeRepo.create({
     bookingId: id,
     raisedBy: user.id,
-    reason: ISSUE_LABELS[issueType] ?? 'Other issue',
+    reason: DISPUTE_REASON_LABELS[issueType] ?? 'Service issue',
     issueType,
     explanation: parsed.data.explanation,
     evidence: parsed.data.evidence,
+    reporterRole: isClient ? 'client' : isCleaner ? 'cleaner' : 'admin',
+    bookingStatusAtReport: booking.status,
   })
   const dispute = await disputeRepo.update(created.id, { status: 'under_review' })
 

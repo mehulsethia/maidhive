@@ -28,6 +28,7 @@ import {
   toTimeLabelInCyprus,
   toTimeValueInCyprus,
 } from '@/lib/booking-proposal'
+import { compareBookingsByOperationalPriority } from '@/lib/booking-priority'
 import { formatCurrency, formatDate } from '@/lib/utils'
 import type { BookingRead, BookingStatus } from '@/types'
 import { toast } from 'sonner'
@@ -252,7 +253,7 @@ export default function CleanerBookingsPage() {
         b.city.toLowerCase().includes(q) ||
         b.postcode.toLowerCase().includes(q)
       )
-    })
+    }).sort(compareBookingsByOperationalPriority)
   }, [bookings, filter, query])
 
   const summary = useMemo(() => {
@@ -467,31 +468,36 @@ export default function CleanerBookingsPage() {
                     )}
 
                     {(b.status === 'accepted' || b.status === 'confirmed') && (
-                      <Button
-                        size="sm"
-                        onClick={() => action(b.id, 'start')}
-                        loading={actionLoading === `${b.id}-start`}
-                        disabled={!startJobState.canStart}
-                      >
-                        Start job
-                      </Button>
+                      <>
+                        <Button
+                          size="sm"
+                          onClick={() => action(b.id, 'start')}
+                          loading={actionLoading === `${b.id}-start`}
+                          disabled={!startJobState.canStart}
+                        >
+                          Start job
+                        </Button>
+                        <p className="text-xs text-slate-500">
+                          Location access is only used when starting a booking for arrival verification and dispute protection.
+                        </p>
+                      </>
                     )}
                     {(b.status === 'accepted' || b.status === 'confirmed') && !startJobState.canStart && (
                       <p className="text-xs text-slate-500">{startJobState.reason}</p>
                     )}
 
-                    {b.status === 'in_progress' && (
-                      <span className="rounded-lg bg-slate-100 px-2.5 py-1 text-xs font-medium text-slate-600">
-                        Waiting for client completion
-                      </span>
-                    )}
-                    {['in_progress', 'completed', 'disputed'].includes(b.status) && (
+                    {['in_progress', 'completed'].includes(b.status) && (
                       <Link
-                        href={`/cleaner/bookings/${b.id}`}
+                        href={`/cleaner/report?booking=${b.id}`}
                         className="inline-flex h-8 items-center rounded-xl border border-slate-300 px-3 text-xs font-semibold text-slate-700 transition-all duration-200 hover:-translate-y-0.5 hover:bg-slate-50"
                       >
                         Report a problem
                       </Link>
+                    )}
+                    {b.status === 'disputed' && (
+                      <span className="inline-flex h-8 items-center rounded-xl border border-amber-200 bg-amber-50 px-3 text-xs font-semibold text-amber-700">
+                        This booking is currently under review.
+                      </span>
                     )}
                   </div>
                   {b.status === 'pending' && !eligibility.canProposeAlternative && !eligibility.canRespondToCounter && eligibility.proposeAlternativeDisabledReason && (

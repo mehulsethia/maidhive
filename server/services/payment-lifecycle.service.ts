@@ -6,6 +6,51 @@ import { bookingService } from './booking.service'
 import { pushInAppNotification } from './in-app-notification.service'
 
 export const paymentLifecycleService = {
+  async processAutoStarts(limit = 200) {
+    const now = new Date()
+    const lateCutoff = new Date(Date.now() - 24 * 60 * 60 * 1000)
+    const due = await db.booking.findMany({
+      where: {
+        status: { in: ['accepted', 'confirmed'] },
+        startedAt: null,
+        scheduledStart: { lte: now },
+        scheduledEnd: { gte: lateCutoff },
+        payment: {
+          is: {
+            status: { in: ['authorized', 'captured', 'transferred'] },
+          },
+        },
+      },
+      select: {
+        id: true,
+        scheduledStart: true,
+      },
+      orderBy: { scheduledStart: 'asc' },
+      take: limit,
+    })
+
+    const summary = {
+      checked: due.length,
+      started: 0,
+      failed: 0,
+      errors: [] as string[],
+    }
+
+    for (const booking of due) {
+      try {
+        const updated = await bookingService.startBySystem(booking.id, booking.scheduledStart)
+        if (updated?.status === 'in_progress') {
+          summary.started += 1
+        }
+      } catch (e: any) {
+        summary.failed += 1
+        summary.errors.push(`${booking.id}: ${e?.message ?? 'auto_start_failed'}`)
+      }
+    }
+
+    return summary
+  },
+
   async processAutoCompletions(limit = 200) {
     const overdue = await db.booking.findMany({
       where: {
@@ -38,12 +83,8 @@ export const paymentLifecycleService = {
     for (const booking of overdue) {
       try {
         if (booking.dispute && !['resolved', 'closed'].includes(String(booking.dispute.status ?? ''))) {
-          const reason = String(booking.dispute.reason ?? '').toLowerCase()
-          const isNoShowIssue = reason.includes('no-show') || reason.includes("didn't arrive")
-          if (isNoShowIssue) {
-            summary.paused_by_dispute += 1
-            continue
-          }
+          summary.paused_by_dispute += 1
+          continue
         }
 
         await bookingService.completeBySystem(booking.id, booking.scheduledEnd)

@@ -90,6 +90,11 @@ function BookingTable({ bookings }: { bookings: BookingRead[] }) {
               </td>
               <td className="px-4 py-3">
                 <BookingStatusBadge status={b.status} proposalBy={b.proposal_by} />
+                {(b.start_initiated_by === 'cleaner' || b.start_initiated_by === 'system') && (
+                  <p className="mt-1 text-[11px] text-muted-foreground">
+                    Start: {b.start_initiated_by === 'system' ? 'Auto-started by system' : 'Started manually by cleaner'}
+                  </p>
+                )}
               </td>
               <td className="px-4 py-3 text-right font-medium">
                 {formatCurrency(b.total_amount)}

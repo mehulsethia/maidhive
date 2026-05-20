@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { requireAuth } from '@/server/auth'
 import { createClient } from '@supabase/supabase-js'
 import { randomUUID } from 'crypto'
-import { IMAGE_MIME_TYPES, matchesFileSignature } from '@/lib/file-signature'
+import { matchesFileSignature } from '@/lib/file-signature'
 
 const supabaseAdmin = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -10,11 +10,12 @@ const supabaseAdmin = createClient(
 )
 
 const DISPUTE_EVIDENCE_BUCKET = (process.env.SUPABASE_DISPUTE_EVIDENCE_BUCKET ?? 'dispute-evidence').trim()
-const ALLOWED_MIME = new Set(IMAGE_MIME_TYPES)
+const ALLOWED_MIME = new Set(['image/jpeg', 'image/png', 'image/heic', 'image/heif'])
 const EXT_BY_MIME: Record<string, string> = {
   'image/jpeg': 'jpg',
   'image/png': 'png',
-  'image/webp': 'webp',
+  'image/heic': 'heic',
+  'image/heif': 'heif',
 }
 
 let bucketEnsured = false
@@ -49,7 +50,7 @@ export const POST = requireAuth(async (req: NextRequest, _ctx, user) => {
   }
 
   if (!ALLOWED_MIME.has(file.type)) {
-    return NextResponse.json({ success: false, message: 'Only JPEG, PNG, and WebP images allowed' }, { status: 400 })
+    return NextResponse.json({ success: false, message: 'Only JPG, PNG, and HEIC images are allowed' }, { status: 400 })
   }
   if (file.size > 10 * 1024 * 1024) {
     return NextResponse.json({ success: false, message: 'Image must be under 10MB' }, { status: 400 })

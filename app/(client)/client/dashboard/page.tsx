@@ -1,7 +1,7 @@
 'use client'
 
 import Link from 'next/link'
-import { useDeferredValue, useEffect, useState, startTransition } from 'react'
+import { useDeferredValue, useEffect, useMemo, useState, startTransition } from 'react'
 import { Bricolage_Grotesque, IBM_Plex_Mono } from 'next/font/google'
 import {
   ArrowUpRight,
@@ -12,6 +12,7 @@ import {
   Sparkles,
 } from 'lucide-react'
 import { authApi, bookingsApi, favoritesApi } from '@/lib/api'
+import { compareBookingsByOperationalPriority } from '@/lib/booking-priority'
 import { BookingStatusBadge } from '@/components/booking-status-badge'
 import { DashboardPageSkeleton } from '@/components/page-skeletons'
 import { reportLoadError, resetLoadError } from '@/lib/load-error-policy'
@@ -31,6 +32,8 @@ const SERVICE_LABELS: Record<string, string> = {
   end_of_tenancy: 'End of Tenancy',
   move_in: 'Move-in Clean',
 }
+
+const LIVE_REFRESH_MS = 10000
 
 function isPaymentAuthorized(paymentStatus?: string | null) {
   return ['authorized', 'captured', 'transferred'].includes(String(paymentStatus ?? ''))
@@ -60,41 +63,49 @@ export default function ClientDashboardPage() {
   const [favorites, setFavorites] = useState<FavoriteCleaner[]>([])
   const [name, setName] = useState('')
 
-  useEffect(() => {
-    let active = true
+  async function refreshDashboard() {
+    try {
+      const [meRes, bookingRes, favoritesRes] = await Promise.allSettled([
+        authApi.me(),
+        bookingsApi.my(),
+        favoritesApi.list(),
+      ])
 
-    ;(async () => {
-      try {
-        const [meRes, bookingRes, favoritesRes] = await Promise.allSettled([
-          authApi.me(),
-          bookingsApi.my(),
-          favoritesApi.list(),
-        ])
-        if (!active) return
-
-        startTransition(() => {
-          const me = meRes.status === 'fulfilled' ? meRes.value : null
-          const booking = bookingRes.status === 'fulfilled' ? bookingRes.value : null
-          const favorites = favoritesRes.status === 'fulfilled' ? favoritesRes.value : null
-          setName((me?.data?.name ?? '').trim())
-          setBookings(booking?.data?.items ?? [])
-          setFavorites(favorites?.data ?? [])
-          setLoading(false)
-        })
-        if (bookingRes.status === 'fulfilled') {
-          resetLoadError('client-dashboard')
-        } else {
-          reportLoadError('client-dashboard', 'Failed to load dashboard data.')
-        }
-      } catch {
-        if (!active) return
-        reportLoadError('client-dashboard', 'Failed to load dashboard data.')
+      startTransition(() => {
+        const me = meRes.status === 'fulfilled' ? meRes.value : null
+        const booking = bookingRes.status === 'fulfilled' ? bookingRes.value : null
+        const favorites = favoritesRes.status === 'fulfilled' ? favoritesRes.value : null
+        setName((me?.data?.name ?? '').trim())
+        setBookings(booking?.data?.items ?? [])
+        setFavorites(favorites?.data ?? [])
         setLoading(false)
+      })
+      if (bookingRes.status === 'fulfilled') {
+        resetLoadError('client-dashboard')
+      } else {
+        reportLoadError('client-dashboard', 'Failed to load dashboard data.')
       }
-    })()
+    } catch {
+      reportLoadError('client-dashboard', 'Failed to load dashboard data.')
+      setLoading(false)
+    }
+  }
 
+  useEffect(() => {
+    refreshDashboard()
+  }, [])
+
+  useEffect(() => {
+    const poll = setInterval(() => {
+      refreshDashboard().catch(() => null)
+    }, LIVE_REFRESH_MS)
+    function onFocus() {
+      refreshDashboard().catch(() => null)
+    }
+    window.addEventListener('focus', onFocus)
     return () => {
-      active = false
+      clearInterval(poll)
+      window.removeEventListener('focus', onFocus)
     }
   }, [])
 
@@ -106,14 +117,18 @@ export default function ClientDashboardPage() {
   const completedBookings = deferredBookings.filter((b) => b.status === 'completed')
   const totalSpent = completedBookings.reduce((sum, b) => sum + Number(b.total_amount ?? 0), 0)
 
-  const recent = [...deferredBookings]
-    .sort((a, b) => +new Date(b.created_at) - +new Date(a.created_at))
+  const operationallySorted = useMemo(
+    () => [...deferredBookings].sort(compareBookingsByOperationalPriority),
+    [deferredBookings],
+  )
+
+  const recent = [...operationallySorted]
     .slice(0, 5)
 
   const now = Date.now()
-  const nextBooking = deferredBookings
+  const nextBooking = operationallySorted
     .filter((b) => isValidUpcomingBooking(b, now))
-    .sort((a, b) => +new Date(a.scheduled_start) - +new Date(b.scheduled_start))[0]
+    .sort(compareBookingsByOperationalPriority)[0]
 
   if (loading) return <DashboardPageSkeleton />
 

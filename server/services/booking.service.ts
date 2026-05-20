@@ -111,6 +111,15 @@ export const bookingService = {
       }
     }
 
+    const shouldAutoStart =
+      ['accepted', 'confirmed'].includes(booking.status) &&
+      !booking.startedAt &&
+      hasAuthorizedPayment &&
+      booking.scheduledStart.getTime() <= nowMs
+    if (shouldAutoStart) {
+      return bookingService.startBySystem(booking.id, booking.scheduledStart)
+    }
+
     return booking
   },
 
@@ -291,30 +300,7 @@ export const bookingService = {
       if (!Number.isFinite(startWindowClosesAtMs) || Date.now() > startWindowClosesAtMs) {
         throw new ServiceError('Start Job is unavailable more than 24 hours after scheduled end time.', 400)
       }
-      const updated = await bookingRepo.update(bookingId, {
-        status: 'in_progress',
-        startedAt: new Date(),
-      })
-      await pushInAppNotification({
-        userId: booking.client.userId,
-        type: 'booking_started',
-        title: 'Job started',
-        body: 'Cleaner has started your booking.',
-        data: { booking_id: bookingId },
-      })
-      try {
-        await loopsEmailService.sendClientBookingStarted({
-          email: booking.client.user.email,
-          fullName: booking.client.user.name ?? 'Client',
-          cleanerName: booking.cleaner.user.name ?? 'Cleaner',
-          scheduledStart: booking.scheduledStart,
-          durationHours: Number(booking.durationHours),
-          bookingId: booking.id,
-        })
-      } catch (emailError) {
-        console.error('Failed to send client job started email via Loops:', emailError)
-      }
-      return updated
+      return startBookingFlow(bookingId, { initiatedBy: 'cleaner', startedAt: new Date() })
     }
 
     if (action === 'accept') {
@@ -1025,6 +1011,25 @@ export const bookingService = {
     })
   },
 
+  async startBySystem(bookingId: string, startedAt = new Date()) {
+    const booking = await bookingRepo.findById(bookingId)
+    if (!booking) return null
+    if (!['accepted', 'confirmed'].includes(booking.status)) return booking
+    if (booking.startedAt) return booking
+    if (!isPaymentAuthorizedStatus(booking.payment?.status)) return booking
+
+    const startWindowClosesAtMs =
+      new Date(booking.scheduledEnd).getTime() + START_JOB_LATE_BUFFER_HOURS * 60 * 60 * 1000
+    if (!Number.isFinite(startWindowClosesAtMs) || Date.now() > startWindowClosesAtMs) {
+      return booking
+    }
+
+    return startBookingFlow(bookingId, {
+      initiatedBy: 'system',
+      startedAt,
+    })
+  },
+
   async cancel(bookingId: string, user: User, reason?: string) {
     const booking = await bookingRepo.findById(bookingId)
     if (!booking) throw new ServiceError('Booking not found', 404)
@@ -1495,6 +1500,81 @@ async function completeBookingFlow(
     })
   } catch (reviewEmailError) {
     console.error('Failed to send client review request email via Loops:', reviewEmailError)
+  }
+
+  return updated
+}
+
+async function startBookingFlow(
+  bookingId: string,
+  args: {
+    initiatedBy: 'cleaner' | 'system'
+    startedAt: Date
+  },
+) {
+  const booking = await bookingRepo.findById(bookingId)
+  if (!booking) throw new ServiceError('Booking not found', 404)
+
+  if (!['accepted', 'confirmed'].includes(booking.status)) {
+    throw new ServiceError(`Cannot start a booking in status '${booking.status}'`, 400)
+  }
+  assertPaymentAuthorized(booking.payment?.status, 'start')
+
+  const updateResult = await db.booking.updateMany({
+    where: {
+      id: bookingId,
+      status: { in: ['accepted', 'confirmed'] },
+      startedAt: null,
+    },
+    data: {
+      status: 'in_progress',
+      startedAt: args.startedAt,
+    },
+  })
+
+  if (updateResult.count > 0) {
+    try {
+      await db.$executeRaw`
+        UPDATE public.bookings
+        SET start_initiated_by = ${args.initiatedBy}
+        WHERE id = ${bookingId}
+      `
+    } catch (error) {
+      console.error('Failed to persist booking start source:', error)
+    }
+  }
+
+  const updated = await bookingRepo.findById(bookingId)
+  if (!updated) throw new ServiceError('Booking not found', 404)
+
+  if (updateResult.count === 0) {
+    return updated
+  }
+
+  await pushInAppNotification({
+    userId: booking.client.userId,
+    type: 'booking_started',
+    title: 'Job started',
+    body:
+      args.initiatedBy === 'cleaner'
+        ? 'Your cleaner has started the booking.'
+        : 'Your booking started automatically at the scheduled time and is now In Progress.',
+    data: { booking_id: bookingId, start_initiated_by: args.initiatedBy },
+  })
+
+  if (args.initiatedBy === 'cleaner') {
+    try {
+      await loopsEmailService.sendClientBookingStarted({
+        email: booking.client.user.email,
+        fullName: booking.client.user.name ?? 'Client',
+        cleanerName: booking.cleaner.user.name ?? 'Cleaner',
+        scheduledStart: booking.scheduledStart,
+        durationHours: Number(booking.durationHours),
+        bookingId: booking.id,
+      })
+    } catch (emailError) {
+      console.error('Failed to send client job started email via Loops:', emailError)
+    }
   }
 
   return updated

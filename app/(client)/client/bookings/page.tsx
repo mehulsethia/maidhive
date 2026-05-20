@@ -5,6 +5,7 @@ import { useDeferredValue, useEffect, useState, startTransition } from 'react'
 import { Bricolage_Grotesque, IBM_Plex_Mono } from 'next/font/google'
 import { CalendarCheck2, CircleX, Clock3, Search } from 'lucide-react'
 import { bookingsApi, disputesApi } from '@/lib/api'
+import { compareBookingsByOperationalPriority } from '@/lib/booking-priority'
 import { BookingStatusBadge } from '@/components/booking-status-badge'
 import { EmptyState } from '@/components/empty-state'
 import { ListPageSkeleton } from '@/components/page-skeletons'
@@ -44,6 +45,8 @@ const SERVICE_LABELS: Record<string, string> = {
   end_of_tenancy: 'End of Tenancy',
   move_in: 'Move-in Clean',
 }
+
+const LIVE_REFRESH_MS = 10000
 
 function getBookingDisplayTitle(booking: BookingRead) {
   const instructions = String(booking.special_instructions ?? '')
@@ -102,6 +105,20 @@ export default function ClientBookingsPage() {
 
   useEffect(() => {
     loadBookings()
+  }, [])
+
+  useEffect(() => {
+    const poll = setInterval(() => {
+      loadBookings().catch(() => null)
+    }, LIVE_REFRESH_MS)
+    function onFocus() {
+      loadBookings().catch(() => null)
+    }
+    window.addEventListener('focus', onFocus)
+    return () => {
+      clearInterval(poll)
+      window.removeEventListener('focus', onFocus)
+    }
   }, [])
 
   async function handleCancel(bookingId: string) {
@@ -176,7 +193,7 @@ export default function ClientBookingsPage() {
       booking.city.toLowerCase().includes(q) ||
       booking.postcode.toLowerCase().includes(q)
     )
-  })
+  }).sort(compareBookingsByOperationalPriority)
 
   const activeCount = deferredBookings.filter((booking) => {
     const isActiveStatus = ['draft', 'pending', 'accepted', 'confirmed', 'in_progress'].includes(booking.status)
@@ -374,9 +391,9 @@ export default function ClientBookingsPage() {
                             Report a problem
                           </Link>
                         )}
-                        {disputeStatusForBooking === 'under_review' && (
+                        {(disputeStatusForBooking === 'open' || disputeStatusForBooking === 'under_review') && (
                           <span className="inline-flex h-8 items-center rounded-full border border-amber-200 bg-amber-50 px-3 text-xs font-semibold text-amber-700">
-                            This booking is currently under review by MaidHive.
+                            This booking is currently under review.
                           </span>
                         )}
 

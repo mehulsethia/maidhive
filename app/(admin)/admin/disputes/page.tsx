@@ -34,11 +34,13 @@ const STATUS_CONFIG: Record<string, { variant: any; label: string; icon: React.E
 }
 
 const ISSUE_QUEUE_LABEL: Record<string, string> = {
-  cleaner_didnt_arrive: 'No-Show',
+  cleaner_no_show: 'No-Show',
   client_no_show: 'No-Show',
-  service_not_completed: 'Payment / Booking',
-  property_damage_safety: 'Urgent Safety',
-  other_issue: 'Payment / Booking',
+  service_issue: 'Payment / Booking',
+  service_dispute: 'Payment / Booking',
+  safety_concern: 'Urgent Safety',
+  property_issue_damage: 'Urgent Safety',
+  access_issue: 'Payment / Booking',
 }
 
 const DISPUTE_FILTERS = ['all', 'urgent', 'no_show', 'payment'] as const
@@ -52,10 +54,10 @@ const DISPUTE_FILTER_LABELS: Record<DisputeFilter, string> = {
 
 function classifyQueue(dispute: AdminDispute): 'urgent' | 'no_show' | 'payment' {
   const issueType = String(dispute.issue_type ?? '')
-  if (['property_damage_safety', 'misconduct', 'aggressive_behaviour', 'theft_allegation'].includes(issueType)) {
+  if (['safety_concern', 'property_issue_damage', 'misconduct', 'aggressive_behaviour', 'theft_allegation'].includes(issueType)) {
     return 'urgent'
   }
-  if (['cleaner_didnt_arrive', 'client_no_show'].includes(issueType)) {
+  if (['cleaner_no_show', 'client_no_show'].includes(issueType)) {
     return 'no_show'
   }
   return 'payment'
@@ -95,8 +97,13 @@ function DisputeCard({
             <p className="text-xs text-muted-foreground mt-0.5">
               Raised {formatDate(dispute.created_at)}
             </p>
+            {(dispute.reporter_role || dispute.booking_status_at_report) && (
+              <p className="text-xs text-muted-foreground mt-0.5">
+                Reporter: {dispute.reporter_role ?? 'unknown'} · Booking status at report: {dispute.booking_status_at_report ?? 'unknown'}
+              </p>
+            )}
             <p className="text-xs text-muted-foreground mt-0.5">
-              Queue: {ISSUE_QUEUE_LABEL[String(dispute.issue_type ?? 'other_issue')] ?? 'Payment / Booking'}
+              Queue: {ISSUE_QUEUE_LABEL[String(dispute.issue_type ?? 'service_issue')] ?? 'Payment / Booking'}
             </p>
           </div>
 
