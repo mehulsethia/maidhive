@@ -17,6 +17,7 @@ import { PhoneInput } from '@/components/phone-input'
 import { ScheduleEditor } from '@/components/schedule-editor'
 import { getAccessToken } from '@/lib/auth-cache'
 import { toApiV1Url } from '@/lib/api-base'
+import { isCompletedBookingReleased } from '@/lib/booking-release'
 import { reportLoadError, resetLoadError } from '@/lib/load-error-policy'
 import { createClient } from '@/lib/supabase'
 import { formatCurrency } from '@/lib/utils'
@@ -128,6 +129,10 @@ function CleanerProfilePageContent() {
     payouts_enabled: false,
     details_submitted: false,
   })
+  const [completedJobsCount, setCompletedJobsCount] = useState(0)
+  const [averageRating, setAverageRating] = useState<number | null>(null)
+  const [onTimePercentage, setOnTimePercentage] = useState(0)
+  const [avgResponseMinutes, setAvgResponseMinutes] = useState(0)
 
   async function loadAll(showSkeleton = true) {
     if (showSkeleton) setLoading(true)
@@ -185,6 +190,10 @@ function CleanerProfilePageContent() {
       setBio(c.bio ?? '')
       setSkills(c.skills ?? [])
       setProfileImageUrl(c.profile_image_url ?? c.profileImageUrl ?? null)
+      setCompletedJobsCount(Number(c.total_jobs ?? c.totalJobs ?? 0))
+      setAverageRating(c.average_rating ?? c.averageRating ?? null)
+      setOnTimePercentage(Number(c.on_time_percentage ?? c.onTimePercentage ?? 0))
+      setAvgResponseMinutes(Number(c.avg_response_minutes ?? c.avgResponseMinutes ?? 0))
 
       const names = String(user.name ?? '').trim().split(' ').filter(Boolean)
       setFirstName(names[0] ?? '')
@@ -235,24 +244,11 @@ function CleanerProfilePageContent() {
     loadAll(false).catch(() => null)
   }, [stripeState])
 
-  const stats = useMemo(() => {
-    const totalJobs = bookings.length
-    const completed = bookings.filter((b) => b.status === 'completed' || b.status === 'disputed').length
-    const completionRate = totalJobs > 0 ? Math.round((completed / totalJobs) * 100) : 0
-    const totalEarnings = bookings
-      .filter((b) => b.status === 'completed' || b.status === 'disputed')
-      .reduce((sum, b) => sum + b.cleaner_payout, 0)
-    return {
-      totalJobs,
-      completionRate,
-      totalEarnings,
-    }
-  }, [bookings])
-
   const avgReview = useMemo(() => {
     if (reviews.length === 0) return 0
     return reviews.reduce((sum, r) => sum + r.rating, 0) / reviews.length
   }, [reviews])
+  const displayAverageRating = averageRating ?? (reviews.length > 0 ? avgReview : 0)
   const initials = useMemo(() => {
     const parts = String(fullName || 'Cleaner')
       .trim()
@@ -263,25 +259,36 @@ function CleanerProfilePageContent() {
   }, [fullName])
 
   const paymentHistory = useMemo(() => {
-    const activeBookingStatuses = new Set<BookingRead['status']>([
-      'pending',
-      'accepted',
-      'confirmed',
-      'in_progress',
-      'disputed',
-    ])
-    const activePaymentStatuses = new Set(['authorized', 'captured', 'transferred'])
-    const completedPaymentStatuses = new Set(['captured', 'transferred', 'partially_refunded', 'refunded'])
-
     return bookings
-      .filter((b) => {
-        const paymentStatus = String(b.payment?.status ?? '')
-        if (!paymentStatus) return false
-        if (b.status === 'completed') return completedPaymentStatuses.has(paymentStatus)
-        if (activeBookingStatuses.has(b.status)) return activePaymentStatuses.has(paymentStatus)
-        return false
+      .map((booking) => {
+        const paymentStatus = String(booking.payment?.status ?? '')
+        if (!paymentStatus) return null
+
+        if (paymentStatus === 'failed' || booking.status === 'disputed') {
+          return { booking, label: 'Payment issue - admin review', tone: 'issue' as const }
+        }
+
+        if (booking.status === 'completed') {
+          const released = isCompletedBookingReleased({
+            status: booking.status,
+            paymentStatus: booking.payment?.status,
+            scheduledEnd: booking.scheduled_end,
+          })
+          return {
+            booking,
+            label: released ? 'Released' : 'Awaiting release',
+            tone: released ? ('ok' as const) : ('warn' as const),
+          }
+        }
+
+        if (['accepted', 'confirmed', 'in_progress'].includes(booking.status) && ['authorized', 'captured', 'transferred'].includes(paymentStatus)) {
+          return { booking, label: 'Payment authorised', tone: 'ok' as const }
+        }
+
+        return null
       })
-      .sort((a, b) => new Date(b.scheduled_start).getTime() - new Date(a.scheduled_start).getTime())
+      .filter((entry): entry is NonNullable<typeof entry> => Boolean(entry))
+      .sort((a, b) => new Date(b.booking.scheduled_start).getTime() - new Date(a.booking.scheduled_start).getTime())
   }, [bookings])
   const stripeFullyReady =
     stripe.connected &&
@@ -625,7 +632,7 @@ function CleanerProfilePageContent() {
                   <Star key={i} className={`h-4 w-4 ${i < Math.round(avgReview) ? 'fill-current' : ''}`} />
                 ))}
                 <span className="ml-1 text-sm font-medium text-slate-600">
-                  {avgReview ? avgReview.toFixed(1) : '0.0'} ({reviews.length} reviews)
+                  {displayAverageRating ? displayAverageRating.toFixed(1) : '0.0'} ({reviews.length} reviews)
                 </span>
               </div>
             </CardContent>
@@ -634,10 +641,10 @@ function CleanerProfilePageContent() {
           <Card className="border-slate-200">
             <CardContent className="space-y-2 p-5 !pt-6 text-sm">
               <p className="font-semibold text-slate-900">Performance Stats</p>
-              <div className="flex items-center justify-between text-slate-600"><span>Total Jobs</span><strong>{stats.totalJobs}</strong></div>
-              <div className="flex items-center justify-between text-slate-600"><span>Completion Rate</span><strong>{stats.completionRate}%</strong></div>
-              <div className="flex items-center justify-between text-slate-600"><span>Total Earnings</span><strong className="text-emerald-700">{formatCurrency(stats.totalEarnings)}</strong></div>
-              <div className="flex items-center justify-between text-slate-600"><span>Response Time</span><strong>&lt; 2 hours</strong></div>
+              <div className="flex items-center justify-between text-slate-600"><span>Completed Jobs</span><strong>{completedJobsCount}</strong></div>
+              <div className="flex items-center justify-between text-slate-600"><span>Average Rating</span><strong>{displayAverageRating ? displayAverageRating.toFixed(1) : '0.0'}</strong></div>
+              <div className="flex items-center justify-between text-slate-600"><span>On-time Rate</span><strong>{onTimePercentage}%</strong></div>
+              <div className="flex items-center justify-between text-slate-600"><span>Average Response Time</span><strong>{avgResponseMinutes} min</strong></div>
             </CardContent>
           </Card>
 
@@ -676,7 +683,8 @@ function CleanerProfilePageContent() {
                 <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
                   <p className="text-sm font-semibold text-slate-900">Identity</p>
                   <p className="mt-1 text-xs text-slate-600">Name: {firstName} {lastName}</p>
-                  <p className="mt-1 text-xs text-slate-600">Email: {email || 'Not set'} (read-only here)</p>
+                  <p className="mt-1 text-xs text-slate-600">Email: {email || 'Not set'}</p>
+                  <p className="mt-1 text-xs text-slate-600">Email changes are managed in Account Credentials.</p>
                   <p className="mt-1 text-xs text-slate-600">Phone is managed in Account Credentials.</p>
                 </div>
 
@@ -1011,7 +1019,7 @@ function CleanerProfilePageContent() {
                     </p>
                   ) : (
                     <div className="mt-3 space-y-2">
-                      {paymentHistory.map((b) => (
+                      {paymentHistory.map(({ booking: b, label, tone }) => (
                         <div key={b.id} className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2">
                           <div>
                             <p className="text-sm font-semibold text-slate-900">
@@ -1029,11 +1037,14 @@ function CleanerProfilePageContent() {
                           </div>
                         <div className="w-full text-left sm:w-auto sm:text-right">
                             <p className="text-sm font-semibold text-emerald-700">{formatCurrency(b.cleaner_payout)}</p>
-                            <p className="text-xs text-slate-500">
-                              Payment: {String(b.payment?.status ?? 'pending').replace(/_/g, ' ')}
-                            </p>
-                            <p className="text-xs text-slate-500">
-                              Booking: {String(b.status).replace(/_/g, ' ')}
+                            <p className={`text-xs ${
+                              tone === 'issue'
+                                ? 'text-red-700'
+                                : tone === 'warn'
+                                  ? 'text-amber-700'
+                                  : 'text-emerald-700'
+                            }`}>
+                              {label}
                             </p>
                           </div>
                         </div>

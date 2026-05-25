@@ -252,17 +252,20 @@ export default function CleanerDashboardPage() {
 
               <div className="my-3 h-px bg-white/20" />
               <p className="text-[0.66rem] uppercase tracking-[0.2em] text-white/65">Next job</p>
-              <div className="mt-2 rounded-2xl border border-white/20 bg-white/10 px-3 py-2.5">
-                {nextUpcoming ? (
-                  <>
-                    <p className="text-base font-semibold text-white">{resolveJobTypeTitle(nextUpcoming)}</p>
-                    <p className="text-sm text-white/85">{formatDate(nextUpcoming.scheduled_start)}</p>
-                    <p className="text-sm text-white/75">{nextUpcoming.city}, {nextUpcoming.postcode}</p>
-                  </>
-                ) : (
+              {nextUpcoming ? (
+                <Link
+                  href={`/cleaner/bookings/${nextUpcoming.id}`}
+                  className="mt-2 block rounded-2xl border border-white/20 bg-white/10 px-3 py-2.5 transition hover:-translate-y-0.5 hover:bg-white/20"
+                >
+                  <p className="text-base font-semibold text-white">{resolveJobTypeTitle(nextUpcoming)}</p>
+                  <p className="text-sm text-white/85">{formatDate(nextUpcoming.scheduled_start)}</p>
+                  <p className="text-sm text-white/75">{nextUpcoming.city}, {nextUpcoming.postcode}</p>
+                </Link>
+              ) : (
+                <div className="mt-2 rounded-2xl border border-white/20 bg-white/10 px-3 py-2.5">
                   <p className="text-sm text-white/80">No upcoming jobs yet.</p>
-                )}
-              </div>
+                </div>
+              )}
             </div>
           </div>
         </div>

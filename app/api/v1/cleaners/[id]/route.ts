@@ -19,10 +19,9 @@ export async function GET(_req: Request, ctx: { params: Promise<{ id: string }> 
     db.booking.findMany({
       where: {
         cleanerId: cleaner.id,
-        status: { in: ['completed', 'disputed'] },
+        status: 'completed',
       },
       select: {
-        status: true,
         scheduledStart: true,
         startedAt: true,
       },
@@ -58,8 +57,6 @@ export async function GET(_req: Request, ctx: { params: Promise<{ id: string }> 
   }, 0)
   const avgResponseMinutes =
     respondedBookings.length > 0 ? Math.round(totalResponseMinutes / respondedBookings.length) : 0
-  const completedOnlyJobs = completedBookings.filter((booking) => booking.status === 'completed').length
-
   const sanitizedUser = cleaner.user
     ? {
         id: cleaner.user.id,
@@ -73,7 +70,7 @@ export async function GET(_req: Request, ctx: { params: Promise<{ id: string }> 
   return ok({
     ...cleaner,
     totalJobs: completedBookings.length,
-    newCleanerBadge: isNewCleanerByCompletedJobs(completedOnlyJobs),
+    newCleanerBadge: isNewCleanerByCompletedJobs(completedBookings.length),
     averageRating: reviewAgg._avg.rating ?? null,
     user: sanitizedUser,
     on_time_percentage: onTimePercentage,

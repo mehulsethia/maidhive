@@ -47,16 +47,6 @@ export async function GET(req: NextRequest) {
       by: ['cleanerId'],
       where: {
         cleanerId: { in: cleanerIds },
-        status: { in: ['completed', 'disputed'] },
-      },
-      _count: { _all: true },
-    })
-    : []
-  const completedOnlyJobsAgg = cleanerIds.length
-    ? await db.booking.groupBy({
-      by: ['cleanerId'],
-      where: {
-        cleanerId: { in: cleanerIds },
         status: 'completed',
       },
       _count: { _all: true },
@@ -75,19 +65,15 @@ export async function GET(req: NextRequest) {
   const avgRatingByCleanerId = new Map<string, number | null>(
     reviewsAgg.map((entry) => [entry.cleanerId, entry._avg.rating ?? null]),
   )
-  const completedOnlyJobsByCleanerId = new Map<string, number>(
-    completedOnlyJobsAgg.map((entry) => [entry.cleanerId, entry._count._all]),
-  )
 
   const mapped = cleaners.map((cleaner) => {
     const completedJobs = completedJobsByCleanerId.get(cleaner.id) ?? 0
-    const completedOnlyJobs = completedOnlyJobsByCleanerId.get(cleaner.id) ?? 0
     return {
       id: cleaner.id,
       user_id: cleaner.userId,
       hourly_rate: Number(cleaner.hourlyRate),
       total_jobs: completedJobs,
-      new_cleaner_badge: isNewCleanerByCompletedJobs(completedOnlyJobs),
+      new_cleaner_badge: isNewCleanerByCompletedJobs(completedJobs),
       average_rating: avgRatingByCleanerId.get(cleaner.id) ?? null,
       years_experience: cleaner.yearsExperience,
       transport_mode: cleaner.transportMode,

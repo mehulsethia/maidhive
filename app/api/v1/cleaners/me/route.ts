@@ -71,11 +71,25 @@ export const GET = requireCleaner(async (req, _ctx, user) => {
   const schedules = await availabilityRepo.getSchedule(cleaner.id)
   const hasAvailabilitySlots = schedules.some((s) => s.isActive)
   const onboarding = computeCleanerOnboardingProgress({ cleaner, hasAvailabilitySlots })
-  const [completedJobsCount, reviewAgg] = await Promise.all([
-    db.booking.count({
+  const [completedBookings, respondedBookings, reviewAgg] = await Promise.all([
+    db.booking.findMany({
       where: {
         cleanerId: cleaner.id,
-        status: { in: ['completed', 'disputed'] },
+        status: 'completed',
+      },
+      select: {
+        scheduledStart: true,
+        startedAt: true,
+      },
+    }),
+    db.booking.findMany({
+      where: {
+        cleanerId: cleaner.id,
+        acceptedAt: { not: null },
+      },
+      select: {
+        createdAt: true,
+        acceptedAt: true,
       },
     }),
     db.review.aggregate({
@@ -83,6 +97,21 @@ export const GET = requireCleaner(async (req, _ctx, user) => {
       _avg: { rating: true },
     }),
   ])
+  const onTimeThresholdMs = 15 * 60 * 1000
+  const onTimeCount = completedBookings.filter((booking) => {
+    if (!booking.startedAt) return false
+    return booking.startedAt.getTime() <= booking.scheduledStart.getTime() + onTimeThresholdMs
+  }).length
+  const onTimePercentage =
+    completedBookings.length > 0 ? Math.round((onTimeCount / completedBookings.length) * 100) : 0
+
+  const totalResponseMinutes = respondedBookings.reduce((sum, booking) => {
+    if (!booking.acceptedAt) return sum
+    const diffMs = booking.acceptedAt.getTime() - booking.createdAt.getTime()
+    return sum + Math.max(diffMs, 0) / (60 * 1000)
+  }, 0)
+  const avgResponseMinutes =
+    respondedBookings.length > 0 ? Math.round(totalResponseMinutes / respondedBookings.length) : 0
   const authSessionUser = await getAuthSessionUser(req)
 
   return ok({
@@ -94,8 +123,10 @@ export const GET = requireCleaner(async (req, _ctx, user) => {
             email_confirmed_at: authSessionUser?.email_confirmed_at ?? null,
           }
         : undefined,
-      totalJobs: completedJobsCount,
+      totalJobs: completedBookings.length,
       averageRating: reviewAgg._avg.rating ?? null,
+      on_time_percentage: onTimePercentage,
+      avg_response_minutes: avgResponseMinutes,
       lifecycle_status: deriveCleanerLifecycleStatus({
         status: cleaner.status,
         stripeOnboardingComplete: cleaner.stripeOnboardingComplete,
