@@ -67,6 +67,7 @@ textarea {
 .app-shell-main {
   min-width: 0;
   overflow-x: clip;
+  overflow-wrap: anywhere;
 }
 
 .app-shell-main > * {

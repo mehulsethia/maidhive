@@ -306,7 +306,7 @@ export default function CleanerBookingsPage() {
         </div>
       )}
 
-      <div className="grid gap-4 sm:grid-cols-3">
+      <div className="grid gap-4 md:grid-cols-3">
         <Card className="border-slate-200">
           <CardContent className="flex min-h-[102px] items-start justify-between px-5 pb-5 pt-6 sm:px-6 sm:pb-5 sm:pt-6">
             <div>
@@ -338,7 +338,7 @@ export default function CleanerBookingsPage() {
 
       <Card className="border-slate-200">
         <CardContent className="space-y-4 px-5 pb-5 pt-6 sm:space-y-5 sm:px-6 sm:pb-6 sm:pt-6">
-          <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+          <div className="flex flex-col gap-2 md:flex-row md:items-center">
             <div className="relative min-w-0 flex-1">
               <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
               <Input
@@ -351,7 +351,7 @@ export default function CleanerBookingsPage() {
             <Select
               value={filter}
               onChange={(e) => setFilter(e.target.value as 'all' | BookingStatus)}
-              className="w-full rounded-full border-slate-300 bg-white px-4 sm:w-[220px] sm:shrink-0"
+              className="w-full rounded-full border-slate-300 bg-white px-4 md:w-[220px] md:shrink-0"
               aria-label="Filter bookings by status"
             >
               {STATUS_FILTERS.map((f) => (

@@ -103,89 +103,89 @@ export default function CleanerChatsPage() {
 
   return (
     <div className="space-y-6">
-      <div className="grid gap-4 xl:h-[calc(100vh-13rem)] xl:grid-cols-[300px_1fr] 2xl:grid-cols-[340px_1fr]">
-      <Card className="min-w-0 border-slate-200 xl:h-full">
-        <CardHeader className="pb-3">
-          <CardTitle className="text-lg">Conversations</CardTitle>
-        </CardHeader>
-        <CardContent className="flex h-full flex-col space-y-3">
-          <Input
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            placeholder="Search conversation"
-          />
+      <div className="grid gap-4 lg:h-[calc(100vh-13rem)] lg:grid-cols-[280px_1fr] xl:grid-cols-[300px_1fr] 2xl:grid-cols-[340px_1fr]">
+        <Card className="min-w-0 border-slate-200 lg:h-full">
+          <CardHeader className="pb-3">
+            <CardTitle className="text-lg">Conversations</CardTitle>
+          </CardHeader>
+          <CardContent className="flex h-full flex-col space-y-3">
+            <Input
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              placeholder="Search conversation"
+            />
 
-          {filtered.length === 0 ? (
-            <div className="rounded-xl border border-dashed border-slate-300 p-5 text-center text-sm text-slate-500">
-              No conversations yet.
-            </div>
-          ) : (
-            <div className="min-h-0 flex-1 space-y-2 overflow-y-auto pr-1">
-              {filtered.map((b) => {
-                const active = b.id === selectedBookingId
-                const clientName = (b as any)?.client?.user?.name ?? 'Client'
-                const clientImage = (b as any)?.client?.user?.avatar_url as string | undefined
-                return (
-                  <button
-                    key={b.id}
-                    onClick={() => setSelectedBookingId(b.id)}
-                    className={`w-full rounded-2xl border px-3 py-3 text-left transition-all duration-200 ${
-                      active
-                        ? 'border-primary/30 bg-primary/10'
-                        : 'border-slate-200 bg-white hover:-translate-y-0.5 hover:bg-slate-50'
-                    }`}
-                  >
-                    <div className="flex items-center gap-3">
-                      <UserAvatar
-                        name={clientName}
-                        imageUrl={clientImage}
-                        className="h-10 w-10 shrink-0"
-                        textClassName="text-sm font-bold"
-                        fallbackClassName="bg-primary/10 text-primary"
-                        fallback="C"
-                      />
-                      <div className="min-w-0 flex-1">
-                        <p className="text-sm font-semibold text-slate-900 truncate">{clientName}</p>
-                        <p className="text-xs text-slate-500 truncate">{formatDate(b.scheduled_start)}</p>
+            {filtered.length === 0 ? (
+              <div className="rounded-xl border border-dashed border-slate-300 p-5 text-center text-sm text-slate-500">
+                No conversations yet.
+              </div>
+            ) : (
+              <div className="min-h-0 flex-1 space-y-2 overflow-y-auto pr-1">
+                {filtered.map((b) => {
+                  const active = b.id === selectedBookingId
+                  const clientName = (b as any)?.client?.user?.name ?? 'Client'
+                  const clientImage = (b as any)?.client?.user?.avatar_url as string | undefined
+                  return (
+                    <button
+                      key={b.id}
+                      onClick={() => setSelectedBookingId(b.id)}
+                      className={`w-full rounded-2xl border px-3 py-3 text-left transition-all duration-200 ${
+                        active
+                          ? 'border-primary/30 bg-primary/10'
+                          : 'border-slate-200 bg-white hover:-translate-y-0.5 hover:bg-slate-50'
+                      }`}
+                    >
+                      <div className="flex items-center gap-3">
+                        <UserAvatar
+                          name={clientName}
+                          imageUrl={clientImage}
+                          className="h-10 w-10 shrink-0"
+                          textClassName="text-sm font-bold"
+                          fallbackClassName="bg-primary/10 text-primary"
+                          fallback="C"
+                        />
+                        <div className="min-w-0 flex-1">
+                          <p className="text-sm font-semibold text-slate-900 truncate">{clientName}</p>
+                          <p className="text-xs text-slate-500 truncate">{formatDate(b.scheduled_start)}</p>
+                        </div>
                       </div>
-                    </div>
-                  </button>
-                )
-              })}
-            </div>
-          )}
-        </CardContent>
-      </Card>
+                    </button>
+                  )
+                })}
+              </div>
+            )}
+          </CardContent>
+        </Card>
 
-      <Card className="min-w-0 border-slate-200 xl:h-full">
-        <CardContent className="h-full p-0">
-          {!selected ? (
-            <div className="flex h-full min-h-[20rem] flex-col items-center justify-center gap-3 text-center text-slate-500 sm:min-h-[24rem] xl:min-h-0">
-              <MessageCircleMore className="h-9 w-9 text-slate-300" />
-              <p className="text-sm">Select a conversation to start chatting.</p>
-            </div>
-          ) : (
-            <div className="flex h-full min-h-0 flex-col p-3 md:p-4">
-              <div className="mb-3 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2">
-                <p className="text-sm font-semibold text-slate-900">{resolveJobTypeTitle(selected)}</p>
-                <p className="text-xs text-slate-500">{selected.city}, {selected.postcode} · {formatDate(selected.scheduled_start)}</p>
-                <Link href={`/cleaner/bookings/${selected.id}`} className="mt-1 inline-block text-xs font-medium text-primary hover:underline">
-                  Open booking details
-                </Link>
+        <Card className="min-w-0 border-slate-200 lg:h-full">
+          <CardContent className="h-full p-0">
+            {!selected ? (
+              <div className="flex h-full min-h-[20rem] flex-col items-center justify-center gap-3 text-center text-slate-500 sm:min-h-[24rem] lg:min-h-0">
+                <MessageCircleMore className="h-9 w-9 text-slate-300" />
+                <p className="text-sm">Select a conversation to start chatting.</p>
               </div>
-              <div className="min-h-0 flex-1">
-                <Chat
-                  bookingId={selected.id}
-                  currentUserId={effectiveCurrentUserId!}
-                  fullHeight
-                  readOnly={isChatReadOnly(selected.scheduled_end, Date.now(), selected.status)}
-                  readOnlyMessage={getChatReadOnlyMessage(selected.status)}
-                />
+            ) : (
+              <div className="flex h-full min-h-0 flex-col p-3 md:p-4">
+                <div className="mb-3 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2">
+                  <p className="text-sm font-semibold text-slate-900">{resolveJobTypeTitle(selected)}</p>
+                  <p className="text-xs text-slate-500">{selected.city}, {selected.postcode} · {formatDate(selected.scheduled_start)}</p>
+                  <Link href={`/cleaner/bookings/${selected.id}`} className="mt-1 inline-block text-xs font-medium text-primary hover:underline">
+                    Open booking details
+                  </Link>
+                </div>
+                <div className="min-h-0 flex-1">
+                  <Chat
+                    bookingId={selected.id}
+                    currentUserId={effectiveCurrentUserId!}
+                    fullHeight
+                    readOnly={isChatReadOnly(selected.scheduled_end, Date.now(), selected.status)}
+                    readOnlyMessage={getChatReadOnlyMessage(selected.status)}
+                  />
+                </div>
               </div>
-            </div>
-          )}
-        </CardContent>
-      </Card>
+            )}
+          </CardContent>
+        </Card>
       </div>
     </div>
   )
