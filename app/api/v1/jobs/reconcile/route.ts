@@ -28,10 +28,12 @@ export async function POST(req: NextRequest) {
   const autoStartSummary = await paymentLifecycleService.processAutoStarts()
   const autoCompletionSummary = await paymentLifecycleService.processAutoCompletions()
   const captureSummary = await paymentLifecycleService.processDueCaptures()
+  const releaseSummary = await paymentLifecycleService.processDueReleaseTransitions()
 
   return ok({
     expiry: expirySummary,
     captures: captureSummary,
+    releases: releaseSummary,
     auto_starts: autoStartSummary,
     auto_completions: autoCompletionSummary,
   })

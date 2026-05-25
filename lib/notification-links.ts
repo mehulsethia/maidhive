@@ -47,6 +47,8 @@ export function getNotificationHref(role: UserRole, notification: NotificationRe
       return '/cleaner/profile'
     case 'account_created':
       return role === 'admin' ? '/admin/users' : role === 'cleaner' ? '/cleaner/profile' : '/client/cleaners'
+    case 'review_received':
+      return role === 'cleaner' ? '/cleaner/profile?tab=reviews' : bookingId ? `${bookingDetailBase(role)}/${bookingId}` : bookingDetailBase(role)
     default:
       if (role === 'admin') return '/admin/dashboard'
       if (role === 'cleaner') return '/cleaner/dashboard'

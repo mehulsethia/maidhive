@@ -169,6 +169,75 @@ export const paymentLifecycleService = {
     return summary
   },
 
+  async processDueReleaseTransitions(limit = 200) {
+    const dueBefore = new Date(Date.now() - config.DISPUTE_WINDOW_HOURS * 60 * 60 * 1000)
+    const candidates = await db.payment.findMany({
+      where: {
+        status: { in: ['authorized', 'captured'] },
+        booking: {
+          status: 'completed',
+          scheduledEnd: { lte: dueBefore },
+          OR: [
+            { dispute: { is: null } },
+            { dispute: { is: { status: { in: ['resolved', 'closed'] } } } },
+          ],
+        },
+      },
+      include: {
+        booking: {
+          include: {
+            cleaner: { include: { user: true } },
+          },
+        },
+      },
+      orderBy: { updatedAt: 'asc' },
+      take: limit,
+    })
+
+    const summary = {
+      checked: candidates.length,
+      released: 0,
+      failed: 0,
+      errors: [] as string[],
+    }
+
+    for (const payment of candidates) {
+      try {
+        const releasedAt = new Date()
+        const updated = await db.payment.updateMany({
+          where: {
+            id: payment.id,
+            status: { in: ['authorized', 'captured'] },
+          },
+          data: {
+            status: 'transferred',
+            transferredAt: releasedAt,
+            payoutScheduledAt: payment.payoutScheduledAt ?? releasedAt,
+          },
+        })
+
+        if (updated.count === 0) {
+          continue
+        }
+
+        summary.released += 1
+
+        await pushInAppNotification({
+          userId: payment.booking.cleaner.userId,
+          type: 'payout_released',
+          title: 'Payout released',
+          body: 'Payout has been marked as released after the report window closed.',
+          data: { booking_id: payment.booking.id },
+        })
+      } catch (e: any) {
+        summary.failed += 1
+        summary.errors.push(`${payment.id}: ${e?.message ?? 'release_transition_failed'}`)
+      }
+    }
+
+    return summary
+  },
+
   async expireBookingDeadlines() {
     const now = new Date()
     const expiredUnpaidDrafts = await db.booking.findMany({

@@ -335,6 +335,9 @@ export default function ClientBookingsPage() {
                   const isWithinDisputeWindow =
                     Number.isFinite(scheduledEndMs) && Date.now() <= scheduledEndMs + DISPUTE_WINDOW_MS
                   const canDispute = booking.status === 'completed' && isWithinDisputeWindow && !disputeStatusForBooking
+                  const reviewWindowOpened = Number.isFinite(scheduledEndMs) && Date.now() >= scheduledEndMs
+                  const canLeaveReview = Boolean(booking.completed_at) && booking.status === 'completed' && !booking.review && reviewWindowOpened
+                  const reviewSubmitted = Boolean(booking.review)
                   const canChat = canViewChatHistoryForBooking(booking)
                   const isOverdueDraftState = isOverdueUnpaid(booking)
                   const canContinuePayment = !isOverdueDraftState && (booking.status === 'draft' || (booking.status === 'pending' && !isPaymentAuthorized(booking.payment?.status)))
@@ -366,7 +369,12 @@ export default function ClientBookingsPage() {
                         </div>
 
                         <div className="text-left sm:text-right">
-                          <BookingStatusBadge status={booking.status} paymentStatus={booking.payment?.status} proposalBy={booking.proposal_by} />
+                          <BookingStatusBadge
+                            status={booking.status}
+                            paymentStatus={booking.payment?.status}
+                            scheduledEnd={booking.scheduled_end}
+                            proposalBy={booking.proposal_by}
+                          />
                           <p className={`${displayFont.className} mt-2 text-base font-semibold text-slate-900`}>
                             {formatCurrency(Number(booking.total_amount ?? 0))}
                           </p>
@@ -427,6 +435,19 @@ export default function ClientBookingsPage() {
                           >
                             Report a problem
                           </Link>
+                        )}
+                        {canLeaveReview && (
+                          <Link
+                            href={`/client/bookings/${booking.id}`}
+                            className="inline-flex h-8 items-center rounded-full border border-slate-300 px-3 text-xs font-semibold text-slate-700 transition hover:bg-slate-50"
+                          >
+                            Leave a review
+                          </Link>
+                        )}
+                        {reviewSubmitted && (
+                          <span className="inline-flex h-8 items-center rounded-full border border-emerald-200 bg-emerald-50 px-3 text-xs font-semibold text-emerald-700">
+                            Review submitted
+                          </span>
                         )}
                         {(disputeStatusForBooking === 'open' || disputeStatusForBooking === 'under_review') && (
                           <span className="inline-flex h-8 items-center rounded-full border border-amber-200 bg-amber-50 px-3 text-xs font-semibold text-amber-700">

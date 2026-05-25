@@ -3,6 +3,7 @@ import { requireClient } from '@/server/auth'
 import { reviewRepo } from '@/server/repositories/review.repo'
 import { bookingRepo } from '@/server/repositories/booking.repo'
 import { clientRepo } from '@/server/repositories/client.repo'
+import { pushInAppNotification } from '@/server/services/in-app-notification.service'
 import { ok, err } from '@/server/response'
 import { createReviewSchema } from '@/server/schemas/review.schema'
 
@@ -34,5 +35,18 @@ export const POST = requireClient(async (req: NextRequest, ctx, user) => {
     comment: parsed.data.comment,
     isPublic: parsed.data.is_public,
   })
+
+  try {
+    await pushInAppNotification({
+      userId: booking.cleaner.userId,
+      type: 'review_received',
+      title: 'You received a new review.',
+      body: 'A client left a review for your recent booking. You can view it on your profile.',
+      data: { booking_id: booking.id },
+    })
+  } catch (notifyError) {
+    console.error('reviews.create.notification failed', notifyError)
+  }
+
   return ok(review, 201)
 })

@@ -32,6 +32,7 @@ import { reportLoadError, resetLoadError } from '@/lib/load-error-policy'
 import { createClient } from '@/lib/supabase'
 import { formatDate } from '@/lib/utils'
 import { canViewChatHistoryForBooking, isChatReadOnly } from '@/lib/chat-window'
+import { isCompletedBookingReleased } from '@/lib/booking-release'
 import type { BookingRead } from '@/types'
 import { toast } from 'sonner'
 
@@ -271,6 +272,7 @@ export default function ClientBookingDetailPage() {
       await reviewsApi.create(id, { rating: reviewRating, comment: reviewComment || undefined })
       toast.success('Review submitted!')
       setReviewOpen(false)
+      await refresh()
     } catch (err: any) {
       toast.error(err.message)
     } finally {
@@ -394,8 +396,13 @@ export default function ClientBookingDetailPage() {
   const hasOpenProposalFlow = hasProposal && ['pending', 'accepted', 'confirmed'].includes(booking.status)
   const canRespondToCleanerProposal = hasOpenProposalFlow && cleanerProposed
   const canReportInProgress = booking.status === 'in_progress'
-  const isCompletedAwaitingRelease = booking.status === 'completed' && paymentStatus !== 'transferred'
-  const isCompletedReleased = booking.status === 'completed' && paymentStatus === 'transferred'
+  const isCompletedReleased = isCompletedBookingReleased({
+    status: booking.status,
+    paymentStatus,
+    scheduledEnd: booking.scheduled_end,
+  })
+  const isCompletedAwaitingRelease = booking.status === 'completed' && !isCompletedReleased
+  const reviewSubmitted = Boolean(booking.review)
   const isPostConfirmationRescheduleDecline = proposalContext === 'post_confirmation' && cleanerProposed && ['accepted', 'confirmed'].includes(booking.status)
   const isAmendProposal = proposalContext === 'amend_start'
   const counterMinDate = isAmendProposal ? toDateInputValueCyprus(booking.scheduled_start) : toDateInputValueCyprus(new Date())
@@ -465,7 +472,12 @@ export default function ClientBookingDetailPage() {
                   Current Status
                 </p>
                 <div className="mt-2 flex flex-wrap items-center justify-between gap-3">
-                  <BookingStatusBadge status={booking.status} paymentStatus={booking.payment?.status} proposalBy={booking.proposal_by} />
+                  <BookingStatusBadge
+                    status={booking.status}
+                    paymentStatus={booking.payment?.status}
+                    scheduledEnd={booking.scheduled_end}
+                    proposalBy={booking.proposal_by}
+                  />
                   <p className={`${displayFont.className} text-xl font-bold tracking-[-0.02em] text-white`}>
                     {new Intl.NumberFormat('en-IE', { style: 'currency', currency: 'EUR' }).format(booking.total_amount)}
                   </p>
@@ -757,6 +769,11 @@ export default function ClientBookingDetailPage() {
                     <Button variant="outline" className="w-full sm:w-auto" onClick={() => setReviewOpen(true)}>
                       Leave a review
                     </Button>
+                  )}
+                  {reviewSubmitted && (
+                    <span className="inline-flex h-10 items-center rounded-xl border border-emerald-200 bg-emerald-50 px-3 text-sm font-semibold text-emerald-700">
+                      Review submitted
+                    </span>
                   )}
                   {reportWindowActive && isCompletedAwaitingRelease && (
                     <Button variant="destructive" className="w-full sm:w-auto" onClick={() => router.push(`/client/report?booking=${id}`)}>

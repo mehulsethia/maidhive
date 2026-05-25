@@ -3,6 +3,7 @@ import { Calendar, Clock, MapPin } from 'lucide-react'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { BookingStatusBadge } from '@/components/booking-status-badge'
+import { isCompletedBookingReleased } from '@/lib/booking-release'
 import { formatCurrency, formatDate } from '@/lib/utils'
 import type { BookingRead } from '@/types'
 
@@ -20,6 +21,11 @@ interface BookingCardProps {
 
 export function BookingCard({ booking, viewAs = 'client' }: BookingCardProps) {
   const basePath = viewAs === 'client' ? '/client' : '/cleaner'
+  const payoutReleased = isCompletedBookingReleased({
+    status: booking.status,
+    paymentStatus: booking.payment?.status,
+    scheduledEnd: booking.scheduled_end,
+  })
 
   return (
     <Card>
@@ -30,6 +36,8 @@ export function BookingCard({ booking, viewAs = 'client' }: BookingCardProps) {
               <span className="font-semibold">{SERVICE_LABELS[booking.service_type] ?? booking.service_type}</span>
               <BookingStatusBadge
                 status={booking.status}
+                paymentStatus={booking.payment?.status}
+                scheduledEnd={booking.scheduled_end}
                 proposalBy={booking.proposal_by}
                 showPaymentRequiredForUnpaid={viewAs !== 'cleaner'}
               />
@@ -55,7 +63,7 @@ export function BookingCard({ booking, viewAs = 'client' }: BookingCardProps) {
             <p className="font-bold text-lg">{formatCurrency(booking.total_amount)}</p>
             {viewAs === 'cleaner' && (
               <p className="text-xs text-muted-foreground">
-                You will earn {formatCurrency(booking.cleaner_payout)}
+                {payoutReleased ? 'You earned' : 'You will earn'} {formatCurrency(booking.cleaner_payout)}
               </p>
             )}
           </div>

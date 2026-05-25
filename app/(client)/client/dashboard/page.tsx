@@ -330,7 +330,12 @@ export default function ClientDashboardPage() {
                       </p>
                     </div>
                     <div className="flex min-w-0 flex-col items-start gap-1 text-left sm:min-w-[11rem] sm:items-end sm:text-right">
-                      <BookingStatusBadge status={booking.status} paymentStatus={booking.payment?.status} proposalBy={booking.proposal_by} />
+                      <BookingStatusBadge
+                        status={booking.status}
+                        paymentStatus={booking.payment?.status}
+                        scheduledEnd={booking.scheduled_end}
+                        proposalBy={booking.proposal_by}
+                      />
                       {isActiveProposal && (
                         <p className="text-xs font-semibold text-blue-700">
                           {proposalSummary}

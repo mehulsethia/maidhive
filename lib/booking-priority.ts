@@ -1,4 +1,5 @@
 import type { BookingRead, BookingStatus } from '@/types'
+import { isCompletedBookingReleased } from '@/lib/booking-release'
 
 const STATUS_PRIORITY: Record<BookingStatus, number> = {
   draft: 2,
@@ -8,9 +9,9 @@ const STATUS_PRIORITY: Record<BookingStatus, number> = {
   pending: 2,
   completed: 3,
   disputed: 3,
-  cancelled: 4,
-  declined: 4,
-  expired: 4,
+  cancelled: 5,
+  declined: 5,
+  expired: 5,
 }
 
 export function getBookingStatusPriority(status: BookingStatus) {
@@ -24,12 +25,24 @@ function toMs(value?: string) {
 }
 
 export function compareBookingsByOperationalPriority(a: BookingRead, b: BookingRead) {
-  const priorityDiff = getBookingStatusPriority(a.status) - getBookingStatusPriority(b.status)
-  if (priorityDiff !== 0) return priorityDiff
-
   const aPriority = getBookingStatusPriority(a.status)
   const bPriority = getBookingStatusPriority(b.status)
-  const historyBand = aPriority >= 3 && bPriority >= 3
+  const aCompletedReleased = isCompletedBookingReleased({
+    status: a.status,
+    paymentStatus: a.payment?.status,
+    scheduledEnd: a.scheduled_end,
+  })
+  const bCompletedReleased = isCompletedBookingReleased({
+    status: b.status,
+    paymentStatus: b.payment?.status,
+    scheduledEnd: b.scheduled_end,
+  })
+  const aEffectivePriority = a.status === 'completed' && aCompletedReleased ? aPriority + 1 : aPriority
+  const bEffectivePriority = b.status === 'completed' && bCompletedReleased ? bPriority + 1 : bPriority
+  const priorityDiff = aEffectivePriority - bEffectivePriority
+  if (priorityDiff !== 0) return priorityDiff
+
+  const historyBand = aEffectivePriority >= 3 && bEffectivePriority >= 3
 
   const aStart = toMs(a.scheduled_start)
   const bStart = toMs(b.scheduled_start)

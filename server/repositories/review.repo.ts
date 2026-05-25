@@ -25,6 +25,7 @@ export const reviewRepo = {
         select: {
           ...reviewSelect,
           client: { include: { user: true } },
+          booking: { select: { scheduledStart: true } },
         },
         skip: (page - 1) * pageSize,
         take: pageSize,

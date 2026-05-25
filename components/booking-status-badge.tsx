@@ -1,4 +1,5 @@
 import { Badge } from '@/components/ui/badge'
+import { isCompletedBookingReleased } from '@/lib/booking-release'
 import type { BookingStatus } from '@/types'
 
 const STATUS_CONFIG: Record<BookingStatus, { label: string; variant: 'default' | 'secondary' | 'success' | 'warning' | 'destructive' | 'outline' | 'info' }> = {
@@ -27,18 +28,26 @@ function pendingLabel(proposalBy?: 'client' | 'cleaner' | null) {
 export function BookingStatusBadge({
   status,
   paymentStatus,
+  scheduledEnd,
   proposalBy,
   showPaymentRequiredForUnpaid = true,
 }: {
   status: BookingStatus
   paymentStatus?: string | null
+  scheduledEnd?: string | Date | null
   proposalBy?: 'client' | 'cleaner' | null
   showPaymentRequiredForUnpaid?: boolean
 }) {
+  const completedLabel = isCompletedBookingReleased({ status, paymentStatus, scheduledEnd })
+    ? 'Completed - Released'
+    : STATUS_CONFIG.completed.label
+
   const config = (showPaymentRequiredForUnpaid && (status === 'draft' || (status === 'pending' && !isPaymentAuthorized(paymentStatus))))
     ? { label: 'Payment Required', variant: 'warning' as const }
     : status === 'pending'
       ? { label: pendingLabel(proposalBy), variant: STATUS_CONFIG.pending.variant }
+      : status === 'completed'
+        ? { label: completedLabel, variant: STATUS_CONFIG.completed.variant }
       : STATUS_CONFIG[status] ?? { label: status, variant: 'outline' as const }
   return <Badge variant={config.variant}>{config.label}</Badge>
 }

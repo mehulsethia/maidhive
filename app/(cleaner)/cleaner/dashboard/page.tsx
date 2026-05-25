@@ -399,7 +399,13 @@ export default function CleanerDashboardPage() {
                         </span>
                       </div>
                     </div>
-                    <BookingStatusBadge status={b.status} proposalBy={b.proposal_by} showPaymentRequiredForUnpaid={false} />
+                    <BookingStatusBadge
+                      status={b.status}
+                      paymentStatus={b.payment?.status}
+                      scheduledEnd={b.scheduled_end}
+                      proposalBy={b.proposal_by}
+                      showPaymentRequiredForUnpaid={false}
+                    />
                   </div>
                   <p className="mt-2 text-sm text-slate-600">{b.city}, {b.postcode} · {b.duration_hours}h</p>
                   {b.special_instructions && (
@@ -503,7 +509,13 @@ export default function CleanerDashboardPage() {
                     <Link key={b.id} href={`/cleaner/bookings/${b.id}`} className="block rounded-xl border border-slate-200 bg-slate-50 p-3 hover:bg-slate-100">
                       <div className="mb-1 flex items-center justify-between">
                         <p className="text-sm font-semibold text-slate-900">{resolveJobTypeTitle(b)}</p>
-                        <BookingStatusBadge status={b.status} proposalBy={b.proposal_by} showPaymentRequiredForUnpaid={false} />
+                        <BookingStatusBadge
+                          status={b.status}
+                          paymentStatus={b.payment?.status}
+                          scheduledEnd={b.scheduled_end}
+                          proposalBy={b.proposal_by}
+                          showPaymentRequiredForUnpaid={false}
+                        />
                       </div>
                       <p className="text-xs text-slate-500">{formatDate(b.scheduled_start)}</p>
                       {isActiveProposal && (
@@ -550,7 +562,13 @@ export default function CleanerDashboardPage() {
                       <p className="mt-2 text-xs font-semibold text-blue-700">{proposalSummary}</p>
                     )}
                     <div className="mt-2 flex items-center justify-between">
-                      <BookingStatusBadge status={b.status} proposalBy={b.proposal_by} showPaymentRequiredForUnpaid={false} />
+                      <BookingStatusBadge
+                        status={b.status}
+                        paymentStatus={b.payment?.status}
+                        scheduledEnd={b.scheduled_end}
+                        proposalBy={b.proposal_by}
+                        showPaymentRequiredForUnpaid={false}
+                      />
                       <p className="text-sm font-semibold text-slate-900">{formatCurrency(b.cleaner_payout)}</p>
                     </div>
                   </Link>

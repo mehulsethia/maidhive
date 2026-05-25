@@ -89,7 +89,12 @@ function BookingTable({ bookings }: { bookings: BookingRead[] }) {
                 {formatDate(b.scheduled_start)}
               </td>
               <td className="px-4 py-3">
-                <BookingStatusBadge status={b.status} proposalBy={b.proposal_by} />
+                <BookingStatusBadge
+                  status={b.status}
+                  paymentStatus={b.payment?.status}
+                  scheduledEnd={b.scheduled_end}
+                  proposalBy={b.proposal_by}
+                />
                 {(b.start_initiated_by === 'cleaner' || b.start_initiated_by === 'system') && (
                   <p className="mt-1 text-[11px] text-muted-foreground">
                     Start: {b.start_initiated_by === 'system' ? 'Auto-started by system' : 'Started manually by cleaner'}

@@ -29,6 +29,7 @@ import {
   toTimeValueInCyprus,
 } from '@/lib/booking-proposal'
 import { canViewChatHistoryForBooking, isChatReadOnly } from '@/lib/chat-window'
+import { isBookingReportWindowActive, isCompletedBookingReleased } from '@/lib/booking-release'
 import { subscribeBookingsRefresh, triggerBookingsRefresh } from '@/lib/booking-sync'
 import { showJobStartedToast } from '@/lib/job-start-toast'
 import { reportLoadError, resetLoadError } from '@/lib/load-error-policy'
@@ -48,7 +49,6 @@ const AMEND_MAX_SHIFT_MS = 3 * 60 * 60 * 1000
 const PHONE_REVEAL_PRE_START_MS = 6 * 60 * 60 * 1000
 const PHONE_REVEAL_POST_END_MS = 30 * 60 * 1000
 const DISPUTE_WINDOW_HOURS = Number(process.env.NEXT_PUBLIC_DISPUTE_WINDOW_HOURS ?? 24)
-const DISPUTE_WINDOW_MS = DISPUTE_WINDOW_HOURS * 60 * 60 * 1000
 
 function resolveJobTypeTitle(booking: BookingRead) {
   const snapshotMatch = booking.special_instructions?.match(/(?:^|\n)Job type:\s*([^\n]+)/i)
@@ -322,11 +322,13 @@ export default function CleanerBookingDetailPage() {
   const moreThan24HoursAway = Number.isFinite(bookingStartsAtMs) && millisUntilStart > RESCHEDULE_CUTOFF_MS
   const startWindowExpired = Number.isFinite(bookingEndsAtMs) && Date.now() > bookingEndsAtMs + 24 * 60 * 60 * 1000
   const canStartJobNow = Number.isFinite(bookingStartsAtMs) && Date.now() >= bookingStartsAtMs - START_JOB_EARLY_WINDOW_MS && !startWindowExpired
-  const cleanerReportWindowEndsAtMs = booking.scheduled_end
-    ? new Date(booking.scheduled_end).getTime() + DISPUTE_WINDOW_MS
-    : 0
   const canReportProblem = ['in_progress', 'completed'].includes(booking.status) &&
-    Date.now() <= cleanerReportWindowEndsAtMs
+    isBookingReportWindowActive(booking.scheduled_end)
+  const payoutReleased = isCompletedBookingReleased({
+    status: booking.status,
+    paymentStatus: booking.payment?.status,
+    scheduledEnd: booking.scheduled_end,
+  })
   const clientTrust = (booking.client as any)?.trust as {
     memberSince?: string | null
     completedBookingsCount?: number
@@ -415,7 +417,13 @@ export default function CleanerBookingDetailPage() {
         <button onClick={() => router.back()} className="inline-flex items-center gap-1 rounded-xl border border-slate-200 px-2.5 py-1.5 text-sm font-semibold text-slate-500 transition-all duration-200 hover:-translate-y-0.5 hover:text-slate-800">
           <ArrowLeft className="h-4 w-4" /> Back
         </button>
-        <BookingStatusBadge status={booking.status} proposalBy={booking.proposal_by} showPaymentRequiredForUnpaid={false} />
+        <BookingStatusBadge
+          status={booking.status}
+          paymentStatus={booking.payment?.status}
+          scheduledEnd={booking.scheduled_end}
+          proposalBy={booking.proposal_by}
+          showPaymentRequiredForUnpaid={false}
+        />
       </div>
 
       <section className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(0,0.9fr)]">
@@ -481,7 +489,7 @@ export default function CleanerBookingDetailPage() {
               <div className="space-y-2">
                 <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
                   <div>
-                    <p className="text-sm text-muted-foreground">You will earn</p>
+                    <p className="text-sm text-muted-foreground">{payoutReleased ? 'You earned' : 'You will earn'}</p>
                     <p className="text-2xl font-bold text-green-700">{formatCurrency(booking.cleaner_payout)}</p>
                     <p className="text-xs text-muted-foreground mt-0.5">
                       {isCancelledPreConfirmation ? 'Informational only — this request was cancelled before confirmation.' : `Released after the ${disputeWindowLabel()} report window from scheduled completion`}

@@ -29,6 +29,7 @@ import {
   toTimeValueInCyprus,
 } from '@/lib/booking-proposal'
 import { compareBookingsByOperationalPriority } from '@/lib/booking-priority'
+import { isBookingReportWindowActive, isCompletedBookingReleased } from '@/lib/booking-release'
 import { subscribeBookingsRefresh, triggerBookingsRefresh } from '@/lib/booking-sync'
 import { showJobStartedToast } from '@/lib/job-start-toast'
 import { formatCurrency, formatDate } from '@/lib/utils'
@@ -51,8 +52,6 @@ const SERVICE_LABELS: Record<string, string> = {
   end_of_tenancy: 'End of Tenancy',
   move_in: 'Move-in Clean',
 }
-const DISPUTE_WINDOW_HOURS = Number(process.env.NEXT_PUBLIC_DISPUTE_WINDOW_HOURS ?? 24)
-const DISPUTE_WINDOW_MS = DISPUTE_WINDOW_HOURS * 60 * 60 * 1000
 const PHONE_REVEAL_PRE_START_MS = 6 * 60 * 60 * 1000
 const PHONE_REVEAL_POST_END_MS = 30 * 60 * 1000
 
@@ -382,9 +381,13 @@ export default function CleanerBookingsPage() {
                 const scheduledStartMs = new Date(b.scheduled_start).getTime()
                 const scheduledEndMs = new Date(b.scheduled_end).getTime()
                 const createdAtMs = new Date(b.created_at).getTime()
-                const canReportProblem = ['in_progress', 'completed'].includes(b.status) &&
-                  Number.isFinite(scheduledEndMs) &&
-                  Date.now() <= scheduledEndMs + DISPUTE_WINDOW_MS
+                const reportWindowActive = isBookingReportWindowActive(b.scheduled_end)
+                const canReportProblem = ['in_progress', 'completed'].includes(b.status) && reportWindowActive
+                const payoutReleased = isCompletedBookingReleased({
+                  status: b.status,
+                  paymentStatus: b.payment?.status,
+                  scheduledEnd: b.scheduled_end,
+                })
                 const unlockAtMs = scheduledStartMs - PHONE_REVEAL_PRE_START_MS
                 const sameDayCreated =
                   Number.isFinite(createdAtMs) &&
@@ -446,8 +449,16 @@ export default function CleanerBookingsPage() {
                       )}
                     </div>
                     <div className="text-left sm:text-right">
-                      <BookingStatusBadge status={b.status} proposalBy={b.proposal_by} showPaymentRequiredForUnpaid={false} />
-                      <p className="mt-2 text-sm font-semibold text-emerald-700">You will earn {formatCurrency(b.cleaner_payout)}</p>
+                      <BookingStatusBadge
+                        status={b.status}
+                        paymentStatus={b.payment?.status}
+                        scheduledEnd={b.scheduled_end}
+                        proposalBy={b.proposal_by}
+                        showPaymentRequiredForUnpaid={false}
+                      />
+                      <p className="mt-2 text-sm font-semibold text-emerald-700">
+                        {payoutReleased ? 'You earned' : 'You will earn'} {formatCurrency(b.cleaner_payout)}
+                      </p>
                     </div>
                   </div>
 

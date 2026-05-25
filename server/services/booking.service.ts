@@ -136,6 +136,9 @@ export const bookingService = {
       return bookingService.completeBySystem(booking.id, booking.scheduledEnd)
     }
 
+    const released = await maybeAutoReleaseCompletedBooking(booking)
+    if (released) return released
+
     return booking
   },
 
@@ -150,6 +153,8 @@ export const bookingService = {
       if (!after) continue
       if (
         before.status !== after.status ||
+        before.payment?.status !== after.payment?.status ||
+        before.payment?.transferredAt?.getTime() !== after.payment?.transferredAt?.getTime() ||
         before.proposalBy !== after.proposalBy ||
         before.proposalContext !== after.proposalContext ||
         before.proposedStart?.getTime() !== after.proposedStart?.getTime() ||
@@ -1735,6 +1740,49 @@ async function applyCancellationPaymentPolicy(
     capturedAt: new Date(),
     payoutScheduledAt: new Date(),
   })
+}
+
+async function maybeAutoReleaseCompletedBooking(booking: BookingWithRelations) {
+  if (booking.status !== 'completed') return null
+  if (!booking.payment) return null
+
+  const paymentStatus = String(booking.payment.status ?? '')
+  if (!['authorized', 'captured'].includes(paymentStatus)) return null
+
+  const scheduledEndMs = booking.scheduledEnd?.getTime() ?? Number.NaN
+  if (!Number.isFinite(scheduledEndMs)) return null
+
+  const releaseDeadlineMs = scheduledEndMs + config.DISPUTE_WINDOW_HOURS * 60 * 60 * 1000
+  if (Date.now() <= releaseDeadlineMs) return null
+
+  const dispute = await disputeRepo.findByBookingId(booking.id)
+  const unresolvedDispute = Boolean(dispute && !['resolved', 'closed'].includes(String(dispute.status ?? '')))
+  if (unresolvedDispute) return null
+
+  const releasedAt = new Date()
+  const releaseUpdate = await db.payment.updateMany({
+    where: {
+      id: booking.payment.id,
+      status: { in: ['authorized', 'captured'] },
+    },
+    data: {
+      status: 'transferred',
+      transferredAt: releasedAt,
+      payoutScheduledAt: booking.payment.payoutScheduledAt ?? releasedAt,
+    },
+  })
+
+  if (releaseUpdate.count === 0) return null
+
+  await pushInAppNotification({
+    userId: booking.cleaner.userId,
+    type: 'payout_released',
+    title: 'Payout released',
+    body: 'Payout has been marked as released after the report window closed.',
+    data: { booking_id: booking.id },
+  })
+
+  return bookingRepo.findById(booking.id)
 }
 
 function isoWeekday(date: Date): number {

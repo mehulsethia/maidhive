@@ -363,6 +363,9 @@ export interface ReviewRead {
     id: string
     user?: UserRead
   }
+  booking?: {
+    scheduled_start?: string
+  }
 }
 
 // ---------------------------------------------------------------------------

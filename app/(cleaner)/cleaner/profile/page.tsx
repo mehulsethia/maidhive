@@ -890,17 +890,26 @@ function CleanerProfilePageContent() {
                     No reviews yet
                   </div>
                 ) : (
-                  reviews.map((r) => (
+                  reviews.map((r) => {
+                    const clientName = r.client?.user?.name?.trim() || 'Client'
+                    const clientFirstName = clientName.split(/\s+/)[0] || 'Client'
+                    const bookingDate = r.booking?.scheduled_start
+                      ? new Date(r.booking.scheduled_start).toLocaleDateString('en-IE', { day: 'numeric', month: 'short', year: 'numeric', timeZone: 'Europe/Nicosia' })
+                      : new Date(r.created_at).toLocaleDateString('en-IE', { day: 'numeric', month: 'short', year: 'numeric', timeZone: 'Europe/Nicosia' })
+                    return (
                     <div key={r.id} className="rounded-xl border border-slate-200 bg-white p-4">
                       <div className="mb-1 flex items-center justify-between">
-                        <p className="font-semibold text-slate-900">Booking #{r.booking_id.slice(0, 8)}</p>
+                        <div>
+                          <p className="font-semibold text-slate-900">Review from {clientFirstName}</p>
+                          <p className="text-xs text-slate-500">Booking: {bookingDate}</p>
+                          <p className="text-[11px] text-slate-400">Ref: {r.booking_id.slice(0, 8)}</p>
+                        </div>
                         <div className="flex items-center gap-1 text-amber-500">
                           {Array.from({ length: 5 }).map((_, i) => (
                             <Star key={i} className={`h-4 w-4 ${i < r.rating ? 'fill-current' : ''}`} />
                           ))}
                         </div>
                       </div>
-                      <p className="text-xs text-slate-500">{new Date(r.created_at).toLocaleDateString('en-IE', { timeZone: 'Europe/Nicosia' })}</p>
                       <p className="mt-2 text-sm text-slate-700">{r.comment || 'No written comment provided.'}</p>
                       {r.cleaner_reply ? (
                         <div className="mt-3 rounded-lg border border-blue-100 bg-blue-50 px-3 py-2">
@@ -915,6 +924,9 @@ function CleanerProfilePageContent() {
                       ) : (
                         <div className="mt-3 space-y-2 rounded-lg border border-slate-200 bg-slate-50 p-3">
                           <Label className="text-xs">Public reply (one-time, cannot be edited)</Label>
+                          <p className="text-xs text-slate-600">
+                            Reply professionally. This response will be visible on your public profile and cannot be edited.
+                          </p>
                           <Textarea
                             value={reviewReplyDrafts[r.id] ?? ''}
                             onChange={(event) =>
@@ -935,7 +947,8 @@ function CleanerProfilePageContent() {
                         </div>
                       )}
                     </div>
-                  ))
+                    )
+                  })
                 )}
               </div>
             )}
