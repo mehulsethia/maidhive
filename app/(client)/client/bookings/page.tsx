@@ -272,9 +272,10 @@ export default function ClientBookingsPage() {
             </div>
 
             <div className="animate-stage-up delay-120">
-              <div className="ml-auto grid w-full max-w-sm grid-cols-1 gap-2 rounded-3xl border border-white/20 bg-black/35 p-4 backdrop-blur-sm sm:grid-cols-3 sm:gap-3">
+              <div className="ml-auto grid w-full max-w-sm grid-cols-1 gap-2 rounded-3xl border border-white/20 bg-black/35 p-4 backdrop-blur-sm sm:grid-cols-4 sm:gap-3">
+                <MetricChip label="All Bookings" value={deferredBookings.length} icon={<Search className="h-4 w-4" />} monoFont={monoFont.className} displayFont={displayFont.className} active={dashboardFilter === null} onClick={() => { setDashboardFilter(null); setFilter('all') }} />
                 <MetricChip label="Active" value={activeCount} icon={<Clock3 className="h-4 w-4" />} monoFont={monoFont.className} displayFont={displayFont.className} active={dashboardFilter === 'active'} onClick={() => { setDashboardFilter('active'); setFilter('all') }} />
-                <MetricChip label="Done" value={completedCount} icon={<CalendarCheck2 className="h-4 w-4" />} monoFont={monoFont.className} displayFont={displayFont.className} active={dashboardFilter === 'completed'} onClick={() => { setDashboardFilter('completed'); setFilter('all') }} />
+                <MetricChip label="Completed" value={completedCount} icon={<CalendarCheck2 className="h-4 w-4" />} monoFont={monoFont.className} displayFont={displayFont.className} active={dashboardFilter === 'completed'} onClick={() => { setDashboardFilter('completed'); setFilter('all') }} />
                 <MetricChip label="Closed" value={cancelledCount} icon={<CircleX className="h-4 w-4" />} monoFont={monoFont.className} displayFont={displayFont.className} active={dashboardFilter === 'closed'} onClick={() => { setDashboardFilter('closed'); setFilter('all') }} />
               </div>
             </div>

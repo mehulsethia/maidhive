@@ -1078,11 +1078,20 @@ export const bookingService = {
         paymentStatus: booking.payment?.status,
         message: error instanceof Error ? error.message : String(error),
       })
-      await releasePaymentAuthorization(
-        booking.payment?.id,
-        booking.payment?.stripePaymentIntentId,
-        booking.payment?.status,
-      )
+      try {
+        await releasePaymentAuthorization(
+          booking.payment?.id,
+          booking.payment?.stripePaymentIntentId,
+          booking.payment?.status,
+        )
+      } catch (releaseError) {
+        console.error('booking.cancel.release_authorization_fallback failed; proceeding with cancellation anyway', {
+          bookingId,
+          paymentId: booking.payment?.id,
+          paymentStatus: booking.payment?.status,
+          message: releaseError instanceof Error ? releaseError.message : String(releaseError),
+        })
+      }
     }
 
       const updated = await bookingRepo.update(bookingId, {
@@ -1431,10 +1440,19 @@ async function releasePaymentAuthorization(
     // Keep booking state deterministic even if Stripe cancellation fails.
   }
 
-  await paymentRepo.update(paymentId, {
-    status: 'failed',
-    failedAt: new Date(),
-  })
+  try {
+    await paymentRepo.update(paymentId, {
+      status: 'failed',
+      failedAt: new Date(),
+    })
+  } catch (error) {
+    // Cancellation flow must remain non-blocking even if legacy payment rows are inconsistent.
+    console.error('releasePaymentAuthorization.payment_update failed', {
+      paymentId,
+      paymentStatus,
+      message: error instanceof Error ? error.message : String(error),
+    })
+  }
 }
 
 async function notifyPendingRequestExpired(booking: BookingWithRelations) {

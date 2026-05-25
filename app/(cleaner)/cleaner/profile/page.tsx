@@ -139,7 +139,7 @@ function CleanerProfilePageContent() {
     try {
       const [meRes, bookingRes, stripeRes] = await Promise.all([
         cleanersApi.me(),
-        bookingsApi.my(),
+        bookingsApi.my(1, undefined, 50),
         paymentsApi.getConnectStatus(),
       ])
 
@@ -261,12 +261,7 @@ function CleanerProfilePageContent() {
   const paymentHistory = useMemo(() => {
     return bookings
       .map((booking) => {
-        const paymentStatus = String(booking.payment?.status ?? '')
-        if (!paymentStatus) return null
-
-        if (paymentStatus === 'failed' || booking.status === 'disputed') {
-          return { booking, label: 'Payment issue - admin review', tone: 'issue' as const }
-        }
+        const paymentStatus = String(booking.payment?.status ?? '').trim()
 
         if (booking.status === 'completed') {
           const released = isCompletedBookingReleased({
@@ -281,8 +276,15 @@ function CleanerProfilePageContent() {
           }
         }
 
-        if (['accepted', 'confirmed', 'in_progress'].includes(booking.status) && ['authorized', 'captured', 'transferred'].includes(paymentStatus)) {
-          return { booking, label: 'Payment authorised', tone: 'ok' as const }
+        if (paymentStatus === 'failed' || booking.status === 'disputed') {
+          return { booking, label: 'Payment issue - admin review', tone: 'issue' as const }
+        }
+
+        if (['accepted', 'confirmed', 'in_progress'].includes(booking.status)) {
+          if (['authorized', 'captured', 'transferred'].includes(paymentStatus)) {
+            return { booking, label: 'Payment authorised', tone: 'ok' as const }
+          }
+          return { booking, label: 'Payment issue - admin review', tone: 'issue' as const }
         }
 
         return null

@@ -25,12 +25,24 @@ function toMs(value?: string) {
 }
 
 function getConversationPriorityBand(booking: BookingRead) {
-  if (booking.status === 'confirmed' || booking.status === 'accepted' || booking.status === 'in_progress' || booking.status === 'disputed') {
-    return 0
+  switch (booking.status) {
+    case 'confirmed':
+      return 0
+    case 'in_progress':
+      return 1
+    case 'disputed':
+      return 2
+    case 'accepted':
+      return 3
+    case 'completed':
+      return 4
+    case 'cancelled':
+    case 'declined':
+    case 'expired':
+      return 5
+    default:
+      return 6
   }
-  if (booking.status === 'completed') return 1
-  if (booking.status === 'cancelled' || booking.status === 'declined' || booking.status === 'expired') return 2
-  return 3
 }
 
 export function compareBookingsByOperationalPriority(a: BookingRead, b: BookingRead) {
@@ -68,7 +80,10 @@ export function compareConversationsByOperationalPriority(a: BookingRead, b: Boo
   const aStart = toMs(a.scheduled_start)
   const bStart = toMs(b.scheduled_start)
   if (aStart !== bStart) {
-    return aBand === 0 ? aStart - bStart : bStart - aStart
+    if (aBand <= 3) {
+      return aStart - bStart
+    }
+    return bStart - aStart
   }
 
   return toMs(b.created_at) - toMs(a.created_at)
