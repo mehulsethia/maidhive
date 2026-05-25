@@ -379,6 +379,33 @@ export default function ClientBookingDetailPage() {
   const amendFinalised = (booking.client_proposals ?? 0) >= 1 && (booking.cleaner_proposals ?? 0) >= 1
   const canAmendStartTime = booking.status === 'confirmed' && within24HoursBeforeStart && !hasProposal && !clientAmendRequestUsed && !amendFinalised
   const canCancelConfirmedBooking = booking.status === 'confirmed' && !hasStarted
+  const estimatedCancellationOutcome = (() => {
+    if (canCancelDraft || canCancelBookingRequest) {
+      return 'Your card authorisation will be released. No cancellation fee applies.'
+    }
+    if (!canCancelConfirmedBooking) return null
+
+    const hoursUntilStart = Number.isFinite(scheduledStartMs)
+      ? (scheduledStartMs - Date.now()) / (60 * 60 * 1000)
+      : Number.NaN
+    if (!Number.isFinite(hoursUntilStart)) return null
+
+    if (hoursUntilStart > 24) {
+      return 'You will receive a full refund.'
+    }
+
+    const totalAmount = Number(booking.total_amount ?? 0)
+    const platformFee = Number(booking.platform_fee ?? 0)
+    const subtotal = Number(booking.subtotal ?? Math.max(totalAmount - platformFee, 0))
+
+    if (hoursUntilStart > 12) {
+      const fee = Math.min(totalAmount, 5)
+      return `A ${new Intl.NumberFormat('en-IE', { style: 'currency', currency: 'EUR' }).format(fee)} cancellation fee will apply.`
+    }
+
+    const chargeAmount = Math.min(totalAmount, (subtotal * 0.5) + platformFee)
+    return `${new Intl.NumberFormat('en-IE', { style: 'currency', currency: 'EUR' }).format(chargeAmount)} may be charged under the cancellation policy.`
+  })()
   const proposalContext =
     booking.proposal_context ??
     (booking.status === 'pending' ? 'pre_confirmation' : booking.status === 'accepted' || booking.status === 'confirmed' ? 'post_confirmation' : null)
@@ -1015,6 +1042,11 @@ export default function ClientBookingDetailPage() {
                 ? 'Are you sure you want to cancel this booking request?'
                 : 'Are you sure you want to cancel this booking? Cancellation rules may apply depending on how close the booking is to the scheduled start time.'}
           </p>
+          {estimatedCancellationOutcome && (
+            <p className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-700">
+              Estimated policy outcome: {estimatedCancellationOutcome}
+            </p>
+          )}
           <div className="flex flex-col gap-2 sm:flex-row">
             <Button variant="outline" className="w-full" onClick={() => setCancelConfirmOpen(false)} disabled={Boolean(actionLoading)}>
               {canCancelDraft ? 'Keep draft' : canCancelBookingRequest ? 'Keep request' : 'Keep booking'}

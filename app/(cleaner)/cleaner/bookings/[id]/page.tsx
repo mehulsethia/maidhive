@@ -338,6 +338,7 @@ export default function CleanerBookingDetailPage() {
     : showProjectedEarnings
       ? 'You will earn'
       : 'Booking value'
+  const isClosedNonPayableStatus = ['cancelled', 'declined', 'expired'].includes(booking.status)
   const clientTrust = (booking.client as any)?.trust as {
     memberSince?: string | null
     completedBookingsCount?: number
@@ -501,7 +502,11 @@ export default function CleanerBookingDetailPage() {
                     <p className="text-sm text-muted-foreground">{earningsLabel}</p>
                     <p className="text-2xl font-bold text-green-700">{formatCurrency(booking.cleaner_payout)}</p>
                     <p className="text-xs text-muted-foreground mt-0.5">
-                      {isCancelledPreConfirmation ? 'Informational only — this request was cancelled before confirmation.' : `Released after the ${disputeWindowLabel()} report window from scheduled completion`}
+                      {isCancelledPreConfirmation
+                        ? 'Informational only — this request was cancelled before confirmation.'
+                        : isClosedNonPayableStatus
+                          ? 'Payout is not applicable for this booking status.'
+                          : `Released after the ${disputeWindowLabel()} report window from scheduled completion`}
                     </p>
                   </div>
                   <div className="text-right text-sm text-muted-foreground">

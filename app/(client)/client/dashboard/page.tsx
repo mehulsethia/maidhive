@@ -25,8 +25,8 @@ import type { BookingRead, BookingStatus, FavoriteCleaner } from '@/types'
 const displayFont = Bricolage_Grotesque({ subsets: ['latin'], weight: ['400', '500', '700', '800'] })
 const monoFont = IBM_Plex_Mono({ subsets: ['latin'], weight: ['400', '500', '600'] })
 
-const ACTIVE_STATUSES: BookingStatus[] = ['pending', 'accepted', 'confirmed', 'in_progress']
-const UPCOMING_STATUSES: BookingStatus[] = ['pending', 'accepted', 'confirmed', 'in_progress']
+const ACTIVE_STATUSES: BookingStatus[] = ['pending', 'confirmed', 'in_progress']
+const UPCOMING_STATUSES: BookingStatus[] = ['pending', 'confirmed', 'in_progress']
 const CLOSED_STATUSES: BookingStatus[] = ['cancelled', 'declined', 'expired']
 
 const SERVICE_LABELS: Record<string, string> = {

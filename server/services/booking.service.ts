@@ -1069,7 +1069,21 @@ export const bookingService = {
 
     if (!isParty && user.role !== 'admin') throw new ServiceError('Forbidden', 403)
 
-    await applyCancellationPaymentPolicy(booking, booking.status)
+    try {
+      await applyCancellationPaymentPolicy(booking, booking.status)
+    } catch (error) {
+      console.error('booking.cancel.payment_policy failed; proceeding with cancellation fallback', {
+        bookingId,
+        status: booking.status,
+        paymentStatus: booking.payment?.status,
+        message: error instanceof Error ? error.message : String(error),
+      })
+      await releasePaymentAuthorization(
+        booking.payment?.id,
+        booking.payment?.stripePaymentIntentId,
+        booking.payment?.status,
+      )
+    }
 
       const updated = await bookingRepo.update(bookingId, {
         status: 'cancelled',
@@ -1134,16 +1148,18 @@ export const bookingService = {
       })
     }
 
-    try {
-      await loopsEmailService.sendClientCancellationConfirmation({
-        email: booking.client.user.email,
-        fullName: booking.client.user.name ?? 'Client',
-        date: booking.scheduledStart,
-        cleanerName: booking.cleaner.user.name ?? 'Cleaner',
-        durationHours: Number(booking.durationHours),
-      })
-    } catch (emailError) {
-      console.error('Failed to send client cancellation confirmation email via Loops:', emailError)
+    if (!isDraftLikePreAuthorisation) {
+      try {
+        await loopsEmailService.sendClientCancellationConfirmation({
+          email: booking.client.user.email,
+          fullName: booking.client.user.name ?? 'Client',
+          date: booking.scheduledStart,
+          cleanerName: booking.cleaner.user.name ?? 'Cleaner',
+          durationHours: Number(booking.durationHours),
+        })
+      } catch (emailError) {
+        console.error('Failed to send client cancellation confirmation email via Loops:', emailError)
+      }
     }
 
     if (isClientCancelling && isAcceptedOrConfirmedCancellation) {

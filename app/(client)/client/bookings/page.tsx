@@ -69,6 +69,11 @@ function isOverdueUnpaid(booking: BookingRead) {
   return new Date(booking.scheduled_start).getTime() <= Date.now()
 }
 
+function isOperationalActiveBooking(booking: BookingRead) {
+  if (booking.status === 'pending') return isPaymentAuthorized(booking.payment?.status)
+  return booking.status === 'confirmed' || booking.status === 'in_progress'
+}
+
 export default function ClientBookingsPage() {
   const [loading, setLoading] = useState(true)
   const [bookings, setBookings] = useState<BookingRead[]>([])
@@ -202,8 +207,7 @@ export default function ClientBookingsPage() {
 
   const filtered = deferredBookings.filter((booking) => {
     if (dashboardFilter === 'active') {
-      const isActiveStatus = ['draft', 'pending', 'accepted', 'confirmed', 'in_progress'].includes(booking.status)
-      if (!isActiveStatus) return false
+      if (!isOperationalActiveBooking(booking)) return false
     }
     if (dashboardFilter === 'completed' && booking.status !== 'completed') return false
     if (dashboardFilter === 'closed' && !['cancelled', 'declined', 'expired'].includes(booking.status)) return false
@@ -232,9 +236,7 @@ export default function ClientBookingsPage() {
   }).sort(compareBookingsByOperationalPriority)
 
   const activeCount = deferredBookings.filter((booking) => {
-    const isActiveStatus = ['draft', 'pending', 'accepted', 'confirmed', 'in_progress'].includes(booking.status)
-    if (!isActiveStatus) return false
-    return true
+    return isOperationalActiveBooking(booking)
   }).length
   const completedCount = deferredBookings.filter((booking) => booking.status === 'completed').length
   const cancelledCount = deferredBookings.filter((booking) =>
