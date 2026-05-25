@@ -53,6 +53,12 @@ const SERVICE_LABELS: Record<string, string> = {
 }
 const DISPUTE_WINDOW_HOURS = Number(process.env.NEXT_PUBLIC_DISPUTE_WINDOW_HOURS ?? 24)
 const DISPUTE_WINDOW_MS = DISPUTE_WINDOW_HOURS * 60 * 60 * 1000
+const PHONE_REVEAL_PRE_START_MS = 6 * 60 * 60 * 1000
+const PHONE_REVEAL_POST_END_MS = 30 * 60 * 1000
+
+function cyprusDateStr(date: Date) {
+  return new Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/Nicosia' }).format(date)
+}
 
 export default function CleanerBookingsPage() {
   const searchParams = useSearchParams()
@@ -67,7 +73,8 @@ export default function CleanerBookingsPage() {
   const [proposalDate, setProposalDate] = useState('')
   const [proposalTime, setProposalTime] = useState('')
   const [proposalTimeOptions, setProposalTimeOptions] = useState<Array<{ value: string; label: string }>>([])
-  const [, setNowTick] = useState(() => Date.now())
+  const [nowTick, setNowTick] = useState(() => Date.now())
+  const [revealedPhoneByBookingId, setRevealedPhoneByBookingId] = useState<Record<string, boolean>>({})
   const START_JOB_EARLY_WINDOW_MS = 15 * 60 * 1000
   const proposalMinDate = toDateInputValueCyprus(new Date())
   const proposalMaxDate = maxPreConfirmationProposalDateInputValue()
@@ -372,10 +379,29 @@ export default function CleanerBookingsPage() {
                   : null
                 const completedBookingsCount = Number(trust?.completedBookingsCount ?? 0)
                 const startJobState = getStartJobAvailability(b.scheduled_start, b.scheduled_end)
+                const scheduledStartMs = new Date(b.scheduled_start).getTime()
                 const scheduledEndMs = new Date(b.scheduled_end).getTime()
+                const createdAtMs = new Date(b.created_at).getTime()
                 const canReportProblem = ['in_progress', 'completed'].includes(b.status) &&
                   Number.isFinite(scheduledEndMs) &&
                   Date.now() <= scheduledEndMs + DISPUTE_WINDOW_MS
+                const unlockAtMs = scheduledStartMs - PHONE_REVEAL_PRE_START_MS
+                const sameDayCreated =
+                  Number.isFinite(createdAtMs) &&
+                  Number.isFinite(scheduledStartMs) &&
+                  cyprusDateStr(new Date(createdAtMs)) === cyprusDateStr(new Date(scheduledStartMs))
+                const createdWithinSixHoursOfStart = sameDayCreated && scheduledStartMs - createdAtMs < PHONE_REVEAL_PRE_START_MS
+                const revealUnlocked = nowTick >= unlockAtMs || createdWithinSixHoursOfStart
+                const revealExpired = Number.isFinite(scheduledEndMs) && nowTick > scheduledEndMs + PHONE_REVEAL_POST_END_MS
+                const isPostCompletionPhoneLocked = ['completed', 'disputed'].includes(b.status)
+                const canRevealPhoneWindow =
+                  ['accepted', 'confirmed', 'in_progress'].includes(b.status) &&
+                  revealUnlocked &&
+                  !isPostCompletionPhoneLocked &&
+                  !revealExpired
+                const clientPhone = b.client?.user?.phone ?? ''
+                const canRevealPhone = canRevealPhoneWindow && Boolean(clientPhone)
+                const phoneRevealed = Boolean(revealedPhoneByBookingId[b.id])
                 const clientName = b.client?.user?.name?.trim() || 'Client'
                 const clientAvatarUrl = b.client?.user?.avatar_url ?? null
                 return (
@@ -508,6 +534,36 @@ export default function CleanerBookingsPage() {
                       >
                         Report a problem
                       </Link>
+                    )}
+                    {canRevealPhoneWindow && (
+                      phoneRevealed ? (
+                        canRevealPhone ? (
+                          <span className="inline-flex h-8 items-center rounded-xl border border-slate-300 px-3 text-xs text-slate-700">
+                            {clientPhone}
+                          </span>
+                        ) : (
+                          <span className="inline-flex h-8 items-center rounded-xl border border-slate-200 bg-slate-50 px-3 text-xs text-slate-500">
+                            Client has not added a phone number yet.
+                          </span>
+                        )
+                      ) : (
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() =>
+                            setRevealedPhoneByBookingId((prev) => ({ ...prev, [b.id]: true }))
+                          }
+                        >
+                          Reveal number
+                        </Button>
+                      )
+                    )}
+                    {!canRevealPhoneWindow && ['accepted', 'confirmed', 'in_progress'].includes(b.status) && (
+                      <span className="inline-flex h-8 items-center rounded-xl border border-slate-200 bg-slate-50 px-3 text-xs text-slate-500">
+                        {revealExpired || isPostCompletionPhoneLocked
+                          ? 'Phone access is now closed for this booking.'
+                          : 'Client number becomes available 6 hours before the booking.'}
+                      </span>
                     )}
                     {b.status === 'disputed' && (
                       <span className="inline-flex h-8 items-center rounded-xl border border-amber-200 bg-amber-50 px-3 text-xs font-semibold text-amber-700">
