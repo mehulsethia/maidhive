@@ -27,6 +27,7 @@ const monoFont = IBM_Plex_Mono({ subsets: ['latin'], weight: ['400', '500', '600
 
 const ACTIVE_STATUSES: BookingStatus[] = ['pending', 'accepted', 'confirmed', 'in_progress']
 const UPCOMING_STATUSES: BookingStatus[] = ['pending', 'accepted', 'confirmed', 'in_progress']
+const CLOSED_STATUSES: BookingStatus[] = ['cancelled', 'declined', 'expired']
 
 const SERVICE_LABELS: Record<string, string> = {
   standard: 'Standard Clean',
@@ -150,8 +151,8 @@ export default function ClientDashboardPage() {
 
   const total = deferredBookings.length
   const activeCount = deferredBookings.filter((b) => isRealActiveBooking(b)).length
-  const completedBookings = deferredBookings.filter((b) => b.status === 'completed')
-  const totalSpent = completedBookings.reduce((sum, b) => sum + Number(b.total_amount ?? 0), 0)
+  const completedCount = deferredBookings.filter((b) => b.status === 'completed').length
+  const closedCount = deferredBookings.filter((b) => CLOSED_STATUSES.includes(b.status)).length
 
   const operationallySorted = useMemo(
     () => [...deferredBookings].sort(compareBookingsByOperationalPriority),
@@ -219,10 +220,10 @@ export default function ClientDashboardPage() {
                   Live Snapshot
                 </p>
 
-                <dl className="mt-4 grid grid-cols-1 gap-3 text-white sm:grid-cols-3 sm:gap-4">
+                <dl className="mt-4 grid grid-cols-2 gap-3 text-white sm:grid-cols-4 sm:gap-4">
                   <div>
                     <dt className={`${monoFont.className} text-[0.62rem] uppercase tracking-[0.18em] text-white/60`}>
-                      Total
+                      All Bookings
                     </dt>
                     <dd className={`${displayFont.className} mt-1 text-2xl font-bold tracking-[-0.02em]`}>
                       {total}
@@ -238,10 +239,18 @@ export default function ClientDashboardPage() {
                   </div>
                   <div>
                     <dt className={`${monoFont.className} text-[0.62rem] uppercase tracking-[0.18em] text-white/60`}>
-                      Spent
+                      Completed
                     </dt>
                     <dd className={`${displayFont.className} mt-1 text-2xl font-bold tracking-[-0.02em]`}>
-                      {formatCurrency(totalSpent)}
+                      {completedCount}
+                    </dd>
+                  </div>
+                  <div>
+                    <dt className={`${monoFont.className} text-[0.62rem] uppercase tracking-[0.18em] text-white/60`}>
+                      Closed
+                    </dt>
+                    <dd className={`${displayFont.className} mt-1 text-2xl font-bold tracking-[-0.02em]`}>
+                      {closedCount}
                     </dd>
                   </div>
                 </dl>

@@ -705,6 +705,7 @@ export default function BookingFlowPage() {
   const continueDraft = searchParams.get('continue') === '1'
   const continueBookingId = searchParams.get('bookingId')?.trim() || ''
   const resetDraft = searchParams.get('reset') === '1' || searchParams.get('fresh') === '1'
+  const openedFromBookings = searchParams.get('source') === 'bookings'
   const paymentResumeMode = continueDraft && Boolean(continueBookingId) && !resetDraft
   const stepFromUrl = Math.min(Math.max(Number(searchParams.get('step') ?? (paymentResumeMode ? '3' : '1')), 1), 4)
 
@@ -1811,10 +1812,14 @@ export default function BookingFlowPage() {
           <div className="mb-5">
             {!isPaymentRequiredLocked && (
               <button
-                onClick={() => (step > 1 ? navigateToStep(step - 1) : router.back())}
+                onClick={() => (
+                  step > 1
+                    ? navigateToStep(step - 1)
+                    : router.push(openedFromBookings ? '/client/bookings' : '/client/cleaners')
+                )}
                 className="inline-flex items-center gap-1 rounded-xl border border-slate-200 bg-white px-3 py-1.5 text-sm font-semibold text-slate-600 transition-all duration-200 hover:-translate-y-0.5 hover:text-slate-900"
               >
-                <ArrowLeft className="h-4 w-4" /> {step > 1 ? 'Previous' : 'Back to All Cleaners'}
+                <ArrowLeft className="h-4 w-4" /> {step > 1 ? 'Previous' : openedFromBookings ? 'Back to bookings' : 'Back to all cleaners'}
               </button>
             )}
           </div>

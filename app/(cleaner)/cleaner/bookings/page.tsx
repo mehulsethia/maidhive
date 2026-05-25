@@ -388,6 +388,15 @@ export default function CleanerBookingsPage() {
                   paymentStatus: b.payment?.status,
                   scheduledEnd: b.scheduled_end,
                 })
+                const showProjectedEarnings =
+                  b.status === 'confirmed' ||
+                  b.status === 'in_progress' ||
+                  (b.status === 'completed' && !payoutReleased)
+                const earningsLabel = payoutReleased
+                  ? 'You earned'
+                  : showProjectedEarnings
+                    ? 'You will earn'
+                    : 'Booking value'
                 const unlockAtMs = scheduledStartMs - PHONE_REVEAL_PRE_START_MS
                 const sameDayCreated =
                   Number.isFinite(createdAtMs) &&
@@ -457,7 +466,7 @@ export default function CleanerBookingsPage() {
                         showPaymentRequiredForUnpaid={false}
                       />
                       <p className="mt-2 text-sm font-semibold text-emerald-700">
-                        {payoutReleased ? 'You earned' : 'You will earn'} {formatCurrency(b.cleaner_payout)}
+                        {earningsLabel} {formatCurrency(b.cleaner_payout)}
                       </p>
                     </div>
                   </div>

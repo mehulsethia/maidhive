@@ -27,6 +27,8 @@ const CLEANER_BOOKING_ACCEPTED_CONFIRMATION_TRANSACTIONAL_ID = 'cmo5hi2ru00fv0i1
 const CLEANER_APPLICATION_REJECTED_TRANSACTIONAL_ID = 'cmo5hfgqp00aa0i08rmzp2w8f'
 const CLEANER_PAYOUT_NOTIFICATION_TRANSACTIONAL_ID = 'cmo5hj1953kp50i0ewrbk3wd4'
 const CLEANER_CANCELLATION_WARNING_OR_STRIKE_TRANSACTIONAL_ID = 'cmo5hk2jk09ci0i0x0iala79a'
+const CLEANER_BOOKING_CANCELLED_BY_CLIENT_TRANSACTIONAL_ID =
+  process.env.LOOPS_CLEANER_BOOKING_CANCELLED_BY_CLIENT_TRANSACTIONAL_ID ?? ''
 const CLIENT_ALT_TIME_PROPOSED_TRANSACTIONAL_ID =
   process.env.LOOPS_CLIENT_ALT_TIME_PROPOSED_TRANSACTIONAL_ID ?? 'cmoy0itw205fk0ix97hljg7jz'
 const CLEANER_CLIENT_ALT_TIME_PROPOSED_TRANSACTIONAL_ID =
@@ -376,6 +378,32 @@ export const loopsEmailService = {
       dataVariables: {
         first_name: firstName(args.fullName),
         dispute_link: `${appUrl()}/client/report?booking=${args.bookingId}`,
+      },
+    })
+  },
+
+  async sendCleanerBookingCancelledByClient(args: {
+    email: string
+    fullName: string
+    clientName: string
+    date: Date
+    durationHours: number
+    bookingId: string
+  }) {
+    if (!CLEANER_BOOKING_CANCELLED_BY_CLIENT_TRANSACTIONAL_ID.trim()) {
+      throw new Error('Missing LOOPS_CLEANER_BOOKING_CANCELLED_BY_CLIENT_TRANSACTIONAL_ID')
+    }
+
+    return sendTransactionalEmail({
+      transactionalId: CLEANER_BOOKING_CANCELLED_BY_CLIENT_TRANSACTIONAL_ID,
+      email: args.email,
+      dataVariables: {
+        first_name: firstName(args.fullName),
+        client_name: args.clientName,
+        booking_date: formatBookingDate(args.date),
+        booking_time: formatBookingTime(args.date),
+        booking_duration: `${args.durationHours} hour${args.durationHours === 1 ? '' : 's'}`,
+        booking_link: `${appUrl()}/cleaner/bookings/${args.bookingId}`,
       },
     })
   },

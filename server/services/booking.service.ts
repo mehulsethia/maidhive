@@ -1088,6 +1088,10 @@ export const bookingService = {
     }
 
     const isClientCancelling = Boolean(client && booking.clientId === client.id)
+    const isPendingRequestCancellation = booking.status === 'pending'
+    const isConfirmedBookingCancellation = booking.status === 'confirmed'
+    const isAcceptedOrConfirmedCancellation = booking.status === 'accepted' || booking.status === 'confirmed'
+    const scheduledStartLabel = formatBookingTimeForMessage(booking.scheduledStart)
     const isDraftLikePreAuthorisation =
       isClientCancelling &&
       (booking.status === 'draft' || (booking.status === 'pending' && !isPaymentAuthorizedStatus(booking.payment?.status)))
@@ -1101,14 +1105,32 @@ export const bookingService = {
       await pushInAppNotification({
         userId: notifyUserId,
         type: 'booking_cancelled',
-        title: isClientCancelling ? 'Client cancelled booking request' : 'Booking cancelled',
+        title: isClientCancelling
+          ? isPendingRequestCancellation
+            ? 'Client cancelled booking request'
+            : 'Client cancelled booking'
+          : 'Booking cancelled',
         body: isClientCancelling
-          ? 'The client cancelled this booking request before confirmation.'
+          ? isPendingRequestCancellation
+            ? 'The client cancelled this booking request before confirmation.'
+            : isConfirmedBookingCancellation
+              ? `The client cancelled a confirmed booking scheduled for ${scheduledStartLabel}.`
+              : `The client cancelled a booking scheduled for ${scheduledStartLabel}.`
           : 'A booking has been cancelled',
         data: { booking_id: bookingId },
       })
       void googleCalendarService.removeCleanerBookingEvent(updated.id).catch((e) => {
         console.error('Failed to remove cleaner Google Calendar event:', e)
+      })
+    }
+
+    if (isClientCancelling && isAcceptedOrConfirmedCancellation) {
+      await pushInAppNotification({
+        userId: booking.client.userId,
+        type: 'booking_cancelled',
+        title: 'Booking cancelled',
+        body: `Your booking scheduled for ${scheduledStartLabel} has been cancelled.`,
+        data: { booking_id: bookingId },
       })
     }
 
@@ -1122,6 +1144,21 @@ export const bookingService = {
       })
     } catch (emailError) {
       console.error('Failed to send client cancellation confirmation email via Loops:', emailError)
+    }
+
+    if (isClientCancelling && isAcceptedOrConfirmedCancellation) {
+      try {
+        await loopsEmailService.sendCleanerBookingCancelledByClient({
+          email: booking.cleaner.user.email,
+          fullName: booking.cleaner.user.name ?? 'Cleaner',
+          clientName: booking.client.user.name ?? 'Client',
+          date: booking.scheduledStart,
+          durationHours: Number(booking.durationHours),
+          bookingId: booking.id,
+        })
+      } catch (emailError) {
+        console.error('Failed to send cleaner cancellation-by-client email via Loops:', emailError)
+      }
     }
 
     if (cleaner && booking.cleanerId === cleaner.id) {

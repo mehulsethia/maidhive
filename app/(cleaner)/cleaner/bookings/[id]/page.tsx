@@ -329,6 +329,15 @@ export default function CleanerBookingDetailPage() {
     paymentStatus: booking.payment?.status,
     scheduledEnd: booking.scheduled_end,
   })
+  const showProjectedEarnings =
+    booking.status === 'confirmed' ||
+    booking.status === 'in_progress' ||
+    (booking.status === 'completed' && !payoutReleased)
+  const earningsLabel = payoutReleased
+    ? 'You earned'
+    : showProjectedEarnings
+      ? 'You will earn'
+      : 'Booking value'
   const clientTrust = (booking.client as any)?.trust as {
     memberSince?: string | null
     completedBookingsCount?: number
@@ -489,7 +498,7 @@ export default function CleanerBookingDetailPage() {
               <div className="space-y-2">
                 <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
                   <div>
-                    <p className="text-sm text-muted-foreground">{payoutReleased ? 'You earned' : 'You will earn'}</p>
+                    <p className="text-sm text-muted-foreground">{earningsLabel}</p>
                     <p className="text-2xl font-bold text-green-700">{formatCurrency(booking.cleaner_payout)}</p>
                     <p className="text-xs text-muted-foreground mt-0.5">
                       {isCancelledPreConfirmation ? 'Informational only — this request was cancelled before confirmation.' : `Released after the ${disputeWindowLabel()} report window from scheduled completion`}

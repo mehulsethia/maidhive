@@ -742,7 +742,7 @@ export default function ClientBookingDetailPage() {
                   )}
                   {(booking.status === 'expired' || booking.status === 'cancelled' || booking.status === 'declined' || overdueUnpaidDraftLike) && (
                     <>
-                      <Button className="w-full sm:w-auto" onClick={() => router.push(`/client/book/${booking.cleaner_id}?reset=1&step=1`)}>
+                      <Button className="w-full sm:w-auto" onClick={() => router.push(`/client/book/${booking.cleaner_id}?reset=1&step=1&source=bookings`)}>
                         Book again
                       </Button>
                       <Button variant="outline" className="w-full sm:w-auto" onClick={() => router.push('/client/cleaners')}>
@@ -761,7 +761,7 @@ export default function ClientBookingDetailPage() {
                     </Button>
                   )}
                   {isCompletedReleased && (
-                    <Button className="w-full sm:w-auto" onClick={() => router.push(`/client/book/${booking.cleaner_id}?reset=1&step=1`)}>
+                    <Button className="w-full sm:w-auto" onClick={() => router.push(`/client/book/${booking.cleaner_id}?reset=1&step=1&source=bookings`)}>
                       Book again
                     </Button>
                   )}

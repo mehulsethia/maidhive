@@ -26,6 +26,15 @@ export function BookingCard({ booking, viewAs = 'client' }: BookingCardProps) {
     paymentStatus: booking.payment?.status,
     scheduledEnd: booking.scheduled_end,
   })
+  const showProjectedEarnings =
+    booking.status === 'confirmed' ||
+    booking.status === 'in_progress' ||
+    (booking.status === 'completed' && !payoutReleased)
+  const earningsLabel = payoutReleased
+    ? 'You earned'
+    : showProjectedEarnings
+      ? 'You will earn'
+      : 'Booking value'
 
   return (
     <Card>
@@ -63,7 +72,7 @@ export function BookingCard({ booking, viewAs = 'client' }: BookingCardProps) {
             <p className="font-bold text-lg">{formatCurrency(booking.total_amount)}</p>
             {viewAs === 'cleaner' && (
               <p className="text-xs text-muted-foreground">
-                {payoutReleased ? 'You earned' : 'You will earn'} {formatCurrency(booking.cleaner_payout)}
+                {earningsLabel} {formatCurrency(booking.cleaner_payout)}
               </p>
             )}
           </div>
