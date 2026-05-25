@@ -31,7 +31,7 @@ import { subscribeBookingsRefresh } from '@/lib/booking-sync'
 import { reportLoadError, resetLoadError } from '@/lib/load-error-policy'
 import { createClient } from '@/lib/supabase'
 import { formatDate } from '@/lib/utils'
-import { canViewChatHistoryForBooking, isChatReadOnly } from '@/lib/chat-window'
+import { canViewChatHistoryForBooking, getChatReadOnlyMessage, isChatReadOnly } from '@/lib/chat-window'
 import { isCompletedBookingReleased } from '@/lib/booking-release'
 import type { BookingRead } from '@/types'
 import { toast } from 'sonner'
@@ -445,7 +445,7 @@ export default function ClientBookingDetailPage() {
     ? toDateInputValueCyprus(booking.scheduled_start)
     : maxAlternativeProposalDateInputValue(booking.original_scheduled_start ?? booking.scheduled_start)
   const showChat = canViewChatHistoryForBooking(booking)
-  const chatIsReadOnly = isChatReadOnly(booking.scheduled_end)
+  const chatIsReadOnly = isChatReadOnly(booking.scheduled_end, Date.now(), booking.status)
   const scheduledEndMs = new Date(booking.scheduled_end).getTime()
   const createdAtMs = new Date(booking.created_at).getTime()
   const sixHoursBeforeStart = nowTick >= scheduledStartMs - PHONE_REVEAL_PRE_START_MS
@@ -826,7 +826,7 @@ export default function ClientBookingDetailPage() {
                     bookingId={id}
                     currentUserId={currentUserId}
                     readOnly={chatIsReadOnly}
-                    readOnlyMessage="This booking chat is now closed. Messaging closed 30 minutes after scheduled booking completion."
+                    readOnlyMessage={getChatReadOnlyMessage(booking.status)}
                     autoScroll={false}
                   />
                 </CardContent>
@@ -913,18 +913,18 @@ export default function ClientBookingDetailPage() {
         <div className="space-y-3">
           <p className="text-sm text-muted-foreground">
             {proposalAction === 'propose_alternative'
-              ? 'You can request a new date or time for this booking. The other party must accept before the booking changes. If they decline or do not respond before the 24-hour cutoff, the original booking time will remain unchanged.'
+              ? 'You can request a new date or time for this booking. The booking will only change once the other party accepts the proposal. If they decline or do not respond before the 24-hour cutoff, the original booking time will remain unchanged.'
               : 'Choose an available slot on the same day. Cleaner can only accept or decline this amendment request.'}
           </p>
           {proposalAction === 'propose_alternative' && (
             <ul className="list-disc space-y-1 pl-5 text-xs text-slate-600">
-              <li>Only available more than 24h before booking start</li>
-              <li>New time must be within 14 days of original booking date</li>
+              <li>Only available more than 24 hours before booking start</li>
+              <li>New time must be within 14 days of the original booking date</li>
               <li>Must fit cleaner availability, booking duration, and buffer rules</li>
-              <li>Other party can accept, decline, or counter once</li>
-              <li>If no agreement before 24h cutoff, original booking remains</li>
-              <li>No penalty applies if reschedule fails</li>
-              <li>Once reschedule is successfully agreed, no further reschedule is allowed for MVP</li>
+              <li>The other party may accept, decline, or send one counter proposal</li>
+              <li>If no agreement is reached before the 24-hour cutoff, the original booking time will remain unchanged</li>
+              <li>No penalty applies if a reschedule proposal is declined or expires</li>
+              <li>Once a reschedule is successfully agreed, no further reschedules are allowed</li>
             </ul>
           )}
           <div>

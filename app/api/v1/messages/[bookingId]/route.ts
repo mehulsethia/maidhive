@@ -6,7 +6,7 @@ import { clientRepo } from '@/server/repositories/client.repo'
 import { cleanerRepo } from '@/server/repositories/cleaner.repo'
 import { ok, err } from '@/server/response'
 import { sendMessageSchema } from '@/server/schemas/message.schema'
-import { canViewChatHistoryForBooking, isChatReadOnly } from '@/lib/chat-window'
+import { canViewChatHistoryForBooking, getChatReadOnlyMessage, isChatReadOnly } from '@/lib/chat-window'
 
 async function isParty(bookingId: string, userId: string, role: string) {
   const booking = await bookingRepo.findById(bookingId)
@@ -26,7 +26,13 @@ export const GET = requireAuth(async (_req, ctx, user) => {
   const { bookingId } = await ctx.params
   const booking = await isParty(bookingId, user.id, user.role)
   if (!booking) return err('Forbidden', 403)
-  if (!canViewChatHistoryForBooking({ status: booking.status, scheduled_end: booking.scheduledEnd })) {
+  if (
+    !canViewChatHistoryForBooking({
+      status: booking.status,
+      scheduled_end: booking.scheduledEnd,
+      _count: booking._count,
+    })
+  ) {
     return err('Chat is unavailable for this booking.', 400)
   }
 
@@ -39,14 +45,17 @@ export const POST = requireAuth(async (req: NextRequest, ctx, user) => {
   const { bookingId } = await ctx.params
   const booking = await isParty(bookingId, user.id, user.role)
   if (!booking) return err('Forbidden', 403)
-  if (!canViewChatHistoryForBooking({ status: booking.status, scheduled_end: booking.scheduledEnd })) {
+  if (
+    !canViewChatHistoryForBooking({
+      status: booking.status,
+      scheduled_end: booking.scheduledEnd,
+      _count: booking._count,
+    })
+  ) {
     return err('Chat is unavailable for this booking.', 400)
   }
-  if (isChatReadOnly(booking.scheduledEnd)) {
-    return err(
-      'This booking chat is now closed. Messaging closed 30 minutes after scheduled booking completion.',
-      400,
-    )
+  if (isChatReadOnly(booking.scheduledEnd, Date.now(), booking.status)) {
+    return err(getChatReadOnlyMessage(booking.status), 400)
   }
 
   const body = await req.json()

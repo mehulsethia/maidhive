@@ -24,6 +24,15 @@ function toMs(value?: string) {
   return Number.isFinite(ms) ? ms : 0
 }
 
+function getConversationPriorityBand(booking: BookingRead) {
+  if (booking.status === 'confirmed' || booking.status === 'accepted' || booking.status === 'in_progress' || booking.status === 'disputed') {
+    return 0
+  }
+  if (booking.status === 'completed') return 1
+  if (booking.status === 'cancelled' || booking.status === 'declined' || booking.status === 'expired') return 2
+  return 3
+}
+
 export function compareBookingsByOperationalPriority(a: BookingRead, b: BookingRead) {
   const aPriority = getBookingStatusPriority(a.status)
   const bPriority = getBookingStatusPriority(b.status)
@@ -47,6 +56,20 @@ export function compareBookingsByOperationalPriority(a: BookingRead, b: BookingR
   const aStart = toMs(a.scheduled_start)
   const bStart = toMs(b.scheduled_start)
   if (aStart !== bStart) return historyBand ? bStart - aStart : aStart - bStart
+
+  return toMs(b.created_at) - toMs(a.created_at)
+}
+
+export function compareConversationsByOperationalPriority(a: BookingRead, b: BookingRead) {
+  const aBand = getConversationPriorityBand(a)
+  const bBand = getConversationPriorityBand(b)
+  if (aBand !== bBand) return aBand - bBand
+
+  const aStart = toMs(a.scheduled_start)
+  const bStart = toMs(b.scheduled_start)
+  if (aStart !== bStart) {
+    return aBand === 0 ? aStart - bStart : bStart - aStart
+  }
 
   return toMs(b.created_at) - toMs(a.created_at)
 }

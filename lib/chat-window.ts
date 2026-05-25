@@ -19,22 +19,44 @@ export function getChatExpiryMs(scheduledEnd?: string | Date | null) {
   return endMs + CHAT_WINDOW_MINUTES * 60 * 1000
 }
 
-export function isChatReadOnly(scheduledEnd?: string | Date | null, nowMs = Date.now()) {
+export function isChatReadOnly(
+  scheduledEnd?: string | Date | null,
+  nowMs = Date.now(),
+  bookingStatus?: string | null,
+) {
+  if (String(bookingStatus ?? '') === 'cancelled') return true
   return nowMs > getChatExpiryMs(scheduledEnd)
+}
+
+export function getChatReadOnlyMessage(bookingStatus?: string | null) {
+  if (String(bookingStatus ?? '') === 'cancelled') {
+    return 'This booking chat is now closed. Messaging is locked immediately after cancellation.'
+  }
+  return 'This booking chat is now closed. Messaging closed 30 minutes after scheduled booking completion.'
 }
 
 export function canViewChatHistoryForBooking(booking: {
   status?: string | null
   scheduled_end?: string | Date | null
+  _count?: {
+    messages?: number | null
+  } | null
 }) {
   const status = String(booking.status ?? '')
+  if (status === 'cancelled') {
+    const messageCount = Number(booking._count?.messages ?? 0)
+    return Number.isFinite(messageCount) && messageCount > 0
+  }
   return CHAT_HISTORY_STATUSES.includes(status as (typeof CHAT_HISTORY_STATUSES)[number])
 }
 
 export function isChatActiveForBooking(booking: {
   status?: string | null
   scheduled_end?: string | Date | null
+  _count?: {
+    messages?: number | null
+  } | null
 }, nowMs = Date.now()) {
   return canViewChatHistoryForBooking(booking) &&
-    !isChatReadOnly(booking.scheduled_end, nowMs)
+    !isChatReadOnly(booking.scheduled_end, nowMs, booking.status)
 }

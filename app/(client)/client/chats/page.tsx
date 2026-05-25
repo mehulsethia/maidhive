@@ -10,7 +10,8 @@ import { Chat } from '@/components/chat'
 import { SplitChatPageSkeleton } from '@/components/page-skeletons'
 import { Input } from '@/components/ui/input'
 import { UserAvatar } from '@/components/ui/user-avatar'
-import { canViewChatHistoryForBooking, isChatReadOnly } from '@/lib/chat-window'
+import { compareConversationsByOperationalPriority } from '@/lib/booking-priority'
+import { canViewChatHistoryForBooking, getChatReadOnlyMessage, isChatReadOnly } from '@/lib/chat-window'
 import { reportLoadError, resetLoadError } from '@/lib/load-error-policy'
 import { formatDate } from '@/lib/utils'
 import type { BookingRead } from '@/types'
@@ -43,9 +44,9 @@ function ClientChatsPageContent() {
           authApi.me().catch(() => null),
         ])
 
-        const chatBookings = (data?.items ?? []).filter((booking) => {
-          return canViewChatHistoryForBooking(booking)
-        })
+        const chatBookings = (data?.items ?? [])
+          .filter((booking) => canViewChatHistoryForBooking(booking))
+          .sort(compareConversationsByOperationalPriority)
 
         startTransition(() => {
           setBookings(chatBookings)
@@ -220,8 +221,8 @@ function ClientChatsPageContent() {
                     bookingId={selected.id}
                     currentUserId={effectiveCurrentUserId!}
                     fullHeight
-                    readOnly={isChatReadOnly(selected.scheduled_end)}
-                    readOnlyMessage="This booking chat is now closed. Messaging closed 30 minutes after scheduled booking completion."
+                    readOnly={isChatReadOnly(selected.scheduled_end, Date.now(), selected.status)}
+                    readOnlyMessage={getChatReadOnlyMessage(selected.status)}
                   />
                 </div>
               </div>
