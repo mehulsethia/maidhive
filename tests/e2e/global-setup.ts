@@ -29,6 +29,12 @@ type CookieRecord = {
   options: CookieOptions
 }
 
+type CookieInput = {
+  name: string
+  value: string
+  options?: CookieOptions
+}
+
 type StorageStateCookie = {
   name: string
   value: string
@@ -151,7 +157,7 @@ async function buildStorageStateForRole(
       getAll() {
         return Array.from(cookieJar.values()).map((item) => ({ name: item.name, value: item.value }))
       },
-      setAll(cookiesToSet) {
+      setAll(cookiesToSet: CookieInput[]) {
         for (const item of cookiesToSet) {
           cookieJar.set(item.name, {
             name: item.name,
