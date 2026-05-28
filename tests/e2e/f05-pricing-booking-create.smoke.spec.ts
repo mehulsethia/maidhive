@@ -1,17 +1,19 @@
 import { expect, test } from '@playwright/test'
+import { authStatePath } from './auth-state'
 import {
   createDraftBooking,
   getFirstBookableSlot,
   getFirstCleaner,
   hasRoleCredentialCandidates,
-  loginAsRole,
   parseApiResponse,
 } from './helpers'
 
 test.describe('F05 Pricing + booking creation @smoke', () => {
+  test.use({ storageState: authStatePath('client') })
+
   test('E2E-PRICE-01 booking summary matches server preview before payment', async ({ page }, testInfo) => {
     test.skip(!hasRoleCredentialCandidates('client'), 'Set at least one E2E_*_EMAIL and E2E_*_PASSWORD pair')
-    await loginAsRole(page, 'client')
+    await page.goto('/client/dashboard')
 
     const cleaner = await getFirstCleaner(page.request, testInfo)
     const durationHours = 2
@@ -56,7 +58,7 @@ test.describe('F05 Pricing + booking creation @smoke', () => {
 
   test('E2E-PRICE-02 resumed draft keeps snapshot stable unless duration/time changed', async ({ page }, testInfo) => {
     test.skip(!hasRoleCredentialCandidates('client'), 'Set at least one E2E_*_EMAIL and E2E_*_PASSWORD pair')
-    await loginAsRole(page, 'client')
+    await page.goto('/client/dashboard')
 
     const cleaner = await getFirstCleaner(page.request, testInfo)
     const durationHours = 2
@@ -77,7 +79,6 @@ test.describe('F05 Pricing + booking creation @smoke', () => {
     const totalBefore = booking.total_amount
 
     await page.reload()
-    await page.waitForLoadState('networkidle')
     await expect(page.getByText('Booking Information')).toBeVisible()
     await expect(
       page.getByText(

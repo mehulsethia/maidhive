@@ -38,3 +38,4 @@ scripts/tsconfig.tsbuildinfo
 .env*.local
 !docs/testing/**/*.md
 test-results/
+tests/e2e/.auth/

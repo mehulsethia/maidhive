@@ -1,16 +1,18 @@
 import { expect, test } from '@playwright/test'
+import { authStatePath } from './auth-state'
 import {
   getFirstBookableSlot,
   getFirstCleaner,
   hasRoleCredentialCandidates,
-  loginAsRole,
   parseApiResponse,
 } from './helpers'
 
 test.describe('F04 Booking draft lifecycle @smoke', () => {
+  test.use({ storageState: authStatePath('client') })
+
   test('E2E-DRAFT-01 client can refresh each step and preserve draft state', async ({ page }, testInfo) => {
     test.skip(!hasRoleCredentialCandidates('client'), 'Set at least one E2E_*_EMAIL and E2E_*_PASSWORD pair')
-    await loginAsRole(page, 'client')
+    await page.goto('/client/dashboard')
     await expect(page).toHaveURL(/\/client\/dashboard/)
 
     const cleaner = await getFirstCleaner(page.request, testInfo)
@@ -39,13 +41,12 @@ test.describe('F04 Booking draft lifecycle @smoke', () => {
     await expect(page.getByRole('heading', { name: 'Address & Job Details' })).toBeVisible()
 
     await page.reload()
-    await page.waitForLoadState('networkidle')
     await expect(page.getByRole('heading', { name: 'Address & Job Details' })).toBeVisible()
   })
 
   test('E2E-DRAFT-02 payment interruption recovers to valid prior step without crash', async ({ page }, testInfo) => {
     test.skip(!hasRoleCredentialCandidates('client'), 'Set at least one E2E_*_EMAIL and E2E_*_PASSWORD pair')
-    await loginAsRole(page, 'client')
+    await page.goto('/client/dashboard')
 
     const cleaner = await getFirstCleaner(page.request, testInfo)
     const { date, slot } = await getFirstBookableSlot(page.request, cleaner.id, 2, testInfo)
@@ -84,7 +85,7 @@ test.describe('F04 Booking draft lifecycle @smoke', () => {
       !hasRoleCredentialCandidates('client') || !hasRoleCredentialCandidates('cleaner'),
       'Set at least one E2E_*_EMAIL and E2E_*_PASSWORD pair',
     )
-    await loginAsRole(page, 'client')
+    await page.goto('/client/dashboard')
 
     const cleaner = await getFirstCleaner(page.request, testInfo)
     const { date, slot } = await getFirstBookableSlot(page.request, cleaner.id, 2, testInfo)

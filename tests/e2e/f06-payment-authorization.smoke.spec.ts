@@ -1,20 +1,22 @@
 import { expect, test } from '@playwright/test'
+import { authStatePath } from './auth-state'
 import {
   createDraftBooking,
   getFirstBookableSlot,
   getFirstCleaner,
   getPaymentMethodId,
   hasRoleCredentialCandidates,
-  loginAsRole,
   parseApiResponse,
 } from './helpers'
 
 test.describe('F06 Payment authorization sync @smoke', () => {
+  test.use({ storageState: authStatePath('client') })
+
   test('E2E-PAYAUTH-01 client authorizes payment and sees Pending Cleaner Acceptance', async ({ page }, testInfo) => {
     test.skip(!hasRoleCredentialCandidates('client'), 'Set at least one E2E_*_EMAIL and E2E_*_PASSWORD pair')
     test.skip(!getPaymentMethodId(), 'Set E2E_CLIENT_PAYMENT_METHOD_ID for saved-card authorization')
 
-    await loginAsRole(page, 'client')
+    await page.goto('/client/dashboard')
     const cleaner = await getFirstCleaner(page.request, testInfo)
     const { slot } = await getFirstBookableSlot(page.request, cleaner.id, 2, testInfo)
     const booking = await createDraftBooking(
@@ -47,7 +49,7 @@ test.describe('F06 Payment authorization sync @smoke', () => {
 
   test('E2E-PAYAUTH-02 authorization failure shows recoverable action path', async ({ page }, testInfo) => {
     test.skip(!hasRoleCredentialCandidates('client'), 'Set at least one E2E_*_EMAIL and E2E_*_PASSWORD pair')
-    await loginAsRole(page, 'client')
+    await page.goto('/client/dashboard')
 
     const cleaner = await getFirstCleaner(page.request, testInfo)
     const { slot } = await getFirstBookableSlot(page.request, cleaner.id, 2, testInfo)
@@ -81,7 +83,7 @@ test.describe('F06 Payment authorization sync @smoke', () => {
     test.skip(!hasRoleCredentialCandidates('client'), 'Set at least one E2E_*_EMAIL and E2E_*_PASSWORD pair')
     test.skip(!getPaymentMethodId(), 'Set E2E_CLIENT_PAYMENT_METHOD_ID for saved-card authorization')
 
-    await loginAsRole(page, 'client')
+    await page.goto('/client/dashboard')
     const cleaner = await getFirstCleaner(page.request, testInfo)
     const { slot } = await getFirstBookableSlot(page.request, cleaner.id, 2, testInfo)
     const booking = await createDraftBooking(

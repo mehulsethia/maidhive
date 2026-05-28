@@ -8,6 +8,7 @@ export default defineConfig({
   },
   fullyParallel: false,
   reporter: 'list',
+  globalSetup: './tests/e2e/global-setup.ts',
   use: {
     baseURL: process.env.E2E_BASE_URL ?? 'http://localhost:3000',
     trace: 'on-first-retry',
