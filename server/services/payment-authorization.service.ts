@@ -4,8 +4,14 @@ import { bookingRepo } from '../repositories/booking.repo'
 import { loopsEmailService } from './loops-email.service'
 import { pushInAppNotification } from './in-app-notification.service'
 import { googleCalendarService } from './google-calendar.service'
-const BOOKING_ACCEPT_TTL_MINUTES = 24 * 60
-const BOOKING_ACCEPT_CUTOFF_BEFORE_START_MINUTES = 60
+import {
+  computeAcceptByFromAuthorizedAt,
+  DEFAULT_BOOKING_ACCEPT_CUTOFF_BEFORE_START_MINUTES,
+  DEFAULT_BOOKING_ACCEPT_TTL_MINUTES,
+} from '../lib/booking-request-window'
+
+const BOOKING_ACCEPT_TTL_MINUTES = DEFAULT_BOOKING_ACCEPT_TTL_MINUTES
+const BOOKING_ACCEPT_CUTOFF_BEFORE_START_MINUTES = DEFAULT_BOOKING_ACCEPT_CUTOFF_BEFORE_START_MINUTES
 
 export const paymentAuthorizationService = {
   async syncFromPaymentIntent(pi: Stripe.PaymentIntent) {
@@ -41,9 +47,10 @@ export const paymentAuthorizationService = {
       const movedToPending =
         booking.status === 'draft' ||
         (booking.status === 'pending' && !booking.acceptedAt && !booking.confirmedAt)
-      const requestWindowEndsAtMs = authorizedAt.getTime() + BOOKING_ACCEPT_TTL_MINUTES * 60 * 1000
-      const startCutoffMs = booking.scheduledStart.getTime() - BOOKING_ACCEPT_CUTOFF_BEFORE_START_MINUTES * 60 * 1000
-      const acceptBy = new Date(Math.min(requestWindowEndsAtMs, startCutoffMs))
+      const acceptBy = computeAcceptByFromAuthorizedAt(authorizedAt, booking.scheduledStart, {
+        ttlMinutes: BOOKING_ACCEPT_TTL_MINUTES,
+        cutoffBeforeStartMinutes: BOOKING_ACCEPT_CUTOFF_BEFORE_START_MINUTES,
+      })
       await bookingRepo.update(booking.id, { status: 'pending', acceptBy })
 
       if (!wasAuthorized) {

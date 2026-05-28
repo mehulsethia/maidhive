@@ -2,6 +2,7 @@ import jwt from 'jsonwebtoken'
 import { createServerClient } from '@supabase/ssr'
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from './db'
+import { hasAnyRole } from './lib/rbac'
 import type { User } from '@prisma/client'
 
 export type RouteContext = { params: Promise<Record<string, string>> }
@@ -101,7 +102,7 @@ export function requireAuth(handler: AuthedHandler): Handler {
 export function requireRole(role: string | string[], handler: AuthedHandler): Handler {
   return requireAuth(async (req, ctx, user) => {
     const roles = Array.isArray(role) ? role : [role]
-    if (!roles.includes(user.role)) {
+    if (!hasAnyRole(user.role, roles)) {
       return NextResponse.json({ success: false, message: 'Forbidden' }, { status: 403 })
     }
     return handler(req, ctx, user)

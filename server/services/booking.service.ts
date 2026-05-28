@@ -10,6 +10,7 @@ import { pushInAppNotification } from './in-app-notification.service'
 import { googleCalendarService } from './google-calendar.service'
 import { stripe } from '../stripe'
 import { config } from '../config'
+import { calculatePriceSnapshot } from '../lib/pricing'
 import type { User } from '@prisma/client'
 
 const PLATFORM_FEE_PCT = 10
@@ -36,19 +37,7 @@ const START_JOB_LATE_BUFFER_HOURS = 24
 
 export const bookingService = {
   previewPrice(hourlyRate: number, durationHours: number, platformFeePct = PLATFORM_FEE_PCT) {
-    const subtotal = hourlyRate * durationHours
-    const platformFee = (subtotal * platformFeePct) / 100
-    const cleanerPayout = subtotal
-    const totalAmount = subtotal + platformFee
-    return {
-      hourly_rate: hourlyRate,
-      duration_hours: durationHours,
-      subtotal: round2(subtotal),
-      platform_fee_pct: platformFeePct,
-      platform_fee: round2(platformFee),
-      cleaner_payout: round2(cleanerPayout),
-      total_amount: round2(totalAmount),
-    }
+    return calculatePriceSnapshot(hourlyRate, durationHours, platformFeePct)
   },
 
   async reconcileSingleBookingDeadline(bookingId: string) {

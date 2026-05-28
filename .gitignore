@@ -36,3 +36,5 @@ Thumbs.db
 scripts/tsconfig.tsbuildinfo
 .vercel
 .env*.local
+!docs/testing/**/*.md
+test-results/
