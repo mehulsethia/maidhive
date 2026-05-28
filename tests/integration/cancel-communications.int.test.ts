@@ -146,6 +146,29 @@ describe('Booking cancellation communications', () => {
     expect(state.clientCancellationEmails).toBe(1)
   })
 
+  it('skips cancellation notifications/emails for draft-like pending bookings without authorization', async () => {
+    state.booking = {
+      id: 'booking_draft_like_1',
+      status: 'pending',
+      clientId: 'client_profile_1',
+      cleanerId: 'cleaner_profile_1',
+      scheduledStart: new Date('2026-06-20T10:00:00.000Z'),
+      durationHours: 2,
+      payment: { status: 'requires_payment_method', stripePaymentIntentId: null },
+      client: { userId: seeded.clientUser.id, user: { email: seeded.clientUser.email, name: seeded.clientUser.name } },
+      cleaner: { userId: seeded.cleanerUser.id, user: { email: seeded.cleanerUser.email, name: seeded.cleanerUser.name } },
+    }
+
+    const { bookingService } = await import('@/server/services/booking.service')
+    const updated = await bookingService.cancel(state.booking.id, seeded.clientUser as any, 'Cancelled draft session')
+
+    expect(updated.status).toBe('cancelled')
+    expect(state.notifications).toHaveLength(0)
+    expect(state.cleanerCancelledByClientEmails).toBe(0)
+    expect(state.clientCancellationEmails).toBe(0)
+    expect(state.removeCalendarCalls).toBe(0)
+  })
+
   it('uses confirmed-cancel wording and sends cleaner email + client in-app notification', async () => {
     state.booking = {
       id: 'booking_confirmed_1',
@@ -177,5 +200,53 @@ describe('Booking cancellation communications', () => {
     expect(state.cleanerCancelledByClientEmails).toBe(1)
     expect(state.clientCancellationEmails).toBe(1)
     expect(state.removeCalendarCalls).toBe(1)
+  })
+
+  it('does not send cleaner cancellation email for accepted-but-not-confirmed cancellation', async () => {
+    state.booking = {
+      id: 'booking_accepted_1',
+      status: 'accepted',
+      clientId: 'client_profile_1',
+      cleanerId: 'cleaner_profile_1',
+      acceptedAt: new Date('2026-06-18T09:00:00.000Z'),
+      confirmedAt: null,
+      scheduledStart: new Date('2026-06-20T10:00:00.000Z'),
+      durationHours: 2,
+      payment: { status: 'authorized', stripePaymentIntentId: null },
+      client: { userId: seeded.clientUser.id, user: { email: seeded.clientUser.email, name: seeded.clientUser.name } },
+      cleaner: { userId: seeded.cleanerUser.id, user: { email: seeded.cleanerUser.email, name: seeded.cleanerUser.name } },
+    }
+
+    const { bookingService } = await import('@/server/services/booking.service')
+    await bookingService.cancel(state.booking.id, seeded.clientUser as any, 'Accepted cancellation')
+
+    expect(state.cleanerCancelledByClientEmails).toBe(0)
+    expect(state.clientCancellationEmails).toBe(1)
+  })
+
+  it('cancels confirmed booking even when cleaner relation data is incomplete', async () => {
+    state.booking = {
+      id: 'booking_confirmed_legacy_relation',
+      status: 'confirmed',
+      clientId: 'client_profile_1',
+      cleanerId: 'cleaner_profile_1',
+      acceptedAt: new Date('2026-06-18T09:00:00.000Z'),
+      confirmedAt: new Date('2026-06-18T09:05:00.000Z'),
+      scheduledStart: new Date('2026-06-20T10:00:00.000Z'),
+      durationHours: 2,
+      payment: null,
+      client: { userId: seeded.clientUser.id, user: { email: seeded.clientUser.email, name: seeded.clientUser.name } },
+      cleaner: null,
+    }
+
+    const { bookingService } = await import('@/server/services/booking.service')
+    const updated = await bookingService.cancel(state.booking.id, seeded.clientUser as any, 'Confirmed cancellation')
+
+    expect(updated.status).toBe('cancelled')
+    expect(state.notifications).toHaveLength(1)
+    expect(state.notifications[0].userId).toBe(seeded.clientUser.id)
+    expect(state.notifications[0].title).toBe('Booking cancelled')
+    expect(state.cleanerCancelledByClientEmails).toBe(0)
+    expect(state.clientCancellationEmails).toBe(1)
   })
 })

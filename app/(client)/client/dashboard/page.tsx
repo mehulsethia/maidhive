@@ -1,7 +1,7 @@
 'use client'
 
 import Link from 'next/link'
-import { useDeferredValue, useEffect, useMemo, useState, startTransition } from 'react'
+import { useDeferredValue, useEffect, useMemo, useRef, useState, startTransition } from 'react'
 import { Bricolage_Grotesque, IBM_Plex_Mono } from 'next/font/google'
 import {
   ArrowUpRight,
@@ -17,6 +17,7 @@ import { compareBookingsByOperationalPriority } from '@/lib/booking-priority'
 import { BookingStatusBadge } from '@/components/booking-status-badge'
 import { DashboardPageSkeleton } from '@/components/page-skeletons'
 import { reportLoadError, resetLoadError } from '@/lib/load-error-policy'
+import { recoverBookingsFromNotifications } from '@/lib/booking-data-recovery'
 import { createClient } from '@/lib/supabase'
 import { UserAvatar } from '@/components/ui/user-avatar'
 import { formatCurrency, formatDate } from '@/lib/utils'
@@ -65,6 +66,7 @@ export default function ClientDashboardPage() {
   const [bookings, setBookings] = useState<BookingRead[]>([])
   const [favorites, setFavorites] = useState<FavoriteCleaner[]>([])
   const [name, setName] = useState('')
+  const recoveryAttemptedRef = useRef(false)
 
   async function refreshDashboard() {
     try {
@@ -74,16 +76,26 @@ export default function ClientDashboardPage() {
         favoritesApi.list(),
       ])
 
+      const listItems =
+        bookingRes.status === 'fulfilled'
+          ? bookingRes.value?.data?.items ?? []
+          : []
+      let recoveredBookings: BookingRead[] = []
+      if (listItems.length === 0 && !recoveryAttemptedRef.current) {
+        recoveryAttemptedRef.current = true
+        recoveredBookings = await recoverBookingsFromNotifications().catch(() => [])
+      }
+
       startTransition(() => {
         const me = meRes.status === 'fulfilled' ? meRes.value : null
         const booking = bookingRes.status === 'fulfilled' ? bookingRes.value : null
         const favorites = favoritesRes.status === 'fulfilled' ? favoritesRes.value : null
         setName((me?.data?.name ?? '').trim())
-        setBookings(booking?.data?.items ?? [])
+        setBookings(listItems.length > 0 ? listItems : recoveredBookings)
         setFavorites(favorites?.data ?? [])
         setLoading(false)
       })
-      if (bookingRes.status === 'fulfilled') {
+      if (bookingRes.status === 'fulfilled' || recoveredBookings.length > 0) {
         resetLoadError('client-dashboard')
       } else {
         reportLoadError('client-dashboard', 'Failed to load dashboard data.')

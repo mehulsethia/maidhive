@@ -1099,6 +1099,12 @@ export const bookingService = {
       })
     }
 
+    const cleanerUserId = booking.cleaner?.userId ?? null
+    const cleanerEmail = booking.cleaner?.user?.email ?? null
+    const cleanerName = booking.cleaner?.user?.name ?? 'Cleaner'
+    const clientUserId = booking.client?.userId ?? null
+    const clientEmail = booking.client?.user?.email ?? null
+    const clientName = booking.client?.user?.name ?? 'Client'
     const isClientCancelling = Boolean(client && booking.clientId === client.id)
     const isPendingRequestCancellation = booking.status === 'pending'
     const isConfirmedBookingCancellation = booking.status === 'confirmed'
@@ -1111,34 +1117,36 @@ export const bookingService = {
     if (!isDraftLikePreAuthorisation) {
       const notifyUserId =
         client && booking.clientId === client.id
-          ? booking.cleaner.userId
-          : booking.client.userId
+          ? cleanerUserId
+          : clientUserId
 
-      await pushInAppNotification({
-        userId: notifyUserId,
-        type: 'booking_cancelled',
-        title: isClientCancelling
-          ? isPendingRequestCancellation
-            ? 'Client cancelled booking request'
-            : 'Client cancelled booking'
-          : 'Booking cancelled',
-        body: isClientCancelling
-          ? isPendingRequestCancellation
-            ? 'The client cancelled this booking request before confirmation.'
-            : isConfirmedBookingCancellation
-              ? `The client cancelled a confirmed booking scheduled for ${scheduledStartLabel}.`
-              : `The client cancelled a booking scheduled for ${scheduledStartLabel}.`
-          : 'A booking has been cancelled',
-        data: { booking_id: bookingId },
-      })
+      if (notifyUserId) {
+        await pushInAppNotification({
+          userId: notifyUserId,
+          type: 'booking_cancelled',
+          title: isClientCancelling
+            ? isPendingRequestCancellation
+              ? 'Client cancelled booking request'
+              : 'Client cancelled booking'
+            : 'Booking cancelled',
+          body: isClientCancelling
+            ? isPendingRequestCancellation
+              ? 'The client cancelled this booking request before confirmation.'
+              : isConfirmedBookingCancellation
+                ? `The client cancelled a confirmed booking scheduled for ${scheduledStartLabel}.`
+                : `The client cancelled a booking scheduled for ${scheduledStartLabel}.`
+            : 'A booking has been cancelled',
+          data: { booking_id: bookingId },
+        })
+      }
       void googleCalendarService.removeCleanerBookingEvent(updated.id).catch((e) => {
         console.error('Failed to remove cleaner Google Calendar event:', e)
       })
     }
 
-    if (isClientCancelling && isAcceptedOrConfirmedCancellation) {
+    if (isClientCancelling && isAcceptedOrConfirmedCancellation && clientUserId) {
       await pushInAppNotification({
-        userId: booking.client.userId,
+        userId: clientUserId,
         type: 'booking_cancelled',
         title: 'Booking cancelled',
         body: `Your booking scheduled for ${scheduledStartLabel} has been cancelled.`,
@@ -1148,11 +1156,12 @@ export const bookingService = {
 
     if (!isDraftLikePreAuthorisation) {
       try {
+        if (!clientEmail) throw new Error('Missing client email for cancellation confirmation')
         await loopsEmailService.sendClientCancellationConfirmation({
-          email: booking.client.user.email,
-          fullName: booking.client.user.name ?? 'Client',
+          email: clientEmail,
+          fullName: clientName,
           date: booking.scheduledStart,
-          cleanerName: booking.cleaner.user.name ?? 'Cleaner',
+          cleanerName,
           durationHours: Number(booking.durationHours),
         })
       } catch (emailError) {
@@ -1160,12 +1169,13 @@ export const bookingService = {
       }
     }
 
-    if (isClientCancelling && isAcceptedOrConfirmedCancellation) {
+    if (isClientCancelling && isConfirmedBookingCancellation) {
       try {
+        if (!cleanerEmail) throw new Error('Missing cleaner email for cancellation confirmation')
         await loopsEmailService.sendCleanerBookingCancelledByClient({
-          email: booking.cleaner.user.email,
-          fullName: booking.cleaner.user.name ?? 'Cleaner',
-          clientName: booking.client.user.name ?? 'Client',
+          email: cleanerEmail,
+          fullName: cleanerName,
+          clientName,
           date: booking.scheduledStart,
           durationHours: Number(booking.durationHours),
           bookingId: booking.id,
@@ -1177,9 +1187,10 @@ export const bookingService = {
 
     if (cleaner && booking.cleanerId === cleaner.id) {
       try {
+        if (!cleanerEmail) throw new Error('Missing cleaner email for strike warning')
         await loopsEmailService.sendCleanerCancellationWarningOrStrike({
-          email: booking.cleaner.user.email,
-          fullName: booking.cleaner.user.name ?? 'Cleaner',
+          email: cleanerEmail,
+          fullName: cleanerName,
         })
       } catch (emailError) {
         console.error('Failed to send cleaner cancellation warning/strike email via Loops:', emailError)

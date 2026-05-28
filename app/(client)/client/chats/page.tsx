@@ -1,6 +1,6 @@
 'use client'
 
-import { Suspense, useDeferredValue, useEffect, useState, startTransition } from 'react'
+import { Suspense, useDeferredValue, useEffect, useRef, useState, startTransition } from 'react'
 import Link from 'next/link'
 import { useSearchParams } from 'next/navigation'
 import { Bricolage_Grotesque, IBM_Plex_Mono } from 'next/font/google'
@@ -12,6 +12,7 @@ import { Input } from '@/components/ui/input'
 import { UserAvatar } from '@/components/ui/user-avatar'
 import { compareConversationsByOperationalPriority } from '@/lib/booking-priority'
 import { canViewChatHistoryForBooking, getChatReadOnlyMessage, isChatReadOnly } from '@/lib/chat-window'
+import { recoverBookingsFromNotifications } from '@/lib/booking-data-recovery'
 import { reportLoadError, resetLoadError } from '@/lib/load-error-policy'
 import { formatDate } from '@/lib/utils'
 import type { BookingRead } from '@/types'
@@ -35,6 +36,7 @@ function ClientChatsPageContent() {
   const [selectedBookingId, setSelectedBookingId] = useState<string | null>(null)
   const [currentUserId, setCurrentUserId] = useState<string | null>(null)
   const [query, setQuery] = useState('')
+  const recoveryAttemptedRef = useRef(false)
 
   useEffect(() => {
     ;(async () => {
@@ -44,7 +46,14 @@ function ClientChatsPageContent() {
           authApi.me().catch(() => null),
         ])
 
-        const chatBookings = (data?.items ?? [])
+        const primaryBookings = data?.items ?? []
+        let fallbackBookings: BookingRead[] = []
+        if (primaryBookings.length === 0 && !recoveryAttemptedRef.current) {
+          recoveryAttemptedRef.current = true
+          fallbackBookings = await recoverBookingsFromNotifications().catch(() => [])
+        }
+
+        const chatBookings = (primaryBookings.length > 0 ? primaryBookings : fallbackBookings)
           .filter((booking) => canViewChatHistoryForBooking(booking))
           .sort(compareConversationsByOperationalPriority)
 

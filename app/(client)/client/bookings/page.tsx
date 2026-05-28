@@ -1,7 +1,7 @@
 'use client'
 
 import Link from 'next/link'
-import { useDeferredValue, useEffect, useState, startTransition } from 'react'
+import { useDeferredValue, useEffect, useRef, useState, startTransition } from 'react'
 import { Bricolage_Grotesque, IBM_Plex_Mono } from 'next/font/google'
 import { CalendarCheck2, CircleX, Clock3, Search } from 'lucide-react'
 import { authApi, bookingsApi, disputesApi } from '@/lib/api'
@@ -14,7 +14,8 @@ import { Button } from '@/components/ui/button'
 import { Dialog, DialogTitle } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import { Select } from '@/components/ui/select'
-import { canViewChatHistoryForBooking, getDisputeWindowMs } from '@/lib/chat-window'
+import { canShowActiveMessageCta, canViewChatHistoryForBooking, getDisputeWindowMs } from '@/lib/chat-window'
+import { recoverBookingsFromNotifications } from '@/lib/booking-data-recovery'
 import { reportLoadError, resetLoadError } from '@/lib/load-error-policy'
 import { createClient } from '@/lib/supabase'
 import { formatCurrency, formatDate } from '@/lib/utils'
@@ -84,22 +85,29 @@ export default function ClientBookingsPage() {
   const [dashboardFilter, setDashboardFilter] = useState<DashboardStatusFilter | null>(null)
   const [cancelConfirmOpen, setCancelConfirmOpen] = useState(false)
   const [cancelTargetBookingId, setCancelTargetBookingId] = useState<string | null>(null)
+  const recoveryAttemptedRef = useRef(false)
 
   async function loadBookings() {
     try {
       const [bookingsRes, disputesRes] = await Promise.allSettled([bookingsApi.my(1), disputesApi.listMine()])
       const res = bookingsRes.status === 'fulfilled' ? bookingsRes.value : null
       const disputes = disputesRes.status === 'fulfilled' ? disputesRes.value : null
+      let recoveredBookings: BookingRead[] = []
+      const listItems = res?.data?.items ?? []
+      if (listItems.length === 0 && !recoveryAttemptedRef.current) {
+        recoveryAttemptedRef.current = true
+        recoveredBookings = await recoverBookingsFromNotifications().catch(() => [])
+      }
       const disputeMap = new Map<string, string>()
       for (const dispute of disputes?.data?.items ?? []) {
         if (dispute?.booking_id) disputeMap.set(dispute.booking_id, dispute.status)
       }
       startTransition(() => {
-        setBookings(res?.data?.items ?? [])
+        setBookings(listItems.length > 0 ? listItems : recoveredBookings)
         setBookingDisputeStatus(disputeMap)
         setLoading(false)
       })
-      if (res) {
+      if (res || recoveredBookings.length > 0) {
         resetLoadError('client-bookings')
       } else {
         reportLoadError('client-bookings', 'Failed to load bookings.')
@@ -342,6 +350,7 @@ export default function ClientBookingsPage() {
                   const canLeaveReview = Boolean(booking.completed_at) && booking.status === 'completed' && !booking.review && reviewWindowOpened
                   const reviewSubmitted = Boolean(booking.review)
                   const canChat = canViewChatHistoryForBooking(booking)
+                  const canOpenMessageCta = canShowActiveMessageCta(booking)
                   const isOverdueDraftState = isOverdueUnpaid(booking)
                   const canContinuePayment = !isOverdueDraftState && (booking.status === 'draft' || (booking.status === 'pending' && !isPaymentAuthorized(booking.payment?.status)))
                   const canCancelDraft = !isOverdueDraftState && (booking.status === 'draft' || (booking.status === 'pending' && !isPaymentAuthorized(booking.payment?.status)))
@@ -422,7 +431,7 @@ export default function ClientBookingsPage() {
                           </Button>
                         )}
 
-                        {canChat && (
+                        {canOpenMessageCta && (
                           <Link
                             href={`/client/chats?booking=${booking.id}`}
                             className="inline-flex h-8 items-center rounded-full border border-slate-300 px-3 text-xs font-semibold text-slate-700 transition hover:bg-slate-50"

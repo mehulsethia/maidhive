@@ -35,12 +35,36 @@ test.describe('F17 Search/lists/counts consistency @smoke', () => {
       expect(second.data.page_size).toBe(10)
       expect(first.data.total).toBe(second.data.total)
     })
+
+    test('E2E-LIST-03 booking list UI remains populated when API has bookings (browser/session consistency)', async ({ page }, testInfo) => {
+      const listRes = await page.request.get('/api/v1/bookings?page=1&page_size=100')
+      const list = await parseApiResponse<{ bookings: Array<{ id: string }>; total: number }>(listRes, testInfo)
+      test.skip(list.data.total === 0, 'Account has no bookings to validate list hydration consistency')
+
+      await page.goto('/client/bookings')
+      await expect(page.getByText('No bookings found')).toHaveCount(0)
+      await expect(page.getByText('View details').first()).toBeVisible()
+    })
+
+    test('E2E-LIST-04 cancelled/closed cards do not show active Message CTA', async ({ page }, testInfo) => {
+      const listRes = await page.request.get('/api/v1/bookings?page=1&page_size=100')
+      const list = await parseApiResponse<{ bookings: Array<{ id: string; status: string }> }>(listRes, testInfo)
+      const closedId = (list.data.bookings ?? []).find((item) =>
+        ['cancelled', 'declined', 'expired'].includes(String(item.status ?? '')),
+      )?.id
+      test.skip(!closedId, 'No closed booking found for Message-CTA visibility check')
+
+      await page.goto('/client/bookings')
+      const closedCard = page.locator('article').filter({ has: page.locator(`a[href="/client/bookings/${closedId}"]`) }).first()
+      await expect(closedCard).toBeVisible()
+      await expect(closedCard.getByRole('link', { name: /^Message$/i })).toHaveCount(0)
+    })
   })
 
   test.describe('cleaner session', () => {
     test.use({ storageState: authStatePath('cleaner') })
 
-    test('E2E-LIST-03 cleaner list and counts endpoints respond with non-negative metrics', async ({ page }, testInfo) => {
+    test('E2E-LIST-05 cleaner list and counts endpoints respond with non-negative metrics', async ({ page }, testInfo) => {
       test.skip(!hasRoleCredentialCandidates('cleaner'), 'Set at least one E2E_*_EMAIL and E2E_*_PASSWORD pair')
 
       const listRes = await page.request.get('/api/v1/bookings?page=1&page_size=20')

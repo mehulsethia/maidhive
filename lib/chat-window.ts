@@ -60,3 +60,15 @@ export function isChatActiveForBooking(booking: {
   return canViewChatHistoryForBooking(booking) &&
     !isChatReadOnly(booking.scheduled_end, nowMs, booking.status)
 }
+
+export function canShowActiveMessageCta(booking: {
+  status?: string | null
+  scheduled_end?: string | Date | null
+  _count?: {
+    messages?: number | null
+  } | null
+}) {
+  const status = String(booking.status ?? '')
+  if (['cancelled', 'declined', 'expired'].includes(status)) return false
+  return canViewChatHistoryForBooking(booking)
+}

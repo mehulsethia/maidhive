@@ -12,6 +12,7 @@ const state = vi.hoisted(() => ({
   currentUser: seededUsers.client as User | null,
   findByClientArgs: null as any,
   findByCleanerArgs: null as any,
+  lastBookingCountArgs: null as any,
   countsResponse: {
     unreadChats: 2,
     pendingBookingsCleaner: 3,
@@ -93,6 +94,7 @@ vi.mock('@/server/db', () => ({
     },
     booking: {
       count: vi.fn(async (args: any) => {
+        state.lastBookingCountArgs = args
         if (args?.where?.cleaner) return state.countsResponse.pendingBookingsCleaner
         if (args?.where?.client) return state.countsResponse.pendingBookingsClient
         return 0
@@ -110,6 +112,7 @@ describe('F17 lists/counts/visibility integration', () => {
     state.currentUser = seededUsers.client as User
     state.findByClientArgs = null
     state.findByCleanerArgs = null
+    state.lastBookingCountArgs = null
   })
 
   it('IT-LIST-01 list endpoint applies status + pagination deterministically', async () => {
@@ -141,6 +144,8 @@ describe('F17 lists/counts/visibility integration', () => {
     expect(body.data.unread_chats).toBe(state.countsResponse.unreadChats)
     expect(body.data.pending_bookings).toBe(state.countsResponse.pendingBookingsCleaner)
     expect(body.data.unread_notifications).toBe(state.countsResponse.unreadNotifications)
+    expect(state.lastBookingCountArgs?.where?.status).toBe('pending')
+    expect(state.lastBookingCountArgs?.where?.payment?.is?.status?.in).toEqual(['authorized', 'captured', 'transferred'])
   })
 
   it('IT-LIST-03 cleaner list returns sanitized non-draft operational bookings payload', async () => {
