@@ -17,7 +17,11 @@ import { PhoneInput } from '@/components/phone-input'
 import { ScheduleEditor } from '@/components/schedule-editor'
 import { getAccessToken } from '@/lib/auth-cache'
 import { toApiV1Url } from '@/lib/api-base'
-import { isCompletedBookingReleased } from '@/lib/booking-release'
+import {
+  buildCleanerPaymentHistory,
+  CLEANER_PAYMENT_HISTORY_SOURCE_STATUSES,
+  dedupeBookingsById,
+} from '@/lib/cleaner-payment-history'
 import { reportLoadError, resetLoadError } from '@/lib/load-error-policy'
 import { createClient } from '@/lib/supabase'
 import { formatCurrency } from '@/lib/utils'
@@ -137,10 +141,14 @@ function CleanerProfilePageContent() {
   async function loadAll(showSkeleton = true) {
     if (showSkeleton) setLoading(true)
     try {
-      const [meRes, bookingRes, stripeRes] = await Promise.all([
+      const [meRes, stripeRes, paymentHistorySettled] = await Promise.all([
         cleanersApi.me(),
-        bookingsApi.my(1, undefined, 50),
         paymentsApi.getConnectStatus(),
+        Promise.allSettled(
+          CLEANER_PAYMENT_HISTORY_SOURCE_STATUSES.map((status) =>
+            bookingsApi.my(1, status, 50),
+          ),
+        ),
       ])
 
       const c = (meRes.data?.cleaner ?? {}) as any
@@ -199,7 +207,11 @@ function CleanerProfilePageContent() {
       setFirstName(names[0] ?? '')
       setLastName(names.slice(1).join(' '))
 
-      setBookings(bookingRes.data?.items ?? [])
+      const mergedPaymentBookings = dedupeBookingsById(
+        paymentHistorySettled
+          .flatMap((result) => (result.status === 'fulfilled' ? result.value.data?.items ?? [] : [])),
+      )
+      setBookings(mergedPaymentBookings)
       setStripe({
         connected: Boolean(stripeRes.data?.connected),
         onboarded: Boolean(stripeRes.data?.onboarded),
@@ -258,40 +270,7 @@ function CleanerProfilePageContent() {
     return parts.map((part) => part[0] ?? '').join('').toUpperCase() || 'C'
   }, [fullName])
 
-  const paymentHistory = useMemo(() => {
-    return bookings
-      .map((booking) => {
-        const paymentStatus = String(booking.payment?.status ?? '').trim()
-
-        if (booking.status === 'completed') {
-          const released = isCompletedBookingReleased({
-            status: booking.status,
-            paymentStatus: booking.payment?.status,
-            scheduledEnd: booking.scheduled_end,
-          })
-          return {
-            booking,
-            label: released ? 'Released' : 'Awaiting release',
-            tone: released ? ('ok' as const) : ('warn' as const),
-          }
-        }
-
-        if (paymentStatus === 'failed' || booking.status === 'disputed') {
-          return { booking, label: 'Payment issue - admin review', tone: 'issue' as const }
-        }
-
-        if (['accepted', 'confirmed', 'in_progress'].includes(booking.status)) {
-          if (['authorized', 'captured', 'transferred'].includes(paymentStatus)) {
-            return { booking, label: 'Payment authorised', tone: 'ok' as const }
-          }
-          return { booking, label: 'Payment issue - admin review', tone: 'issue' as const }
-        }
-
-        return null
-      })
-      .filter((entry): entry is NonNullable<typeof entry> => Boolean(entry))
-      .sort((a, b) => new Date(b.booking.scheduled_start).getTime() - new Date(a.booking.scheduled_start).getTime())
-  }, [bookings])
+  const paymentHistory = useMemo(() => buildCleanerPaymentHistory(bookings), [bookings])
   const stripeFullyReady =
     stripe.connected &&
     stripe.payouts_enabled &&

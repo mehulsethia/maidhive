@@ -29,7 +29,8 @@ import {
   toTimeValueInCyprus,
 } from '@/lib/booking-proposal'
 import { compareBookingsByOperationalPriority } from '@/lib/booking-priority'
-import { isBookingReportWindowActive, isCompletedBookingReleased } from '@/lib/booking-release'
+import { isBookingReportWindowActive } from '@/lib/booking-release'
+import { getCleanerEarningsLabel } from '@/lib/cleaner-earnings-label'
 import { subscribeBookingsRefresh, triggerBookingsRefresh } from '@/lib/booking-sync'
 import { showJobStartedToast } from '@/lib/job-start-toast'
 import { formatCurrency, formatDate } from '@/lib/utils'
@@ -383,20 +384,11 @@ export default function CleanerBookingsPage() {
                 const createdAtMs = new Date(b.created_at).getTime()
                 const reportWindowActive = isBookingReportWindowActive(b.scheduled_end)
                 const canReportProblem = ['in_progress', 'completed'].includes(b.status) && reportWindowActive
-                const payoutReleased = isCompletedBookingReleased({
+                const earningsLabel = getCleanerEarningsLabel({
                   status: b.status,
                   paymentStatus: b.payment?.status,
                   scheduledEnd: b.scheduled_end,
                 })
-                const showProjectedEarnings =
-                  b.status === 'confirmed' ||
-                  b.status === 'in_progress' ||
-                  (b.status === 'completed' && !payoutReleased)
-                const earningsLabel = payoutReleased
-                  ? 'You earned'
-                  : showProjectedEarnings
-                    ? 'You will earn'
-                    : 'Booking value'
                 const unlockAtMs = scheduledStartMs - PHONE_REVEAL_PRE_START_MS
                 const sameDayCreated =
                   Number.isFinite(createdAtMs) &&

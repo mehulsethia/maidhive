@@ -14,6 +14,21 @@ test.describe('F09 Reschedule + cancel policies @smoke', () => {
       await expect(page).toHaveURL(/\/client\/bookings/)
     })
 
+    test('E2E-CANCEL-01B booking flow opened from bookings shows "Back to bookings" and returns correctly', async ({ page }, testInfo) => {
+      test.skip(!hasRoleCredentialCandidates('client'), 'Set at least one E2E_*_EMAIL and E2E_*_PASSWORD pair')
+
+      const listRes = await page.request.get('/api/v1/bookings?page=1&page_size=20')
+      const list = await parseApiResponse<{ bookings?: Array<{ cleaner_id: string }> }>(listRes, testInfo)
+      const cleanerId = list.data.bookings?.[0]?.cleaner_id
+      test.skip(!cleanerId, 'No booking available to validate back-navigation wording from bookings source')
+
+      await page.goto(`/client/book/${cleanerId}?reset=1&step=1&source=bookings`)
+      const backButton = page.getByRole('button', { name: /Back to bookings/i })
+      await expect(backButton).toBeVisible()
+      await backButton.click()
+      await expect(page).toHaveURL(/\/client\/bookings/)
+    })
+
     test('E2E-CANCEL-02 invalid or ineligible cancellation returns explicit blocked response', async ({ page }) => {
       const cancelRes = await page.request.post('/api/v1/bookings/00000000-0000-0000-0000-000000000000/cancel', {
         data: { reason: 'Policy boundary smoke check' },

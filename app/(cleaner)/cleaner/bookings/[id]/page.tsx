@@ -29,7 +29,8 @@ import {
   toTimeValueInCyprus,
 } from '@/lib/booking-proposal'
 import { canViewChatHistoryForBooking, getChatReadOnlyMessage, isChatReadOnly } from '@/lib/chat-window'
-import { isBookingReportWindowActive, isCompletedBookingReleased } from '@/lib/booking-release'
+import { isBookingReportWindowActive } from '@/lib/booking-release'
+import { getCleanerEarningsLabel } from '@/lib/cleaner-earnings-label'
 import { subscribeBookingsRefresh, triggerBookingsRefresh } from '@/lib/booking-sync'
 import { showJobStartedToast } from '@/lib/job-start-toast'
 import { reportLoadError, resetLoadError } from '@/lib/load-error-policy'
@@ -324,20 +325,11 @@ export default function CleanerBookingDetailPage() {
   const canStartJobNow = Number.isFinite(bookingStartsAtMs) && Date.now() >= bookingStartsAtMs - START_JOB_EARLY_WINDOW_MS && !startWindowExpired
   const canReportProblem = ['in_progress', 'completed'].includes(booking.status) &&
     isBookingReportWindowActive(booking.scheduled_end)
-  const payoutReleased = isCompletedBookingReleased({
+  const earningsLabel = getCleanerEarningsLabel({
     status: booking.status,
     paymentStatus: booking.payment?.status,
     scheduledEnd: booking.scheduled_end,
   })
-  const showProjectedEarnings =
-    booking.status === 'confirmed' ||
-    booking.status === 'in_progress' ||
-    (booking.status === 'completed' && !payoutReleased)
-  const earningsLabel = payoutReleased
-    ? 'You earned'
-    : showProjectedEarnings
-      ? 'You will earn'
-      : 'Booking value'
   const isClosedNonPayableStatus = ['cancelled', 'declined', 'expired'].includes(booking.status)
   const clientTrust = (booking.client as any)?.trust as {
     memberSince?: string | null

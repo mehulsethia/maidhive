@@ -255,11 +255,13 @@ export default function CleanerDashboardPage() {
               {nextUpcoming ? (
                 <Link
                   href={`/cleaner/bookings/${nextUpcoming.id}`}
+                  aria-label="Open next job details"
                   className="mt-2 block rounded-2xl border border-white/20 bg-white/10 px-3 py-2.5 transition hover:-translate-y-0.5 hover:bg-white/20"
                 >
                   <p className="text-base font-semibold text-white">{resolveJobTypeTitle(nextUpcoming)}</p>
                   <p className="text-sm text-white/85">{formatDate(nextUpcoming.scheduled_start)}</p>
                   <p className="text-sm text-white/75">{nextUpcoming.city}, {nextUpcoming.postcode}</p>
+                  <p className="mt-1 text-xs font-semibold text-cyan-100">View booking details</p>
                 </Link>
               ) : (
                 <div className="mt-2 rounded-2xl border border-white/20 bg-white/10 px-3 py-2.5">

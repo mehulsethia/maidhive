@@ -12,8 +12,10 @@ test.describe('F08 Booking lifecycle + reconcile @smoke', () => {
     await page.goto('/cleaner/dashboard')
     await expect(page).toHaveURL(/\/cleaner\/dashboard|\/cleaner\/onboarding/)
 
-    await page.goto('/cleaner/dashboard')
-    await expect(page).toHaveURL(/\/cleaner\/dashboard|\/cleaner\/onboarding/)
+    const nextJobLink = page.getByRole('link', { name: 'Open next job details' })
+    if (await nextJobLink.count()) {
+      await expect(nextJobLink.first()).toHaveAttribute('href', /\/cleaner\/bookings\/.+/)
+    }
   })
 
   test('E2E-LIFECYCLE-02 reconcile endpoint blocks unauthorized access deterministically', async ({ request }) => {
