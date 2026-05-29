@@ -1,4 +1,4 @@
-import { NextRequest } from 'next/server'
+import { after, NextRequest } from 'next/server'
 import { requireAuth, requireClient } from '@/server/auth'
 import { bookingRepo } from '@/server/repositories/booking.repo'
 import { clientRepo } from '@/server/repositories/client.repo'
@@ -7,6 +7,8 @@ import { bookingService, ServiceError } from '@/server/services/booking.service'
 import { sanitizeBookingsForRole } from '@/server/services/booking-visibility.service'
 import { ok, err } from '@/server/response'
 import { createBookingSchema, myBookingsQuerySchema } from '@/server/schemas/booking.schema'
+
+export const maxDuration = 60
 
 // GET /api/v1/bookings/my — list user's bookings (client or cleaner)
 export const GET = requireAuth(async (req: NextRequest, _ctx, user) => {
@@ -17,6 +19,7 @@ export const GET = requireAuth(async (req: NextRequest, _ctx, user) => {
   if (!parsed.success) return err(parsed.error.message, 422)
 
   const { page, page_size, status } = parsed.data
+  const shouldScheduleReconcile = shouldScheduleListReconcile(page, status)
 
   if (user.role === 'client') {
     let client = await clientRepo.findByUserId(user.id)
@@ -29,20 +32,9 @@ export const GET = requireAuth(async (req: NextRequest, _ctx, user) => {
         clientId: client.id,
       })
     }
-    let [bookings, total] = await bookingRepo.findByClient(client.id, { page, pageSize: page_size, status })
+    const listStartedAt = Date.now()
+    const [bookings, total] = await bookingRepo.findByClient(client.id, { page, pageSize: page_size, status })
     const bookingIds = bookings.map((b) => b.id)
-    try {
-      const changed = await bookingService.reconcileDeadlinesForBookings(bookingIds)
-      if (changed) {
-        ;[bookings, total] = await bookingRepo.findByClient(client.id, { page, pageSize: page_size, status })
-      }
-    } catch (error) {
-      console.error('bookings.list.client.reconcile failed', {
-        clientRequestId,
-        userId: user.id,
-        message: error instanceof Error ? error.message : String(error),
-      })
-    }
     if (total === 0) {
       console.info('bookings.list.client.empty', {
         clientRequestId,
@@ -64,6 +56,14 @@ export const GET = requireAuth(async (req: NextRequest, _ctx, user) => {
       status: status ?? 'all',
       total,
       count: bookings.length,
+      duration_ms: Date.now() - listStartedAt,
+    })
+    scheduleNonBlockingReconcile({
+      enabled: shouldScheduleReconcile,
+      bookingIds,
+      clientRequestId,
+      userId: user.id,
+      role: user.role,
     })
     return ok({ bookings, total, page, page_size })
   }
@@ -79,20 +79,9 @@ export const GET = requireAuth(async (req: NextRequest, _ctx, user) => {
         cleanerId: cleaner.id,
       })
     }
-    let [bookings, total] = await bookingRepo.findByCleaner(cleaner.id, { page, pageSize: page_size, status })
+    const listStartedAt = Date.now()
+    const [bookings, total] = await bookingRepo.findByCleaner(cleaner.id, { page, pageSize: page_size, status })
     const bookingIds = bookings.map((b) => b.id)
-    try {
-      const changed = await bookingService.reconcileDeadlinesForBookings(bookingIds)
-      if (changed) {
-        ;[bookings, total] = await bookingRepo.findByCleaner(cleaner.id, { page, pageSize: page_size, status })
-      }
-    } catch (error) {
-      console.error('bookings.list.cleaner.reconcile failed', {
-        clientRequestId,
-        userId: user.id,
-        message: error instanceof Error ? error.message : String(error),
-      })
-    }
     if (total === 0) {
       console.info('bookings.list.cleaner.empty', {
         clientRequestId,
@@ -114,6 +103,14 @@ export const GET = requireAuth(async (req: NextRequest, _ctx, user) => {
       status: status ?? 'all',
       total,
       count: bookings.length,
+      duration_ms: Date.now() - listStartedAt,
+    })
+    scheduleNonBlockingReconcile({
+      enabled: shouldScheduleReconcile,
+      bookingIds,
+      clientRequestId,
+      userId: user.id,
+      role: user.role,
     })
     return ok({ bookings: sanitizeBookingsForRole(bookings as any[], 'cleaner'), total, page, page_size })
   }
@@ -129,6 +126,54 @@ function detectBrowserFamily(userAgent: string | null) {
   if (ua.includes('safari/') && !ua.includes('chrome/')) return 'safari'
   if (ua.includes('firefox/')) return 'firefox'
   return 'other'
+}
+
+function shouldScheduleListReconcile(page: number, status?: string) {
+  if (page !== 1) return false
+  if (!status) return true
+  return ['pending', 'accepted', 'confirmed', 'in_progress', 'completed', 'disputed'].includes(status)
+}
+
+function scheduleNonBlockingReconcile(args: {
+  enabled: boolean
+  bookingIds: string[]
+  clientRequestId: string | null
+  userId: string
+  role: string
+}) {
+  if (!args.enabled) return
+  const uniqueIds = Array.from(new Set(args.bookingIds.filter(Boolean)))
+  if (uniqueIds.length === 0) return
+
+  const run = async () => {
+    const startedAt = Date.now()
+    try {
+      await bookingService.reconcileDeadlinesForBookings(uniqueIds)
+      console.info('bookings.list.reconcile.completed', {
+        clientRequestId: args.clientRequestId,
+        userId: args.userId,
+        role: args.role,
+        count: uniqueIds.length,
+        duration_ms: Date.now() - startedAt,
+      })
+    } catch (error) {
+      console.error('bookings.list.reconcile.failed', {
+        clientRequestId: args.clientRequestId,
+        userId: args.userId,
+        role: args.role,
+        count: uniqueIds.length,
+        duration_ms: Date.now() - startedAt,
+        message: error instanceof Error ? error.message : String(error),
+      })
+    }
+  }
+
+  try {
+    after(run)
+  } catch {
+    // Vitest route handler calls execute outside a Next request scope.
+    void run()
+  }
 }
 
 // POST /api/v1/bookings — create booking

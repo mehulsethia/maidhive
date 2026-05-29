@@ -283,6 +283,14 @@ model Booking {
   strikes          CleanerStrike[]
   bookingFlowDraft BookingFlowDraft?
 
+  @@index([clientId, createdAt(sort: Desc)], map: "bookings_client_created_desc_idx")
+  @@index([cleanerId, createdAt(sort: Desc)], map: "bookings_cleaner_created_desc_idx")
+  @@index([clientId, status, createdAt(sort: Desc)], map: "bookings_client_status_created_desc_idx")
+  @@index([cleanerId, status, createdAt(sort: Desc)], map: "bookings_cleaner_status_created_desc_idx")
+  @@index([status, createdAt(sort: Desc)], map: "bookings_status_created_desc_idx")
+  @@index([status, acceptBy], map: "bookings_status_accept_by_idx")
+  @@index([status, completedAt], map: "bookings_status_completed_at_idx")
+  @@index([cleanerId, scheduledStart, scheduledEnd], map: "bookings_cleaner_schedule_idx")
   @@map("bookings")
   @@schema("public")
 }
@@ -336,6 +344,10 @@ model Payment {
 
   booking Booking @relation(fields: [bookingId], references: [id])
 
+  @@index([status, bookingId], map: "payments_status_booking_idx")
+  @@index([authorizedAt], map: "payments_authorized_at_idx")
+  @@index([capturedAt], map: "payments_captured_at_idx")
+  @@index([transferredAt], map: "payments_transferred_at_idx")
   @@map("payments")
   @@schema("public")
 }

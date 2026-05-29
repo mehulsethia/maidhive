@@ -14,6 +14,7 @@ import { compareConversationsByOperationalPriority } from '@/lib/booking-priorit
 import { canViewChatHistoryForBooking, getChatReadOnlyMessage, isChatReadOnly } from '@/lib/chat-window'
 import { recoverBookingsFromNotifications } from '@/lib/booking-data-recovery'
 import { reportLoadError, resetLoadError } from '@/lib/load-error-policy'
+import { setupVisiblePolling } from '@/lib/visible-polling'
 import { formatDate } from '@/lib/utils'
 import type { BookingRead } from '@/types'
 
@@ -39,53 +40,59 @@ function ClientChatsPageContent() {
   const [query, setQuery] = useState('')
   const recoveryAttemptedRef = useRef(false)
 
-  useEffect(() => {
-    async function loadChats() {
-      try {
-        const [bookingsRes, meRes] = await Promise.allSettled([
-          bookingsApi.my(),
-          authApi.me().catch(() => null),
-        ])
+  async function loadChats() {
+    try {
+      const [bookingsRes, meRes] = await Promise.allSettled([
+        bookingsApi.my(),
+        authApi.me().catch(() => null),
+      ])
 
-        const data = bookingsRes.status === 'fulfilled' ? bookingsRes.value?.data : null
-        const me = meRes.status === 'fulfilled' ? meRes.value : null
-        const primaryBookings = data?.items ?? []
-        let fallbackBookings: BookingRead[] = []
-        if (primaryBookings.length === 0 && !recoveryAttemptedRef.current) {
-          recoveryAttemptedRef.current = true
-          fallbackBookings = await recoverBookingsFromNotifications().catch(() => [])
-        }
-
-        const chatBookings = (primaryBookings.length > 0 ? primaryBookings : fallbackBookings)
-          .filter((booking) => canViewChatHistoryForBooking(booking))
-          .sort(compareConversationsByOperationalPriority)
-
-        startTransition(() => {
-          setBookings(chatBookings)
-          const initialSelection =
-            (bookingFromQuery && chatBookings.some((booking) => booking.id === bookingFromQuery)
-              ? bookingFromQuery
-              : null) ??
-            chatBookings[0]?.id ??
-            null
-          setSelectedBookingId(initialSelection)
-          setCurrentUserId(me?.data?.id ?? chatBookings[0]?.client?.user?.id ?? null)
-          setLoading(false)
-        })
-        setChatLoadError(
-          primaryBookings.length === 0 && fallbackBookings.length > 0
-            ? 'Live chat thread sync failed. Showing recovered conversations from recent notifications.'
-            : null,
-        )
-        resetLoadError('client-chats')
-      } catch {
-        setChatLoadError('Chat conversations could not be loaded right now. Please refresh and try again.')
-        reportLoadError('client-chats', 'Failed to load chats.')
-        setLoading(false)
+      const data = bookingsRes.status === 'fulfilled' ? bookingsRes.value?.data : null
+      const me = meRes.status === 'fulfilled' ? meRes.value : null
+      const primaryBookings = data?.items ?? []
+      let fallbackBookings: BookingRead[] = []
+      if (primaryBookings.length === 0 && !recoveryAttemptedRef.current) {
+        recoveryAttemptedRef.current = true
+        fallbackBookings = await recoverBookingsFromNotifications().catch(() => [])
       }
-    }
 
-    loadChats()
+      const chatBookings = (primaryBookings.length > 0 ? primaryBookings : fallbackBookings)
+        .filter((booking) => canViewChatHistoryForBooking(booking))
+        .sort(compareConversationsByOperationalPriority)
+
+      startTransition(() => {
+        setBookings(chatBookings)
+        const initialSelection =
+          (bookingFromQuery && chatBookings.some((booking) => booking.id === bookingFromQuery)
+            ? bookingFromQuery
+            : null) ??
+          chatBookings[0]?.id ??
+          null
+        setSelectedBookingId(initialSelection)
+        setCurrentUserId(me?.data?.id ?? chatBookings[0]?.client?.user?.id ?? null)
+        setLoading(false)
+      })
+      setChatLoadError(
+        primaryBookings.length === 0 && fallbackBookings.length > 0
+          ? 'Live chat thread sync failed. Showing recovered conversations from recent notifications.'
+          : null,
+      )
+      resetLoadError('client-chats')
+    } catch {
+      setChatLoadError('Chat conversations could not be loaded right now. Please refresh and try again.')
+      reportLoadError('client-chats', 'Failed to load chats.')
+      setLoading(false)
+    }
+  }
+
+  useEffect(() => {
+    loadChats().catch(() => null)
+  }, [bookingFromQuery])
+
+  useEffect(() => {
+    return setupVisiblePolling(() => {
+      loadChats().catch(() => null)
+    }, Number(process.env.NEXT_PUBLIC_CHATS_LIVE_REFRESH_MS ?? 45000))
   }, [bookingFromQuery])
 
   const deferredBookings = useDeferredValue(bookings)

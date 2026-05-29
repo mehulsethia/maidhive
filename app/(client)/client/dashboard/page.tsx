@@ -19,6 +19,7 @@ import { DashboardPageSkeleton } from '@/components/page-skeletons'
 import { reportLoadError, resetLoadError } from '@/lib/load-error-policy'
 import { recoverBookingsFromNotifications } from '@/lib/booking-data-recovery'
 import { createClient } from '@/lib/supabase'
+import { setupVisiblePolling } from '@/lib/visible-polling'
 import { UserAvatar } from '@/components/ui/user-avatar'
 import { formatCurrency, formatDate } from '@/lib/utils'
 import type { BookingRead, BookingStatus, FavoriteCleaner } from '@/types'
@@ -37,7 +38,7 @@ const SERVICE_LABELS: Record<string, string> = {
   move_in: 'Move-in Clean',
 }
 
-const LIVE_REFRESH_MS = 10000
+const LIVE_REFRESH_MS = Number(process.env.NEXT_PUBLIC_DASHBOARD_LIVE_REFRESH_MS ?? 45000)
 
 function isPaymentAuthorized(paymentStatus?: string | null) {
   return ['authorized', 'captured', 'transferred'].includes(String(paymentStatus ?? ''))
@@ -118,17 +119,9 @@ export default function ClientDashboardPage() {
   }, [])
 
   useEffect(() => {
-    const poll = setInterval(() => {
+    return setupVisiblePolling(() => {
       refreshDashboard().catch(() => null)
     }, LIVE_REFRESH_MS)
-    function onFocus() {
-      refreshDashboard().catch(() => null)
-    }
-    window.addEventListener('focus', onFocus)
-    return () => {
-      clearInterval(poll)
-      window.removeEventListener('focus', onFocus)
-    }
   }, [])
 
   useEffect(() => {

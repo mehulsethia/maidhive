@@ -38,9 +38,9 @@ import type { DisputeIssueType } from '@/lib/dispute-issues'
 
 const BASE = getApiBaseUrl()
 const GET_CACHE_TTL_MS = Number(process.env.NEXT_PUBLIC_API_CLIENT_CACHE_TTL_MS ?? 30000)
-const REQUEST_TIMEOUT_MS = Number(process.env.NEXT_PUBLIC_API_REQUEST_TIMEOUT_MS ?? 25000)
-const GET_REQUEST_TIMEOUT_MS = Number(process.env.NEXT_PUBLIC_API_GET_REQUEST_TIMEOUT_MS ?? 30000)
-const RETRY_REQUEST_TIMEOUT_MS = Number(process.env.NEXT_PUBLIC_API_RETRY_TIMEOUT_MS ?? 60000)
+const REQUEST_TIMEOUT_MS = Number(process.env.NEXT_PUBLIC_API_REQUEST_TIMEOUT_MS ?? 20000)
+const GET_REQUEST_TIMEOUT_MS = Number(process.env.NEXT_PUBLIC_API_GET_REQUEST_TIMEOUT_MS ?? 20000)
+const RETRY_REQUEST_TIMEOUT_MS = Number(process.env.NEXT_PUBLIC_API_RETRY_TIMEOUT_MS ?? 30000)
 const GET_RETRY_BACKOFF_MS = Number(process.env.NEXT_PUBLIC_API_GET_RETRY_BACKOFF_MS ?? 400)
 let inFlightSessionResync: Promise<boolean> | null = null
 
@@ -148,6 +148,13 @@ function isTransientFetchError(error: unknown) {
   return false
 }
 
+function isRequestTimeoutAbort(error: unknown) {
+  if (!(error instanceof Error)) return false
+  if (error.name !== 'AbortError') return false
+  const msg = String(error.message ?? '').toLowerCase()
+  return msg.includes('request-timeout')
+}
+
 async function executeRequest<T>(path: string, options: RequestInit, method: string): Promise<T> {
   const clientRequestId = buildClientRequestId()
 
@@ -178,7 +185,7 @@ async function executeRequest<T>(path: string, options: RequestInit, method: str
   try {
     res = await runRequest(false, initialTimeoutMs)
   } catch (error) {
-    if (method === 'GET' && isTransientFetchError(error)) {
+    if (method === 'GET' && isTransientFetchError(error) && !isRequestTimeoutAbort(error)) {
       await sleep(GET_RETRY_BACKOFF_MS)
       try {
         res = await runRequest(true, retryTimeoutMs)

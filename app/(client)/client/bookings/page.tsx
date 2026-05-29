@@ -18,6 +18,7 @@ import { canShowActiveMessageCta, canViewChatHistoryForBooking, getDisputeWindow
 import { recoverBookingsFromNotifications } from '@/lib/booking-data-recovery'
 import { reportLoadError, resetLoadError } from '@/lib/load-error-policy'
 import { createClient } from '@/lib/supabase'
+import { setupVisiblePolling } from '@/lib/visible-polling'
 import { formatCurrency, formatDate } from '@/lib/utils'
 import type { BookingRead, BookingStatus } from '@/types'
 import { toast } from 'sonner'
@@ -49,7 +50,7 @@ const SERVICE_LABELS: Record<string, string> = {
   move_in: 'Move-in Clean',
 }
 
-const LIVE_REFRESH_MS = 10000
+const LIVE_REFRESH_MS = Number(process.env.NEXT_PUBLIC_BOOKINGS_LIVE_REFRESH_MS ?? 45000)
 
 function getBookingDisplayTitle(booking: BookingRead) {
   const instructions = String(booking.special_instructions ?? '')
@@ -131,17 +132,9 @@ export default function ClientBookingsPage() {
   }, [])
 
   useEffect(() => {
-    const poll = setInterval(() => {
+    return setupVisiblePolling(() => {
       loadBookings().catch(() => null)
     }, LIVE_REFRESH_MS)
-    function onFocus() {
-      loadBookings().catch(() => null)
-    }
-    window.addEventListener('focus', onFocus)
-    return () => {
-      clearInterval(poll)
-      window.removeEventListener('focus', onFocus)
-    }
   }, [])
 
   useEffect(() => {

@@ -5,18 +5,47 @@ const bookingInclude = {
   client: {
     include: {
       user: true,
-      _count: {
-        select: {
-          bookings: {
-            where: { status: 'completed' },
-          },
-        },
-      },
     },
   },
   cleaner: { include: { user: true } },
   payment: true,
   review: true,
+  _count: {
+    select: {
+      messages: true,
+    },
+  },
+} satisfies Prisma.BookingInclude
+
+const bookingListInclude = {
+  client: {
+    include: {
+      user: {
+        select: {
+          id: true,
+          name: true,
+        },
+      },
+    },
+  },
+  cleaner: {
+    include: {
+      user: {
+        select: {
+          id: true,
+          name: true,
+        },
+      },
+    },
+  },
+  payment: true,
+  review: {
+    select: {
+      id: true,
+      rating: true,
+      createdAt: true,
+    },
+  },
   _count: {
     select: {
       messages: true,
@@ -36,7 +65,7 @@ export const bookingRepo = {
     return Promise.all([
       db.booking.findMany({
         where,
-        include: bookingInclude,
+        include: bookingListInclude,
         skip: (params.page - 1) * params.pageSize,
         take: params.pageSize,
         orderBy: { createdAt: 'desc' },
@@ -84,7 +113,7 @@ export const bookingRepo = {
     return Promise.all([
       db.booking.findMany({
         where,
-        include: bookingInclude,
+        include: bookingListInclude,
         skip: (params.page - 1) * params.pageSize,
         take: params.pageSize,
         orderBy: { createdAt: 'desc' },

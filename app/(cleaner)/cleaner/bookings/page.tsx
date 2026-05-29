@@ -33,6 +33,7 @@ import { isBookingReportWindowActive } from '@/lib/booking-release'
 import { getCleanerEarningsLabel } from '@/lib/cleaner-earnings-label'
 import { subscribeBookingsRefresh, triggerBookingsRefresh } from '@/lib/booking-sync'
 import { showJobStartedToast } from '@/lib/job-start-toast'
+import { setupVisiblePolling } from '@/lib/visible-polling'
 import { formatCurrency, formatDate } from '@/lib/utils'
 import type { BookingRead, BookingStatus } from '@/types'
 import { toast } from 'sonner'
@@ -129,17 +130,9 @@ export default function CleanerBookingsPage() {
   }, [searchParams])
 
   useEffect(() => {
-    const poll = setInterval(() => {
+    return setupVisiblePolling(() => {
       refresh().catch(() => null)
-    }, 20000)
-    function onFocus() {
-      refresh().catch(() => null)
-    }
-    window.addEventListener('focus', onFocus)
-    return () => {
-      clearInterval(poll)
-      window.removeEventListener('focus', onFocus)
-    }
+    }, Number(process.env.NEXT_PUBLIC_CLEANER_BOOKINGS_LIVE_REFRESH_MS ?? 45000))
   }, [])
 
   useEffect(() => {

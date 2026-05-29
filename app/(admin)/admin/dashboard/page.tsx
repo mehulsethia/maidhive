@@ -21,6 +21,7 @@ import { UserAvatar } from '@/components/ui/user-avatar'
 import { LoadingSpinner } from '@/components/loading-spinner'
 import { reportLoadError, resetLoadError } from '@/lib/load-error-policy'
 import { formatDate } from '@/lib/utils'
+import { setupVisiblePolling } from '@/lib/visible-polling'
 import type { AdminOpsQueues, AdminStats } from '@/types'
 
 function KpiCard({
@@ -114,8 +115,7 @@ export default function AdminDashboard() {
 
   useEffect(() => {
     load()
-    const interval = setInterval(load, 30_000)
-    return () => clearInterval(interval)
+    return setupVisiblePolling(load, Number(process.env.NEXT_PUBLIC_ADMIN_DASHBOARD_LIVE_REFRESH_MS ?? 45000))
   }, [load])
 
   const generatedAtLabel = useMemo(() => {

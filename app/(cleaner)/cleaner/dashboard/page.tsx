@@ -18,6 +18,7 @@ import { formatCurrency, formatDate } from '@/lib/utils'
 import type { BookingRead, BookingStatus, CleanerOnboardingProgress } from '@/types'
 import { deriveCleanerLifecycleStatus } from '@/lib/cleaner-status'
 import { showJobStartedToast } from '@/lib/job-start-toast'
+import { setupVisiblePolling } from '@/lib/visible-polling'
 import { toast } from 'sonner'
 
 const REQUEST_STATUSES: BookingStatus[] = ['pending']
@@ -100,17 +101,9 @@ export default function CleanerDashboardPage() {
   }, [])
 
   useEffect(() => {
-    const poll = setInterval(() => {
+    return setupVisiblePolling(() => {
       refresh().catch(() => null)
-    }, 20000)
-    function onFocus() {
-      refresh().catch(() => null)
-    }
-    window.addEventListener('focus', onFocus)
-    return () => {
-      clearInterval(poll)
-      window.removeEventListener('focus', onFocus)
-    }
+    }, Number(process.env.NEXT_PUBLIC_CLEANER_DASHBOARD_LIVE_REFRESH_MS ?? 45000))
   }, [])
 
   useEffect(() => {
