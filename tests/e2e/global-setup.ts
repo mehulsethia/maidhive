@@ -187,16 +187,19 @@ async function buildStorageStateForRole(
     )
   }
 
-  const cookies: StorageStateCookie[] = Array.from(cookieJar.values()).map((item) => ({
-    name: item.name,
-    value: item.value,
-    domain: item.options.domain ?? baseUrl.hostname,
-    path: item.options.path ?? '/',
-    expires: expiresForStorage(item.options),
-    httpOnly: Boolean(item.options.httpOnly),
-    secure: item.options.secure ?? baseUrl.protocol === 'https:',
-    sameSite: sameSiteForStorage(item.options.sameSite),
-  }))
+  const cookies: StorageStateCookie[] = Array.from(cookieJar.values()).flatMap((item) => {
+    const domains = resolveCookieDomains(item.options.domain, baseUrl.hostname)
+    return domains.map((domain) => ({
+      name: item.name,
+      value: item.value,
+      domain,
+      path: item.options.path ?? '/',
+      expires: expiresForStorage(item.options),
+      httpOnly: Boolean(item.options.httpOnly),
+      secure: item.options.secure ?? baseUrl.protocol === 'https:',
+      sameSite: sameSiteForStorage(item.options.sameSite),
+    }))
+  })
 
   if (cookies.length === 0) {
     throw new Error(`No auth cookies were written for role ${role}.`)
@@ -218,12 +221,19 @@ export default async function globalSetup(config: FullConfig) {
   const baseUrl = new URL(configuredBaseUrl)
   const authDir = authDirPath()
   await fs.mkdir(authDir, { recursive: true })
+  const resolvedBaseUrl = await assertBaseUrlReachable(baseUrl)
 
   const roleToCreds = await resolveRoleCredentials(supabaseUrl, supabaseAnonKey)
 
   await Promise.all(
     (['client', 'cleaner', 'admin'] as const).map((role) =>
-      buildStorageStateForRole(roleToCreds.get(role) as Credentials, role, supabaseUrl, supabaseAnonKey, baseUrl),
+      buildStorageStateForRole(
+        roleToCreds.get(role) as Credentials,
+        role,
+        supabaseUrl,
+        supabaseAnonKey,
+        resolvedBaseUrl,
+      ),
     ),
   )
 
@@ -231,4 +241,61 @@ export default async function globalSetup(config: FullConfig) {
     .map((role) => `${role}:${path.basename(authStatePath(role))}`)
     .join(', ')
   console.log(`[e2e globalSetup] generated storage states -> ${summary}`)
+}
+
+async function assertBaseUrlReachable(baseUrl: URL): Promise<URL> {
+  const controller = new AbortController()
+  const timeout = setTimeout(() => controller.abort('base-url-timeout'), 15_000)
+  try {
+    const res = await fetch(baseUrl.toString(), {
+      method: 'GET',
+      redirect: 'follow',
+      signal: controller.signal,
+    })
+    if (res.status >= 500) {
+      throw new Error(`E2E base URL responded with ${res.status}`)
+    }
+    const resolved = new URL(res.url || baseUrl.toString())
+    return resolved
+  } catch (error) {
+    throw new Error(
+      `Unable to reach E2E_BASE_URL (${baseUrl.toString()}). ` +
+        'Start the app server or set E2E_BASE_URL to a reachable deployment.',
+    )
+  } finally {
+    clearTimeout(timeout)
+  }
+}
+
+function resolveCookieDomains(cookieDomain: string | undefined, baseHostname: string): string[] {
+  const explicit = normalizeCookieDomain(cookieDomain)
+  if (explicit) return [explicit]
+
+  if (isLocalHost(baseHostname)) return [baseHostname]
+
+  const root = toRootDomain(baseHostname)
+  const candidates = new Set<string>([
+    baseHostname,
+    root,
+    `www.${root}`,
+    `.${root}`,
+  ])
+  return Array.from(candidates).filter(Boolean)
+}
+
+function normalizeCookieDomain(value: string | undefined): string | null {
+  if (!value) return null
+  const trimmed = value.trim()
+  return trimmed.length > 0 ? trimmed : null
+}
+
+function isLocalHost(hostname: string): boolean {
+  return hostname === 'localhost' || hostname === '127.0.0.1' || hostname === '::1'
+}
+
+function toRootDomain(hostname: string): string {
+  const stripped = hostname.replace(/^www\./, '')
+  const parts = stripped.split('.').filter(Boolean)
+  if (parts.length < 2) return stripped
+  return parts.slice(-2).join('.')
 }

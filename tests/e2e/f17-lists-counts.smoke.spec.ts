@@ -1,4 +1,4 @@
-import { expect, test } from '@playwright/test'
+import { expect, test, type Route } from '@playwright/test'
 import { authStatePath } from './auth-state'
 import { hasRoleCredentialCandidates, parseApiResponse } from './helpers'
 
@@ -61,9 +61,20 @@ test.describe('F17 Search/lists/counts consistency @smoke', () => {
     })
 
     test('E2E-LIST-05 list page shows load-error state instead of false empty state on API failure', async ({ page }) => {
-      await page.route('**/api/v1/bookings**', (route) => route.abort('failed'))
-      await page.route('**/api/v1/disputes**', (route) => route.abort('failed'))
-      await page.route('**/api/v1/notifications**', (route) => route.abort('failed'))
+      const failWith503 = (urlLabel: string) => async (route: Route) => {
+        await route.fulfill({
+          status: 503,
+          contentType: 'application/json',
+          body: JSON.stringify({
+            success: false,
+            message: `${urlLabel} unavailable`,
+          }),
+        })
+      }
+
+      await page.route('**/api/v1/bookings**', failWith503('bookings'))
+      await page.route('**/api/v1/disputes**', failWith503('disputes'))
+      await page.route('**/api/v1/notifications**', failWith503('notifications'))
 
       await page.goto('/client/bookings')
       await expect(page.getByText('Unable to load bookings')).toBeVisible()
