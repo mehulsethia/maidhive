@@ -18,7 +18,6 @@ import { BookingStatusBadge } from '@/components/booking-status-badge'
 import { DashboardPageSkeleton } from '@/components/page-skeletons'
 import { reportLoadError, resetLoadError } from '@/lib/load-error-policy'
 import { recoverBookingsFromNotifications } from '@/lib/booking-data-recovery'
-import { forceSessionResync } from '@/lib/session-resync'
 import { createClient } from '@/lib/supabase'
 import { UserAvatar } from '@/components/ui/user-avatar'
 import { formatCurrency, formatDate } from '@/lib/utils'
@@ -70,21 +69,13 @@ export default function ClientDashboardPage() {
   const [name, setName] = useState('')
   const recoveryAttemptedRef = useRef(false)
 
-  async function refreshDashboard(allowSessionRetry = true) {
+  async function refreshDashboard() {
     try {
       const [meRes, bookingRes, favoritesRes] = await Promise.allSettled([
         authApi.me(),
         bookingsApi.my(),
         favoritesApi.list(),
       ])
-
-      if (bookingRes.status !== 'fulfilled' && allowSessionRetry) {
-        const resynced = await forceSessionResync()
-        if (resynced) {
-          await refreshDashboard(false)
-          return
-        }
-      }
 
       const listItems =
         bookingRes.status === 'fulfilled'

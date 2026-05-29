@@ -4,6 +4,7 @@
  */
 import { getAccessToken, refreshAccessToken } from '@/lib/auth-cache'
 import { getApiBaseUrl } from '@/lib/api-base'
+import { createClient } from '@/lib/supabase'
 import type {
   AdminCleaner,
   AdminDispute,
@@ -41,6 +42,7 @@ const REQUEST_TIMEOUT_MS = Number(process.env.NEXT_PUBLIC_API_REQUEST_TIMEOUT_MS
 const GET_REQUEST_TIMEOUT_MS = Number(process.env.NEXT_PUBLIC_API_GET_REQUEST_TIMEOUT_MS ?? 30000)
 const RETRY_REQUEST_TIMEOUT_MS = Number(process.env.NEXT_PUBLIC_API_RETRY_TIMEOUT_MS ?? 60000)
 const GET_RETRY_BACKOFF_MS = Number(process.env.NEXT_PUBLIC_API_GET_RETRY_BACKOFF_MS ?? 400)
+let inFlightSessionResync: Promise<boolean> | null = null
 
 type AnyObj = Record<string, any>
 type CachedResponse = { expiresAt: number; data: unknown }
@@ -108,6 +110,27 @@ export function clearApiCache() {
 
 async function sleep(ms: number) {
   await new Promise((resolve) => setTimeout(resolve, ms))
+}
+
+async function forceSessionResync() {
+  if (typeof window === 'undefined') return false
+  if (inFlightSessionResync) return inFlightSessionResync
+
+  inFlightSessionResync = (async () => {
+    try {
+      const supabase = createClient()
+      const refresh = await supabase.auth.refreshSession()
+      if (!refresh.error) return true
+      const probe = await supabase.auth.getUser()
+      return !probe.error
+    } catch {
+      return false
+    } finally {
+      inFlightSessionResync = null
+    }
+  })()
+
+  return inFlightSessionResync
 }
 
 // Statuses we retry once. 401 stays in here because it triggers the
@@ -182,6 +205,14 @@ async function executeRequest<T>(path: string, options: RequestInit, method: str
   if (method === 'GET' && !res.ok && isTransientStatus(res.status)) {
     await sleep(GET_RETRY_BACKOFF_MS)
     res = await runRequest(true, retryTimeoutMs)
+  }
+
+  if (method === 'GET' && res.status === 401) {
+    const resynced = await forceSessionResync()
+    if (resynced) {
+      await sleep(GET_RETRY_BACKOFF_MS)
+      res = await runRequest(true, retryTimeoutMs)
+    }
   }
 
   if (!res.ok) {

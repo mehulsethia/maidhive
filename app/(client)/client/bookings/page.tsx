@@ -17,7 +17,6 @@ import { Select } from '@/components/ui/select'
 import { canShowActiveMessageCta, canViewChatHistoryForBooking, getDisputeWindowMs } from '@/lib/chat-window'
 import { recoverBookingsFromNotifications } from '@/lib/booking-data-recovery'
 import { reportLoadError, resetLoadError } from '@/lib/load-error-policy'
-import { forceSessionResync } from '@/lib/session-resync'
 import { createClient } from '@/lib/supabase'
 import { formatCurrency, formatDate } from '@/lib/utils'
 import type { BookingRead, BookingStatus } from '@/types'
@@ -89,16 +88,9 @@ export default function ClientBookingsPage() {
   const [cancelTargetBookingId, setCancelTargetBookingId] = useState<string | null>(null)
   const recoveryAttemptedRef = useRef(false)
 
-  async function loadBookings(allowSessionRetry = true) {
+  async function loadBookings() {
     try {
       const [bookingsRes, disputesRes] = await Promise.allSettled([bookingsApi.my(1), disputesApi.listMine()])
-      if (bookingsRes.status !== 'fulfilled' && allowSessionRetry) {
-        const resynced = await forceSessionResync()
-        if (resynced) {
-          await loadBookings(false)
-          return
-        }
-      }
       const res = bookingsRes.status === 'fulfilled' ? bookingsRes.value : null
       const disputes = disputesRes.status === 'fulfilled' ? disputesRes.value : null
       let recoveredBookings: BookingRead[] = []

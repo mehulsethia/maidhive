@@ -14,7 +14,6 @@ import { compareConversationsByOperationalPriority } from '@/lib/booking-priorit
 import { canViewChatHistoryForBooking, getChatReadOnlyMessage, isChatReadOnly } from '@/lib/chat-window'
 import { recoverBookingsFromNotifications } from '@/lib/booking-data-recovery'
 import { reportLoadError, resetLoadError } from '@/lib/load-error-policy'
-import { forceSessionResync } from '@/lib/session-resync'
 import { formatDate } from '@/lib/utils'
 import type { BookingRead } from '@/types'
 
@@ -41,19 +40,12 @@ function ClientChatsPageContent() {
   const recoveryAttemptedRef = useRef(false)
 
   useEffect(() => {
-    async function loadChats(allowSessionRetry: boolean) {
+    async function loadChats() {
       try {
         const [bookingsRes, meRes] = await Promise.allSettled([
           bookingsApi.my(),
           authApi.me().catch(() => null),
         ])
-        if (bookingsRes.status !== 'fulfilled' && allowSessionRetry) {
-          const resynced = await forceSessionResync()
-          if (resynced) {
-            await loadChats(false)
-            return
-          }
-        }
 
         const data = bookingsRes.status === 'fulfilled' ? bookingsRes.value?.data : null
         const me = meRes.status === 'fulfilled' ? meRes.value : null
@@ -93,7 +85,7 @@ function ClientChatsPageContent() {
       }
     }
 
-    loadChats(true)
+    loadChats()
   }, [bookingFromQuery])
 
   const deferredBookings = useDeferredValue(bookings)
