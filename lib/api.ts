@@ -49,6 +49,8 @@ class ApiRequestError extends Error {
   constructor(
     message: string,
     readonly status: number,
+    readonly requestId?: string,
+    readonly clientRequestId?: string,
   ) {
     super(message)
   }
@@ -87,6 +89,10 @@ function normalizePaginated<T>(payload: AnyObj, key: string): PaginatedResponse<
   }
 }
 
+function buildClientRequestId() {
+  return `client_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 10)}`
+}
+
 async function getAuthHeaders(forceRefresh = false): Promise<HeadersInit> {
   const token = forceRefresh ? await refreshAccessToken() : await getAccessToken()
   return {
@@ -120,6 +126,8 @@ function isTransientFetchError(error: unknown) {
 }
 
 async function executeRequest<T>(path: string, options: RequestInit, method: string): Promise<T> {
+  const clientRequestId = buildClientRequestId()
+
   const runRequest = async (forceRefresh = false, timeoutMs = REQUEST_TIMEOUT_MS) => {
     const headers = await getAuthHeaders(forceRefresh)
     const controller = new AbortController()
@@ -132,7 +140,7 @@ async function executeRequest<T>(path: string, options: RequestInit, method: str
         ...options,
         cache: 'no-store',
         credentials: 'include',
-        headers: { ...headers, ...options.headers },
+        headers: { ...headers, 'x-client-request-id': clientRequestId, ...options.headers },
         signal: controller.signal,
       })
     } finally {
@@ -149,8 +157,24 @@ async function executeRequest<T>(path: string, options: RequestInit, method: str
   } catch (error) {
     if (method === 'GET' && isTransientFetchError(error)) {
       await sleep(GET_RETRY_BACKOFF_MS)
-      res = await runRequest(true, retryTimeoutMs)
+      try {
+        res = await runRequest(true, retryTimeoutMs)
+      } catch (retryError) {
+        console.error('api.request.network_failed', {
+          path,
+          method,
+          clientRequestId,
+          error: retryError instanceof Error ? retryError.message : String(retryError),
+        })
+        throw retryError
+      }
     } else {
+      console.error('api.request.network_failed', {
+        path,
+        method,
+        clientRequestId,
+        error: error instanceof Error ? error.message : String(error),
+      })
       throw error
     }
   }
@@ -186,7 +210,23 @@ async function executeRequest<T>(path: string, options: RequestInit, method: str
             ? detail.message ?? detail.error ?? null
             : null
     const rawMessage = String(detailMessage ?? parsedError?.message ?? `Request failed: ${res.status}`)
-    throw new ApiRequestError(toUserFriendlyErrorMessage(rawMessage, res.status), res.status)
+    const serverRequestId =
+      res.headers.get('x-request-id') ??
+      (typeof parsedError?.request_id === 'string' ? parsedError.request_id : undefined)
+    console.error('api.request.failed', {
+      path,
+      method,
+      status: res.status,
+      message: rawMessage,
+      clientRequestId,
+      serverRequestId,
+    })
+    throw new ApiRequestError(
+      toUserFriendlyErrorMessage(rawMessage, res.status),
+      res.status,
+      serverRequestId,
+      clientRequestId,
+    )
   }
 
   const json = (await res.json()) as T

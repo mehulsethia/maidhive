@@ -33,6 +33,7 @@ function ClientChatsPageContent() {
 
   const [loading, setLoading] = useState(true)
   const [bookings, setBookings] = useState<BookingRead[]>([])
+  const [chatLoadError, setChatLoadError] = useState<string | null>(null)
   const [selectedBookingId, setSelectedBookingId] = useState<string | null>(null)
   const [currentUserId, setCurrentUserId] = useState<string | null>(null)
   const [query, setQuery] = useState('')
@@ -69,8 +70,14 @@ function ClientChatsPageContent() {
           setCurrentUserId(meRes?.data?.id ?? chatBookings[0]?.client?.user?.id ?? null)
           setLoading(false)
         })
+        setChatLoadError(
+          primaryBookings.length === 0 && fallbackBookings.length > 0
+            ? 'Live chat thread sync failed. Showing recovered conversations from recent notifications.'
+            : null,
+        )
         resetLoadError('client-chats')
       } catch {
+        setChatLoadError('Chat conversations could not be loaded right now. Please refresh and try again.')
         reportLoadError('client-chats', 'Failed to load chats.')
         setLoading(false)
       }
@@ -109,6 +116,11 @@ function ClientChatsPageContent() {
   return (
     <>
       <div className="client-chats-revamp space-y-7 md:space-y-9">
+        {chatLoadError && (
+          <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+            {chatLoadError}
+          </div>
+        )}
         <section className="client-stage overflow-hidden rounded-[2rem] border border-slate-200/70">
           <div className="client-stage__media" aria-hidden="true" />
           <div className="client-stage__grain" aria-hidden="true" />
@@ -163,7 +175,9 @@ function ClientChatsPageContent() {
 
             {filtered.length === 0 ? (
               <div className="mt-4 rounded-2xl border border-dashed border-slate-300 p-5 text-center text-sm text-slate-500">
-                No conversations yet.
+                {chatLoadError && deferredBookings.length === 0
+                  ? 'Unable to load conversations right now.'
+                  : 'No conversations yet.'}
               </div>
             ) : (
               <div className="mt-4 min-h-0 flex-1 space-y-2 overflow-y-auto pr-1">

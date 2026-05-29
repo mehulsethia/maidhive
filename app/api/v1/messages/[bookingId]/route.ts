@@ -24,6 +24,8 @@ async function isParty(bookingId: string, userId: string, role: string) {
 
 export const GET = requireAuth(async (_req, ctx, user) => {
   const { bookingId } = await ctx.params
+  const clientRequestId = _req.headers.get('x-client-request-id') ?? null
+  const browser = detectBrowserFamily(_req.headers.get('user-agent'))
   const booking = await isParty(bookingId, user.id, user.role)
   if (!booking) return err('Forbidden', 403)
   if (
@@ -38,11 +40,21 @@ export const GET = requireAuth(async (_req, ctx, user) => {
 
   await messageRepo.markReadForBooking(bookingId, user.id)
   const messages = await messageRepo.findByBookingId(bookingId)
+  console.info('messages.thread.result', {
+    clientRequestId,
+    bookingId,
+    userId: user.id,
+    role: user.role,
+    browser,
+    count: messages.length,
+  })
   return ok(messages)
 })
 
 export const POST = requireAuth(async (req: NextRequest, ctx, user) => {
   const { bookingId } = await ctx.params
+  const clientRequestId = req.headers.get('x-client-request-id') ?? null
+  const browser = detectBrowserFamily(req.headers.get('user-agent'))
   const booking = await isParty(bookingId, user.id, user.role)
   if (!booking) return err('Forbidden', 403)
   if (
@@ -63,5 +75,23 @@ export const POST = requireAuth(async (req: NextRequest, ctx, user) => {
   if (!parsed.success) return err(parsed.error.message, 422)
 
   const message = await messageRepo.send(bookingId, user.id, parsed.data.content)
+  console.info('messages.thread.sent', {
+    clientRequestId,
+    bookingId,
+    userId: user.id,
+    role: user.role,
+    browser,
+    length: parsed.data.content.length,
+  })
   return ok(message, 201)
 })
+
+function detectBrowserFamily(userAgent: string | null) {
+  const ua = String(userAgent ?? '').toLowerCase()
+  if (!ua) return 'unknown'
+  if (ua.includes('edg/')) return 'edge'
+  if (ua.includes('chrome/') && !ua.includes('edg/')) return 'chromium'
+  if (ua.includes('safari/') && !ua.includes('chrome/')) return 'safari'
+  if (ua.includes('firefox/')) return 'firefox'
+  return 'other'
+}

@@ -4,6 +4,8 @@ import { ok } from '@/server/response'
 import { notificationRepo } from '@/server/repositories/notification.repo'
 
 export const GET = requireAuth(async (_req, _ctx, user) => {
+  const clientRequestId = _req.headers.get('x-client-request-id') ?? null
+  const browser = detectBrowserFamily(_req.headers.get('user-agent'))
   const userId = user.id
   const role = user.role
   const chatCutoff = new Date(Date.now() - 30 * 60 * 1000)
@@ -70,9 +72,41 @@ export const GET = requireAuth(async (_req, _ctx, user) => {
         })()
       : await notificationRepo.countUnread(userId)
 
+  if ((pendingBookings === 0 && unreadChats === 0) && unreadNotifications > 0 && role !== 'admin') {
+    console.warn('counts.zero_operational_with_notifications', {
+      clientRequestId,
+      userId,
+      role,
+      browser,
+      pendingBookings,
+      unreadChats,
+      unreadNotifications,
+    })
+  }
+
+  console.info('counts.result', {
+    clientRequestId,
+    userId,
+    role,
+    browser,
+    unreadChats,
+    pendingBookings,
+    unreadNotifications,
+  })
+
   return ok({
     unread_chats: unreadChats,
     pending_bookings: pendingBookings,
     unread_notifications: unreadNotifications,
   })
 })
+
+function detectBrowserFamily(userAgent: string | null) {
+  const ua = String(userAgent ?? '').toLowerCase()
+  if (!ua) return 'unknown'
+  if (ua.includes('edg/')) return 'edge'
+  if (ua.includes('chrome/') && !ua.includes('edg/')) return 'chromium'
+  if (ua.includes('safari/') && !ua.includes('chrome/')) return 'safari'
+  if (ua.includes('firefox/')) return 'firefox'
+  return 'other'
+}

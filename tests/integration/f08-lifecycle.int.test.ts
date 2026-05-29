@@ -88,6 +88,15 @@ vi.mock('@/server/services/payment-lifecycle.service', () => ({
   },
 }))
 
+vi.mock('@/server/db', () => ({
+  db: {
+    platformConfig: {
+      findUnique: vi.fn(async () => null),
+      upsert: vi.fn(async () => ({})),
+    },
+  },
+}))
+
 describe('F08 Confirmed booking lifecycle integration', () => {
   beforeEach(() => {
     vi.resetModules()

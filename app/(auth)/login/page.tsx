@@ -5,7 +5,7 @@ import Link from 'next/link'
 import Image from 'next/image'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { Eye, EyeOff } from 'lucide-react'
-import { authApi, cleanersApi } from '@/lib/api'
+import { authApi, cleanersApi, clearApiCache } from '@/lib/api'
 import { createClient } from '@/lib/supabase'
 import { toast } from 'sonner'
 
@@ -26,6 +26,9 @@ function LoginForm() {
     if (error) {
       toast.error(error.message)
     } else {
+      await supabase.auth.refreshSession().catch(() => null)
+      clearApiCache()
+
       const metadata = data.user?.user_metadata as Record<string, unknown> | undefined
       const metaPhone = typeof metadata?.phone === 'string' ? metadata.phone : undefined
       const metaExperienceRaw = metadata?.experience
@@ -48,6 +51,8 @@ function LoginForm() {
       } catch {
         // Non-fatal.
       }
+
+      await authApi.me().catch(() => null)
 
       const nextParam = params.get('next')
       const safeNext = nextParam && nextParam.startsWith('/') ? nextParam : null

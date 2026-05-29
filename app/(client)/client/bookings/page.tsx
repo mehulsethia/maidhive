@@ -78,6 +78,7 @@ function isOperationalActiveBooking(booking: BookingRead) {
 export default function ClientBookingsPage() {
   const [loading, setLoading] = useState(true)
   const [bookings, setBookings] = useState<BookingRead[]>([])
+  const [listError, setListError] = useState<string | null>(null)
   const [bookingDisputeStatus, setBookingDisputeStatus] = useState<Map<string, string>>(new Map())
   const [actionLoadingId, setActionLoadingId] = useState<string | null>(null)
   const [query, setQuery] = useState('')
@@ -108,11 +109,18 @@ export default function ClientBookingsPage() {
         setLoading(false)
       })
       if (res || recoveredBookings.length > 0) {
+        setListError(
+          bookingsRes.status !== 'fulfilled' && recoveredBookings.length > 0
+            ? 'Live booking sync failed. Showing recovered items from recent notifications.'
+            : null,
+        )
         resetLoadError('client-bookings')
       } else {
+        setListError('We could not load your bookings right now. Please refresh and try again.')
         reportLoadError('client-bookings', 'Failed to load bookings.')
       }
     } catch {
+      setListError('We could not load your bookings right now. Please refresh and try again.')
       reportLoadError('client-bookings', 'Failed to load bookings.')
       setLoading(false)
     }
@@ -318,15 +326,22 @@ export default function ClientBookingsPage() {
                 ))}
               </Select>
             </div>
+            {listError && (
+              <div className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">
+                {listError}
+              </div>
+            )}
           </div>
 
           <div className="mt-5">
             {filtered.length === 0 ? (
               <EmptyState
-                title="No bookings found"
+                title={listError && deferredBookings.length === 0 ? 'Unable to load bookings' : 'No bookings found'}
                 description={
-                  deferredBookings.length === 0
-                    ? 'You do not have bookings yet.'
+                  listError && deferredBookings.length === 0
+                    ? 'Booking data failed to load. Please refresh this page.'
+                    : deferredBookings.length === 0
+                      ? 'You do not have bookings yet.'
                     : 'Try a different search or status filter.'
                 }
                 action={

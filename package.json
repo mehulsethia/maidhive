@@ -14,7 +14,9 @@
     "test:integration": "vitest run tests/integration",
     "test:e2e": "playwright test",
     "test:e2e:smoke": "playwright test --grep @smoke",
-    "backfill:notifications": "node scripts/backfill-notifications.cjs"
+    "test:e2e:matrix": "E2E_BROWSER_MATRIX=1 playwright test --grep @smoke",
+    "backfill:notifications": "node scripts/backfill-notifications.cjs",
+    "reconcile:backfill": "node scripts/reconcile-backfill.cjs"
   },
   "dependencies": {
     "@hookform/resolvers": "^3.9.1",

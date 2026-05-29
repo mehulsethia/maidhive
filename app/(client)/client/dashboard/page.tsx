@@ -64,6 +64,7 @@ function isValidUpcomingBooking(booking: BookingRead, nowMs: number) {
 export default function ClientDashboardPage() {
   const [loading, setLoading] = useState(true)
   const [bookings, setBookings] = useState<BookingRead[]>([])
+  const [dashboardError, setDashboardError] = useState<string | null>(null)
   const [favorites, setFavorites] = useState<FavoriteCleaner[]>([])
   const [name, setName] = useState('')
   const recoveryAttemptedRef = useRef(false)
@@ -88,7 +89,6 @@ export default function ClientDashboardPage() {
 
       startTransition(() => {
         const me = meRes.status === 'fulfilled' ? meRes.value : null
-        const booking = bookingRes.status === 'fulfilled' ? bookingRes.value : null
         const favorites = favoritesRes.status === 'fulfilled' ? favoritesRes.value : null
         setName((me?.data?.name ?? '').trim())
         setBookings(listItems.length > 0 ? listItems : recoveredBookings)
@@ -96,11 +96,18 @@ export default function ClientDashboardPage() {
         setLoading(false)
       })
       if (bookingRes.status === 'fulfilled' || recoveredBookings.length > 0) {
+        setDashboardError(
+          bookingRes.status !== 'fulfilled' && recoveredBookings.length > 0
+            ? 'Live booking sync failed. Showing recovered dashboard activity from notifications.'
+            : null,
+        )
         resetLoadError('client-dashboard')
       } else {
+        setDashboardError('Dashboard data could not be loaded right now. Please refresh and try again.')
         reportLoadError('client-dashboard', 'Failed to load dashboard data.')
       }
     } catch {
+      setDashboardError('Dashboard data could not be loaded right now. Please refresh and try again.')
       reportLoadError('client-dashboard', 'Failed to load dashboard data.')
       setLoading(false)
     }
@@ -184,6 +191,11 @@ export default function ClientDashboardPage() {
   return (
     <>
       <div className="dashboard-revamp space-y-8 md:space-y-10">
+        {dashboardError && (
+          <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+            {dashboardError}
+          </div>
+        )}
         <section className="dashboard-stage overflow-hidden rounded-[2rem] border border-slate-200/70">
           <div className="dashboard-stage__media" aria-hidden="true" />
           <div className="dashboard-stage__grain" aria-hidden="true" />
@@ -314,9 +326,13 @@ export default function ClientDashboardPage() {
             {recent.length === 0 ? (
               <div className="rounded-2xl border border-dashed border-slate-300 px-5 py-8 text-center">
                 <p className={`${displayFont.className} text-lg font-semibold text-slate-800`}>
-                  No bookings yet
+                  {dashboardError && total === 0 ? 'Unable to load bookings' : 'No bookings yet'}
                 </p>
-                <p className="mt-1 text-sm text-slate-500">Start by exploring trusted cleaners near you.</p>
+                <p className="mt-1 text-sm text-slate-500">
+                  {dashboardError && total === 0
+                    ? 'Booking activity failed to load. Please refresh this page.'
+                    : 'Start by exploring trusted cleaners near you.'}
+                </p>
                 <Link
                   href="/client/cleaners"
                   className="mt-4 inline-flex h-10 items-center rounded-full bg-[#0d4bc9] px-4 text-sm font-semibold text-white hover:bg-[#0a3ea8]"

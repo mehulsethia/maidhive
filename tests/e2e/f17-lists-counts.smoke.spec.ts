@@ -59,12 +59,22 @@ test.describe('F17 Search/lists/counts consistency @smoke', () => {
       await expect(closedCard).toBeVisible()
       await expect(closedCard.getByRole('link', { name: /^Message$/i })).toHaveCount(0)
     })
+
+    test('E2E-LIST-05 list page shows load-error state instead of false empty state on API failure', async ({ page }) => {
+      await page.route('**/api/v1/bookings**', (route) => route.abort('failed'))
+      await page.route('**/api/v1/disputes**', (route) => route.abort('failed'))
+      await page.route('**/api/v1/notifications**', (route) => route.abort('failed'))
+
+      await page.goto('/client/bookings')
+      await expect(page.getByText('Unable to load bookings')).toBeVisible()
+      await expect(page.getByText('No bookings found')).toHaveCount(0)
+    })
   })
 
   test.describe('cleaner session', () => {
     test.use({ storageState: authStatePath('cleaner') })
 
-    test('E2E-LIST-05 cleaner list and counts endpoints respond with non-negative metrics', async ({ page }, testInfo) => {
+    test('E2E-LIST-06 cleaner list and counts endpoints respond with non-negative metrics', async ({ page }, testInfo) => {
       test.skip(!hasRoleCredentialCandidates('cleaner'), 'Set at least one E2E_*_EMAIL and E2E_*_PASSWORD pair')
 
       const listRes = await page.request.get('/api/v1/bookings?page=1&page_size=20')
