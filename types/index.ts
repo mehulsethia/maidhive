@@ -212,9 +212,11 @@ export interface BookingRead {
   started_at?: string
   start_initiated_by?: 'cleaner' | 'system' | null
   completed_at?: string
+  cancelled_by?: string | null
   cancelled_at?: string
   cancellation_reason?: string
   created_at: string
+  updated_at?: string
   client?: {
     id: string
     id_file_url?: string | null
@@ -230,11 +232,27 @@ export interface BookingRead {
   payment?: {
     id: string
     status: string
+    amount?: number
+    platform_fee?: number
+    cleaner_payout?: number
+    currency?: string
+    refund_amount?: number | null
+    refund_reason?: string | null
+    authorized_at?: string | null
+    captured_at?: string | null
+    transferred_at?: string | null
+    payout_scheduled_at?: string | null
+    refunded_at?: string | null
+    failed_at?: string | null
+    created_at?: string
+    updated_at?: string
   } | null
   review?: {
     id: string
     rating: number
     comment?: string
+    created_at?: string
+    updated_at?: string
   } | null
 }
 

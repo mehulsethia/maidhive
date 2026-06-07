@@ -1,11 +1,12 @@
 'use client'
 
 import { useCallback, useEffect, useState } from 'react'
+import Link from 'next/link'
 import { useSearchParams } from 'next/navigation'
-import { ChevronLeft, ChevronRight } from 'lucide-react'
+import { ChevronLeft, ChevronRight, Eye } from 'lucide-react'
 import { adminApi } from '@/lib/api'
 import { BookingStatusBadge } from '@/components/booking-status-badge'
-import { Button } from '@/components/ui/button'
+import { Button, buttonVariants } from '@/components/ui/button'
 import { LoadingSpinner } from '@/components/loading-spinner'
 import { EmptyState } from '@/components/empty-state'
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
@@ -61,8 +62,8 @@ function BookingTable({ bookings }: { bookings: BookingRead[] }) {
   if (bookings.length === 0) return <EmptyState title="No bookings" />
 
   return (
-    <div className="-mx-4 w-[calc(100%+2rem)] max-w-none overflow-x-auto overscroll-x-contain rounded-lg border sm:mx-0 sm:w-full">
-      <table className="w-full min-w-[680px] text-sm sm:min-w-[760px]">
+    <div className="-mx-4 w-[calc(100%+2rem)] max-w-none overflow-x-auto overscroll-x-contain rounded-lg border sm:mx-0 sm:w-full" role="region" aria-label="Admin bookings table">
+      <table className="w-full min-w-[760px] text-sm sm:min-w-[860px]">
         <thead className="bg-muted/40">
           <tr className="text-left text-muted-foreground text-xs uppercase tracking-wide">
             <th className="px-4 py-3 font-medium">Booking</th>
@@ -72,13 +73,19 @@ function BookingTable({ bookings }: { bookings: BookingRead[] }) {
             <th className="px-4 py-3 font-medium">Status</th>
             <th className="px-4 py-3 font-medium text-right">Amount</th>
             <th className="px-4 py-3 font-medium text-right">Platform Fee (10%)</th>
+            <th className="px-4 py-3 font-medium text-right">Details</th>
           </tr>
         </thead>
         <tbody className="divide-y">
           {bookings.map(b => (
-            <tr key={b.id} className="hover:bg-muted/20 transition-colors">
+            <tr key={b.id} className="group hover:bg-muted/20 transition-colors">
               <td className="px-4 py-3 min-w-[140px]">
-                <span className="font-mono text-xs text-muted-foreground">#{b.id.slice(0, 8)}</span>
+                <Link
+                  href={`/admin/bookings/${b.id}`}
+                  className="font-mono text-xs text-muted-foreground underline-offset-4 transition-colors hover:text-slate-900 hover:underline"
+                >
+                  #{b.id.slice(0, 8)}
+                </Link>
                 <p className="text-[10px] text-muted-foreground">{formatDate(b.created_at)}</p>
               </td>
               <td className="px-4 py-3 min-w-[120px] capitalize">{b.service_type.replace(/_/g, ' ')}</td>
@@ -106,6 +113,16 @@ function BookingTable({ bookings }: { bookings: BookingRead[] }) {
               </td>
               <td className="px-4 py-3 text-right text-muted-foreground text-xs">
                 {formatCurrency(b.platform_fee)}
+              </td>
+              <td className="px-4 py-3 text-right">
+                <Link
+                  href={`/admin/bookings/${b.id}`}
+                  aria-label={`Open booking ${b.id.slice(0, 8)}`}
+                  className={buttonVariants({ variant: 'outline', size: 'sm' })}
+                >
+                  <Eye className="h-3.5 w-3.5" />
+                  View
+                </Link>
               </td>
             </tr>
           ))}

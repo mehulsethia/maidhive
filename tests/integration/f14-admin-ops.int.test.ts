@@ -11,6 +11,7 @@ const seededUsers = vi.hoisted(() => ({
 const state = vi.hoisted(() => ({
   currentUser: seededUsers.admin as User | null,
   listAllArgs: null as any,
+  findByIdArgs: null as any,
 }))
 
 vi.mock('@/server/auth', () => {
@@ -84,6 +85,31 @@ vi.mock('@/server/repositories/booking.repo', () => ({
         },
       ], 1]
     }),
+    findById: vi.fn(async (id: string) => {
+      state.findByIdArgs = id
+      if (id !== 'booking_admin_1') return null
+      return {
+        id,
+        status: 'confirmed',
+        serviceType: 'standard',
+        city: 'Larnaca',
+        scheduledStart: new Date('2026-06-07T12:00:00.000Z'),
+        scheduledEnd: new Date('2026-06-07T15:00:00.000Z'),
+        totalAmount: 35.2,
+        platformFee: 3.2,
+        cleanerPayout: 32,
+        createdAt: new Date('2026-06-01T10:00:00.000Z'),
+        client: { user: { name: 'Client User' } },
+        cleaner: { user: { name: 'Cleaner User' } },
+        payment: { status: 'authorized', authorizedAt: new Date('2026-06-01T10:05:00.000Z') },
+      }
+    }),
+  },
+}))
+
+vi.mock('@/server/services/booking.service', () => ({
+  bookingService: {
+    reconcileSingleBookingDeadline: vi.fn(async () => null),
   },
 }))
 
@@ -304,5 +330,21 @@ describe('F14 Admin routes integration', () => {
     expect(body.success).toBe(true)
     expect(state.listAllArgs).toEqual({ status: 'pending', page: 2, pageSize: 15 })
     expect(body.data.total).toBe(1)
+  })
+
+  it('IT-ADMIN-05 admin can fetch a read-only booking detail payload', async () => {
+    const route = await import('@/app/api/v1/admin/bookings/[id]/route')
+    const res = await route.GET(
+      new NextRequest('http://localhost/api/v1/admin/bookings/booking_admin_1'),
+      { params: Promise.resolve({ id: 'booking_admin_1' }) } as any,
+    )
+    const body = await res.json()
+
+    expect(res.status).toBe(200)
+    expect(body.success).toBe(true)
+    expect(state.findByIdArgs).toBe('booking_admin_1')
+    expect(body.data.id).toBe('booking_admin_1')
+    expect(body.data.service_type).toBe('standard')
+    expect(body.data.payment.status).toBe('authorized')
   })
 })

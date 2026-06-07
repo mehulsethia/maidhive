@@ -755,6 +755,8 @@ export const adminApi = {
     const res = await request<APIResponse<any>>(`/admin/bookings${qs ? `?${qs}` : ''}`)
     return { ...res, data: normalizePaginated<BookingRead>(res.data ?? {}, 'bookings') }
   },
+  getBooking: (id: string) =>
+    request<APIResponse<BookingRead>>(`/admin/bookings/${encodeURIComponent(id)}`),
 
   listDisputes: async () => {
     const res = await request<APIResponse<any>>('/disputes')
