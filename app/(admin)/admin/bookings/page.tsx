@@ -6,6 +6,7 @@ import { useSearchParams } from 'next/navigation'
 import { ChevronLeft, ChevronRight, Eye } from 'lucide-react'
 import { adminApi } from '@/lib/api'
 import { BookingStatusBadge } from '@/components/booking-status-badge'
+import { CancellationPaymentBreakdown } from '@/components/cancellation-payment-breakdown'
 import { Button, buttonVariants } from '@/components/ui/button'
 import { LoadingSpinner } from '@/components/loading-spinner'
 import { EmptyState } from '@/components/empty-state'
@@ -109,7 +110,7 @@ function BookingTable({ bookings }: { bookings: BookingRead[] }) {
                 )}
               </td>
               <td className="px-4 py-3 text-right font-medium">
-                {formatCurrency(b.total_amount)}
+                {b.status === 'cancelled' ? <CancellationPaymentBreakdown booking={b} compact /> : formatCurrency(b.total_amount)}
               </td>
               <td className="px-4 py-3 text-right text-muted-foreground text-xs">
                 {formatCurrency(b.platform_fee)}

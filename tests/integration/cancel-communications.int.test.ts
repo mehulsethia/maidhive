@@ -19,6 +19,7 @@ const state = vi.hoisted(() => ({
   booking: null as any,
   notifications: [] as any[],
   cleanerCancelledByClientEmails: 0,
+  cleanerCancelledByClientPayloads: [] as any[],
   clientCancellationEmails: 0,
   removeCalendarCalls: 0,
 }))
@@ -80,8 +81,9 @@ vi.mock('@/server/services/loops-email.service', () => ({
       state.clientCancellationEmails += 1
       return true
     }),
-    sendCleanerBookingCancelledByClient: vi.fn(async () => {
+    sendCleanerBookingCancelledByClient: vi.fn(async (payload: any) => {
       state.cleanerCancelledByClientEmails += 1
+      state.cleanerCancelledByClientPayloads.push(payload)
       return true
     }),
     sendCleanerCancellationWarningOrStrike: vi.fn(async () => true),
@@ -118,6 +120,7 @@ describe('Booking cancellation communications', () => {
     vi.resetModules()
     state.notifications = []
     state.cleanerCancelledByClientEmails = 0
+    state.cleanerCancelledByClientPayloads = []
     state.clientCancellationEmails = 0
     state.removeCalendarCalls = 0
   })
@@ -198,11 +201,16 @@ describe('Booking cancellation communications', () => {
     expect(String(clientNotif?.body ?? '')).toContain('has been cancelled')
 
     expect(state.cleanerCancelledByClientEmails).toBe(1)
+    expect(state.cleanerCancelledByClientPayloads[0]).toMatchObject({
+      email: seeded.cleanerUser.email,
+      bookingId: 'booking_confirmed_1',
+      cancellationReason: 'Confirmed cancellation',
+    })
     expect(state.clientCancellationEmails).toBe(1)
     expect(state.removeCalendarCalls).toBe(1)
   })
 
-  it('does not send cleaner cancellation email for accepted-but-not-confirmed cancellation', async () => {
+  it('sends cleaner cancellation email for accepted-but-not-confirmed client cancellation', async () => {
     state.booking = {
       id: 'booking_accepted_1',
       status: 'accepted',
@@ -220,7 +228,12 @@ describe('Booking cancellation communications', () => {
     const { bookingService } = await import('@/server/services/booking.service')
     await bookingService.cancel(state.booking.id, seeded.clientUser as any, 'Accepted cancellation')
 
-    expect(state.cleanerCancelledByClientEmails).toBe(0)
+    expect(state.cleanerCancelledByClientEmails).toBe(1)
+    expect(state.cleanerCancelledByClientPayloads[0]).toMatchObject({
+      email: seeded.cleanerUser.email,
+      bookingId: 'booking_accepted_1',
+      cancellationReason: 'Accepted cancellation',
+    })
     expect(state.clientCancellationEmails).toBe(1)
   })
 

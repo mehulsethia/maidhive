@@ -5,6 +5,13 @@ const bookingInclude = {
   client: {
     include: {
       user: true,
+      _count: {
+        select: {
+          bookings: {
+            where: { status: 'completed' },
+          },
+        },
+      },
     },
   },
   cleaner: { include: { user: true } },
@@ -24,6 +31,15 @@ const bookingListInclude = {
         select: {
           id: true,
           name: true,
+          phone: true,
+          avatarUrl: true,
+        },
+      },
+      _count: {
+        select: {
+          bookings: {
+            where: { status: 'completed' },
+          },
         },
       },
     },

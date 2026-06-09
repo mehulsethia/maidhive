@@ -3,6 +3,7 @@ import { Calendar, Clock, MapPin } from 'lucide-react'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { BookingStatusBadge } from '@/components/booking-status-badge'
+import { CancellationPaymentBreakdown } from '@/components/cancellation-payment-breakdown'
 import { isCompletedBookingReleased } from '@/lib/booking-release'
 import { formatCurrency, formatDate } from '@/lib/utils'
 import type { BookingRead } from '@/types'
@@ -69,8 +70,12 @@ export function BookingCard({ booking, viewAs = 'client' }: BookingCardProps) {
           </div>
 
           <div className="text-right shrink-0">
-            <p className="font-bold text-lg">{formatCurrency(booking.total_amount)}</p>
-            {viewAs === 'cleaner' && (
+            {booking.status === 'cancelled' ? (
+              <CancellationPaymentBreakdown booking={booking} compact />
+            ) : (
+              <p className="font-bold text-lg">{formatCurrency(booking.total_amount)}</p>
+            )}
+            {viewAs === 'cleaner' && booking.status !== 'cancelled' && (
               <p className="text-xs text-muted-foreground">
                 {earningsLabel} {formatCurrency(booking.cleaner_payout)}
               </p>

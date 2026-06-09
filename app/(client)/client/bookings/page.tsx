@@ -8,6 +8,7 @@ import { authApi, bookingsApi, disputesApi } from '@/lib/api'
 import { subscribeBookingsRefresh } from '@/lib/booking-sync'
 import { compareBookingsByOperationalPriority } from '@/lib/booking-priority'
 import { BookingStatusBadge } from '@/components/booking-status-badge'
+import { CancellationPaymentBreakdown } from '@/components/cancellation-payment-breakdown'
 import { EmptyState } from '@/components/empty-state'
 import { ListPageSkeleton } from '@/components/page-skeletons'
 import { Button } from '@/components/ui/button'
@@ -395,9 +396,13 @@ export default function ClientBookingsPage() {
                             scheduledEnd={booking.scheduled_end}
                             proposalBy={booking.proposal_by}
                           />
-                          <p className={`${displayFont.className} mt-2 text-base font-semibold text-slate-900`}>
-                            {formatCurrency(Number(booking.total_amount ?? 0))}
-                          </p>
+                          <div className={`${displayFont.className} mt-2 text-base font-semibold text-slate-900`}>
+                            {booking.status === 'cancelled' ? (
+                              <CancellationPaymentBreakdown booking={booking} compact />
+                            ) : (
+                              formatCurrency(Number(booking.total_amount ?? 0))
+                            )}
+                          </div>
                         </div>
                       </div>
 

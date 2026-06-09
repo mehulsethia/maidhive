@@ -389,6 +389,7 @@ export const loopsEmailService = {
     date: Date
     durationHours: number
     bookingId: string
+    cancellationReason?: string
   }) {
     if (!CLEANER_BOOKING_CANCELLED_BY_CLIENT_TRANSACTIONAL_ID.trim()) {
       throw new Error('Missing LOOPS_CLEANER_BOOKING_CANCELLED_BY_CLIENT_TRANSACTIONAL_ID')
@@ -403,6 +404,7 @@ export const loopsEmailService = {
         booking_date: formatBookingDate(args.date),
         booking_time: formatBookingTime(args.date),
         booking_duration: `${args.durationHours} hour${args.durationHours === 1 ? '' : 's'}`,
+        cancellation_reason: args.cancellationReason?.trim() || 'Not provided',
         booking_link: `${appUrl()}/cleaner/bookings/${args.bookingId}`,
       },
     })

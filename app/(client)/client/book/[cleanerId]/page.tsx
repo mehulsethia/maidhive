@@ -22,6 +22,7 @@ import { reportLoadError, resetLoadError } from '@/lib/load-error-policy'
 import { formatCurrency, cn, APP_TIMEZONE } from '@/lib/utils'
 import { MAX_SAVED_ADDRESSES, MVP_CITY, normalizeCyprusPostcode } from '@/lib/location-policy'
 import { pickupFullLabel } from '@/lib/transport-pickup'
+import { getClientBookingRequestDeadlineCopy } from '@/lib/booking-expiry-copy'
 import type { CleanerRead, PriceBreakdown, BookingRead, ClientProfileRead, ClientAddressRead } from '@/types'
 import { toast } from 'sonner'
 
@@ -97,19 +98,7 @@ function isPaymentAuthorizedStatus(status?: string | null) {
 }
 
 function bookingExpiryMessage(acceptBy?: string | null) {
-  if (!acceptBy) {
-    return 'This request expires 1 hour before the scheduled start time. If the cleaner does not respond, the booking request will expire automatically and your card authorisation will be released.'
-  }
-  const expiryLabel = new Date(acceptBy).toLocaleString('en-IE', {
-    hour: 'numeric',
-    minute: '2-digit',
-    hour12: true,
-    day: 'numeric',
-    month: 'short',
-    year: 'numeric',
-    timeZone: APP_TIMEZONE,
-  })
-  return `This request expires on ${expiryLabel}. If the cleaner does not respond, the booking request will expire automatically and your card authorisation will be released.`
+  return getClientBookingRequestDeadlineCopy({ accept_by: acceptBy ?? null })
 }
 
 function normalizeToIsoDatetime(value: string): string | null {

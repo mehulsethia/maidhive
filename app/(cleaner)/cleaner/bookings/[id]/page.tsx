@@ -6,6 +6,7 @@ import { Calendar, Clock, MapPin, ArrowLeft } from 'lucide-react'
 import { authApi, availabilityApi, bookingsApi, cleanersApi } from '@/lib/api'
 import { BookingStatusBadge } from '@/components/booking-status-badge'
 import { BookingInstructions } from '@/components/booking-instructions'
+import { CancellationPaymentBreakdown } from '@/components/cancellation-payment-breakdown'
 import { Chat } from '@/components/chat'
 import { DetailPageSkeleton } from '@/components/page-skeletons'
 import { Button } from '@/components/ui/button'
@@ -31,6 +32,8 @@ import {
 import { canViewChatHistoryForBooking, getChatReadOnlyMessage, isChatReadOnly } from '@/lib/chat-window'
 import { isBookingReportWindowActive } from '@/lib/booking-release'
 import { getCleanerEarningsLabel } from '@/lib/cleaner-earnings-label'
+import { getCleanerBookingRequestDeadlineCopy } from '@/lib/booking-expiry-copy'
+import { getCancellationPaymentOutcome } from '@/lib/booking-payment-outcome'
 import { subscribeBookingsRefresh, triggerBookingsRefresh } from '@/lib/booking-sync'
 import { showJobStartedToast } from '@/lib/job-start-toast'
 import { reportLoadError, resetLoadError } from '@/lib/load-error-policy'
@@ -298,18 +301,7 @@ export default function CleanerBookingDetailPage() {
   const showChat = canViewChatHistoryForBooking(booking)
   const chatIsReadOnly = isChatReadOnly(booking.scheduled_end, Date.now(), booking.status)
   const pendingValidityLabel = (() => {
-    if (!booking.accept_by) {
-      return 'This request expires 1 hour before the scheduled start time. If the cleaner does not respond, the booking request will expire automatically and your card authorisation will be released.'
-    }
-    const validUntilText = new Date(booking.accept_by).toLocaleString('en-IE', {
-      hour: 'numeric',
-      minute: '2-digit',
-      hour12: true,
-      day: 'numeric',
-      month: 'short',
-      year: 'numeric',
-    })
-    return `This request expires on ${validUntilText}. If the cleaner does not respond, the booking request will expire automatically and your card authorisation will be released.`
+    return getCleanerBookingRequestDeadlineCopy(booking)
   })()
   const completeOpensAt = booking.scheduled_end
     ? new Date(booking.scheduled_end).getTime() - 5 * 60 * 1000
@@ -330,6 +322,7 @@ export default function CleanerBookingDetailPage() {
     paymentStatus: booking.payment?.status,
     scheduledEnd: booking.scheduled_end,
   })
+  const cancellationOutcome = getCancellationPaymentOutcome(booking)
   const isClosedNonPayableStatus = ['cancelled', 'declined', 'expired'].includes(booking.status)
   const clientTrust = (booking.client as any)?.trust as {
     memberSince?: string | null
@@ -491,8 +484,10 @@ export default function CleanerBookingDetailPage() {
               <div className="space-y-2">
                 <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
                   <div>
-                    <p className="text-sm text-muted-foreground">{earningsLabel}</p>
-                    <p className="text-2xl font-bold text-green-700">{formatCurrency(booking.cleaner_payout)}</p>
+                    <p className="text-sm text-muted-foreground">{cancellationOutcome ? 'Cleaner payout due' : earningsLabel}</p>
+                    <p className="text-2xl font-bold text-green-700">
+                      {formatCurrency(cancellationOutcome ? cancellationOutcome.cleanerPayoutDue : booking.cleaner_payout)}
+                    </p>
                     <p className="text-xs text-muted-foreground mt-0.5">
                       {isCancelledPreConfirmation
                         ? 'Informational only — this request was cancelled before confirmation.'
@@ -509,6 +504,9 @@ export default function CleanerBookingDetailPage() {
               </div>
             </CardContent>
           </Card>
+          {booking.status === 'cancelled' && (
+            <CancellationPaymentBreakdown booking={booking} />
+          )}
         </div>
 
         <div className="min-w-0 space-y-4">

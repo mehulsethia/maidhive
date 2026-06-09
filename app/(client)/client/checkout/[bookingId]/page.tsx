@@ -12,6 +12,7 @@ import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { BookingStatusBadge } from '@/components/booking-status-badge'
 import { formatDate } from '@/lib/utils'
+import { getClientBookingRequestDeadlineCopy } from '@/lib/booking-expiry-copy'
 import type { BookingRead } from '@/types'
 import { toast } from 'sonner'
 
@@ -131,7 +132,7 @@ function CheckoutForm({ booking, onSuccess }: { booking: BookingRead; onSuccess:
         Your card will NOT be charged now. Payment is only captured after the job is completed.
       </p>
       <p className="text-xs text-slate-500">
-        This request expires 1 hour before the scheduled start time. If the cleaner does not respond, the booking request will expire automatically and your card authorisation will be released.
+        {getClientBookingRequestDeadlineCopy(booking)}
       </p>
       <Button
         type="submit"

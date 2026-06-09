@@ -1,3 +1,6 @@
+'use client'
+
+import { useEffect, useState } from 'react'
 import { cn } from '@/lib/utils'
 
 function toInitials(name?: string, fallback = 'U') {
@@ -28,14 +31,20 @@ export function UserAvatar({
   alt?: string
   fallback?: string
 }) {
+  const [imageFailed, setImageFailed] = useState(false)
   const initials = toInitials(name, fallback)
 
-  if (imageUrl) {
+  useEffect(() => {
+    setImageFailed(false)
+  }, [imageUrl])
+
+  if (imageUrl && !imageFailed) {
     return (
       <img
         src={imageUrl}
         alt={alt}
         className={cn('rounded-full object-cover', className)}
+        onError={() => setImageFailed(true)}
       />
     )
   }
@@ -53,4 +62,3 @@ export function UserAvatar({
     </div>
   )
 }
-

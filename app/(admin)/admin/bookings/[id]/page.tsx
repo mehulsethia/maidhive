@@ -21,12 +21,14 @@ import { adminApi } from '@/lib/api'
 import { BookingInstructions } from '@/components/booking-instructions'
 import { BookingStatusBadge } from '@/components/booking-status-badge'
 import { PriceBreakdownCard } from '@/components/price-breakdown-card'
+import { CancellationPaymentBreakdown } from '@/components/cancellation-payment-breakdown'
 import { DetailPageSkeleton } from '@/components/page-skeletons'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Separator } from '@/components/ui/separator'
 import { reportLoadError, resetLoadError } from '@/lib/load-error-policy'
+import { getCancellationPaymentOutcome, isNonPayableBookingState, isSuccessfulPaymentStatus } from '@/lib/booking-payment-outcome'
 import { formatCurrency, formatDate } from '@/lib/utils'
 import type { BookingRead } from '@/types'
 
@@ -70,6 +72,7 @@ function proposalContextLabel(context?: string | null) {
 function buildTimeline(booking: BookingRead): TimelineEvent[] {
   const events: TimelineEvent[] = []
   const payment = booking.payment
+  const cancellationOutcome = getCancellationPaymentOutcome(booking)
 
   addEvent(events, {
     id: 'created',
@@ -137,22 +140,22 @@ function buildTimeline(booking: BookingRead): TimelineEvent[] {
     id: 'payment-captured',
     at: payment.captured_at,
     title: 'Payment captured',
-    description: `Captured ${formatCurrency(payment.amount ?? booking.total_amount)} for this booking.`,
+    description: `Captured ${formatCurrency(cancellationOutcome?.capturedAmount ?? payment.amount ?? booking.total_amount)} for this booking.`,
     tone: 'success',
   } : null)
 
-  addEvent(events, payment?.payout_scheduled_at ? {
+  addEvent(events, payment?.payout_scheduled_at && (!cancellationOutcome || cancellationOutcome.cleanerPayoutDue > 0) ? {
     id: 'payout-scheduled',
     at: payment.payout_scheduled_at,
     title: 'Payout scheduled',
-    description: `Cleaner payout scheduled for ${formatCurrency(payment.cleaner_payout ?? booking.cleaner_payout)}.`,
+    description: `Cleaner payout scheduled for ${formatCurrency(cancellationOutcome?.cleanerPayoutDue ?? payment.cleaner_payout ?? booking.cleaner_payout)}.`,
   } : null)
 
-  addEvent(events, payment?.transferred_at ? {
+  addEvent(events, payment?.transferred_at && (!cancellationOutcome || cancellationOutcome.cleanerPayoutDue > 0) ? {
     id: 'payment-transferred',
     at: payment.transferred_at,
     title: 'Cleaner payout transferred',
-    description: `Transferred ${formatCurrency(payment.cleaner_payout ?? booking.cleaner_payout)} to the cleaner.`,
+    description: `Transferred ${formatCurrency(cancellationOutcome?.cleanerPayoutDue ?? payment.cleaner_payout ?? booking.cleaner_payout)} to the cleaner.`,
     tone: 'success',
   } : null)
 
@@ -242,6 +245,10 @@ export default function AdminBookingDetailPage() {
   const cleanerName = booking.cleaner?.user?.name?.trim() || 'Cleaner'
   const subtotal = booking.subtotal ?? booking.total_amount - booking.platform_fee
   const paymentStatus = booking.payment?.status ?? 'not recorded'
+  const cancellationOutcome = isSuccessfulPaymentStatus(booking.payment?.status)
+    ? getCancellationPaymentOutcome(booking)
+    : null
+  const useProjectedPaymentLabels = isNonPayableBookingState(booking)
 
   return (
     <div className="min-w-0 space-y-5">
@@ -333,6 +340,9 @@ export default function AdminBookingDetailPage() {
               total_amount: booking.total_amount,
             }}
           />
+          {cancellationOutcome && (
+            <CancellationPaymentBreakdown booking={booking} showAdminRows />
+          )}
 
           <Card>
             <CardHeader className="pb-0">
@@ -364,10 +374,28 @@ export default function AdminBookingDetailPage() {
               <div className="grid min-w-0 gap-3 sm:grid-cols-2 xl:grid-cols-1">
                 <DetailRow label="Payment status" value={paymentStatus.replace(/_/g, ' ')} />
                 <DetailRow label="Original booking amount" value={formatCurrency(booking.total_amount)} />
-                <DetailRow label="Cleaner payout" value={formatCurrency(booking.cleaner_payout)} />
-                <DetailRow label="Platform fee" value={formatCurrency(booking.platform_fee)} />
-                {booking.payment?.refund_amount != null && (
-                  <DetailRow label="Refund amount" value={formatCurrency(booking.payment.refund_amount)} />
+                {cancellationOutcome ? (
+                  <>
+                    <DetailRow label="Amount captured" value={formatCurrency(cancellationOutcome.capturedAmount)} />
+                    <DetailRow label="Released to client" value={formatCurrency(cancellationOutcome.releasedAmount)} />
+                    <DetailRow label="Cancellation fee applied" value={formatCurrency(cancellationOutcome.cancellationFee)} />
+                    <DetailRow label="Cleaner payout due" value={formatCurrency(cancellationOutcome.cleanerPayoutDue)} />
+                    <DetailRow label="Final platform amount retained" value={`${formatCurrency(cancellationOutcome.platformRetainedAmount)} before Stripe fees`} />
+                  </>
+                ) : (
+                  <>
+                    <DetailRow
+                      label={useProjectedPaymentLabels ? 'Projected cleaner payout' : 'Cleaner payout'}
+                      value={formatCurrency(booking.cleaner_payout)}
+                    />
+                    <DetailRow
+                      label={useProjectedPaymentLabels ? 'Projected platform fee' : 'Platform fee'}
+                      value={formatCurrency(booking.platform_fee)}
+                    />
+                    {booking.payment?.refund_amount != null && (
+                      <DetailRow label="Refund amount" value={formatCurrency(booking.payment.refund_amount)} />
+                    )}
+                  </>
                 )}
               </div>
             </CardContent>

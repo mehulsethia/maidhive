@@ -8,6 +8,7 @@ import { authApi, availabilityApi, bookingsApi, paymentsApi, reviewsApi } from '
 import { BookingStatusBadge } from '@/components/booking-status-badge'
 import { BookingInstructions } from '@/components/booking-instructions'
 import { PriceBreakdownCard } from '@/components/price-breakdown-card'
+import { CancellationPaymentBreakdown } from '@/components/cancellation-payment-breakdown'
 import { Chat } from '@/components/chat'
 import { DetailPageSkeleton } from '@/components/page-skeletons'
 import { Button } from '@/components/ui/button'
@@ -33,6 +34,7 @@ import { createClient } from '@/lib/supabase'
 import { formatDate } from '@/lib/utils'
 import { canViewChatHistoryForBooking, getChatReadOnlyMessage, isChatReadOnly } from '@/lib/chat-window'
 import { isCompletedBookingReleased } from '@/lib/booking-release'
+import { getClientBookingRequestDeadlineCopy } from '@/lib/booking-expiry-copy'
 import type { BookingRead } from '@/types'
 import { toast } from 'sonner'
 
@@ -64,18 +66,7 @@ function isOverdueUnpaidDraftLike(booking: BookingRead) {
 }
 
 function pendingValidityLabel(booking: BookingRead) {
-  if (!booking.accept_by) {
-    return 'This request expires 1 hour before the scheduled start time. If the cleaner does not respond, the booking request will expire automatically and your card authorisation will be released.'
-  }
-  const validUntilText = new Date(booking.accept_by).toLocaleString('en-IE', {
-    hour: 'numeric',
-    minute: '2-digit',
-    hour12: true,
-    day: 'numeric',
-    month: 'short',
-    year: 'numeric',
-  })
-  return `This request expires on ${validUntilText}. If the cleaner does not respond, the booking request will expire automatically and your card authorisation will be released.`
+  return getClientBookingRequestDeadlineCopy(booking)
 }
 
 function cyprusDateStr(date: Date) {
@@ -562,6 +553,9 @@ export default function ClientBookingDetailPage() {
                 total_amount: booking.total_amount,
               }}
             />
+            {booking.status === 'cancelled' && (
+              <CancellationPaymentBreakdown booking={booking} />
+            )}
 
           </div>
 

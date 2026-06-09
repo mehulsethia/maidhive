@@ -1169,7 +1169,7 @@ export const bookingService = {
       }
     }
 
-    if (isClientCancelling && isConfirmedBookingCancellation) {
+    if (isClientCancelling && isAcceptedOrConfirmedCancellation) {
       try {
         if (!cleanerEmail) throw new Error('Missing cleaner email for cancellation confirmation')
         await loopsEmailService.sendCleanerBookingCancelledByClient({
@@ -1179,6 +1179,7 @@ export const bookingService = {
           date: booking.scheduledStart,
           durationHours: Number(booking.durationHours),
           bookingId: booking.id,
+          cancellationReason: reason,
         })
       } catch (emailError) {
         console.error('Failed to send cleaner cancellation-by-client email via Loops:', emailError)
@@ -1805,11 +1806,17 @@ async function applyCancellationPaymentPolicy(
     application_fee_amount: Math.max(0, applicationFeeCents),
   })
 
+  const cleanerPayoutCents = Math.max(0, captureCents - applicationFeeCents)
+
   await paymentRepo.update(payment.id, {
     status: 'captured',
     stripeChargeId: typeof captured.latest_charge === 'string' ? captured.latest_charge : undefined,
     capturedAt: new Date(),
-    payoutScheduledAt: new Date(),
+    refundAmount: Number(((totalAmountCents - captureCents) / 100).toFixed(2)),
+    refundReason: 'client_cancellation_policy',
+    platformFee: Number((applicationFeeCents / 100).toFixed(2)),
+    cleanerPayout: Number((cleanerPayoutCents / 100).toFixed(2)),
+    payoutScheduledAt: cleanerPayoutCents > 0 ? new Date() : null,
   })
 }
 

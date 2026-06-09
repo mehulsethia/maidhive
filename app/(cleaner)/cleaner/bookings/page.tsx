@@ -7,6 +7,7 @@ import { CalendarCheck2, ClipboardList, Clock3, Search } from 'lucide-react'
 import { availabilityApi, bookingsApi, cleanersApi } from '@/lib/api'
 import { BookingStatusBadge } from '@/components/booking-status-badge'
 import { BookingInstructions } from '@/components/booking-instructions'
+import { CancellationPaymentBreakdown } from '@/components/cancellation-payment-breakdown'
 import { EmptyState } from '@/components/empty-state'
 import { ListPageSkeleton } from '@/components/page-skeletons'
 import { Button } from '@/components/ui/button'
@@ -31,6 +32,7 @@ import {
 import { compareBookingsByOperationalPriority } from '@/lib/booking-priority'
 import { isBookingReportWindowActive } from '@/lib/booking-release'
 import { getCleanerEarningsLabel } from '@/lib/cleaner-earnings-label'
+import { getCleanerBookingRequestDeadlineCopy } from '@/lib/booking-expiry-copy'
 import { subscribeBookingsRefresh, triggerBookingsRefresh } from '@/lib/booking-sync'
 import { showJobStartedToast } from '@/lib/job-start-toast'
 import { setupVisiblePolling } from '@/lib/visible-polling'
@@ -278,18 +280,7 @@ export default function CleanerBookingsPage() {
   if (loading) return <ListPageSkeleton />
 
   function pendingValidityLabel(bookingStart?: string, acceptBy?: string) {
-    if (!acceptBy) {
-      return 'This request expires 1 hour before the scheduled start time. If the cleaner does not respond, the booking request will expire automatically and your card authorisation will be released.'
-    }
-    const validUntilText = new Date(acceptBy).toLocaleString('en-IE', {
-      hour: 'numeric',
-      minute: '2-digit',
-      hour12: true,
-      day: 'numeric',
-      month: 'short',
-      year: 'numeric',
-    })
-    return `This request expires on ${validUntilText}. If the cleaner does not respond, the booking request will expire automatically and your card authorisation will be released.`
+    return getCleanerBookingRequestDeadlineCopy({ accept_by: acceptBy ?? null })
   }
 
   return (
@@ -450,9 +441,15 @@ export default function CleanerBookingsPage() {
                         proposalBy={b.proposal_by}
                         showPaymentRequiredForUnpaid={false}
                       />
-                      <p className="mt-2 text-sm font-semibold text-emerald-700">
-                        {earningsLabel} {formatCurrency(b.cleaner_payout)}
-                      </p>
+                      {b.status === 'cancelled' ? (
+                        <div className="mt-2">
+                          <CancellationPaymentBreakdown booking={b} compact />
+                        </div>
+                      ) : (
+                        <p className="mt-2 text-sm font-semibold text-emerald-700">
+                          {earningsLabel} {formatCurrency(b.cleaner_payout)}
+                        </p>
+                      )}
                     </div>
                   </div>
 
