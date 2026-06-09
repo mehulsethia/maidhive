@@ -583,7 +583,7 @@ export default function ClientProfilePage() {
 
         <section className="grid gap-4 xl:grid-cols-[340px_1fr]">
           <div className="rounded-[1.5rem] border border-slate-200/80 bg-white/90 p-5 shadow-[0_18px_45px_rgba(11,33,78,0.08)] backdrop-blur-sm">
-            <div className="flex items-start gap-4">
+            <div className="flex min-w-0 flex-col gap-4 sm:flex-row sm:items-start">
               <AvatarUpload
                 currentUrl={avatarUrl}
                 fallbackInitial={initials || 'C'}
@@ -769,8 +769,8 @@ export default function ClientProfilePage() {
                     <div className="mt-3 space-y-2">
                       {savedAddresses.map((entry) => (
                         <div key={entry.id} className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700">
-                          <div className="flex flex-wrap items-start justify-between gap-2">
-                            <p className="font-medium">{entry.label?.trim() || 'Saved address'} {entry.is_default ? '(Default)' : ''}</p>
+                          <div className="flex min-w-0 flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+                            <p className="min-w-0 font-medium">{entry.label?.trim() || 'Saved address'} {entry.is_default ? '(Default)' : ''}</p>
                             <div className="flex flex-wrap items-center gap-2">
                               {!entry.is_default && (
                                 <Button
@@ -803,7 +803,7 @@ export default function ClientProfilePage() {
                               </Button>
                             </div>
                           </div>
-                          <p className="text-xs text-slate-500">{entry.address_line1}, {entry.city}, {entry.postcode}</p>
+                          <p className="min-w-0 text-xs text-slate-500">{entry.address_line1}, {entry.city}, {entry.postcode}</p>
                           {editingAddressId === entry.id && (
                             <div className="mt-3 grid gap-3 md:grid-cols-2">
                               <Field label="Label (optional)">
@@ -886,8 +886,8 @@ export default function ClientProfilePage() {
                     />
                     Set as default address
                   </label>
-                  <div className="mt-3 flex justify-end">
-                    <Button type="button" onClick={createSavedAddress} loading={addingAddress} disabled={savedAddresses.length >= MAX_SAVED_ADDRESSES} className="rounded-full">
+                  <div className="mt-3 flex justify-stretch sm:justify-end">
+                    <Button type="button" onClick={createSavedAddress} loading={addingAddress} disabled={savedAddresses.length >= MAX_SAVED_ADDRESSES} className="w-full rounded-full sm:w-auto">
                       Add Address
                     </Button>
                   </div>
@@ -918,8 +918,8 @@ export default function ClientProfilePage() {
                   <div className="mt-3 space-y-2">
                     {savedCards.map((card) => (
                       <div key={card.id} className="rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-700">
-                        <div className="flex items-center justify-between gap-2">
-                          <span>
+                        <div className="flex min-w-0 flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                          <span className="min-w-0">
                             {card.brand.toUpperCase()} •••• {card.last4}
                             {card.exp_month && card.exp_year ? ` (exp ${card.exp_month}/${card.exp_year})` : ''}
                           </span>
@@ -956,8 +956,8 @@ export default function ClientProfilePage() {
               </div>
             )}
 
-            <div className="mt-5 flex justify-end">
-              <Button onClick={saveProfile} loading={saving} className="rounded-full bg-[#0d4bc9] hover:bg-[#0a3ea8]">
+            <div className="mt-5 flex justify-stretch sm:justify-end">
+              <Button onClick={saveProfile} loading={saving} className="w-full rounded-full bg-[#0d4bc9] hover:bg-[#0a3ea8] sm:w-auto">
                 Save & Publish
               </Button>
             </div>

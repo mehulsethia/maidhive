@@ -74,6 +74,18 @@ textarea {
   min-width: 0;
 }
 
+.app-shell-main :where(section, article, form, div, ul, ol, li) {
+  min-width: 0;
+}
+
+.app-shell-main :where(h1, h2, h3, h4, p, span, a, button, label, td, th) {
+  overflow-wrap: anywhere;
+}
+
+.app-shell-main :where(table) {
+  max-width: 100%;
+}
+
 @media (max-width: 1024px) {
   body {
     background-attachment: scroll;

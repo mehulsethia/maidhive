@@ -29,14 +29,14 @@ function Tabs({ defaultValue = '', value, onValueChange, children, className }: 
 
   return (
     <TabsCtx.Provider value={{ active, setActive }}>
-      <div className={cn('', className)}>{children}</div>
+      <div className={cn('min-w-0', className)}>{children}</div>
     </TabsCtx.Provider>
   )
 }
 
 function TabsList({ className, children }: { className?: string; children: React.ReactNode }) {
   return (
-    <div className={cn('inline-flex h-10 items-center justify-center rounded-md bg-muted p-1 text-muted-foreground', className)}>
+    <div className={cn('inline-flex max-w-full min-w-0 items-center justify-start rounded-md bg-muted p-1 text-muted-foreground', className)}>
       {children}
     </div>
   )
@@ -48,7 +48,7 @@ function TabsTrigger({ value, children, className }: { value: string; children: 
     <button
       onClick={() => setActive(value)}
       className={cn(
-        'inline-flex items-center justify-center whitespace-nowrap rounded-sm px-3 py-1.5 text-sm font-medium ring-offset-background transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50',
+        'inline-flex min-w-0 items-center justify-center whitespace-nowrap rounded-sm px-3 py-1.5 text-sm font-medium ring-offset-background transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50',
         active === value ? 'bg-background text-foreground shadow-sm' : 'hover:bg-background/50',
         className,
       )}
@@ -61,7 +61,7 @@ function TabsTrigger({ value, children, className }: { value: string; children: 
 function TabsContent({ value, children, className }: { value: string; children: React.ReactNode; className?: string }) {
   const { active } = React.useContext(TabsCtx)
   if (active !== value) return null
-  return <div className={cn('mt-4', className)}>{children}</div>
+  return <div className={cn('mt-4 min-w-0', className)}>{children}</div>
 }
 
 export { Tabs, TabsList, TabsTrigger, TabsContent }

@@ -48,7 +48,7 @@ export function CleanerCard({ cleaner, isFavorite, onToggleFavorite }: CleanerCa
     <Card className="rounded-[20px] border-[#ecedf3] bg-white shadow-[0_1px_2px_rgba(15,23,51,0.04),0_12px_32px_-12px_rgba(15,23,51,0.10)]">
       <CardContent className="p-4 sm:p-[22px]">
         <div className="space-y-5">
-          <div className="flex items-start gap-3.5">
+	          <div className="flex min-w-0 items-start gap-3.5">
             <UserAvatar
               name={name}
               imageUrl={cleaner.profile_image_url ?? cleaner.user?.avatar_url}
@@ -57,7 +57,7 @@ export function CleanerCard({ cleaner, isFavorite, onToggleFavorite }: CleanerCa
               fallback="C"
             />
             <div className="min-w-0 flex-1">
-              <div className="flex items-start justify-between gap-2.5 sm:gap-3">
+	              <div className="flex min-w-0 flex-col gap-2.5 min-[420px]:flex-row min-[420px]:items-start min-[420px]:justify-between sm:gap-3">
                 <div className="min-w-0 pr-2">
                   <div className="flex flex-wrap items-center gap-2">
                     <h3 className="truncate text-[18px] leading-[1.15] font-bold tracking-[-0.01em] text-[#0f1733]">
@@ -92,8 +92,8 @@ export function CleanerCard({ cleaner, isFavorite, onToggleFavorite }: CleanerCa
                     <span className="text-[12.5px] leading-none text-[#8a90a8]">{displayCount}</span>
                   </div>
                 </div>
-                <div className="flex items-center gap-2 shrink-0">
-                  <p className="text-[18px] leading-none font-bold tracking-[-0.01em] text-[#0f1733]">
+	                <div className="flex shrink-0 items-center gap-2">
+	                  <p className="text-[18px] font-bold leading-none tracking-[-0.01em] text-[#0f1733]">
                     {formatCurrency(cleaner.hourly_rate)}
                     <span className="ml-1 text-[12px] font-medium text-[#8a90a8]">/hr</span>
                   </p>
@@ -154,18 +154,18 @@ export function CleanerCard({ cleaner, isFavorite, onToggleFavorite }: CleanerCa
 
           <div className="h-px bg-[#ecedf3]" />
 
-          <div className="grid grid-cols-2 gap-2.5">
-            <Link
-              href={`/client/cleaners/${cleaner.id}`}
-              className="inline-flex h-[44px] items-center justify-center rounded-xl border border-[#e3e6ef] px-3 text-[14px] font-semibold text-[#0f1733] hover:bg-[#fafbfe]"
-            >
-              View Profile
-            </Link>
-            <Link
-              href={`/client/book/${cleaner.id}?fresh=1`}
-              className="inline-flex h-[44px] items-center justify-center rounded-xl bg-[#1f3bd6] px-3 text-[14px] font-semibold text-white hover:bg-[#182fb3]"
-            >
-              Book Now
+	          <div className="grid gap-2.5 min-[360px]:grid-cols-2">
+	            <Link
+	              href={`/client/cleaners/${cleaner.id}`}
+	              className="inline-flex min-h-[44px] min-w-0 items-center justify-center rounded-xl border border-[#e3e6ef] px-3 text-center text-[14px] font-semibold leading-snug text-[#0f1733] hover:bg-[#fafbfe]"
+	            >
+	              View Profile
+	            </Link>
+	            <Link
+	              href={`/client/book/${cleaner.id}?fresh=1`}
+	              className="inline-flex min-h-[44px] min-w-0 items-center justify-center rounded-xl bg-[#1f3bd6] px-3 text-center text-[14px] font-semibold leading-snug text-white hover:bg-[#182fb3]"
+	            >
+	              Book Now
             </Link>
           </div>
           </div>

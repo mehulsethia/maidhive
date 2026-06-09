@@ -519,7 +519,7 @@ export function ScheduleEditor({ compact, onSave, onSaveExternal, saveRef }: Sch
               <p className="mt-1">Use the <span className="font-semibold">+</span> control to add multiple time slots on the same day for split shifts.</p>
             </div>
             {/* Header */}
-            <div className="mb-5 flex items-center justify-between">
+            <div className="mb-5 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
               <p className="text-sm font-semibold text-slate-700">Weeks</p>
               {!compact && (
                 <Button size="sm" variant="outline" onClick={save} loading={saving}>
@@ -536,9 +536,9 @@ export function ScheduleEditor({ compact, onSave, onSaveExternal, saveRef }: Sch
                 const hasSlots = d.slots.length > 0
 
                 return (
-                  <div key={d.dayOfWeek} className="flex gap-3">
+                  <div key={d.dayOfWeek} className="flex min-w-0 gap-2 sm:gap-3">
                     {/* Day circle */}
-                    <div className="flex w-12 shrink-0 flex-col items-center pt-1.5">
+                    <div className="flex w-10 shrink-0 flex-col items-center pt-1.5 sm:w-12">
                       <button
                         type="button"
                         onClick={() => toggleDay(d.dayOfWeek)}
@@ -564,7 +564,7 @@ export function ScheduleEditor({ compact, onSave, onSaveExternal, saveRef }: Sch
                           const isLast = slotIdx === d.slots.length - 1
 
                           return (
-                            <div key={slot.id} className="flex flex-wrap items-center gap-2">
+                            <div key={slot.id} className="flex min-w-0 flex-wrap items-center gap-2">
                               <TimeSelect
                                 value={slot.start}
                                 onChange={(v) => updateSlot(d.dayOfWeek, slot.id, 'start', v)}
@@ -628,7 +628,7 @@ export function ScheduleEditor({ compact, onSave, onSaveExternal, saveRef }: Sch
 
       {/* ── Right: Block Dates + Google Calendar ────────────────────────── */}
       {!compact && (
-        <div className="space-y-4 xl:w-[320px]">
+        <div className="min-w-0 space-y-4 xl:w-[320px]">
           {/* Block Dates */}
           <div className="rounded-2xl border border-slate-200 bg-white p-5">
             <p className="text-base font-semibold text-slate-900">Block Dates</p>
@@ -679,10 +679,10 @@ export function ScheduleEditor({ compact, onSave, onSaveExternal, saveRef }: Sch
 
           {/* Google Calendar */}
           <div className="rounded-2xl border border-slate-200 bg-white p-5">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-3">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between xl:flex-col xl:items-stretch 2xl:flex-row 2xl:items-center">
+              <div className="flex min-w-0 items-center gap-3">
                 <CalendarDays className="h-8 w-8 text-primary" />
-                <p className="text-sm font-semibold text-slate-900">Google Calendar</p>
+                <p className="min-w-0 text-sm font-semibold text-slate-900">Google Calendar</p>
               </div>
               <Button
                 size="sm"
@@ -716,16 +716,16 @@ export function ScheduleEditor({ compact, onSave, onSaveExternal, saveRef }: Sch
         <div className="rounded-2xl border border-slate-200 bg-white p-4">
           <p className="text-sm font-semibold text-slate-700">Block Dates (optional)</p>
           <p className="mt-1 text-xs text-slate-500">Block specific future dates</p>
-          <div className="mt-3 flex items-center gap-2">
+          <div className="mt-3 flex flex-col gap-2 sm:flex-row sm:items-center">
             <Input
               type="date"
               value={blockInput}
               min={todayUtcDateOnly()}
               disabled={addingBlocked}
               onChange={(e) => setBlockInput(e.target.value)}
-              className="flex-1"
+              className="min-w-0 flex-1"
             />
-            <Button size="sm" onClick={addBlockedDate} loading={addingBlocked}>
+            <Button size="sm" className="w-full sm:w-auto" onClick={addBlockedDate} loading={addingBlocked}>
               Add
             </Button>
           </div>

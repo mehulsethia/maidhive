@@ -49,12 +49,12 @@ export function ScrollReveal({
       to: 'opacity-100 translate-y-0',
     },
     'fade-left': {
-      from: 'opacity-0 -translate-x-8',
-      to: 'opacity-100 translate-x-0',
+      from: 'opacity-0 translate-y-8',
+      to: 'opacity-100 translate-y-0',
     },
     'fade-right': {
-      from: 'opacity-0 translate-x-8',
-      to: 'opacity-100 translate-x-0',
+      from: 'opacity-0 translate-y-8',
+      to: 'opacity-100 translate-y-0',
     },
     'zoom-in': {
       from: 'opacity-0 scale-95',
@@ -119,12 +119,12 @@ export function StaggerChildren({
       to: 'opacity-100 translate-y-0',
     },
     'fade-left': {
-      from: 'opacity-0 -translate-x-8',
-      to: 'opacity-100 translate-x-0',
+      from: 'opacity-0 translate-y-8',
+      to: 'opacity-100 translate-y-0',
     },
     'fade-right': {
-      from: 'opacity-0 translate-x-8',
-      to: 'opacity-100 translate-x-0',
+      from: 'opacity-0 translate-y-8',
+      to: 'opacity-100 translate-y-0',
     },
     'zoom-in': {
       from: 'opacity-0 scale-95',

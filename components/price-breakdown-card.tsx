@@ -10,25 +10,25 @@ export function PriceBreakdownCard({
   showPlatformFee?: boolean
 }) {
   return (
-    <div className="space-y-2 rounded-2xl border border-slate-200 bg-white p-4 text-sm">
+    <div className="min-w-0 space-y-2 rounded-2xl border border-slate-200 bg-white p-4 text-sm">
       <h4 className="font-semibold tracking-tight">Price breakdown</h4>
       <Separator />
-      <div className="flex justify-between">
-        <span className="text-muted-foreground">
+      <div className="flex min-w-0 items-start justify-between gap-3">
+        <span className="min-w-0 text-muted-foreground">
           {formatCurrency(breakdown.hourly_rate)} × {breakdown.duration_hours}h
         </span>
-        <span>{formatCurrency(breakdown.subtotal)}</span>
+        <span className="shrink-0 text-right tabular-nums">{formatCurrency(breakdown.subtotal)}</span>
       </div>
       {showPlatformFee && (
-        <div className="flex justify-between text-muted-foreground">
-          <span>Secure booking &amp; support fee ({breakdown.platform_fee_pct}%)</span>
-          <span>{formatCurrency(breakdown.platform_fee)}</span>
+        <div className="flex min-w-0 items-start justify-between gap-3 text-muted-foreground">
+          <span className="min-w-0">Secure booking &amp; support fee ({breakdown.platform_fee_pct}%)</span>
+          <span className="shrink-0 text-right tabular-nums">{formatCurrency(breakdown.platform_fee)}</span>
         </div>
       )}
       <Separator />
-      <div className="flex justify-between font-semibold text-base">
-        <span>Total</span>
-        <span>{formatCurrency(breakdown.total_amount)}</span>
+      <div className="flex min-w-0 items-start justify-between gap-3 text-base font-semibold">
+        <span className="min-w-0">Total</span>
+        <span className="shrink-0 text-right tabular-nums">{formatCurrency(breakdown.total_amount)}</span>
       </div>
     </div>
   )

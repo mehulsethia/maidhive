@@ -4,9 +4,9 @@ import type { BookingRead } from '@/types'
 
 function Row({ label, value }: { label: string; value: string }) {
   return (
-    <div className="flex items-center justify-between gap-3">
-      <span className="text-muted-foreground">{label}</span>
-      <span className="font-medium text-slate-900">{value}</span>
+    <div className="flex min-w-0 items-start justify-between gap-3">
+      <span className="min-w-0 text-muted-foreground">{label}</span>
+      <span className="shrink-0 text-right font-medium tabular-nums text-slate-900">{value}</span>
     </div>
   )
 }
@@ -25,14 +25,14 @@ export function CancellationPaymentBreakdown({
 
   if (compact) {
     return (
-      <p className="text-sm font-semibold text-rose-700">
+      <p className="min-w-0 text-sm font-semibold text-rose-700">
         Amount not refunded: {formatCurrency(outcome.cancellationFee)}
       </p>
     )
   }
 
   return (
-    <div className="space-y-2 rounded-2xl border border-rose-100 bg-rose-50/70 p-4 text-sm">
+    <div className="min-w-0 space-y-2 rounded-2xl border border-rose-100 bg-rose-50/70 p-4 text-sm">
       <h4 className="font-semibold tracking-tight text-rose-950">Cancellation payment outcome</h4>
       <Row label="Amount not refunded" value={formatCurrency(outcome.cancellationFee)} />
       <Row label="Original booking total" value={formatCurrency(outcome.originalAmount)} />

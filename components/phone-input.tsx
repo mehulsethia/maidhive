@@ -171,9 +171,9 @@ export function PhoneInput({ value, onChange, className, placeholder }: PhoneInp
   }
 
   return (
-    <div ref={ref} className={cn('relative flex', className)}>
+    <div ref={ref} className={cn('relative flex min-w-0', className)}>
       {/* Country code selector + manual code */}
-      <div className="flex h-10 items-center gap-1 rounded-l-xl border border-r-0 border-input bg-slate-50 px-2 text-sm shrink-0">
+      <div className="flex h-10 shrink-0 items-center gap-1 rounded-l-xl border border-r-0 border-input bg-slate-50 px-2 text-sm">
         <button
           type="button"
           onClick={() => setOpen(!open)}
@@ -187,7 +187,7 @@ export function PhoneInput({ value, onChange, className, placeholder }: PhoneInp
           type="text"
           value={dialCode}
           onChange={(e) => handleDialCodeInput(e.target.value)}
-          className="w-[64px] bg-transparent text-sm font-medium text-slate-700 outline-none"
+          className="w-14 bg-transparent text-sm font-medium text-slate-700 outline-none sm:w-[64px]"
           aria-label="Dial code"
           placeholder="+357"
         />
@@ -199,12 +199,12 @@ export function PhoneInput({ value, onChange, className, placeholder }: PhoneInp
         value={number}
         onChange={e => handleNumberChange(e.target.value)}
         placeholder={placeholder ?? 'Phone number'}
-        className="flex h-10 w-full rounded-r-xl border border-input bg-white px-3 py-2 text-sm ring-offset-background placeholder:text-slate-400 transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/60 focus-visible:border-primary/40 disabled:cursor-not-allowed disabled:opacity-50"
+        className="min-w-0 flex h-10 w-full rounded-r-xl border border-input bg-white px-3 py-2 text-sm ring-offset-background placeholder:text-slate-400 transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/60 focus-visible:border-primary/40 disabled:cursor-not-allowed disabled:opacity-50"
       />
 
       {/* Dropdown */}
       {open && (
-        <div className="absolute left-0 top-full z-50 mt-1 w-64 rounded-xl border border-slate-200 bg-white shadow-lg">
+        <div className="absolute left-0 top-full z-50 mt-1 w-[min(16rem,calc(100vw-2rem))] rounded-xl border border-slate-200 bg-white shadow-lg">
           <div className="p-2">
             <input
               type="text"

@@ -5,7 +5,7 @@ import { cva, type VariantProps } from 'class-variance-authority'
 import { cn } from '@/lib/utils'
 
 const buttonVariants = cva(
-  'inline-flex items-center justify-center gap-2 rounded-xl text-sm font-semibold tracking-tight transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50',
+  'inline-flex max-w-full min-w-0 items-center justify-center gap-2 rounded-xl text-center text-sm font-semibold leading-snug tracking-tight transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50',
   {
     variants: {
       variant: {
@@ -17,9 +17,9 @@ const buttonVariants = cva(
         link: 'text-primary underline-offset-4 hover:underline',
       },
       size: {
-        default: 'h-10 px-4 py-2',
-        sm: 'h-8 rounded-lg px-3 text-xs',
-        lg: 'h-11 rounded-xl px-8 text-base',
+        default: 'min-h-10 px-4 py-2',
+        sm: 'min-h-8 rounded-lg px-3 py-1.5 text-xs',
+        lg: 'min-h-11 rounded-xl px-6 py-2.5 text-base sm:px-8',
         icon: 'h-10 w-10',
       },
     },
@@ -47,7 +47,7 @@ const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
           <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
         </svg>
       )}
-      {children}
+      <span className="inline-flex min-w-0 items-center justify-center gap-2">{children}</span>
     </button>
   ),
 )

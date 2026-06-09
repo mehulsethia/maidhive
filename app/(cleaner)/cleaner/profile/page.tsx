@@ -566,12 +566,12 @@ function CleanerProfilePageContent() {
         </div>
       ) : lifecycleStatus === 'pending_approval' && completionPct === 100 && !profileComplete ? (
         <div className="rounded-2xl border border-blue-200 bg-gradient-to-r from-blue-50 to-indigo-50 px-4 py-3">
-          <div className="flex items-center justify-between gap-3">
-            <div>
+          <div className="flex min-w-0 flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div className="min-w-0">
               <p className="text-sm font-semibold text-blue-900">Your profile is complete.</p>
               <p className="text-xs text-blue-700">Submit your profile for admin review to start receiving bookings.</p>
             </div>
-            <Button size="sm" onClick={submitForApproval} loading={submitting} className="shrink-0">
+            <Button size="sm" onClick={submitForApproval} loading={submitting} className="w-full sm:w-auto sm:shrink-0">
               Submit for approval
             </Button>
           </div>
@@ -596,7 +596,7 @@ function CleanerProfilePageContent() {
       ) : null}
 
       <div className="grid gap-4 xl:grid-cols-[320px_1fr]">
-        <div className="space-y-4">
+        <div className="min-w-0 space-y-4">
           <Card className="border-slate-200">
             <CardContent className="p-5 !pt-6 text-center">
               <div className="mx-auto mb-3">
@@ -606,8 +606,8 @@ function CleanerProfilePageContent() {
                   onUploaded={(url) => setProfileImageUrl(url)}
                 />
               </div>
-              <p className="text-2xl font-bold text-slate-900">{fullName || 'Cleaner'}</p>
-              <p className="text-sm text-slate-500">{email || 'No email found'}</p>
+              <p className="min-w-0 text-2xl font-bold text-slate-900">{fullName || 'Cleaner'}</p>
+              <p className="min-w-0 text-sm text-slate-500">{email || 'No email found'}</p>
               <div className="mt-2 flex items-center justify-center gap-1 text-amber-500">
                 {Array.from({ length: 5 }).map((_, i) => (
                   <Star key={i} className={`h-4 w-4 ${i < Math.round(avgReview) ? 'fill-current' : ''}`} />
@@ -622,20 +622,20 @@ function CleanerProfilePageContent() {
           <Card className="border-slate-200">
             <CardContent className="space-y-2 p-5 !pt-6 text-sm">
               <p className="font-semibold text-slate-900">Performance Stats</p>
-              <div className="flex items-center justify-between text-slate-600"><span>Completed Jobs</span><strong>{completedJobsCount}</strong></div>
-              <div className="flex items-center justify-between text-slate-600"><span>Average Rating</span><strong>{displayAverageRating ? displayAverageRating.toFixed(1) : '0.0'}</strong></div>
-              <div className="flex items-center justify-between text-slate-600"><span>On-time Rate</span><strong>{onTimePercentage}%</strong></div>
-              <div className="flex items-center justify-between text-slate-600"><span>Average Response Time</span><strong>{avgResponseMinutes} min</strong></div>
+              <div className="flex min-w-0 items-start justify-between gap-3 text-slate-600"><span className="min-w-0">Completed Jobs</span><strong className="shrink-0">{completedJobsCount}</strong></div>
+              <div className="flex min-w-0 items-start justify-between gap-3 text-slate-600"><span className="min-w-0">Average Rating</span><strong className="shrink-0">{displayAverageRating ? displayAverageRating.toFixed(1) : '0.0'}</strong></div>
+              <div className="flex min-w-0 items-start justify-between gap-3 text-slate-600"><span className="min-w-0">On-time Rate</span><strong className="shrink-0">{onTimePercentage}%</strong></div>
+              <div className="flex min-w-0 items-start justify-between gap-3 text-slate-600"><span className="min-w-0">Average Response Time</span><strong className="shrink-0">{avgResponseMinutes} min</strong></div>
             </CardContent>
           </Card>
 
           <Card className="border-slate-200">
             <CardContent className="space-y-2 p-5 !pt-6">
               <p className="font-semibold text-slate-900">Quick Actions</p>
-              <button onClick={() => setTab('overview')} className="flex w-full items-center gap-2 rounded-xl border border-slate-200 px-3 py-2 text-sm font-semibold text-slate-700 transition-all duration-200 hover:-translate-y-0.5 hover:bg-slate-50"><ChartNoAxesCombined className="h-4 w-4 text-primary" />View Overview</button>
-              <button onClick={() => setTab('availability')} className="flex w-full items-center gap-2 rounded-xl border border-slate-200 px-3 py-2 text-sm font-semibold text-slate-700 transition-all duration-200 hover:-translate-y-0.5 hover:bg-slate-50"><CalendarDays className="h-4 w-4 text-primary" />Update Availability</button>
-              <button onClick={() => setTab('reviews')} className="flex w-full items-center gap-2 rounded-xl border border-slate-200 px-3 py-2 text-sm font-semibold text-slate-700 transition-all duration-200 hover:-translate-y-0.5 hover:bg-slate-50"><Star className="h-4 w-4 text-primary" />Manage Reviews</button>
-              <button onClick={() => setTab('payments')} className="flex w-full items-center gap-2 rounded-xl border border-slate-200 px-3 py-2 text-sm font-semibold text-slate-700 transition-all duration-200 hover:-translate-y-0.5 hover:bg-slate-50"><Wallet className="h-4 w-4 text-primary" />Payout Settings</button>
+              <button onClick={() => setTab('overview')} className="flex w-full min-w-0 items-center gap-2 rounded-xl border border-slate-200 px-3 py-2 text-left text-sm font-semibold text-slate-700 transition-all duration-200 hover:-translate-y-0.5 hover:bg-slate-50"><ChartNoAxesCombined className="h-4 w-4 shrink-0 text-primary" /><span className="min-w-0">View Overview</span></button>
+              <button onClick={() => setTab('availability')} className="flex w-full min-w-0 items-center gap-2 rounded-xl border border-slate-200 px-3 py-2 text-left text-sm font-semibold text-slate-700 transition-all duration-200 hover:-translate-y-0.5 hover:bg-slate-50"><CalendarDays className="h-4 w-4 shrink-0 text-primary" /><span className="min-w-0">Update Availability</span></button>
+              <button onClick={() => setTab('reviews')} className="flex w-full min-w-0 items-center gap-2 rounded-xl border border-slate-200 px-3 py-2 text-left text-sm font-semibold text-slate-700 transition-all duration-200 hover:-translate-y-0.5 hover:bg-slate-50"><Star className="h-4 w-4 shrink-0 text-primary" /><span className="min-w-0">Manage Reviews</span></button>
+              <button onClick={() => setTab('payments')} className="flex w-full min-w-0 items-center gap-2 rounded-xl border border-slate-200 px-3 py-2 text-left text-sm font-semibold text-slate-700 transition-all duration-200 hover:-translate-y-0.5 hover:bg-slate-50"><Wallet className="h-4 w-4 shrink-0 text-primary" /><span className="min-w-0">Payout Settings</span></button>
             </CardContent>
           </Card>
         </div>
@@ -858,10 +858,10 @@ function CleanerProfilePageContent() {
                     </div>
                   )}
                 </div>
-
-
-                <div className="flex justify-end">
-                  <Button onClick={saveOverview} loading={saving}>Save & Publish</Button>
+                <div className="flex justify-stretch sm:justify-end">
+                  <Button onClick={saveOverview} loading={saving} className="w-full sm:w-auto">
+                    Save & Publish
+                  </Button>
                 </div>
               </div>
             )}
@@ -887,13 +887,13 @@ function CleanerProfilePageContent() {
                       : new Date(r.created_at).toLocaleDateString('en-IE', { day: 'numeric', month: 'short', year: 'numeric', timeZone: 'Europe/Nicosia' })
                     return (
                     <div key={r.id} className="rounded-xl border border-slate-200 bg-white p-4">
-                      <div className="mb-1 flex items-center justify-between">
-                        <div>
+                      <div className="mb-1 flex min-w-0 flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+                        <div className="min-w-0">
                           <p className="font-semibold text-slate-900">Review from {clientFirstName}</p>
                           <p className="text-xs text-slate-500">Booking: {bookingDate}</p>
                           <p className="text-[11px] text-slate-400">Ref: {r.booking_id.slice(0, 8)}</p>
                         </div>
-                        <div className="flex items-center gap-1 text-amber-500">
+                        <div className="flex shrink-0 items-center gap-1 text-amber-500">
                           {Array.from({ length: 5 }).map((_, i) => (
                             <Star key={i} className={`h-4 w-4 ${i < r.rating ? 'fill-current' : ''}`} />
                           ))}
@@ -924,11 +924,12 @@ function CleanerProfilePageContent() {
                             rows={3}
                             placeholder="Thank the client and provide a short professional response."
                           />
-                          <div className="flex justify-end">
+                          <div className="flex justify-stretch sm:justify-end">
                             <Button
                               size="sm"
                               onClick={() => submitReviewReply(r.id)}
                               loading={replySubmittingId === r.id}
+                              className="w-full sm:w-auto"
                             >
                               Post Reply
                             </Button>
@@ -945,15 +946,15 @@ function CleanerProfilePageContent() {
             {tab === 'payments' && (
               <div className="space-y-4">
                 <div className="rounded-xl border border-slate-200 bg-white p-4">
-                  <div className="flex flex-wrap items-center justify-between gap-3">
-                    <div>
+                  <div className="flex min-w-0 flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                    <div className="min-w-0">
                       <p className="text-2xl font-semibold leading-none text-[#635BFF]">stripe</p>
                       <p className="mt-2 text-sm text-slate-500">Manage earnings and payouts securely with Stripe Connect.</p>
                       {!stripeFullyReady && (
                         <p className="mt-1 text-sm font-medium text-amber-700">You must connect Stripe to accept bookings and receive payouts. Go to: Profile → Payments to complete setup.</p>
                       )}
                     </div>
-                    <Button onClick={connectStripe} variant="outline">{stripe.connected ? 'Manage Stripe' : 'Connect Stripe'}</Button>
+                    <Button onClick={connectStripe} variant="outline" className="w-full sm:w-auto">{stripe.connected ? 'Manage Stripe' : 'Connect Stripe'}</Button>
                   </div>
                 </div>
 
