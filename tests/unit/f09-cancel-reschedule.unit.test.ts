@@ -1,5 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import { bookingActionSchema, cancelBookingSchema } from '@/server/schemas/booking.schema'
+import { computeConfirmedCancellationPolicy, moneyFromCents } from '@/lib/cancellation-policy'
+import { getCancellationPaymentOutcome } from '@/lib/booking-payment-outcome'
+import type { BookingRead } from '@/types'
 
 describe('F09 cancel/reschedule policy unit coverage', () => {
   it('UT-CANCEL-01 cancellation reason validator accepts optional reason and rejects >500 chars', () => {
@@ -45,5 +48,59 @@ describe('F09 cancel/reschedule policy unit coverage', () => {
 
     expect(valid.success).toBe(true)
     expect(invalid.success).toBe(false)
+  })
+
+  it('UT-CANCEL-05 under-12h client cancellation locks refund, cleaner compensation, and platform retention', () => {
+    const policy = computeConfirmedCancellationPolicy({
+      scheduledStart: '2026-06-15T10:00:00.000Z',
+      cancelledAt: '2026-06-15T02:30:00.000Z',
+      subtotal: 32,
+      platformFee: 3.2,
+      totalAmount: 35.2,
+    })
+
+    expect(policy?.window).toBe('under_12h')
+    expect(moneyFromCents(policy?.clientRefundCents ?? 0)).toBe(17.6)
+    expect(moneyFromCents(policy?.cleanerPayoutCents ?? 0)).toBe(16)
+    expect(moneyFromCents(policy?.platformRetainedCents ?? 0)).toBe(1.6)
+    expect(moneyFromCents(policy?.captureCents ?? 0)).toBe(17.6)
+  })
+
+  it('UT-CANCEL-06 cancellation payment outcome uses stored cleaner payout when refund metadata exists', () => {
+    const cancelledBooking: BookingRead = {
+      id: 'booking_cancelled_under_12',
+      client_id: 'client_1',
+      cleaner_id: 'cleaner_1',
+      status: 'cancelled',
+      service_type: 'standard',
+      address: 'Address',
+      city: 'Larnaca',
+      postcode: '6015',
+      scheduled_start: '2026-06-15T10:00:00.000Z',
+      scheduled_end: '2026-06-15T12:00:00.000Z',
+      duration_hours: 2,
+      hourly_rate: 16,
+      subtotal: 32,
+      platform_fee: 3.2,
+      total_amount: 35.2,
+      cleaner_payout: 32,
+      cancelled_at: '2026-06-15T02:30:00.000Z',
+      created_at: '2026-06-14T10:00:00.000Z',
+      payment: {
+        id: 'payment_1',
+        status: 'captured',
+        amount: 35.2,
+        refund_amount: 17.6,
+        cleaner_payout: 16,
+        platform_fee: 1.6,
+      },
+    }
+
+    const outcome = getCancellationPaymentOutcome(cancelledBooking)
+
+    expect(outcome?.releasedAmount).toBe(17.6)
+    expect(outcome?.capturedAmount).toBe(17.6)
+    expect(outcome?.cleanerPayoutDue).toBe(16)
+    expect(outcome?.platformRetainedAmount).toBe(1.6)
   })
 })

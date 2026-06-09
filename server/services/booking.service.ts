@@ -11,6 +11,7 @@ import { googleCalendarService } from './google-calendar.service'
 import { stripe } from '../stripe'
 import { config } from '../config'
 import { calculatePriceSnapshot } from '../lib/pricing'
+import { computeConfirmedCancellationPolicy, moneyFromCents } from '@/lib/cancellation-policy'
 import type { User } from '@prisma/client'
 
 const PLATFORM_FEE_PCT = 10
@@ -1778,45 +1779,37 @@ async function applyCancellationPaymentPolicy(
     return
   }
 
-  const hoursUntilStart = (booking.scheduledStart.getTime() - Date.now()) / (60 * 60 * 1000)
-  const totalAmountCents = Math.round(Number(booking.totalAmount) * 100)
-  const subtotalCents = Math.round(Number(booking.subtotal) * 100)
-  const platformFeeCents = Math.round(Number(booking.platformFee) * 100)
+  const policy = computeConfirmedCancellationPolicy({
+    scheduledStart: booking.scheduledStart,
+    totalAmount: booking.totalAmount,
+    subtotal: booking.subtotal,
+    platformFee: booking.platformFee,
+  })
+  if (!policy) return
 
-  if (hoursUntilStart > 24) {
+  if (policy.window === 'more_than_24h') {
     await stripe.paymentIntents.cancel(payment.stripePaymentIntentId)
     await paymentRepo.update(payment.id, { status: 'failed', failedAt: new Date() })
     return
   }
 
-  let captureCents: number
-  let applicationFeeCents: number
-
-  if (hoursUntilStart > 12) {
-    captureCents = Math.min(totalAmountCents, 500)
-    applicationFeeCents = captureCents
-  } else {
-    const cleanerShareCents = Math.round(subtotalCents * 0.5)
-    captureCents = Math.min(totalAmountCents, cleanerShareCents + platformFeeCents)
-    applicationFeeCents = Math.min(captureCents, platformFeeCents)
-  }
+  const captureCents = policy.captureCents
+  const applicationFeeCents = policy.platformRetainedCents
 
   const captured = await stripe.paymentIntents.capture(payment.stripePaymentIntentId, {
     amount_to_capture: Math.max(1, captureCents),
     application_fee_amount: Math.max(0, applicationFeeCents),
   })
 
-  const cleanerPayoutCents = Math.max(0, captureCents - applicationFeeCents)
-
   await paymentRepo.update(payment.id, {
     status: 'captured',
     stripeChargeId: typeof captured.latest_charge === 'string' ? captured.latest_charge : undefined,
     capturedAt: new Date(),
-    refundAmount: Number(((totalAmountCents - captureCents) / 100).toFixed(2)),
+    refundAmount: moneyFromCents(policy.clientRefundCents),
     refundReason: 'client_cancellation_policy',
-    platformFee: Number((applicationFeeCents / 100).toFixed(2)),
-    cleanerPayout: Number((cleanerPayoutCents / 100).toFixed(2)),
-    payoutScheduledAt: cleanerPayoutCents > 0 ? new Date() : null,
+    platformFee: moneyFromCents(applicationFeeCents),
+    cleanerPayout: moneyFromCents(policy.cleanerPayoutCents),
+    payoutScheduledAt: policy.cleanerPayoutCents > 0 ? new Date() : null,
   })
 }
 

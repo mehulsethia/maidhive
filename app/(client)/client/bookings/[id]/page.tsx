@@ -31,10 +31,11 @@ import {
 import { subscribeBookingsRefresh } from '@/lib/booking-sync'
 import { reportLoadError, resetLoadError } from '@/lib/load-error-policy'
 import { createClient } from '@/lib/supabase'
-import { formatDate } from '@/lib/utils'
+import { formatCurrency, formatDate } from '@/lib/utils'
 import { canViewChatHistoryForBooking, getChatReadOnlyMessage, isChatReadOnly } from '@/lib/chat-window'
 import { isCompletedBookingReleased } from '@/lib/booking-release'
 import { getClientBookingRequestDeadlineCopy } from '@/lib/booking-expiry-copy'
+import { computeConfirmedCancellationPolicy, moneyFromCents } from '@/lib/cancellation-policy'
 import type { BookingRead } from '@/types'
 import { toast } from 'sonner'
 
@@ -370,32 +371,48 @@ export default function ClientBookingDetailPage() {
   const amendFinalised = (booking.client_proposals ?? 0) >= 1 && (booking.cleaner_proposals ?? 0) >= 1
   const canAmendStartTime = booking.status === 'confirmed' && within24HoursBeforeStart && !hasProposal && !clientAmendRequestUsed && !amendFinalised
   const canCancelConfirmedBooking = booking.status === 'confirmed' && !hasStarted
-  const estimatedCancellationOutcome = (() => {
+  const cancellationPolicySummary = (() => {
     if (canCancelDraft || canCancelBookingRequest) {
-      return 'Your card authorisation will be released. No cancellation fee applies.'
+      return {
+        title: 'No cancellation fee applies.',
+        lines: ['Your card authorisation will be released.'],
+      }
     }
     if (!canCancelConfirmedBooking) return null
 
-    const hoursUntilStart = Number.isFinite(scheduledStartMs)
-      ? (scheduledStartMs - Date.now()) / (60 * 60 * 1000)
-      : Number.NaN
-    if (!Number.isFinite(hoursUntilStart)) return null
+    const policy = computeConfirmedCancellationPolicy({
+      scheduledStart: booking.scheduled_start,
+      totalAmount: booking.total_amount,
+      subtotal: booking.subtotal ?? Math.max(Number(booking.total_amount ?? 0) - Number(booking.platform_fee ?? 0), 0),
+      platformFee: booking.platform_fee,
+    })
+    if (!policy) return null
 
-    if (hoursUntilStart > 24) {
-      return 'You will receive a full refund.'
+    if (policy.window === 'more_than_24h') {
+      return {
+        title: 'More than 24 hours remain before the booking starts.',
+        lines: [`You will receive a full refund (${formatCurrency(moneyFromCents(policy.clientRefundCents))}).`],
+      }
     }
 
-    const totalAmount = Number(booking.total_amount ?? 0)
-    const platformFee = Number(booking.platform_fee ?? 0)
-    const subtotal = Number(booking.subtotal ?? Math.max(totalAmount - platformFee, 0))
-
-    if (hoursUntilStart > 12) {
-      const fee = Math.min(totalAmount, 5)
-      return `A ${new Intl.NumberFormat('en-IE', { style: 'currency', currency: 'EUR' }).format(fee)} cancellation fee will apply.`
+    if (policy.window === 'between_12h_and_24h') {
+      return {
+        title: 'Less than 24 hours remain before the booking starts.',
+        lines: [
+          `You will receive ${formatCurrency(moneyFromCents(policy.clientRefundCents))} back.`,
+          `A ${formatCurrency(moneyFromCents(policy.platformRetainedCents))} cancellation fee applies.`,
+          'No cleaner compensation applies in this window.',
+        ],
+      }
     }
 
-    const chargeAmount = Math.min(totalAmount, (subtotal * 0.5) + platformFee)
-    return `${new Intl.NumberFormat('en-IE', { style: 'currency', currency: 'EUR' }).format(chargeAmount)} may be charged under the cancellation policy.`
+    return {
+      title: 'Less than 12 hours remain before the booking starts.',
+      lines: [
+        `You will receive a 50% refund (${formatCurrency(moneyFromCents(policy.clientRefundCents))}).`,
+        `The cleaner will receive ${formatCurrency(moneyFromCents(policy.cleanerPayoutCents))} compensation because the booking is being cancelled at short notice.`,
+      ],
+    }
   })()
   const proposalContext =
     booking.proposal_context ??
@@ -1036,10 +1053,17 @@ export default function ClientBookingDetailPage() {
                 ? 'Are you sure you want to cancel this booking request?'
                 : 'Are you sure you want to cancel this booking? Cancellation rules may apply depending on how close the booking is to the scheduled start time.'}
           </p>
-          {estimatedCancellationOutcome && (
-            <p className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-700">
-              Estimated policy outcome: {estimatedCancellationOutcome}
-            </p>
+          {cancellationPolicySummary && (
+            <div className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900">
+              <p className="font-semibold">{cancellationPolicySummary.title}</p>
+              <p className="mt-2">If you cancel now:</p>
+              <ul className="mt-1 list-disc space-y-1 pl-4">
+                {cancellationPolicySummary.lines.map((line) => (
+                  <li key={line}>{line}</li>
+                ))}
+              </ul>
+              <p className="mt-2 font-medium">Do you want to continue?</p>
+            </div>
           )}
           <div className="flex flex-col gap-2 sm:flex-row">
             <Button variant="outline" className="w-full" onClick={() => setCancelConfirmOpen(false)} disabled={Boolean(actionLoading)}>

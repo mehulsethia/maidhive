@@ -1,4 +1,5 @@
 import type { BookingRead } from '@/types'
+import { computeConfirmedCancellationPolicy, moneyFromCents } from '@/lib/cancellation-policy'
 
 export type CancellationPaymentOutcome = {
   originalAmount: number
@@ -51,24 +52,24 @@ export function getCancellationPaymentOutcome(booking: BookingRead): Cancellatio
   }
 
   let capturedAmount = 0
-  let cleanerPayoutDue = 0
+  let cleanerPayoutDue = money(booking.payment?.cleaner_payout)
   const explicitRefund = paymentRefundAmount == null ? null : money(paymentRefundAmount)
 
   if (paymentStatus === 'captured' || paymentStatus === 'transferred') {
     if (explicitRefund !== null) {
       capturedAmount = Math.max(0, originalAmount - explicitRefund)
     } else if (booking.cancelled_at) {
-      const cancelledAtMs = new Date(booking.cancelled_at).getTime()
-      const startsAtMs = new Date(booking.scheduled_start).getTime()
-      const hoursUntilStart = (startsAtMs - cancelledAtMs) / (60 * 60 * 1000)
-      const subtotal = money(booking.subtotal ?? Math.max(originalAmount - money(booking.platform_fee), 0))
-      const platformFee = money(booking.platform_fee)
+      const policy = computeConfirmedCancellationPolicy({
+        scheduledStart: booking.scheduled_start,
+        cancelledAt: booking.cancelled_at,
+        totalAmount: booking.total_amount,
+        subtotal: booking.subtotal ?? Math.max(originalAmount - money(booking.platform_fee), 0),
+        platformFee: booking.platform_fee,
+      })
 
-      if (Number.isFinite(hoursUntilStart) && hoursUntilStart > 12 && hoursUntilStart <= 24) {
-        capturedAmount = Math.min(originalAmount, 5)
-      } else if (Number.isFinite(hoursUntilStart) && hoursUntilStart <= 12) {
-        capturedAmount = Math.min(originalAmount, subtotal * 0.5 + platformFee)
-        cleanerPayoutDue = Math.max(0, capturedAmount - platformFee)
+      if (policy && policy.window !== 'more_than_24h') {
+        capturedAmount = moneyFromCents(policy.captureCents)
+        cleanerPayoutDue = moneyFromCents(policy.cleanerPayoutCents)
       } else {
         capturedAmount = money(booking.payment?.amount ?? originalAmount)
       }

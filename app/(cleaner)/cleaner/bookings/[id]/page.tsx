@@ -34,6 +34,7 @@ import { isBookingReportWindowActive } from '@/lib/booking-release'
 import { getCleanerEarningsLabel } from '@/lib/cleaner-earnings-label'
 import { getCleanerBookingRequestDeadlineCopy } from '@/lib/booking-expiry-copy'
 import { getCancellationPaymentOutcome } from '@/lib/booking-payment-outcome'
+import { computeConfirmedCancellationPolicy } from '@/lib/cancellation-policy'
 import { subscribeBookingsRefresh, triggerBookingsRefresh } from '@/lib/booking-sync'
 import { showJobStartedToast } from '@/lib/job-start-toast'
 import { reportLoadError, resetLoadError } from '@/lib/load-error-policy'
@@ -69,6 +70,75 @@ function disputeWindowLabel() {
   if (!Number.isFinite(DISPUTE_WINDOW_HOURS) || DISPUTE_WINDOW_HOURS <= 0) return '24 hours'
   if (DISPUTE_WINDOW_HOURS >= 1) return `${DISPUTE_WINDOW_HOURS} hours`
   return `${Math.round(DISPUTE_WINDOW_HOURS * 60)} minutes`
+}
+
+function getCleanerCancelledPayoutMessage(
+  booking: BookingRead,
+  outcome: ReturnType<typeof getCancellationPaymentOutcome>,
+  isCancelledPreConfirmation: boolean,
+) {
+  if (booking.status !== 'cancelled') return null
+
+  const cleanerPayoutDue = outcome?.cleanerPayoutDue ?? Number(booking.payment?.cleaner_payout ?? 0)
+  const normalizedReason = `${booking.cancellation_reason ?? ''} ${booking.payment?.refund_reason ?? ''}`
+    .toLowerCase()
+    .replace(/[_-]/g, ' ')
+  const cancelledByCleaner = Boolean(booking.cancelled_by && booking.cancelled_by === booking.cleaner?.user?.id)
+  const policy = booking.cancelled_at
+    ? computeConfirmedCancellationPolicy({
+        scheduledStart: booking.scheduled_start,
+        cancelledAt: booking.cancelled_at,
+        totalAmount: booking.total_amount,
+        subtotal: booking.subtotal ?? Math.max(Number(booking.total_amount ?? 0) - Number(booking.platform_fee ?? 0), 0),
+        platformFee: booking.platform_fee,
+      })
+    : null
+
+  if (normalizedReason.includes('client no show')) {
+    return {
+      label: 'Client no-show payout',
+      amount: cleanerPayoutDue,
+      description: cleanerPayoutDue > 0
+        ? `Cleaner payout: ${formatCurrency(cleanerPayoutDue)}`
+        : 'Cleaner payout is pending admin no-show review.',
+    }
+  }
+
+  if (normalizedReason.includes('cleaner no show') || cancelledByCleaner) {
+    return {
+      label: 'No payout applies',
+      amount: 0,
+      description: normalizedReason.includes('cleaner no show')
+        ? 'Cleaner no-show: no payout applies.'
+        : 'Cleaner cancellation: no payout applies.',
+    }
+  }
+
+  if (isCancelledPreConfirmation) {
+    return {
+      label: 'No cleaner compensation',
+      amount: 0,
+      description: 'No cleaner compensation applies because this request was cancelled before confirmation.',
+    }
+  }
+
+  if (cleanerPayoutDue > 0) {
+    return {
+      label: 'Cleaner compensation',
+      amount: cleanerPayoutDue,
+      description: policy?.window === 'under_12h'
+        ? `Cleaner compensation: ${formatCurrency(cleanerPayoutDue)} for a client cancellation less than 12 hours before start.`
+        : `Cleaner payout: ${formatCurrency(cleanerPayoutDue)}.`,
+    }
+  }
+
+  return {
+    label: 'No cleaner compensation',
+    amount: 0,
+    description: policy?.window === 'more_than_24h'
+      ? 'Client cancelled more than 24 hours before start. No cleaner compensation applies.'
+      : 'No cleaner compensation applies for this cancellation outcome.',
+  }
 }
 
 export default function CleanerBookingDetailPage() {
@@ -354,6 +424,7 @@ export default function CleanerBookingDetailPage() {
   const clientPhone = booking.client?.user?.phone ?? ''
   const canRevealPhone = canRevealPhoneWindow && Boolean(clientPhone)
   const isCancelledPreConfirmation = booking.status === 'cancelled' && !booking.accepted_at && !booking.confirmed_at
+  const cleanerCancelledPayoutMessage = getCleanerCancelledPayoutMessage(booking, cancellationOutcome, isCancelledPreConfirmation)
   const isConfirmed = booking.status === 'confirmed'
   const hasAlreadyRescheduled = (booking.post_cleaner_proposals ?? 0) >= 1 && (booking.post_client_proposals ?? 0) >= 1
   const proposalContext =
@@ -484,13 +555,21 @@ export default function CleanerBookingDetailPage() {
               <div className="space-y-2">
                 <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
                   <div>
-                    <p className="text-sm text-muted-foreground">{cancellationOutcome ? 'Cleaner payout due' : earningsLabel}</p>
+                    <p className="text-sm text-muted-foreground">
+                      {cleanerCancelledPayoutMessage?.label ?? (cancellationOutcome ? 'Cleaner payout due' : earningsLabel)}
+                    </p>
                     <p className="text-2xl font-bold text-green-700">
-                      {formatCurrency(cancellationOutcome ? cancellationOutcome.cleanerPayoutDue : booking.cleaner_payout)}
+                      {formatCurrency(
+                        cleanerCancelledPayoutMessage
+                          ? cleanerCancelledPayoutMessage.amount
+                          : cancellationOutcome
+                            ? cancellationOutcome.cleanerPayoutDue
+                            : booking.cleaner_payout,
+                      )}
                     </p>
                     <p className="text-xs text-muted-foreground mt-0.5">
-                      {isCancelledPreConfirmation
-                        ? 'Informational only — this request was cancelled before confirmation.'
+                      {cleanerCancelledPayoutMessage
+                        ? cleanerCancelledPayoutMessage.description
                         : isClosedNonPayableStatus
                           ? 'Payout is not applicable for this booking status.'
                           : `Released after the ${disputeWindowLabel()} report window from scheduled completion`}
