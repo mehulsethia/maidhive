@@ -26,7 +26,7 @@ export function CancellationPaymentBreakdown({
   if (compact) {
     return (
       <p className="min-w-0 text-sm font-semibold text-rose-700">
-        Amount not refunded: {formatCurrency(outcome.cancellationFee)}
+        Cancellation charge: {formatCurrency(outcome.cancellationFee)}
       </p>
     )
   }
@@ -34,9 +34,9 @@ export function CancellationPaymentBreakdown({
   return (
     <div className="min-w-0 space-y-2 rounded-2xl border border-rose-100 bg-rose-50/70 p-4 text-sm">
       <h4 className="font-semibold tracking-tight text-rose-950">Cancellation payment outcome</h4>
-      <Row label="Amount not refunded" value={formatCurrency(outcome.cancellationFee)} />
+      <Row label="Cancellation charge" value={formatCurrency(outcome.cancellationFee)} />
       <Row label="Original booking total" value={formatCurrency(outcome.originalAmount)} />
-      <Row label="Client refund/released amount" value={formatCurrency(outcome.releasedAmount)} />
+      <Row label="Refund/released amount" value={formatCurrency(outcome.releasedAmount)} />
       {showAdminRows && (
         <>
           <Row label="Amount captured" value={formatCurrency(outcome.capturedAmount)} />
