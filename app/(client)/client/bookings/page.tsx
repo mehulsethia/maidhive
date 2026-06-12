@@ -21,6 +21,7 @@ import { reportLoadError, resetLoadError } from '@/lib/load-error-policy'
 import { createClient } from '@/lib/supabase'
 import { setupVisiblePolling } from '@/lib/visible-polling'
 import { formatCurrency, formatDate } from '@/lib/utils'
+import { hasPendingAmendmentRequest } from '@/lib/booking-amendment'
 import type { BookingRead, BookingStatus } from '@/types'
 import { toast } from 'sonner'
 
@@ -363,6 +364,7 @@ export default function ClientBookingsPage() {
                   const isOverdueDraftState = isOverdueUnpaid(booking)
                   const canContinuePayment = !isOverdueDraftState && (booking.status === 'draft' || (booking.status === 'pending' && !isPaymentAuthorized(booking.payment?.status)))
                   const canCancelDraft = !isOverdueDraftState && (booking.status === 'draft' || (booking.status === 'pending' && !isPaymentAuthorized(booking.payment?.status)))
+                  const amendmentPending = hasPendingAmendmentRequest(booking)
 
                   return (
                     <article
@@ -396,6 +398,13 @@ export default function ClientBookingsPage() {
                             scheduledEnd={booking.scheduled_end}
                             proposalBy={booking.proposal_by}
                           />
+                          {amendmentPending && (
+                            <div className="mt-2">
+                              <span className="inline-flex max-w-full rounded-full border border-blue-200 bg-blue-50 px-2 py-0.5 text-left text-[11px] font-semibold leading-4 text-blue-700 whitespace-normal">
+                                Amendment request pending
+                              </span>
+                            </div>
+                          )}
                           <div className={`${displayFont.className} mt-2 text-base font-semibold text-slate-900`}>
                             {booking.status === 'cancelled' ? (
                               <CancellationPaymentBreakdown booking={booking} compact />

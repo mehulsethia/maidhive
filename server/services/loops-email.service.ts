@@ -37,6 +37,8 @@ const CLIENT_PROPOSAL_DECLINED_CLOSED_TRANSACTIONAL_ID =
   process.env.LOOPS_CLIENT_PROPOSAL_DECLINED_CLOSED_TRANSACTIONAL_ID ?? 'cmozyqayi0xof0iyuyxodgpci'
 const CLEANER_CLIENT_DECLINED_PROPOSAL_TRANSACTIONAL_ID =
   process.env.LOOPS_CLEANER_CLIENT_DECLINED_PROPOSAL_TRANSACTIONAL_ID ?? 'cmozyuhtd2ej10iyplagxg614'
+const AMENDMENT_REQUEST_EXPIRY_TRANSACTIONAL_ID = 'cmqb0lh2j0fmu0jxihl9pz3qa'
+const AMENDMENT_REQUEST_ACCEPTED_TRANSACTIONAL_ID = 'cmqb0soch2eyc0j0170n9yjfh'
 
 function appUrl() {
   return (process.env.NEXT_PUBLIC_APP_URL ?? 'http://localhost:3000').replace(/\/+$/, '')
@@ -509,6 +511,8 @@ export const loopsEmailService = {
     cleanerName: string
     originalStart: Date
     proposedStart: Date
+    requestType?: string
+    expiryOutcome?: string
   }) {
     return sendTransactionalEmail({
       transactionalId: CLIENT_ALT_TIME_PROPOSED_TRANSACTIONAL_ID,
@@ -516,10 +520,12 @@ export const loopsEmailService = {
       dataVariables: {
         clientName: args.clientName,
         cleanerName: args.cleanerName,
+        requestType: args.requestType ?? 'Alternative time proposal',
         originalDate: formatBookingDate(args.originalStart),
         originalTime: formatBookingTime(args.originalStart),
         proposedDate: formatBookingDate(args.proposedStart),
         proposedTime: formatBookingTime(args.proposedStart),
+        expiryOutcome: args.expiryOutcome ?? 'If this request is declined or expires, the original booking time will remain unchanged.',
       },
     })
   },
@@ -530,6 +536,8 @@ export const loopsEmailService = {
     clientName: string
     originalStart: Date
     proposedStart: Date
+    requestType?: string
+    expiryOutcome?: string
   }) {
     return sendTransactionalEmail({
       transactionalId: CLEANER_CLIENT_ALT_TIME_PROPOSED_TRANSACTIONAL_ID,
@@ -537,10 +545,12 @@ export const loopsEmailService = {
       dataVariables: {
         cleanerName: args.cleanerName,
         clientName: args.clientName,
+        requestType: args.requestType ?? 'Alternative time proposal',
         originalDate: formatBookingDate(args.originalStart),
         originalTime: formatBookingTime(args.originalStart),
         proposedDate: formatBookingDate(args.proposedStart),
         proposedTime: formatBookingTime(args.proposedStart),
+        expiryOutcome: args.expiryOutcome ?? 'If this request is declined or expires, the original booking time will remain unchanged.',
       },
     })
   },
@@ -574,6 +584,41 @@ export const loopsEmailService = {
         clientName: args.clientName,
         proposedDate: formatBookingDate(args.proposedStart),
         proposedTime: formatBookingTime(args.proposedStart),
+      },
+    })
+  },
+
+  async sendAmendmentRequestExpired(args: {
+    email: string
+    fullName: string
+    scheduledStart: Date
+  }) {
+    return sendTransactionalEmail({
+      transactionalId: AMENDMENT_REQUEST_EXPIRY_TRANSACTIONAL_ID,
+      email: args.email,
+      dataVariables: {
+        FirstName: firstName(args.fullName),
+        Date: formatBookingDate(args.scheduledStart),
+        Time: formatBookingTime(args.scheduledStart),
+      },
+    })
+  },
+
+  async sendAmendmentRequestAccepted(args: {
+    email: string
+    fullName: string
+    originalStart: Date
+    newStart: Date
+  }) {
+    return sendTransactionalEmail({
+      transactionalId: AMENDMENT_REQUEST_ACCEPTED_TRANSACTIONAL_ID,
+      email: args.email,
+      dataVariables: {
+        FirstName: firstName(args.fullName),
+        OriginalDate: formatBookingDate(args.originalStart),
+        OriginalTime: formatBookingTime(args.originalStart),
+        NewDate: formatBookingDate(args.newStart),
+        NewTime: formatBookingTime(args.newStart),
       },
     })
   },

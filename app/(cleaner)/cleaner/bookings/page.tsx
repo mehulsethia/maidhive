@@ -37,6 +37,7 @@ import { subscribeBookingsRefresh, triggerBookingsRefresh } from '@/lib/booking-
 import { showJobStartedToast } from '@/lib/job-start-toast'
 import { setupVisiblePolling } from '@/lib/visible-polling'
 import { formatCurrency, formatDate } from '@/lib/utils'
+import { hasPendingAmendmentRequest } from '@/lib/booking-amendment'
 import type { BookingRead, BookingStatus } from '@/types'
 import { toast } from 'sonner'
 
@@ -392,6 +393,7 @@ export default function CleanerBookingsPage() {
                 const phoneRevealed = Boolean(revealedPhoneByBookingId[b.id])
                 const clientName = b.client?.user?.name?.trim() || 'Client'
                 const clientAvatarUrl = b.client?.user?.avatar_url ?? null
+                const amendmentPending = hasPendingAmendmentRequest(b)
                 return (
                   <div key={b.id} className="rounded-2xl border border-slate-200 bg-white p-4 transition-all duration-200 hover:-translate-y-0.5 hover:shadow-[0_10px_26px_rgba(15,23,42,0.08)] sm:p-5">
                   <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
@@ -441,6 +443,13 @@ export default function CleanerBookingsPage() {
                         proposalBy={b.proposal_by}
                         showPaymentRequiredForUnpaid={false}
                       />
+                      {amendmentPending && (
+                        <div className="mt-2">
+                          <span className="inline-flex max-w-full rounded-full border border-blue-200 bg-blue-50 px-2 py-0.5 text-left text-[11px] font-semibold leading-4 text-blue-700 whitespace-normal">
+                            Amendment request pending
+                          </span>
+                        </div>
+                      )}
                       {b.status === 'cancelled' ? (
                         <div className="mt-2">
                           <CancellationPaymentBreakdown booking={b} compact />

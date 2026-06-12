@@ -12,6 +12,7 @@ import { stripe } from '../stripe'
 import { config } from '../config'
 import { calculatePriceSnapshot } from '../lib/pricing'
 import { computeConfirmedCancellationPolicy, moneyFromCents } from '@/lib/cancellation-policy'
+import { AMENDMENT_EXPIRED_BODY, AMENDMENT_EXPIRED_TITLE, AMENDMENT_EXPIRY_OUTCOME_COPY } from '@/lib/booking-amendment'
 import type { User } from '@prisma/client'
 
 const PLATFORM_FEE_PCT = 10
@@ -751,27 +752,37 @@ export const bookingService = {
           cleanerProposals: 1,
           clientProposals: 1,
         })
+        const acceptanceBody = `The booking start time has been updated to ${formatBookingTimeForMessage(booking.proposedStart)}.`
         await pushInAppNotification({
-          userId: isClient ? booking.cleaner.userId : booking.client.userId,
+          userId: booking.client.userId,
           type: 'booking_time_agreed',
           title: 'Start time amended',
-          body: 'The amended start time was accepted.',
+          body: acceptanceBody,
+          data: { booking_id: bookingId },
+        })
+        await pushInAppNotification({
+          userId: booking.cleaner.userId,
+          type: 'booking_time_agreed',
+          title: 'Start time amended',
+          body: acceptanceBody,
           data: { booking_id: bookingId },
         })
         try {
-          await loopsEmailService.sendCleanerBookingAcceptedConfirmation({
+          await loopsEmailService.sendAmendmentRequestAccepted({
             email: booking.cleaner.user.email,
             fullName: booking.cleaner.user.name ?? 'Cleaner',
-            bookingId: booking.id,
+            originalStart: booking.scheduledStart,
+            newStart: booking.proposedStart,
           })
         } catch (emailError) {
           console.error('Failed to send cleaner amended-time acceptance email via Loops:', emailError)
         }
         try {
-          await loopsEmailService.sendClientBookingCreatedPending({
+          await loopsEmailService.sendAmendmentRequestAccepted({
             email: booking.client.user.email,
             fullName: booking.client.user.name ?? 'Client',
-            cleanerName: booking.cleaner.user.name ?? 'Cleaner',
+            originalStart: booking.scheduledStart,
+            newStart: booking.proposedStart,
           })
         } catch (emailError) {
           console.error('Failed to send client amended-time acceptance email via Loops:', emailError)
@@ -964,7 +975,7 @@ export const bookingService = {
         userId: actor === 'cleaner' ? booking.client.userId : booking.cleaner.userId,
         type: 'booking_proposed_new_time',
         title: 'Start time amendment requested',
-        body: `${actor === 'cleaner' ? 'Cleaner' : 'Client'} proposed ${formatBookingTimeForMessage(proposedStart)} (original ${formatBookingTimeForMessage(booking.scheduledStart)}). Respond within ${ttlMinutes} minutes.`,
+        body: `${actor === 'cleaner' ? 'Cleaner' : 'Client'} proposed ${formatBookingTimeForMessage(proposedStart)} (original ${formatBookingTimeForMessage(booking.scheduledStart)}). Respond within ${ttlMinutes} minutes. ${AMENDMENT_EXPIRY_OUTCOME_COPY}`,
         data: { booking_id: bookingId },
       })
       try {
@@ -975,6 +986,8 @@ export const bookingService = {
             cleanerName: booking.cleaner.user.name ?? 'Cleaner',
             originalStart: booking.scheduledStart,
             proposedStart,
+            requestType: 'Amend Start Time request',
+            expiryOutcome: AMENDMENT_EXPIRY_OUTCOME_COPY,
           })
         } else {
           await loopsEmailService.sendCleanerClientAlternateTimeProposed({
@@ -983,6 +996,8 @@ export const bookingService = {
             clientName: booking.client.user.name ?? 'Client',
             originalStart: booking.scheduledStart,
             proposedStart,
+            requestType: 'Amend Start Time request',
+            expiryOutcome: AMENDMENT_EXPIRY_OUTCOME_COPY,
           })
         }
       } catch (emailError) {
@@ -1329,7 +1344,7 @@ function assertAmendWindow(currentStart: Date, proposedStart: Date) {
 function assertAmendRequestStillValid(booking: Awaited<ReturnType<typeof bookingRepo.findById>>) {
   if (!booking?.proposalExpiresAt) return
   if (booking.proposalExpiresAt.getTime() < Date.now()) {
-    throw new ServiceError('Amend Start Time request expired. Original schedule remains active.', 400)
+    throw new ServiceError('Amend Start Time request expired. The original booking time remains in effect.', 400)
   }
 }
 
@@ -1498,9 +1513,11 @@ async function notifyPendingRequestExpired(booking: BookingWithRelations) {
 
 async function notifyPostConfirmationProposalExpired(booking: BookingWithRelations) {
   const title = booking.proposalContext === 'amend_start'
-    ? 'Amend Start Time expired'
+    ? AMENDMENT_EXPIRED_TITLE
     : 'Reschedule request expired'
-  const body = 'No agreement was reached before the cutoff. Original booking remains active.'
+  const body = booking.proposalContext === 'amend_start'
+    ? AMENDMENT_EXPIRED_BODY
+    : 'No agreement was reached before the cutoff. Original booking remains active.'
 
   await pushInAppNotification({
     userId: booking.client.userId,
@@ -1516,6 +1533,26 @@ async function notifyPostConfirmationProposalExpired(booking: BookingWithRelatio
     body,
     data: { booking_id: booking.id },
   })
+  if (booking.proposalContext !== 'amend_start') return
+
+  try {
+    await loopsEmailService.sendAmendmentRequestExpired({
+      email: booking.client.user.email,
+      fullName: booking.client.user.name ?? 'Client',
+      scheduledStart: booking.scheduledStart,
+    })
+  } catch (emailError) {
+    console.error('Failed to send client amendment expiry email via Loops:', emailError)
+  }
+  try {
+    await loopsEmailService.sendAmendmentRequestExpired({
+      email: booking.cleaner.user.email,
+      fullName: booking.cleaner.user.name ?? 'Cleaner',
+      scheduledStart: booking.scheduledStart,
+    })
+  } catch (emailError) {
+    console.error('Failed to send cleaner amendment expiry email via Loops:', emailError)
+  }
 }
 
 function assertCompletionWindow(scheduledEnd: Date) {

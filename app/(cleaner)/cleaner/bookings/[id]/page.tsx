@@ -39,6 +39,7 @@ import { subscribeBookingsRefresh, triggerBookingsRefresh } from '@/lib/booking-
 import { showJobStartedToast } from '@/lib/job-start-toast'
 import { reportLoadError, resetLoadError } from '@/lib/load-error-policy'
 import { formatCurrency, formatDate } from '@/lib/utils'
+import { AMENDMENT_EXPIRY_OUTCOME_COPY, isWithinAmendStartWindow } from '@/lib/booking-amendment'
 import type { BookingRead } from '@/types'
 import { toast } from 'sonner'
 
@@ -215,6 +216,7 @@ export default function CleanerBookingDetailPage() {
       .then((res) => {
         const options = (res.data ?? [])
           .filter((slot) => !slot.disabled)
+          .filter((slot) => !isAmendContext || isWithinAmendStartWindow(slot.start, booking.scheduled_start))
           .map((slot) => {
             const start = new Date(slot.start)
             const value = toTimeValueInCyprus(start)
@@ -659,12 +661,12 @@ export default function CleanerBookingDetailPage() {
         )}
         {!isCancelledPreConfirmation && isAmendProposal && booking.proposal_by === 'cleaner' && (
           <p className="rounded-xl border border-blue-200 bg-blue-50 px-3 py-2 text-sm text-blue-700">
-            You requested Amend Start Time: {formatDate(booking.scheduled_start)} → {formatDate(booking.proposed_start!)}. Waiting for client response.
+            You requested Amend Start Time: {formatDate(booking.scheduled_start)} → {formatDate(booking.proposed_start!)}. Waiting for client response. {AMENDMENT_EXPIRY_OUTCOME_COPY}
           </p>
         )}
         {!isCancelledPreConfirmation && canRespondToClientAmendProposal && (
           <p className="rounded-xl border border-blue-200 bg-blue-50 px-3 py-2 text-sm text-blue-700">
-            Client requested Amend Start Time: {formatDate(booking.scheduled_start)} → {formatDate(booking.proposed_start!)}. The other party can accept or decline this amendment request.
+            Client requested Amend Start Time: {formatDate(booking.scheduled_start)} → {formatDate(booking.proposed_start!)}. The other party can accept or decline this amendment request. {AMENDMENT_EXPIRY_OUTCOME_COPY}
           </p>
         )}
         {!isCancelledPreConfirmation && hasOpenProposalFlow && proposalCountdownLabel && (
@@ -913,7 +915,7 @@ export default function CleanerBookingDetailPage() {
             {proposalAction === 'propose_alternative'
               ? 'You can request a new date or time for this booking. The booking will only change once the other party accepts the proposal. If they decline or do not respond before the 24-hour cutoff, the original booking time will remain unchanged.'
               : proposalAction === 'amend_start_time'
-                ? 'Small same-day adjustment only (up to +/-3 hours). The other party can accept or decline this amendment request.'
+                ? `Small same-day adjustment only (up to +/-3 hours). The other party can accept or decline this amendment request. ${AMENDMENT_EXPIRY_OUTCOME_COPY}`
                 : 'You can counter once. After both sides use their counter, only accept or decline is allowed.'}
           </p>
           {proposalAction === 'propose_alternative' && (
@@ -929,7 +931,11 @@ export default function CleanerBookingDetailPage() {
           )}
           <div className="rounded-xl border border-slate-200 bg-slate-50/70 p-3">
             <Label className="text-sm font-semibold text-slate-700">
-              {proposalAction === 'propose_alternative' ? 'Proposed start time' : 'Counter start time'}
+              {proposalAction === 'propose_alternative'
+                ? 'Proposed start time'
+                : proposalAction === 'amend_start_time'
+                  ? 'Amended start time'
+                  : 'Counter start time'}
             </Label>
             <div className="mt-2 grid gap-2 sm:grid-cols-2">
               <Input
@@ -953,7 +959,9 @@ export default function CleanerBookingDetailPage() {
               </select>
             </div>
             <p className="mt-2 text-xs text-slate-500">
-              Only valid availability slots are shown for the selected date and duration.
+              {proposalAction === 'amend_start_time'
+                ? 'Only same-day availability slots within +/-3 hours are shown for this booking duration.'
+                : 'Only valid availability slots are shown for the selected date and duration.'}
             </p>
             {proposalAction === 'propose_alternative' && (
               <p className="mt-2 text-xs text-slate-600">
@@ -962,7 +970,7 @@ export default function CleanerBookingDetailPage() {
             )}
             {proposalAction === 'amend_start_time' && (
               <p className="mt-2 text-xs text-slate-600">
-                Small same-day adjustment only (up to +/-3 hours).
+                Small same-day adjustment only (up to +/-3 hours). {AMENDMENT_EXPIRY_OUTCOME_COPY}
               </p>
             )}
           </div>

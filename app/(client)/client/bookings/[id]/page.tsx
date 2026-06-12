@@ -36,6 +36,7 @@ import { canViewChatHistoryForBooking, getChatReadOnlyMessage, isChatReadOnly } 
 import { isCompletedBookingReleased } from '@/lib/booking-release'
 import { getClientBookingRequestDeadlineCopy } from '@/lib/booking-expiry-copy'
 import { computeConfirmedCancellationPolicy, moneyFromCents } from '@/lib/cancellation-policy'
+import { AMENDMENT_EXPIRY_OUTCOME_COPY, isWithinAmendStartWindow } from '@/lib/booking-amendment'
 import type { BookingRead } from '@/types'
 import { toast } from 'sonner'
 
@@ -162,6 +163,7 @@ export default function ClientBookingDetailPage() {
       .then((res) => {
         const options = (res.data ?? [])
           .filter((slot) => !slot.disabled)
+          .filter((slot) => !isAmendContext || isWithinAmendStartWindow(slot.start, booking.scheduled_start))
           .map((slot) => {
             const start = new Date(slot.start)
             const value = toTimeValueInCyprus(start)
@@ -193,8 +195,10 @@ export default function ClientBookingDetailPage() {
         proposalAction === 'amend_start_time' ? { excludeBookingId: booking.id } : undefined,
       )
       .then((res) => {
+        const isAmendAction = proposalAction === 'amend_start_time'
         const options = (res.data ?? [])
           .filter((slot) => !slot.disabled)
+          .filter((slot) => !isAmendAction || isWithinAmendStartWindow(slot.start, booking.scheduled_start))
           .map((slot) => {
             const start = new Date(slot.start)
             const value = toTimeValueInCyprus(start)
@@ -210,7 +214,7 @@ export default function ClientBookingDetailPage() {
         setProposalTimeOptions([])
         setProposalTime('')
       })
-  }, [booking, proposalOpen, proposalDate, proposalTime])
+  }, [booking, proposalAction, proposalOpen, proposalDate, proposalTime])
 
   useEffect(() => {
     setPhoneRevealed(false)
@@ -611,10 +615,10 @@ export default function ClientBookingDetailPage() {
               <p className="rounded-xl border border-blue-200 bg-blue-50 px-3 py-2 text-sm text-blue-700">
                 {cleanerProposed
                   ? isAmendProposal
-                    ? `Cleaner requested Amend Start Time: ${formatDate(booking.scheduled_start)} → ${formatDate(booking.proposed_start!)}. The other party can accept or decline this amendment request.`
+                    ? `Cleaner requested Amend Start Time: ${formatDate(booking.scheduled_start)} → ${formatDate(booking.proposed_start!)}. The other party can accept or decline this amendment request. ${AMENDMENT_EXPIRY_OUTCOME_COPY}`
                     : `Cleaner proposed ${formatDate(booking.scheduled_start)} → ${formatDate(booking.proposed_start!)}. Accept, decline, or counter once before expiry.`
                   : clientProposed && isAmendProposal
-                    ? `You requested Amend Start Time: ${formatDate(booking.scheduled_start)} → ${formatDate(booking.proposed_start!)}. Waiting for cleaner response.`
+                    ? `You requested Amend Start Time: ${formatDate(booking.scheduled_start)} → ${formatDate(booking.proposed_start!)}. Waiting for cleaner response. ${AMENDMENT_EXPIRY_OUTCOME_COPY}`
                     : `You proposed a reschedule: ${formatDate(booking.scheduled_start)} → ${formatDate(booking.proposed_start!)}. Waiting for cleaner response before the 24-hour cutoff.`}
               </p>
             )}
@@ -887,7 +891,11 @@ export default function ClientBookingDetailPage() {
                 ))}
               </select>
             </div>
-            <p className="mt-2 text-xs text-slate-500">Only valid availability slots are shown for the selected date and duration.</p>
+            <p className="mt-2 text-xs text-slate-500">
+              {isAmendProposal
+                ? 'Only same-day availability slots within +/-3 hours are shown for this booking duration.'
+                : 'Only valid availability slots are shown for the selected date and duration.'}
+            </p>
             {isAmendProposal && (
               <p className="mt-2 text-xs text-slate-600">Small same-day adjustment only (up to +/-3 hours).</p>
             )}
@@ -925,7 +933,7 @@ export default function ClientBookingDetailPage() {
           <p className="text-sm text-muted-foreground">
             {proposalAction === 'propose_alternative'
               ? 'You can request a new date or time for this booking. The booking will only change once the other party accepts the proposal. If they decline or do not respond before the 24-hour cutoff, the original booking time will remain unchanged.'
-              : 'Choose an available slot on the same day. Cleaner can only accept or decline this amendment request.'}
+              : `Choose an available slot on the same day. Cleaner can only accept or decline this amendment request. ${AMENDMENT_EXPIRY_OUTCOME_COPY}`}
           </p>
           {proposalAction === 'propose_alternative' && (
             <ul className="list-disc space-y-1 pl-5 text-xs text-slate-600">
@@ -960,14 +968,20 @@ export default function ClientBookingDetailPage() {
                 ))}
               </select>
             </div>
-            <p className="mt-2 text-xs text-slate-500">Only valid availability slots are shown for the selected date and duration.</p>
+            <p className="mt-2 text-xs text-slate-500">
+              {proposalAction === 'amend_start_time'
+                ? 'Only same-day availability slots within +/-3 hours are shown for this booking duration.'
+                : 'Only valid availability slots are shown for the selected date and duration.'}
+            </p>
             {proposalAction === 'propose_alternative' && (
               <p className="mt-2 text-xs text-slate-600">
                 If this request is declined or expires, the original booking time will remain unchanged.
               </p>
             )}
             {proposalAction === 'amend_start_time' && (
-              <p className="mt-2 text-xs text-slate-600">Small same-day adjustment only (up to +/-3 hours).</p>
+              <p className="mt-2 text-xs text-slate-600">
+                Small same-day adjustment only (up to +/-3 hours). {AMENDMENT_EXPIRY_OUTCOME_COPY}
+              </p>
             )}
           </div>
           <Button

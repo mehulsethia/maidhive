@@ -4,6 +4,7 @@ import { config } from '../config'
 import { loopsEmailService } from './loops-email.service'
 import { bookingService } from './booking.service'
 import { pushInAppNotification } from './in-app-notification.service'
+import { AMENDMENT_EXPIRED_BODY, AMENDMENT_EXPIRED_TITLE } from '@/lib/booking-amendment'
 
 const AUTO_COMPLETION_GRACE_MINUTES = 5
 
@@ -486,17 +487,41 @@ export const paymentLifecycleService = {
       await pushInAppNotification({
         userId: booking.client.userId,
         type: 'booking_request_expired',
-        title: booking.proposalContext === 'amend_start' ? 'Amend Start Time expired' : 'Reschedule request expired',
-        body: 'No agreement was reached before the cutoff. Original booking remains active.',
+        title: booking.proposalContext === 'amend_start' ? AMENDMENT_EXPIRED_TITLE : 'Reschedule request expired',
+        body: booking.proposalContext === 'amend_start'
+          ? AMENDMENT_EXPIRED_BODY
+          : 'No agreement was reached before the cutoff. Original booking remains active.',
         data: { booking_id: booking.id },
       })
       await pushInAppNotification({
         userId: booking.cleaner.userId,
         type: 'booking_request_expired',
-        title: booking.proposalContext === 'amend_start' ? 'Amend Start Time expired' : 'Reschedule request expired',
-        body: 'No agreement was reached before the cutoff. Original booking remains active.',
+        title: booking.proposalContext === 'amend_start' ? AMENDMENT_EXPIRED_TITLE : 'Reschedule request expired',
+        body: booking.proposalContext === 'amend_start'
+          ? AMENDMENT_EXPIRED_BODY
+          : 'No agreement was reached before the cutoff. Original booking remains active.',
         data: { booking_id: booking.id },
       })
+      if (booking.proposalContext === 'amend_start') {
+        try {
+          await loopsEmailService.sendAmendmentRequestExpired({
+            email: booking.client.user.email,
+            fullName: booking.client.user.name ?? 'Client',
+            scheduledStart: booking.scheduledStart,
+          })
+        } catch (emailError) {
+          console.error('Failed to send client amendment expiry email via Loops:', emailError)
+        }
+        try {
+          await loopsEmailService.sendAmendmentRequestExpired({
+            email: booking.cleaner.user.email,
+            fullName: booking.cleaner.user.name ?? 'Cleaner',
+            scheduledStart: booking.scheduledStart,
+          })
+        } catch (emailError) {
+          console.error('Failed to send cleaner amendment expiry email via Loops:', emailError)
+        }
+      }
     }
 
     return {
