@@ -915,13 +915,22 @@ export const bookingService = {
         data: { booking_id: bookingId },
       })
       try {
-        await loopsEmailService.sendClientBookingRejectedOrExpired({
-          email: booking.client.user.email,
-          fullName: booking.client.user.name ?? 'Client',
-          cleanerName: booking.cleaner.user.name ?? 'Cleaner',
-        })
+        if (proposalContext === 'amend_start') {
+          const amendmentRequester = booking.proposalBy === 'cleaner' ? booking.cleaner.user : booking.client.user
+          await loopsEmailService.sendAmendmentRequestDeclined({
+            email: amendmentRequester.email,
+            fullName: amendmentRequester.name ?? (booking.proposalBy === 'cleaner' ? 'Cleaner' : 'Client'),
+            originalStart: booking.scheduledStart,
+          })
+        } else {
+          await loopsEmailService.sendClientBookingRejectedOrExpired({
+            email: booking.client.user.email,
+            fullName: booking.client.user.name ?? 'Client',
+            cleanerName: booking.cleaner.user.name ?? 'Cleaner',
+          })
+        }
       } catch (emailError) {
-        console.error('Failed to send client reschedule-declined email via Loops:', emailError)
+        console.error('Failed to send schedule request declined email via Loops:', emailError)
       }
       return updated
     }

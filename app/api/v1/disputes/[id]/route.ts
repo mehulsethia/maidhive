@@ -24,6 +24,11 @@ function disputeWindowLabel() {
   return `${minutes} minutes`
 }
 
+function bookingReference(bookingId: string) {
+  const raw = bookingId.replace(/[^a-z0-9]/gi, '')
+  return `MH-${raw.slice(-6).toUpperCase()}`
+}
+
 export const POST = requireAuth(async (req: NextRequest, ctx, user) => {
   const { id } = await ctx.params
   const booking = await bookingRepo.findById(id)
@@ -144,15 +149,34 @@ export const POST = requireAuth(async (req: NextRequest, ctx, user) => {
     console.error('Failed to send admin dispute raised email via Loops:', emailError)
   }
 
-  const recipient = issueType === 'client_no_show' ? booking.cleaner.user : booking.client.user
+  const issueLabel = DISPUTE_REASON_LABELS[issueType] ?? 'Service issue'
+  const reference = bookingReference(booking.id)
+  const reporter = isCleaner
+    ? { user: booking.cleaner.user, disputePath: `/cleaner/report?booking=${booking.id}` }
+    : { user: booking.client.user, disputePath: `/client/report?booking=${booking.id}` }
+  const counterparty = isCleaner
+    ? { user: booking.client.user, disputePath: `/client/report?booking=${booking.id}` }
+    : { user: booking.cleaner.user, disputePath: `/cleaner/report?booking=${booking.id}` }
+
   try {
-    await loopsEmailService.sendClientIssueOrNoShowNotification({
-      email: recipient.email,
-      fullName: recipient.name ?? 'User',
-      bookingId: booking.id,
-    })
+    await Promise.all([
+      loopsEmailService.sendDisputeSubmittedConfirmation({
+        email: reporter.user.email,
+        fullName: reporter.user.name ?? 'User',
+        bookingReference: reference,
+        issueType: issueLabel,
+        disputePath: reporter.disputePath,
+      }),
+      loopsEmailService.sendDisputeRaisedAgainstNotification({
+        email: counterparty.user.email,
+        fullName: counterparty.user.name ?? 'User',
+        bookingReference: reference,
+        issueType: issueLabel,
+        disputePath: counterparty.disputePath,
+      }),
+    ])
   } catch (emailError) {
-    console.error('Failed to send issue/no-show email via Loops:', emailError)
+    console.error('Failed to send dispute participant emails via Loops:', emailError)
   }
 
   return ok(dispute, 201)

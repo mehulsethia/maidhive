@@ -21,6 +21,8 @@ const state = vi.hoisted(() => ({
   cleanerCancelledByClientEmails: 0,
   cleanerCancelledByClientPayloads: [] as any[],
   clientCancellationEmails: 0,
+  clientRejectedEmails: 0,
+  amendmentDeclinedPayloads: [] as any[],
   removeCalendarCalls: 0,
 }))
 
@@ -87,6 +89,14 @@ vi.mock('@/server/services/loops-email.service', () => ({
       return true
     }),
     sendCleanerCancellationWarningOrStrike: vi.fn(async () => true),
+    sendClientBookingRejectedOrExpired: vi.fn(async () => {
+      state.clientRejectedEmails += 1
+      return true
+    }),
+    sendAmendmentRequestDeclined: vi.fn(async (payload: any) => {
+      state.amendmentDeclinedPayloads.push(payload)
+      return true
+    }),
   },
 }))
 
@@ -122,6 +132,8 @@ describe('Booking cancellation communications', () => {
     state.cleanerCancelledByClientEmails = 0
     state.cleanerCancelledByClientPayloads = []
     state.clientCancellationEmails = 0
+    state.clientRejectedEmails = 0
+    state.amendmentDeclinedPayloads = []
     state.removeCalendarCalls = 0
   })
 
@@ -261,5 +273,65 @@ describe('Booking cancellation communications', () => {
     expect(state.notifications[0].title).toBe('Booking cancelled')
     expect(state.cleanerCancelledByClientEmails).toBe(0)
     expect(state.clientCancellationEmails).toBe(1)
+  })
+
+  it('sends amendment declined email to client when cleaner declines client amendment request', async () => {
+    state.booking = {
+      id: 'booking_client_amend_1',
+      status: 'confirmed',
+      clientId: 'client_profile_1',
+      cleanerId: 'cleaner_profile_1',
+      scheduledStart: new Date('2026-06-20T10:00:00.000Z'),
+      scheduledEnd: new Date('2026-06-20T12:00:00.000Z'),
+      proposedStart: new Date('2026-06-20T11:00:00.000Z'),
+      proposedEnd: new Date('2026-06-20T13:00:00.000Z'),
+      proposalBy: 'client',
+      proposalContext: 'amend_start',
+      payment: null,
+      client: { userId: seeded.clientUser.id, user: { email: seeded.clientUser.email, name: seeded.clientUser.name } },
+      cleaner: { userId: seeded.cleanerUser.id, user: { email: seeded.cleanerUser.email, name: seeded.cleanerUser.name } },
+    }
+
+    const { bookingService } = await import('@/server/services/booking.service')
+    await bookingService.applyAction(state.booking.id, seeded.cleanerUser as any, { action: 'decline_proposal' })
+
+    expect(state.clientRejectedEmails).toBe(0)
+    expect(state.amendmentDeclinedPayloads).toEqual([
+      expect.objectContaining({
+        email: seeded.clientUser.email,
+        fullName: seeded.clientUser.name,
+        originalStart: state.booking.scheduledStart,
+      }),
+    ])
+  })
+
+  it('sends amendment declined email to cleaner when client declines cleaner amendment request', async () => {
+    state.booking = {
+      id: 'booking_cleaner_amend_1',
+      status: 'confirmed',
+      clientId: 'client_profile_1',
+      cleanerId: 'cleaner_profile_1',
+      scheduledStart: new Date('2026-06-20T10:00:00.000Z'),
+      scheduledEnd: new Date('2026-06-20T12:00:00.000Z'),
+      proposedStart: new Date('2026-06-20T11:00:00.000Z'),
+      proposedEnd: new Date('2026-06-20T13:00:00.000Z'),
+      proposalBy: 'cleaner',
+      proposalContext: 'amend_start',
+      payment: null,
+      client: { userId: seeded.clientUser.id, user: { email: seeded.clientUser.email, name: seeded.clientUser.name } },
+      cleaner: { userId: seeded.cleanerUser.id, user: { email: seeded.cleanerUser.email, name: seeded.cleanerUser.name } },
+    }
+
+    const { bookingService } = await import('@/server/services/booking.service')
+    await bookingService.applyAction(state.booking.id, seeded.clientUser as any, { action: 'decline_proposal' })
+
+    expect(state.clientRejectedEmails).toBe(0)
+    expect(state.amendmentDeclinedPayloads).toEqual([
+      expect.objectContaining({
+        email: seeded.cleanerUser.email,
+        fullName: seeded.cleanerUser.name,
+        originalStart: state.booking.scheduledStart,
+      }),
+    ])
   })
 })

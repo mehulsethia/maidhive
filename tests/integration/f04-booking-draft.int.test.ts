@@ -40,6 +40,7 @@ const state = vi.hoisted(() => ({
   cleaner: { id: 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa', userId: seededUsers.cleaner.id },
   draftStore: new Map<string, DraftRecord>(),
   bookingFindByClientCall: 0,
+  reconciledBookingIds: [] as string[][],
   bookingRows: [
     { id: 'b_pending', status: 'pending' },
     { id: 'b_expired', status: 'expired' },
@@ -133,7 +134,10 @@ vi.mock('@/server/services/booking.service', () => ({
     }
   },
   bookingService: {
-    reconcileDeadlinesForBookings: vi.fn(async () => true),
+    reconcileDeadlinesForBookings: vi.fn(async (ids: string[]) => {
+      state.reconciledBookingIds.push(ids)
+      return true
+    }),
   },
 }))
 
@@ -147,6 +151,7 @@ describe('F04 Booking draft lifecycle integration', () => {
     state.currentUser = seededUsers.client as any
     state.draftStore.clear()
     state.bookingFindByClientCall = 0
+    state.reconciledBookingIds = []
   })
 
   it('IT-DRAFT-01 save and retrieve step 1/2/3 draft payload', async () => {
@@ -218,7 +223,7 @@ describe('F04 Booking draft lifecycle integration', () => {
     expect(body.message).toBe('Forbidden')
   })
 
-  it('IT-DRAFT-04 expired draft transitions to expired on reconcile path', async () => {
+  it('IT-DRAFT-04 booking list schedules pending booking reconciliation without blocking the response', async () => {
     const bookingsRoute = await import('@/app/api/v1/bookings/route')
     const res = await bookingsRoute.GET(
       new NextRequest('http://localhost/api/v1/bookings?page=1&page_size=20&status=pending'),
@@ -228,7 +233,10 @@ describe('F04 Booking draft lifecycle integration', () => {
 
     expect(res.status).toBe(200)
     expect(body.success).toBe(true)
-    expect(body.data.bookings[0].status).toBe('expired')
-    expect(state.bookingFindByClientCall).toBe(2)
+    expect(body.data.bookings[0].status).toBe('pending')
+    expect(state.bookingFindByClientCall).toBe(1)
+    await vi.waitFor(() => {
+      expect(state.reconciledBookingIds).toEqual([['b_pending']])
+    })
   })
 })

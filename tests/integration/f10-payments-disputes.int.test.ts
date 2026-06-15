@@ -16,6 +16,8 @@ const state = vi.hoisted(() => ({
     status: 'completed',
     clientId: 'client_profile_1',
     cleanerId: 'cleaner_profile_1',
+    scheduledStart: new Date('2099-01-01T10:00:00.000Z'),
+    scheduledEnd: new Date('2099-01-01T12:00:00.000Z'),
     client: { userId: seededUsers.client.id, user: { email: 'client@test.local', name: 'Client' } },
     cleaner: { userId: seededUsers.cleaner.id, user: { email: 'cleaner@test.local', name: 'Cleaner' } },
   } as any,
@@ -34,8 +36,9 @@ const state = vi.hoisted(() => ({
     id: 'dispute_1',
     bookingId: 'booking_pay_1',
     status: 'open',
-  } as any,
+  } as any | null,
   notifications: [] as any[],
+  emails: [] as any[],
   webhookEventType: 'charge.captured',
   webhookEventId: 'evt_1',
   transfersSeen: new Set<string>(),
@@ -84,9 +87,20 @@ vi.mock('@/server/repositories/payment.repo', () => ({
 
 vi.mock('@/server/repositories/dispute.repo', () => ({
   disputeRepo: {
-    findById: vi.fn(async (id: string) => (id === state.dispute.id ? state.dispute : null)),
+    findById: vi.fn(async (id: string) => (id === state.dispute?.id ? state.dispute : null)),
+    findByBookingId: vi.fn(async (bookingId: string) => (state.dispute?.bookingId === bookingId ? state.dispute : null)),
+    create: vi.fn(async (payload: any) => {
+      state.dispute = { id: 'dispute_created_1', status: 'open', ...payload }
+      return state.dispute
+    }),
     update: vi.fn(async (_id: string, patch: any) => {
-      state.dispute = { ...state.dispute, ...patch }
+      state.dispute = {
+        id: _id,
+        bookingId: state.booking.id,
+        status: 'open',
+        ...(state.dispute ?? {}),
+        ...patch,
+      }
       return state.dispute
     }),
   },
@@ -105,6 +119,18 @@ vi.mock('@/server/services/loops-email.service', () => ({
   loopsEmailService: {
     sendClientPaymentReceipt: vi.fn(async () => true),
     sendCleanerPayoutNotification: vi.fn(async () => true),
+    sendAdminDisputeRaised: vi.fn(async (payload: any) => {
+      state.emails.push({ kind: 'admin_dispute_raised', ...payload })
+      return true
+    }),
+    sendDisputeSubmittedConfirmation: vi.fn(async (payload: any) => {
+      state.emails.push({ kind: 'dispute_submitted_confirmation', ...payload })
+      return true
+    }),
+    sendDisputeRaisedAgainstNotification: vi.fn(async (payload: any) => {
+      state.emails.push({ kind: 'dispute_raised_against_notification', ...payload })
+      return true
+    }),
   },
 }))
 
@@ -124,6 +150,10 @@ vi.mock('@/server/services/in-app-notification.service', () => ({
 vi.mock('@/server/repositories/cleaner.repo', () => ({
   cleanerRepo: {
     findById: vi.fn(async () => null),
+    findByUserId: vi.fn(async (userId: string) => {
+      if (userId === seededUsers.cleaner.id) return { id: 'cleaner_profile_1', userId }
+      return null
+    }),
     update: vi.fn(async () => true),
   },
 }))
@@ -188,6 +218,8 @@ describe('F10 Payments capture/refund/dispute integration', () => {
       status: 'completed',
       clientId: 'client_profile_1',
       cleanerId: 'cleaner_profile_1',
+      scheduledStart: new Date('2099-01-01T10:00:00.000Z'),
+      scheduledEnd: new Date('2099-01-01T12:00:00.000Z'),
       client: { userId: seededUsers.client.id, user: { email: 'client@test.local', name: 'Client' } },
       cleaner: { userId: seededUsers.cleaner.id, user: { email: 'cleaner@test.local', name: 'Cleaner' } },
     } as any
@@ -208,6 +240,7 @@ describe('F10 Payments capture/refund/dispute integration', () => {
       status: 'open',
     } as any
     state.notifications = []
+    state.emails = []
     state.webhookEventType = 'charge.captured'
     state.webhookEventId = 'evt_1'
     state.transfersSeen.clear()
@@ -281,6 +314,86 @@ describe('F10 Payments capture/refund/dispute integration', () => {
     expect(res.status).toBe(200)
     expect(body.success).toBe(true)
     expect(body.data.status).toBe('under_review')
+  })
+
+  it('IT-PAY-06 client report emails confirmation to client and against-notification to cleaner', async () => {
+    state.currentUser = seededUsers.client
+    state.dispute = null
+    const route = await import('@/app/api/v1/disputes/[id]/route')
+    const res = await route.POST(
+      new NextRequest('http://localhost/api/v1/disputes/booking_pay_1', {
+        method: 'POST',
+        body: JSON.stringify({
+          issue_type: 'service_issue',
+          explanation: 'Cleaner did not complete the agreed service scope.',
+        }),
+        headers: { 'content-type': 'application/json' },
+      }),
+      { params: Promise.resolve({ id: 'booking_pay_1' }) } as any,
+    )
+    const body = await res.json()
+
+    expect(res.status).toBe(201)
+    expect(body.success).toBe(true)
+    expect(state.booking.status).toBe('disputed')
+    expect(state.emails).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          kind: 'dispute_submitted_confirmation',
+          email: 'client@test.local',
+          bookingReference: 'MH-NGPAY1',
+          issueType: 'Service issue',
+          disputePath: '/client/report?booking=booking_pay_1',
+        }),
+        expect.objectContaining({
+          kind: 'dispute_raised_against_notification',
+          email: 'cleaner@test.local',
+          bookingReference: 'MH-NGPAY1',
+          issueType: 'Service issue',
+          disputePath: '/cleaner/report?booking=booking_pay_1',
+        }),
+      ]),
+    )
+  })
+
+  it('IT-PAY-07 cleaner report emails confirmation to cleaner and against-notification to client', async () => {
+    state.currentUser = seededUsers.cleaner
+    state.dispute = null
+    const route = await import('@/app/api/v1/disputes/[id]/route')
+    const res = await route.POST(
+      new NextRequest('http://localhost/api/v1/disputes/booking_pay_1', {
+        method: 'POST',
+        body: JSON.stringify({
+          issue_type: 'access_issue',
+          explanation: 'Client did not provide safe access to the property.',
+        }),
+        headers: { 'content-type': 'application/json' },
+      }),
+      { params: Promise.resolve({ id: 'booking_pay_1' }) } as any,
+    )
+    const body = await res.json()
+
+    expect(res.status).toBe(201)
+    expect(body.success).toBe(true)
+    expect(state.booking.status).toBe('disputed')
+    expect(state.emails).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          kind: 'dispute_submitted_confirmation',
+          email: 'cleaner@test.local',
+          bookingReference: 'MH-NGPAY1',
+          issueType: 'Access issue',
+          disputePath: '/cleaner/report?booking=booking_pay_1',
+        }),
+        expect.objectContaining({
+          kind: 'dispute_raised_against_notification',
+          email: 'client@test.local',
+          bookingReference: 'MH-NGPAY1',
+          issueType: 'Access issue',
+          disputePath: '/client/report?booking=booking_pay_1',
+        }),
+      ]),
+    )
   })
 
   it('IT-PAY-05 transfer webhook marks payment transferred and pushes payout notification once', async () => {

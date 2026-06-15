@@ -85,4 +85,25 @@ describe('Loops amendment emails', () => {
       },
     })
   })
+
+  it('sends amendment declined email with original booking time variables', async () => {
+    const { loopsEmailService, fetchMock } = await loadLoopsEmailService()
+    const originalStart = new Date('2026-06-12T10:30:00.000Z')
+
+    await loopsEmailService.sendAmendmentRequestDeclined({
+      email: 'client@example.test',
+      fullName: 'Client User',
+      originalStart,
+    })
+
+    expect(lastRequestBody(fetchMock)).toEqual({
+      transactionalId: 'cmqf2hr134x6k0jyq8c6kg4d7',
+      email: 'client@example.test',
+      dataVariables: {
+        FirstName: 'Client',
+        OriginalDate: '12 Jun 2026',
+        OriginalTime: '13:30',
+      },
+    })
+  })
 })

@@ -11,6 +11,13 @@ const seededUsers = vi.hoisted(() => ({
     role: 'client',
     phone: null,
   } as User,
+  cleaner: {
+    id: '22222222-2222-2222-2222-222222222222',
+    email: 'cleaner@test.local',
+    name: 'Cleaner User',
+    role: 'cleaner',
+    phone: null,
+  } as User,
   admin: {
     id: '33333333-3333-3333-3333-333333333333',
     email: 'admin@test.local',
@@ -24,6 +31,8 @@ const state = vi.hoisted(() => ({
   currentUser: seededUsers.client as User | null,
   clientExists: false,
   createdClients: 0,
+  cleanerExists: false,
+  createdCleaners: 0,
   notifications: [] as any[],
   readCalls: 0,
   readAllCalls: 0,
@@ -33,6 +42,8 @@ const state = vi.hoisted(() => ({
   markAllReadForUsersCalls: 0,
   setArchivedForUsersCalls: 0,
   emailShouldFail: false,
+  clientAccountEmails: [] as any[],
+  cleanerSignupEmails: [] as any[],
 }))
 
 vi.mock('@/server/auth', () => {
@@ -112,8 +123,12 @@ vi.mock('@/server/repositories/client.repo', () => ({
 
 vi.mock('@/server/repositories/cleaner.repo', () => ({
   cleanerRepo: {
-    findByUserId: vi.fn(async () => null),
-    create: vi.fn(async () => null),
+    findByUserId: vi.fn(async () => (state.cleanerExists ? { id: 'cleaner_profile_1' } : null)),
+    create: vi.fn(async () => {
+      state.cleanerExists = true
+      state.createdCleaners += 1
+      return { id: 'cleaner_profile_1', userId: state.currentUser?.id }
+    }),
     update: vi.fn(async () => null),
   },
 }))
@@ -134,11 +149,15 @@ vi.mock('@/server/services/in-app-notification.service', () => ({
 
 vi.mock('@/server/services/loops-email.service', () => ({
   loopsEmailService: {
-    sendClientAccountCreated: vi.fn(async () => {
+    sendClientAccountCreated: vi.fn(async (payload: any) => {
       if (state.emailShouldFail) throw new Error('loops down')
+      state.clientAccountEmails.push(payload)
       return true
     }),
-    sendCleanerSignup: vi.fn(async () => true),
+    sendCleanerSignup: vi.fn(async (payload: any) => {
+      state.cleanerSignupEmails.push(payload)
+      return true
+    }),
   },
 }))
 
@@ -148,6 +167,8 @@ describe('F13 notifications integration', () => {
     state.currentUser = seededUsers.client as User
     state.clientExists = false
     state.createdClients = 0
+    state.cleanerExists = false
+    state.createdCleaners = 0
     state.notifications = []
     state.readCalls = 0
     state.readAllCalls = 0
@@ -157,6 +178,8 @@ describe('F13 notifications integration', () => {
     state.markAllReadForUsersCalls = 0
     state.setArchivedForUsersCalls = 0
     state.emailShouldFail = false
+    state.clientAccountEmails = []
+    state.cleanerSignupEmails = []
   })
 
   it('IT-NOTIF-01 first client auth sync emits account_created notification and creates profile', async () => {
@@ -176,6 +199,39 @@ describe('F13 notifications integration', () => {
     expect(body.success).toBe(true)
     expect(state.createdClients).toBe(1)
     expect(state.notifications.some((item) => item.type === 'account_created')).toBe(true)
+    expect(state.clientAccountEmails).toEqual([
+      expect.objectContaining({
+        email: seededUsers.client.email,
+        fullName: seededUsers.client.name,
+      }),
+    ])
+    expect(state.cleanerSignupEmails).toHaveLength(0)
+  })
+
+  it('IT-NOTIF-01B first cleaner auth sync emits signup email and creates profile', async () => {
+    state.currentUser = seededUsers.cleaner
+    const route = await import('@/app/api/v1/auth/sync/route')
+
+    const res = await route.POST(
+      new NextRequest('http://localhost/api/v1/auth/sync', {
+        method: 'POST',
+        body: JSON.stringify({ name: 'Cleaner User' }),
+        headers: { 'content-type': 'application/json' },
+      }),
+      { params: Promise.resolve({}) } as any,
+    )
+    const body = await res.json()
+
+    expect(res.status).toBe(200)
+    expect(body.success).toBe(true)
+    expect(state.createdCleaners).toBe(1)
+    expect(state.cleanerSignupEmails).toEqual([
+      expect.objectContaining({
+        email: 'cleaner@test.local',
+        fullName: 'Cleaner User',
+      }),
+    ])
+    expect(state.clientAccountEmails).toHaveLength(0)
   })
 
   it('IT-NOTIF-02 read/read-all/archive routes update notification state for regular and admin users', async () => {

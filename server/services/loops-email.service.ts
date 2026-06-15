@@ -17,9 +17,10 @@ const CLIENT_BOOKING_REJECTED_OR_EXPIRED_TRANSACTIONAL_ID = 'cmo2rozk700gw0izg1w
 const CLIENT_PAYMENT_RECEIPT_TRANSACTIONAL_ID = 'cmo2rrvdv2ppa0izkfm5zk7ov'
 const CLIENT_REVIEW_REQUEST_TRANSACTIONAL_ID = 'cmo2rtf800f500iyxs4d16x8x'
 const CLIENT_BOOKING_COMPLETED_TRANSACTIONAL_ID =
-  process.env.LOOPS_CLIENT_BOOKING_COMPLETED_TRANSACTIONAL_ID ?? 'cmo2rtf800f500iyxs4d16x8x'
+  process.env.LOOPS_CLIENT_BOOKING_COMPLETED_TRANSACTIONAL_ID ?? ''
 const CLIENT_CANCELLATION_CONFIRMATION_TRANSACTIONAL_ID = 'cmo2ruvdu07yk0iw5gw79hvew'
-const CLIENT_ISSUE_OR_NOSHOW_NOTIFICATION_TRANSACTIONAL_ID = 'cmo2rwfnv2p3t0izcpaqf74tc'
+const DISPUTE_SUBMITTED_CONFIRMATION_TRANSACTIONAL_ID = 'cmqf1rb7r7z9q0jx99f8lq615'
+const DISPUTE_RAISED_AGAINST_NOTIFICATION_TRANSACTIONAL_ID = 'cmqf1u9ly4ujo0jyq9kfdcfbw'
 const CLEANER_SIGNUP_TRANSACTIONAL_ID = 'cmo5hbjfv0lbm0iya3k626pjl'
 const CLEANER_APPLICATION_APPROVED_TRANSACTIONAL_ID = 'cmo5hdvco009s0i06469pwe16'
 const CLEANER_NEW_BOOKING_REQUEST_TRANSACTIONAL_ID = 'cmo5hgm9p00hn0i0fzxhtjsv8'
@@ -27,8 +28,7 @@ const CLEANER_BOOKING_ACCEPTED_CONFIRMATION_TRANSACTIONAL_ID = 'cmo5hi2ru00fv0i1
 const CLEANER_APPLICATION_REJECTED_TRANSACTIONAL_ID = 'cmo5hfgqp00aa0i08rmzp2w8f'
 const CLEANER_PAYOUT_NOTIFICATION_TRANSACTIONAL_ID = 'cmo5hj1953kp50i0ewrbk3wd4'
 const CLEANER_CANCELLATION_WARNING_OR_STRIKE_TRANSACTIONAL_ID = 'cmo5hk2jk09ci0i0x0iala79a'
-const CLEANER_BOOKING_CANCELLED_BY_CLIENT_TRANSACTIONAL_ID =
-  process.env.LOOPS_CLEANER_BOOKING_CANCELLED_BY_CLIENT_TRANSACTIONAL_ID ?? ''
+const CLEANER_BOOKING_CANCELLED_BY_CLIENT_TRANSACTIONAL_ID = 'cmq4ueii70dzh0j2gq00j0bya'
 const CLIENT_ALT_TIME_PROPOSED_TRANSACTIONAL_ID =
   process.env.LOOPS_CLIENT_ALT_TIME_PROPOSED_TRANSACTIONAL_ID ?? 'cmoy0itw205fk0ix97hljg7jz'
 const CLEANER_CLIENT_ALT_TIME_PROPOSED_TRANSACTIONAL_ID =
@@ -39,6 +39,7 @@ const CLEANER_CLIENT_DECLINED_PROPOSAL_TRANSACTIONAL_ID =
   process.env.LOOPS_CLEANER_CLIENT_DECLINED_PROPOSAL_TRANSACTIONAL_ID ?? 'cmozyuhtd2ej10iyplagxg614'
 const AMENDMENT_REQUEST_EXPIRY_TRANSACTIONAL_ID = 'cmqb0lh2j0fmu0jxihl9pz3qa'
 const AMENDMENT_REQUEST_ACCEPTED_TRANSACTIONAL_ID = 'cmqb0soch2eyc0j0170n9yjfh'
+const AMENDMENT_REQUEST_DECLINED_TRANSACTIONAL_ID = 'cmqf2hr134x6k0jyq8c6kg4d7'
 
 function appUrl() {
   return (process.env.NEXT_PUBLIC_APP_URL ?? 'http://localhost:3000').replace(/\/+$/, '')
@@ -112,6 +113,11 @@ function firstName(fullName: string) {
   const trimmed = fullName.trim()
   if (!trimmed) return 'there'
   return trimmed.split(/\s+/)[0] ?? 'there'
+}
+
+function absoluteAppLink(path: string) {
+  const normalizedPath = path.startsWith('/') ? path : `/${path}`
+  return `${appUrl()}${normalizedPath}`
 }
 
 async function resolveBookingConfirmationNotes(args: {
@@ -333,6 +339,10 @@ export const loopsEmailService = {
         ? 'Your booking has been marked as completed. If there was an issue, please report it within 24 hours.'
         : 'Cleaner marked this booking as completed. If there was an issue, please report it within 24 hours.'
 
+    if (!CLIENT_BOOKING_COMPLETED_TRANSACTIONAL_ID.trim()) {
+      throw new Error('Missing LOOPS_CLIENT_BOOKING_COMPLETED_TRANSACTIONAL_ID')
+    }
+
     return sendTransactionalEmail({
       transactionalId: CLIENT_BOOKING_COMPLETED_TRANSACTIONAL_ID,
       email: args.email,
@@ -369,17 +379,40 @@ export const loopsEmailService = {
     })
   },
 
-  async sendClientIssueOrNoShowNotification(args: {
+  async sendDisputeSubmittedConfirmation(args: {
     email: string
     fullName: string
-    bookingId: string
+    bookingReference: string
+    issueType: string
+    disputePath: string
   }) {
     return sendTransactionalEmail({
-      transactionalId: CLIENT_ISSUE_OR_NOSHOW_NOTIFICATION_TRANSACTIONAL_ID,
+      transactionalId: DISPUTE_SUBMITTED_CONFIRMATION_TRANSACTIONAL_ID,
       email: args.email,
       dataVariables: {
         first_name: firstName(args.fullName),
-        dispute_link: `${appUrl()}/client/report?booking=${args.bookingId}`,
+        booking_reference: args.bookingReference,
+        issue_type: args.issueType,
+        dispute_link: absoluteAppLink(args.disputePath),
+      },
+    })
+  },
+
+  async sendDisputeRaisedAgainstNotification(args: {
+    email: string
+    fullName: string
+    bookingReference: string
+    issueType: string
+    disputePath: string
+  }) {
+    return sendTransactionalEmail({
+      transactionalId: DISPUTE_RAISED_AGAINST_NOTIFICATION_TRANSACTIONAL_ID,
+      email: args.email,
+      dataVariables: {
+        first_name: firstName(args.fullName),
+        booking_reference: args.bookingReference,
+        issue_type: args.issueType,
+        dispute_link: absoluteAppLink(args.disputePath),
       },
     })
   },
@@ -393,10 +426,6 @@ export const loopsEmailService = {
     bookingId: string
     cancellationReason?: string
   }) {
-    if (!CLEANER_BOOKING_CANCELLED_BY_CLIENT_TRANSACTIONAL_ID.trim()) {
-      throw new Error('Missing LOOPS_CLEANER_BOOKING_CANCELLED_BY_CLIENT_TRANSACTIONAL_ID')
-    }
-
     return sendTransactionalEmail({
       transactionalId: CLEANER_BOOKING_CANCELLED_BY_CLIENT_TRANSACTIONAL_ID,
       email: args.email,
@@ -405,7 +434,6 @@ export const loopsEmailService = {
         client_name: args.clientName,
         booking_date: formatBookingDate(args.date),
         booking_time: formatBookingTime(args.date),
-        booking_duration: `${args.durationHours} hour${args.durationHours === 1 ? '' : 's'}`,
         cancellation_reason: args.cancellationReason?.trim() || 'Not provided',
         booking_link: `${appUrl()}/cleaner/bookings/${args.bookingId}`,
       },
@@ -619,6 +647,22 @@ export const loopsEmailService = {
         OriginalTime: formatBookingTime(args.originalStart),
         NewDate: formatBookingDate(args.newStart),
         NewTime: formatBookingTime(args.newStart),
+      },
+    })
+  },
+
+  async sendAmendmentRequestDeclined(args: {
+    email: string
+    fullName: string
+    originalStart: Date
+  }) {
+    return sendTransactionalEmail({
+      transactionalId: AMENDMENT_REQUEST_DECLINED_TRANSACTIONAL_ID,
+      email: args.email,
+      dataVariables: {
+        FirstName: firstName(args.fullName),
+        OriginalDate: formatBookingDate(args.originalStart),
+        OriginalTime: formatBookingTime(args.originalStart),
       },
     })
   },
