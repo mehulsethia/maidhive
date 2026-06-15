@@ -18,7 +18,7 @@ describe('F12 Messaging/chat gating unit coverage', () => {
     expect(canViewChatHistoryForBooking({ status: 'cancelled', _count: { messages: 0 } })).toBe(false)
     expect(canViewChatHistoryForBooking({ status: 'cancelled', _count: { messages: 2 } })).toBe(true)
     expect(canShowActiveMessageCta({ status: 'cancelled', _count: { messages: 2 } })).toBe(false)
-    expect(canShowActiveMessageCta({ status: 'completed', _count: { messages: 0 } })).toBe(true)
+    expect(canShowActiveMessageCta({ status: 'completed', scheduled_end: new Date(Date.now() - 60 * 60 * 1000) })).toBe(false)
   })
 
   it('UT-CHAT-02 read-only rules lock cancelled immediately and after scheduled end window', () => {
@@ -44,6 +44,7 @@ describe('F12 Messaging/chat gating unit coverage', () => {
     expect(empty.success).toBe(false)
     expect(tooLong.success).toBe(false)
     expect(isChatActiveForBooking({ status: 'completed', scheduled_end: new Date(Date.now() - 10 * 60 * 1000) })).toBe(true)
+    expect(isChatActiveForBooking({ status: 'disputed', scheduled_end: new Date(Date.now() - 60 * 60 * 1000) })).toBe(false)
   })
 
   it('UT-CHAT-05 conversation ordering keeps operational chats above history and sorts active by nearest start', () => {

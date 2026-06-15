@@ -49,6 +49,12 @@ function getDisputeBookingId(dispute: any) {
   return dispute?.booking_id ?? dispute?.bookingId ?? ''
 }
 
+function getFriendlyBookingReference(dispute: any) {
+  const raw = String(getDisputeBookingId(dispute) ?? '').replace(/[^a-z0-9]/gi, '')
+  if (!raw) return 'MH-UNKNOWN'
+  return `MH-${raw.slice(-6).toUpperCase()}`
+}
+
 function getDisputeCreatedAt(dispute: any) {
   return dispute?.created_at ?? dispute?.createdAt ?? new Date().toISOString()
 }
@@ -304,6 +310,7 @@ function ClientReportPageContent() {
     return (
       dispute.reason.toLowerCase().includes(q) ||
       String(dispute.booking?.service_type ?? '').toLowerCase().includes(q) ||
+      getFriendlyBookingReference(dispute).toLowerCase().includes(q) ||
       String(getDisputeBookingId(dispute)).toLowerCase().includes(q)
     )
   })
@@ -468,7 +475,7 @@ function ClientReportPageContent() {
                 <Input
                   value={search}
                   onChange={(event) => setSearch(event.target.value)}
-                  placeholder="Search by reason or booking id"
+                  placeholder="Search by reason or booking reference"
                   className="h-11 rounded-full border-slate-300 pl-9"
                 />
               </div>
@@ -490,6 +497,7 @@ function ClientReportPageContent() {
                 {filteredDisputes.map((dispute, index) => {
                   const status = (dispute.status ?? 'open') as ReportStatus
                   const booking = dispute.booking
+                  const bookingReference = getFriendlyBookingReference(dispute)
                   return (
                     <article
                       key={dispute.id}
@@ -502,7 +510,7 @@ function ClientReportPageContent() {
                             {booking?.service_type ?? 'Service booking'}
                           </p>
                           <p className={`${monoFont.className} text-[0.68rem] tracking-wide text-slate-500`}>
-                            Booking {getDisputeBookingId(dispute)}
+                            Booking Reference: {bookingReference}
                           </p>
                         </div>
                         <span className={`rounded-full px-2.5 py-1 text-xs font-semibold ${STATUS_STYLES[status]}`}>
@@ -538,6 +546,11 @@ function ClientReportPageContent() {
         <div className="space-y-3">
           <p className="text-sm text-muted-foreground">
             Please note: submitting false or misleading reports may result in account penalties or suspension.
+          </p>
+          <p className="text-sm text-muted-foreground">
+            This booking will be marked Under Review while the report is investigated. Any payout or release process related to this booking may be paused pending review.
+          </p>
+          <p className="text-sm text-muted-foreground">
             Please confirm that the information you are submitting is accurate.
           </p>
           <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">

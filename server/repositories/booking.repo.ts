@@ -1,77 +1,91 @@
 import { db } from '../db'
 import type { Prisma } from '@prisma/client'
 
-const bookingInclude = {
-  client: {
-    include: {
-      user: true,
-      _count: {
-        select: {
-          bookings: {
-            where: { status: 'completed' },
-          },
-        },
-      },
-    },
-  },
-  cleaner: { include: { user: true } },
-  payment: true,
-  review: true,
-  _count: {
-    select: {
-      messages: true,
-    },
-  },
-} satisfies Prisma.BookingInclude
+function completedReleasedBookingWhere(): Prisma.BookingWhereInput {
+  const disputeWindowHours = Number(process.env.NEXT_PUBLIC_DISPUTE_WINDOW_HOURS ?? 24)
+  const releaseWindowMs = (Number.isFinite(disputeWindowHours) && disputeWindowHours > 0 ? disputeWindowHours : 24) * 60 * 60 * 1000
+  const releaseCutoff = new Date(Date.now() - releaseWindowMs)
 
-const bookingListInclude = {
-  client: {
-    include: {
-      user: {
-        select: {
-          id: true,
-          name: true,
-          phone: true,
-          avatarUrl: true,
-        },
-      },
-      _count: {
-        select: {
-          bookings: {
-            where: { status: 'completed' },
+  return {
+    status: 'completed',
+    OR: [
+      { payment: { is: { status: 'transferred' } } },
+      { scheduledEnd: { lte: releaseCutoff } },
+    ],
+  }
+}
+
+function bookingInclude() {
+  return {
+    client: {
+      include: {
+        user: true,
+        _count: {
+          select: {
+            bookings: { where: completedReleasedBookingWhere() },
           },
         },
       },
     },
-  },
-  cleaner: {
-    include: {
-      user: {
-        select: {
-          id: true,
-          name: true,
+    cleaner: { include: { user: true } },
+    payment: true,
+    review: true,
+    _count: {
+      select: {
+        messages: true,
+      },
+    },
+  } satisfies Prisma.BookingInclude
+}
+
+function bookingListInclude() {
+  return {
+    client: {
+      include: {
+        user: {
+          select: {
+            id: true,
+            name: true,
+            phone: true,
+            avatarUrl: true,
+          },
+        },
+        _count: {
+          select: {
+            bookings: { where: completedReleasedBookingWhere() },
+          },
         },
       },
     },
-  },
-  payment: true,
-  review: {
-    select: {
-      id: true,
-      rating: true,
-      createdAt: true,
+    cleaner: {
+      include: {
+        user: {
+          select: {
+            id: true,
+            name: true,
+          },
+        },
+      },
     },
-  },
-  _count: {
-    select: {
-      messages: true,
+    payment: true,
+    review: {
+      select: {
+        id: true,
+        rating: true,
+        createdAt: true,
+      },
     },
-  },
-} satisfies Prisma.BookingInclude
+    _count: {
+      select: {
+        messages: true,
+      },
+    },
+  } satisfies Prisma.BookingInclude
+}
 
 export const bookingRepo = {
   findById: (id: string) =>
-    db.booking.findUnique({ where: { id }, include: bookingInclude }),
+    db.booking.findUnique({ where: { id }, include: bookingInclude() }),
 
   findByClient: (clientId: string, params: { page: number; pageSize: number; status?: string }) => {
     const where: Prisma.BookingWhereInput = {
@@ -81,7 +95,7 @@ export const bookingRepo = {
     return Promise.all([
       db.booking.findMany({
         where,
-        include: bookingListInclude,
+        include: bookingListInclude(),
         skip: (params.page - 1) * params.pageSize,
         take: params.pageSize,
         orderBy: { createdAt: 'desc' },
@@ -129,7 +143,7 @@ export const bookingRepo = {
     return Promise.all([
       db.booking.findMany({
         where,
-        include: bookingListInclude,
+        include: bookingListInclude(),
         skip: (params.page - 1) * params.pageSize,
         take: params.pageSize,
         orderBy: { createdAt: 'desc' },
@@ -162,10 +176,10 @@ export const bookingRepo = {
     originalScheduledStart?: Date
     status?: string
   }) =>
-    db.booking.create({ data, include: bookingInclude }),
+    db.booking.create({ data, include: bookingInclude() }),
 
   update: (id: string, data: Prisma.BookingUpdateInput) =>
-    db.booking.update({ where: { id }, data, include: bookingInclude }),
+    db.booking.update({ where: { id }, data, include: bookingInclude() }),
 
   findOverlappingDraftForClient: (params: {
     clientId: string
@@ -181,7 +195,7 @@ export const bookingRepo = {
         scheduledStart: { lt: params.end },
         scheduledEnd: { gt: params.start },
       },
-      include: bookingInclude,
+      include: bookingInclude(),
       orderBy: { updatedAt: 'desc' },
     }),
 
@@ -209,7 +223,7 @@ export const bookingRepo = {
     return Promise.all([
       db.booking.findMany({
         where,
-        include: bookingInclude,
+        include: bookingInclude(),
         skip: (params.page - 1) * params.pageSize,
         take: params.pageSize,
         orderBy: { createdAt: 'desc' },

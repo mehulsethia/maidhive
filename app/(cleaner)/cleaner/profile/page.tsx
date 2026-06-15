@@ -1001,7 +1001,7 @@ function CleanerProfilePageContent() {
                     </p>
                   ) : (
                     <div className="mt-3 space-y-2">
-                      {paymentHistory.map(({ booking: b, label, tone }) => (
+                      {paymentHistory.map(({ booking: b, label, tone, amount }) => (
                         <div key={b.id} className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2">
                           <div>
                             <p className="text-sm font-semibold text-slate-900">
@@ -1018,7 +1018,7 @@ function CleanerProfilePageContent() {
                             </p>
                           </div>
                         <div className="w-full text-left sm:w-auto sm:text-right">
-                            <p className="text-sm font-semibold text-emerald-700">{formatCurrency(b.cleaner_payout)}</p>
+                            <p className="text-sm font-semibold text-emerald-700">{formatCurrency(amount ?? b.cleaner_payout)}</p>
                             <p className={`text-xs ${
                               tone === 'issue'
                                 ? 'text-red-700'

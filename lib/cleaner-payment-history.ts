@@ -1,4 +1,5 @@
 import { isCompletedBookingReleased } from '@/lib/booking-release'
+import { formatCurrency } from '@/lib/utils'
 import type { BookingRead, BookingStatus } from '@/types'
 
 export type CleanerPaymentHistoryTone = 'ok' | 'warn' | 'issue'
@@ -7,6 +8,7 @@ export type CleanerPaymentHistoryEntry = {
   booking: BookingRead
   label: string
   tone: CleanerPaymentHistoryTone
+  amount?: number
 }
 
 export const CLEANER_PAYMENT_HISTORY_SOURCE_STATUSES: BookingStatus[] = [
@@ -35,6 +37,24 @@ export function classifyCleanerPaymentHistoryBooking(
       label: released ? 'Released' : 'Awaiting release',
       tone: released ? 'ok' : 'warn',
     }
+  }
+
+  if (booking.status === 'cancelled') {
+    const cancellationCompensation = Number(booking.payment?.cleaner_payout ?? booking.cleaner_payout ?? 0)
+    if (cancellationCompensation > 0) {
+      if (paymentStatus === 'failed') {
+        return { label: 'Payment issue - admin review', tone: 'issue' }
+      }
+      const released = paymentStatus === 'transferred' || Boolean(booking.payment?.transferred_at)
+      return {
+        label: released
+          ? `Cancellation compensation released: ${formatCurrency(cancellationCompensation)}`
+          : `Cancellation compensation: ${formatCurrency(cancellationCompensation)}`,
+        tone: released ? 'ok' : 'warn',
+        amount: cancellationCompensation,
+      }
+    }
+    return { label: 'Cancelled - no payout due', tone: 'warn', amount: 0 }
   }
 
   if (paymentStatus === 'failed' || booking.status === 'disputed') {

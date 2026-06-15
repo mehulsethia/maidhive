@@ -65,6 +65,41 @@ describe('Cleaner payment history mapping', () => {
     expect(classifyCleanerPaymentHistoryBooking(failed)?.label).toBe('Payment issue - admin review')
   })
 
+  it('maps cancelled bookings to cancellation payout labels', () => {
+    const noPayout = booking({
+      id: 'booking_cancelled_no_payout',
+      status: 'cancelled',
+      cleaner_payout: 32,
+      payment: { id: 'p7', status: 'refunded', cleaner_payout: 0 },
+    })
+    const compensationDue = booking({
+      id: 'booking_cancelled_comp_due',
+      status: 'cancelled',
+      payment: { id: 'p8', status: 'captured', cleaner_payout: 16 },
+    })
+    const compensationReleased = booking({
+      id: 'booking_cancelled_comp_released',
+      status: 'cancelled',
+      payment: { id: 'p9', status: 'transferred', cleaner_payout: 16, transferred_at: new Date().toISOString() },
+    })
+
+    expect(classifyCleanerPaymentHistoryBooking(noPayout)).toMatchObject({
+      label: 'Cancelled - no payout due',
+      amount: 0,
+      tone: 'warn',
+    })
+    expect(classifyCleanerPaymentHistoryBooking(compensationDue)).toMatchObject({
+      label: 'Cancellation compensation: €16.00',
+      amount: 16,
+      tone: 'warn',
+    })
+    expect(classifyCleanerPaymentHistoryBooking(compensationReleased)).toMatchObject({
+      label: 'Cancellation compensation released: €16.00',
+      amount: 16,
+      tone: 'ok',
+    })
+  })
+
   it('dedupes bookings and returns history sorted by scheduled start desc', () => {
     const older = booking({
       id: 'older',

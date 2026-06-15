@@ -32,6 +32,7 @@ import {
 import { canViewChatHistoryForBooking, getChatReadOnlyMessage, isChatReadOnly } from '@/lib/chat-window'
 import { isBookingReportWindowActive } from '@/lib/booking-release'
 import { getCleanerEarningsLabel } from '@/lib/cleaner-earnings-label'
+import { getClientTrustMetadata } from '@/lib/client-trust'
 import { getCleanerBookingRequestDeadlineCopy } from '@/lib/booking-expiry-copy'
 import { getCancellationPaymentOutcome } from '@/lib/booking-payment-outcome'
 import { computeConfirmedCancellationPolicy } from '@/lib/cancellation-policy'
@@ -378,7 +379,7 @@ export default function CleanerBookingDetailPage() {
   const completeOpensAt = booking.scheduled_end
     ? new Date(booking.scheduled_end).getTime() - 5 * 60 * 1000
     : Infinity
-  const canCompleteJob = ['in_progress', 'disputed'].includes(booking.status) &&
+  const canCompleteJob = booking.status === 'in_progress' &&
     Boolean(booking.started_at) &&
     Date.now() >= completeOpensAt
   const bookingStartsAtMs = new Date(booking.scheduled_start).getTime()
@@ -396,15 +397,12 @@ export default function CleanerBookingDetailPage() {
   })
   const cancellationOutcome = getCancellationPaymentOutcome(booking)
   const isClosedNonPayableStatus = ['cancelled', 'declined', 'expired'].includes(booking.status)
-  const clientTrust = (booking.client as any)?.trust as {
-    memberSince?: string | null
-    completedBookingsCount?: number
-  } | undefined
-  const memberSinceRaw = clientTrust?.memberSince ?? (booking.client as any)?.created_at ?? (booking.client as any)?.createdAt
+  const clientTrust = getClientTrustMetadata(booking.client)
+  const memberSinceRaw = clientTrust.memberSince
   const memberSinceLabel = memberSinceRaw
     ? new Date(memberSinceRaw).toLocaleDateString('en-IE', { month: 'short', year: 'numeric' })
     : null
-  const completedBookingsCount = Number(clientTrust?.completedBookingsCount ?? 0)
+  const completedBookingsCount = clientTrust.completedBookingsCount
   const clientDisplayName = booking.client?.user?.name?.trim() || 'Client'
   const clientAvatarUrl = booking.client?.user?.avatar_url ?? null
   const createdAtMs = new Date(booking.created_at).getTime()

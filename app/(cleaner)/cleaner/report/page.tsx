@@ -49,6 +49,12 @@ function getDisputeBookingId(dispute: any) {
   return dispute?.booking_id ?? dispute?.bookingId ?? ''
 }
 
+function getFriendlyBookingReference(dispute: any) {
+  const raw = String(getDisputeBookingId(dispute) ?? '').replace(/[^a-z0-9]/gi, '')
+  if (!raw) return 'MH-UNKNOWN'
+  return `MH-${raw.slice(-6).toUpperCase()}`
+}
+
 function disputeWindowLabel() {
   if (!Number.isFinite(DISPUTE_WINDOW_HOURS) || DISPUTE_WINDOW_HOURS <= 0) return '24 hours'
   if (DISPUTE_WINDOW_HOURS >= 1) return `${DISPUTE_WINDOW_HOURS} hours`
@@ -271,6 +277,7 @@ function CleanerReportPageContent() {
     return (
       dispute.reason.toLowerCase().includes(q) ||
       String(dispute.booking?.service_type ?? '').toLowerCase().includes(q) ||
+      getFriendlyBookingReference(dispute).toLowerCase().includes(q) ||
       String(getDisputeBookingId(dispute)).toLowerCase().includes(q)
     )
   })
@@ -404,7 +411,7 @@ function CleanerReportPageContent() {
           <div className="mt-4 grid gap-2 sm:grid-cols-[1fr_180px]">
             <div className="relative">
               <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
-              <Input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search by reason or booking id" className="h-11 rounded-full border-slate-300 pl-9" />
+              <Input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search by reason or booking reference" className="h-11 rounded-full border-slate-300 pl-9" />
             </div>
             <Select value={statusFilter} onChange={(event) => { setDashboardFilter(null); setStatusFilter(event.target.value as 'all' | ReportStatus) }}>
               <option value="all">All Status</option>
@@ -419,6 +426,7 @@ function CleanerReportPageContent() {
             <div className="mt-4 space-y-3">
               {filteredDisputes.map((dispute) => {
                 const status = (dispute.status ?? 'open') as ReportStatus
+                const bookingReference = getFriendlyBookingReference(dispute)
                 return (
                   <article key={dispute.id} className="rounded-2xl border border-slate-200 bg-white p-4">
                     <div className="flex flex-wrap items-start justify-between gap-2">
@@ -427,7 +435,7 @@ function CleanerReportPageContent() {
                           {dispute.booking?.service_type ?? 'Service booking'}
                         </p>
                         <p className={`${monoFont.className} text-[0.68rem] tracking-wide text-slate-500`}>
-                          Booking {getDisputeBookingId(dispute)}
+                          Booking Reference: {bookingReference}
                         </p>
                       </div>
                       <span className={`rounded-full px-2.5 py-1 text-xs font-semibold ${STATUS_STYLES[status]}`}>
@@ -450,7 +458,9 @@ function CleanerReportPageContent() {
       <Dialog open={confirmOpen} onClose={() => setConfirmOpen(false)}>
         <DialogTitle>Confirm Report Submission</DialogTitle>
         <div className="space-y-3">
-          <p className="text-sm text-muted-foreground">Submitting false or misleading reports may result in account penalties or suspension.</p>
+          <p className="text-sm text-muted-foreground">Please note: submitting false or misleading reports may result in account penalties or suspension.</p>
+          <p className="text-sm text-muted-foreground">This booking will be marked Under Review while the report is investigated. Any payout or release process related to this booking may be paused pending review.</p>
+          <p className="text-sm text-muted-foreground">Please confirm that the information you are submitting is accurate.</p>
           <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
             <Button variant="outline" onClick={() => setConfirmOpen(false)}>Cancel</Button>
             <Button onClick={confirmSubmitReport} loading={saving || uploadingEvidence}>Confirm Report</Button>

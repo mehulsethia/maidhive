@@ -206,12 +206,12 @@ export function NotificationsCenter({ role }: { role: NotificationRole }) {
                   notification.is_read ? 'border-slate-200 bg-white' : 'border-primary/20 bg-primary/5',
                 )}
               >
-                <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-start">
                   <div className="min-w-0">
                     <p className={cn('text-sm text-slate-900', !notification.is_read && 'font-semibold')}>
                       {notification.title}
                     </p>
-                    <p className="mt-1 text-sm text-slate-600">{notification.body}</p>
+                    <p className="mt-1 text-sm text-slate-600 [overflow-wrap:anywhere]">{notification.body}</p>
                     <p className="mt-1 text-xs text-slate-500">
                       {new Date(notification.created_at).toLocaleString('en-IE', {
                         day: '2-digit',
@@ -227,12 +227,12 @@ export function NotificationsCenter({ role }: { role: NotificationRole }) {
                     </Link>
                   </div>
 
-                  <div className="flex items-center gap-2">
+                  <div className="flex shrink-0 flex-wrap items-center justify-end gap-2 sm:max-w-[15rem]">
                     {!notification.is_read && (
                       <button
                         onClick={() => markRead(notification.id)}
                         disabled={working}
-                        className="inline-flex h-8 items-center gap-1 rounded-full border border-slate-300 px-3 text-xs font-semibold text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
+                        className="inline-flex h-8 items-center gap-1 whitespace-nowrap rounded-full border border-slate-300 px-3 text-xs font-semibold text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
                       >
                         <Check className="h-3.5 w-3.5" />
                         Mark read
@@ -241,7 +241,7 @@ export function NotificationsCenter({ role }: { role: NotificationRole }) {
                     <button
                       onClick={() => deleteNotification(notification.id)}
                       disabled={working}
-                      className="inline-flex h-8 items-center gap-1 rounded-full border border-slate-300 px-3 text-xs font-semibold text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
+                      className="inline-flex h-8 items-center gap-1 whitespace-nowrap rounded-full border border-slate-300 px-3 text-xs font-semibold text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
                     >
                       <Trash2 className="h-3.5 w-3.5" />
                       Delete

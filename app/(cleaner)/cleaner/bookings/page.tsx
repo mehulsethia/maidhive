@@ -32,6 +32,7 @@ import {
 import { compareBookingsByOperationalPriority } from '@/lib/booking-priority'
 import { isBookingReportWindowActive } from '@/lib/booking-release'
 import { getCleanerEarningsLabel } from '@/lib/cleaner-earnings-label'
+import { getClientTrustMetadata } from '@/lib/client-trust'
 import { getCleanerBookingRequestDeadlineCopy } from '@/lib/booking-expiry-copy'
 import { subscribeBookingsRefresh, triggerBookingsRefresh } from '@/lib/booking-sync'
 import { showJobStartedToast } from '@/lib/job-start-toast'
@@ -357,12 +358,12 @@ export default function CleanerBookingsPage() {
             <div className="space-y-4">
               {filtered.map((b) => {
                 const eligibility = getCleanerProposalEligibility(b)
-                const trust = (b.client as any)?.trust as { memberSince?: string | null; completedBookingsCount?: number } | undefined
-                const memberSinceRaw = trust?.memberSince ?? (b.client as any)?.created_at ?? (b.client as any)?.createdAt
+                const trust = getClientTrustMetadata(b.client)
+                const memberSinceRaw = trust.memberSince
                 const memberSinceLabel = memberSinceRaw
                   ? new Date(memberSinceRaw).toLocaleDateString('en-IE', { month: 'short', year: 'numeric' })
                   : null
-                const completedBookingsCount = Number(trust?.completedBookingsCount ?? 0)
+                const completedBookingsCount = trust.completedBookingsCount
                 const startJobState = getStartJobAvailability(b.scheduled_start, b.scheduled_end)
                 const scheduledStartMs = new Date(b.scheduled_start).getTime()
                 const scheduledEndMs = new Date(b.scheduled_end).getTime()

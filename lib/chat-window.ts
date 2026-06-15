@@ -67,8 +67,8 @@ export function canShowActiveMessageCta(booking: {
   _count?: {
     messages?: number | null
   } | null
-}) {
+}, nowMs = Date.now()) {
   const status = String(booking.status ?? '')
   if (['cancelled', 'declined', 'expired'].includes(status)) return false
-  return canViewChatHistoryForBooking(booking)
+  return isChatActiveForBooking(booking, nowMs)
 }

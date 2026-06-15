@@ -1583,8 +1583,10 @@ async function completeBookingFlow(
   if (!booking) throw new ServiceError('Booking not found', 404)
 
   if (!['confirmed', 'in_progress', 'disputed'].includes(booking.status)) {
+    if (booking.status === 'completed' && booking.completedAt) return booking
     throw new ServiceError(`Cannot complete a booking in status '${booking.status}'`, 400)
   }
+  if (booking.completedAt) return booking
 
   const dispute = await disputeRepo.findByBookingId(bookingId)
   const unresolvedDispute = Boolean(dispute && !['resolved', 'closed'].includes(String(dispute.status ?? '')))
@@ -1592,10 +1594,24 @@ async function completeBookingFlow(
   const scheduledEndMs = booking.scheduledEnd ? booking.scheduledEnd.getTime() : Number.NaN
   const completionAnchorAt = Number.isFinite(scheduledEndMs) ? new Date(scheduledEndMs) : args.completedAt
   const nextStatus = unresolvedDispute ? 'disputed' : 'completed'
-  const updated = await bookingRepo.update(bookingId, {
-    status: nextStatus,
-    completedAt: completionAnchorAt,
+  const completed = await db.booking.updateMany({
+    where: {
+      id: bookingId,
+      status: { in: ['confirmed', 'in_progress', 'disputed'] },
+      completedAt: null,
+    },
+    data: {
+      status: nextStatus,
+      completedAt: completionAnchorAt,
+    },
   })
+  if (completed.count === 0) {
+    const current = await bookingRepo.findById(bookingId)
+    if (current) return current
+    throw new ServiceError('Booking not found', 404)
+  }
+  const updated = await bookingRepo.findById(bookingId)
+  if (!updated) throw new ServiceError('Booking not found', 404)
 
   await pushInAppNotification({
     userId: booking.client.userId,

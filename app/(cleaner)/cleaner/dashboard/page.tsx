@@ -6,6 +6,7 @@ import { CircleCheck, Clock3, Euro, Star, ArrowUpRight, CalendarClock, MessageSq
 import { bookingsApi, cleanersApi } from '@/lib/api'
 import { subscribeBookingsRefresh, triggerBookingsRefresh } from '@/lib/booking-sync'
 import { compareBookingsByOperationalPriority } from '@/lib/booking-priority'
+import { isCompletedBookingReleased } from '@/lib/booking-release'
 import { BookingStatusBadge } from '@/components/booking-status-badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -14,6 +15,7 @@ import { UserAvatar } from '@/components/ui/user-avatar'
 import { DashboardPageSkeleton } from '@/components/page-skeletons'
 import { EmptyState } from '@/components/empty-state'
 import { reportLoadError, resetLoadError } from '@/lib/load-error-policy'
+import { getClientTrustMetadata } from '@/lib/client-trust'
 import { formatCurrency, formatDate } from '@/lib/utils'
 import type { BookingRead, BookingStatus, CleanerOnboardingProgress } from '@/types'
 import { deriveCleanerLifecycleStatus } from '@/lib/cleaner-status'
@@ -167,6 +169,11 @@ export default function CleanerDashboardPage() {
       .sort(compareBookingsByOperationalPriority)
     const activeJobs = bookings.filter((b) => ACTIVE_STATUSES.includes(b.status) || UPCOMING_STATUSES.includes(b.status))
     const completed = bookings.filter((b) => COMPLETED_STATUSES.includes(b.status))
+    const releasedCompleted = bookings.filter((b) => isCompletedBookingReleased({
+      status: b.status,
+      paymentStatus: b.payment?.status,
+      scheduledEnd: b.scheduled_end,
+    }))
     const prioritizedRecent = [...bookings].sort(compareBookingsByOperationalPriority)
 
     return {
@@ -175,7 +182,7 @@ export default function CleanerDashboardPage() {
       activeJobs,
       completed,
       prioritizedRecent,
-      totalRevenue: completed.reduce((sum, b) => sum + b.cleaner_payout, 0),
+      releasedEarnings: releasedCompleted.reduce((sum, b) => sum + b.cleaner_payout, 0),
     }
   }, [bookings])
 
@@ -237,7 +244,7 @@ export default function CleanerDashboardPage() {
                 Live Snapshot
               </p>
               <div className="mt-3 grid grid-cols-1 gap-2.5 sm:grid-cols-2">
-                <SnapshotStat label="Revenue" value={stats.totalRevenue > 0 ? formatCurrency(stats.totalRevenue) : '€0.00'} />
+                <SnapshotStat label="Released Earnings" value={stats.releasedEarnings > 0 ? formatCurrency(stats.releasedEarnings) : '€0.00'} />
                 <SnapshotStat label="Completed" value={String(stats.completed.length)} />
                 <SnapshotStat label="Active" value={String(stats.activeJobs.length)} />
                 <SnapshotStat label="Rating" value={avgRating ? Number(avgRating).toFixed(1) : '-'} />
@@ -361,12 +368,12 @@ export default function CleanerDashboardPage() {
               <EmptyState title="No new requests" description="You're all caught up for now." />
             ) : (
               stats.requests.slice(0, 4).map((b) => {
-                  const trust = (b.client as any)?.trust as { memberSince?: string | null; completedBookingsCount?: number } | undefined
-                  const memberSinceRaw = trust?.memberSince ?? (b.client as any)?.created_at ?? (b.client as any)?.createdAt
+                  const trust = getClientTrustMetadata(b.client)
+                  const memberSinceRaw = trust.memberSince
                   const memberSinceLabel = memberSinceRaw
                     ? new Date(memberSinceRaw).toLocaleDateString('en-IE', { month: 'short', year: 'numeric' })
                     : null
-                  const completedBookingsCount = Number(trust?.completedBookingsCount ?? 0)
+                  const completedBookingsCount = trust.completedBookingsCount
                   const clientName = b.client?.user?.name?.trim() || 'Client'
                   const clientAvatarUrl = b.client?.user?.avatar_url ?? null
                   const waitingForClientResponse = b.proposal_by === 'cleaner'

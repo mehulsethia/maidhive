@@ -15,7 +15,7 @@ import { Button } from '@/components/ui/button'
 import { Dialog, DialogTitle } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import { Select } from '@/components/ui/select'
-import { canShowActiveMessageCta, canViewChatHistoryForBooking, getDisputeWindowMs } from '@/lib/chat-window'
+import { canShowActiveMessageCta, getDisputeWindowMs } from '@/lib/chat-window'
 import { recoverBookingsFromNotifications } from '@/lib/booking-data-recovery'
 import { reportLoadError, resetLoadError } from '@/lib/load-error-policy'
 import { createClient } from '@/lib/supabase'
@@ -359,7 +359,6 @@ export default function ClientBookingsPage() {
                   const reviewWindowOpened = Number.isFinite(scheduledEndMs) && Date.now() >= scheduledEndMs
                   const canLeaveReview = Boolean(booking.completed_at) && booking.status === 'completed' && !booking.review && reviewWindowOpened
                   const reviewSubmitted = Boolean(booking.review)
-                  const canChat = canViewChatHistoryForBooking(booking)
                   const canOpenMessageCta = canShowActiveMessageCta(booking)
                   const isOverdueDraftState = isOverdueUnpaid(booking)
                   const canContinuePayment = !isOverdueDraftState && (booking.status === 'draft' || (booking.status === 'pending' && !isPaymentAuthorized(booking.payment?.status)))
