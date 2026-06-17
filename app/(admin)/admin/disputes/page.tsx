@@ -63,6 +63,10 @@ function classifyQueue(dispute: AdminDispute): 'urgent' | 'no_show' | 'payment' 
   return 'payment'
 }
 
+function getEvidenceLinks(value?: string[] | null) {
+  return Array.isArray(value) ? value.filter(Boolean) : []
+}
+
 // ── Dispute card ──────────────────────────────────────────────────────────────
 
 function DisputeCard({
@@ -78,6 +82,8 @@ function DisputeCard({
 }) {
   const cfg = STATUS_CONFIG[dispute.status] ?? STATUS_CONFIG.closed
   const resolutionLabel = RESOLUTION_TYPES.find(r => r.value === dispute.resolution_type)?.label
+  const originalEvidence = getEvidenceLinks(dispute.evidence)
+  const responseEvidence = getEvidenceLinks(dispute.response_evidence)
 
   return (
     <Card>
@@ -93,7 +99,31 @@ function DisputeCard({
                 {cfg.label}
               </Badge>
             </div>
-            <p className="text-sm font-medium">{dispute.explanation ?? dispute.reason}</p>
+            <div className="mt-2 space-y-2 text-sm">
+              <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2">
+                <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Original report</p>
+                <p className="mt-1 font-medium">{dispute.reason}</p>
+                {dispute.explanation && <p className="mt-1 text-muted-foreground">{dispute.explanation}</p>}
+                <EvidenceLinks links={originalEvidence} />
+              </div>
+              {dispute.response_explanation ? (
+                <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2">
+                  <p className="text-xs font-semibold uppercase tracking-wide text-amber-700">Counterparty response</p>
+                  <p className="mt-1 text-amber-950">{dispute.response_explanation}</p>
+                  <EvidenceLinks links={responseEvidence} />
+                  {dispute.responder_role && (
+                    <p className="mt-1 text-xs text-amber-700">
+                      Responded by: {dispute.responder_role}
+                      {dispute.responded_at ? ` · ${formatDate(dispute.responded_at)}` : ''}
+                    </p>
+                  )}
+                </div>
+              ) : (
+                <p className="rounded-lg border border-dashed border-slate-200 px-3 py-2 text-xs text-muted-foreground">
+                  No counterparty response submitted.
+                </p>
+              )}
+            </div>
             <p className="text-xs text-muted-foreground mt-0.5">
               Raised {formatDate(dispute.created_at)}
             </p>
@@ -153,6 +183,25 @@ function DisputeCard({
         )}
       </CardContent>
     </Card>
+  )
+}
+
+function EvidenceLinks({ links }: { links: string[] }) {
+  if (links.length === 0) return null
+  return (
+    <div className="mt-2 flex flex-wrap gap-2">
+      {links.map((link, index) => (
+        <a
+          key={`${link}-${index}`}
+          href={link}
+          target="_blank"
+          rel="noreferrer"
+          className="rounded-full border border-slate-200 bg-white px-2.5 py-1 text-xs font-medium text-slate-600 hover:border-slate-300"
+        >
+          Evidence {index + 1}
+        </a>
+      ))}
+    </div>
   )
 }
 

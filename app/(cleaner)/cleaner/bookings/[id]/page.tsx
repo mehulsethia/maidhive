@@ -390,6 +390,7 @@ export default function CleanerBookingDetailPage() {
   const canStartJobNow = Number.isFinite(bookingStartsAtMs) && Date.now() >= bookingStartsAtMs - START_JOB_EARLY_WINDOW_MS && !startWindowExpired
   const canReportProblem = ['in_progress', 'completed'].includes(booking.status) &&
     isBookingReportWindowActive(booking.scheduled_end)
+  const canOpenDisputeCase = booking.status === 'disputed' && isBookingReportWindowActive(booking.scheduled_end)
   const earningsLabel = getCleanerEarningsLabel({
     status: booking.status,
     paymentStatus: booking.payment?.status,
@@ -572,6 +573,8 @@ export default function CleanerBookingDetailPage() {
                         ? cleanerCancelledPayoutMessage.description
                         : isClosedNonPayableStatus
                           ? 'Payout is not applicable for this booking status.'
+                          : booking.status === 'disputed'
+                            ? 'Payout is paused until MaidHive resolves this dispute.'
                           : `Released after the ${disputeWindowLabel()} report window from scheduled completion`}
                     </p>
                   </div>
@@ -842,6 +845,15 @@ export default function CleanerBookingDetailPage() {
             onClick={() => router.push(`/cleaner/report?booking=${booking.id}`)}
           >
             Report a problem
+          </Button>
+        )}
+        {!isCancelledPreConfirmation && canOpenDisputeCase && (
+          <Button
+            variant="outline"
+            size="lg"
+            onClick={() => router.push(`/cleaner/report?booking=${booking.id}`)}
+          >
+            Add information to existing case
           </Button>
         )}
         {!isCancelledPreConfirmation && booking.status === 'disputed' && (

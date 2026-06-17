@@ -10,6 +10,11 @@ const disputeSelect = {
   explanation: true,
   evidence: true,
   status: true,
+  responseExplanation: true,
+  responseEvidence: true,
+  respondedBy: true,
+  responderRole: true,
+  respondedAt: true,
   resolutionType: true,
   resolutionNote: true,
   refundAmount: true,
@@ -92,4 +97,35 @@ export const disputeRepo = {
       }),
       db.dispute.count({ where: { raisedBy } }),
     ]),
+
+  listByParticipantUserId: (userId: string, page: number, pageSize: number) => {
+    const where: Prisma.DisputeWhereInput = {
+      OR: [
+        { raisedBy: userId },
+        { respondedBy: userId },
+        { booking: { client: { userId } } },
+        { booking: { cleaner: { userId } } },
+      ],
+    }
+
+    return Promise.all([
+      db.dispute.findMany({
+        where,
+        select: {
+          ...disputeSelect,
+          booking: {
+            include: {
+              client: { include: { user: true } },
+              cleaner: { include: { user: true } },
+              payment: true,
+            },
+          },
+        },
+        skip: (page - 1) * pageSize,
+        take: pageSize,
+        orderBy: { createdAt: 'desc' },
+      }),
+      db.dispute.count({ where }),
+    ])
+  },
 }

@@ -17,6 +17,7 @@ export function getCleanerEarningsLabel(args: {
     status === 'in_progress' ||
     (status === 'completed' && !payoutReleased)
 
+  if (status === 'disputed') return 'Payout pending review'
   if (payoutReleased) return 'You earned'
   if (showProjectedEarnings) return 'You will earn'
   return 'Booking value'

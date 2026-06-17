@@ -25,4 +25,8 @@ describe('Cleaner earnings label', () => {
     expect(labelFor('expired', 10, 'authorized')).toBe('Booking value')
     expect(labelFor('cancelled', 10, 'authorized')).toBe('Booking value')
   })
+
+  it('shows paused payout wording for under-review bookings', () => {
+    expect(labelFor('disputed', 10, 'authorized')).toBe('Payout pending review')
+  })
 })

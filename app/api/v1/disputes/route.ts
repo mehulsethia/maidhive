@@ -10,7 +10,7 @@ export const GET = requireAuth(async (req: NextRequest, _ctx, user) => {
   const [disputes, total] =
     user.role === 'admin'
       ? await disputeRepo.listOpen(page, pageSize)
-      : await disputeRepo.listByRaisedBy(user.id, page, pageSize)
+      : await disputeRepo.listByParticipantUserId(user.id, page, pageSize)
 
   return ok({ disputes, total, page, page_size: pageSize })
 })

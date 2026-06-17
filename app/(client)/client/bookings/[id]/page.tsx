@@ -802,6 +802,11 @@ export default function ClientBookingDetailPage() {
                       Report a problem
                     </Button>
                   )}
+                  {reportWindowActive && booking.status === 'disputed' && (
+                    <Button variant="outline" className="w-full sm:w-auto" onClick={() => router.push(`/client/report?booking=${id}`)}>
+                      Add information to existing case
+                    </Button>
+                  )}
                   {isCompletedReleased && (
                     <Button className="w-full sm:w-auto" onClick={() => router.push(`/client/book/${booking.cleaner_id}?reset=1&step=1&source=bookings`)}>
                       Book again

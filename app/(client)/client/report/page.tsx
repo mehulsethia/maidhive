@@ -63,6 +63,18 @@ function getDisputeResolutionNote(dispute: any) {
   return dispute?.resolution_note ?? dispute?.resolutionNote ?? ''
 }
 
+function getDisputeResponseExplanation(dispute: any) {
+  return dispute?.response_explanation ?? dispute?.responseExplanation ?? ''
+}
+
+function getDisputeEvidence(dispute: any, field: 'original' | 'response') {
+  const value =
+    field === 'response'
+      ? dispute?.response_evidence ?? dispute?.responseEvidence
+      : dispute?.evidence
+  return Array.isArray(value) ? value.filter(Boolean) : []
+}
+
 function ClientReportPageContent() {
   const searchParams = useSearchParams()
   const bookingFromQuery = searchParams.get('booking') ?? ''
@@ -85,6 +97,18 @@ function ClientReportPageContent() {
 
   function isActiveDisputeStatus(status?: string | null) {
     return status === 'open' || status === 'under_review'
+  }
+
+  function isWithinReportWindow(booking: BookingRead) {
+    const scheduledEndAt = new Date(booking.scheduled_end).getTime()
+    return Number.isFinite(scheduledEndAt) && Date.now() <= scheduledEndAt + DISPUTE_WINDOW_MS
+  }
+
+  function canSubmitResponseToDispute(booking: BookingRead, dispute?: ClientDispute) {
+    if (!dispute || !isActiveDisputeStatus(dispute.status)) return false
+    if (!isWithinReportWindow(booking)) return false
+    if (dispute.reporter_role === 'client' || dispute.responder_role === 'client') return false
+    return !dispute.responded_by && !dispute.responded_at
   }
 
   function addEvidenceFiles(filesToAdd: File[]) {
@@ -167,14 +191,14 @@ function ClientReportPageContent() {
 
   const eligibleBookings = deferredBookings.filter((booking) => {
     const dispute = disputeByBookingId.get(booking.id)
-    if (dispute && isActiveDisputeStatus(dispute.status)) return false
+    if (dispute && isActiveDisputeStatus(dispute.status)) {
+      return canSubmitResponseToDispute(booking, dispute)
+    }
 
     if (booking.status === 'in_progress') return true
 
     if (booking.status === 'completed' || booking.status === 'disputed') {
-      const scheduledEndAt = new Date(booking.scheduled_end).getTime()
-      if (!Number.isFinite(scheduledEndAt)) return false
-      return Date.now() <= scheduledEndAt + DISPUTE_WINDOW_MS
+      return isWithinReportWindow(booking)
     }
 
     if (booking.status === 'confirmed') {
@@ -205,6 +229,12 @@ function ClientReportPageContent() {
   }, [bookingOptions, bookingId])
 
   const selectedBooking = bookingOptions.find((booking) => booking.id === bookingId)
+  const selectedActiveDispute = bookingId ? disputeByBookingId.get(bookingId) : undefined
+  const isRespondingToDispute = Boolean(
+    selectedBooking &&
+    selectedActiveDispute &&
+    canSubmitResponseToDispute(selectedBooking, selectedActiveDispute),
+  )
   const canUseCleanerNoShowOption = selectedBooking
     ? Date.now() >= new Date(selectedBooking.scheduled_start).getTime() + NO_SHOW_DELAY_MS
     : false
@@ -219,14 +249,15 @@ function ClientReportPageContent() {
     if (!bookingId) return toast.error('Select a booking.')
     const activeDispute = disputeByBookingId.get(bookingId)
     if (activeDispute && isActiveDisputeStatus(activeDispute.status)) {
-      return toast.error('This booking is currently under review.')
-    }
-    if (!eligibleBookings.some((booking) => booking.id === bookingId)) {
+      if (!selectedBooking || !canSubmitResponseToDispute(selectedBooking, activeDispute)) {
+        return toast.error('Booking already under review. You cannot add more information to this case.')
+      }
+    } else if (!eligibleBookings.some((booking) => booking.id === bookingId)) {
       return toast.error('This booking cannot be reported right now.')
     }
-    if (!issueType) return toast.error('Select a report reason.')
+    if (!isRespondingToDispute && !issueType) return toast.error('Select a report reason.')
     if (!selectedBooking) return toast.error('Invalid booking selection.')
-    if (issueType === 'cleaner_no_show') {
+    if (!isRespondingToDispute && issueType === 'cleaner_no_show') {
       const canReportNoShowAt = new Date(selectedBooking.scheduled_start).getTime() + NO_SHOW_DELAY_MS
       if (Date.now() < canReportNoShowAt) {
         return toast.error('Cleaner no-show can be reported 30 minutes after the scheduled start time.')
@@ -272,12 +303,17 @@ function ClientReportPageContent() {
 
     setSaving(true)
     try {
+      const wasResponse = Boolean(
+        selectedBooking &&
+        disputeByBookingId.get(bookingId) &&
+        canSubmitResponseToDispute(selectedBooking, disputeByBookingId.get(bookingId)),
+      )
       await disputesApi.createForBooking(bookingId, {
         issue_type: issueType,
         explanation: explanation.trim(),
         evidence: [...evidence, ...uploadedUrls].length ? [...evidence, ...uploadedUrls] : undefined,
       })
-      toast.success('Report submitted successfully.')
+      toast.success(wasResponse ? 'Response submitted to the existing case.' : 'Report submitted successfully.')
       setIssueType('service_issue')
       setExplanation('')
       setEvidenceInput('')
@@ -350,12 +386,12 @@ function ClientReportPageContent() {
         <section className="grid gap-4 xl:grid-cols-[1fr_1fr]">
           <div className="rounded-[1.5rem] border border-slate-200/80 bg-white/90 p-5 shadow-[0_18px_45px_rgba(11,33,78,0.08)] backdrop-blur-sm">
             <h2 className={`${displayFont.className} text-2xl font-bold tracking-[-0.02em] text-slate-900`}>
-              Report a problem
+              {isRespondingToDispute ? 'Add information to existing case' : 'Report a problem'}
             </h2>
             <p className="mt-1 text-sm text-slate-500">{REPORT_AVAILABILITY_COPY}</p>
             {isActiveDisputeStatus(queryBookingDisputeStatus) && (
               <p className="mt-2 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-700">
-                This booking is currently under review by MaidHive.
+                Booking already under review. Submit your response in the existing case if you have not already submitted.
               </p>
             )}
 
@@ -376,32 +412,34 @@ function ClientReportPageContent() {
                   </Select>
                 </div>
 
-                <div>
-                  <Label>Report reason</Label>
-                  <Select value={issueType} onChange={(event) => setIssueType(event.target.value as (typeof CLIENT_DISPUTE_ISSUES)[number]['value'])} className="mt-1">
-                    {CLIENT_DISPUTE_ISSUES.filter((option) =>
-                      option.value === 'cleaner_no_show' ? canUseCleanerNoShowOption : true,
-                    ).map((option) => (
-                      <option key={option.value} value={option.value}>
-                        {option.label}
-                      </option>
-                    ))}
-                  </Select>
-                  {!canUseCleanerNoShowOption && (
-                    <p className="mt-1 text-xs text-slate-500">
-                      “Cleaner no-show” becomes available 30 minutes after scheduled start.
-                    </p>
-                  )}
-                </div>
+                {!isRespondingToDispute && (
+                  <div>
+                    <Label>Report reason</Label>
+                    <Select value={issueType} onChange={(event) => setIssueType(event.target.value as (typeof CLIENT_DISPUTE_ISSUES)[number]['value'])} className="mt-1">
+                      {CLIENT_DISPUTE_ISSUES.filter((option) =>
+                        option.value === 'cleaner_no_show' ? canUseCleanerNoShowOption : true,
+                      ).map((option) => (
+                        <option key={option.value} value={option.value}>
+                          {option.label}
+                        </option>
+                      ))}
+                    </Select>
+                    {!canUseCleanerNoShowOption && (
+                      <p className="mt-1 text-xs text-slate-500">
+                        “Cleaner no-show” becomes available 30 minutes after scheduled start.
+                      </p>
+                    )}
+                  </div>
+                )}
 
                 <div>
-                  <Label>Short explanation (minimum 20 characters)</Label>
+                  <Label>{isRespondingToDispute ? 'Your response (minimum 20 characters)' : 'Short explanation (minimum 20 characters)'}</Label>
                   <Textarea
                     value={explanation}
                     onChange={(event) => setExplanation(event.target.value)}
                     className="mt-1"
                     rows={4}
-                    placeholder="Describe what happened in clear detail."
+                    placeholder={isRespondingToDispute ? 'Add your side of the dispute in clear detail.' : 'Describe what happened in clear detail.'}
                   />
                   <p className="mt-1 text-xs text-slate-500">{explanation.trim().length}/20 minimum</p>
                   {issueType === 'property_issue_damage' && (
@@ -456,7 +494,7 @@ function ClientReportPageContent() {
 
                 <div className="flex justify-end">
                   <Button onClick={submitReport} loading={saving || uploadingEvidence} className="rounded-full bg-[#0d4bc9] hover:bg-[#0a3ea8]">
-                    Submit Report
+                    {isRespondingToDispute ? 'Submit your response' : 'Submit Report'}
                   </Button>
                 </div>
               </div>
@@ -518,7 +556,21 @@ function ClientReportPageContent() {
                         </span>
                       </div>
 
-                      <p className="mt-2 text-sm text-slate-700">{dispute.explanation ?? dispute.reason}</p>
+                      <div className="mt-2 space-y-2 text-sm text-slate-700">
+                        <div>
+                          <p className="text-xs font-semibold uppercase text-slate-500">Original report</p>
+                          <p className="mt-1">{dispute.reason}</p>
+                          {dispute.explanation && <p className="mt-1">{dispute.explanation}</p>}
+                          <EvidenceLinks links={getDisputeEvidence(dispute, 'original')} />
+                        </div>
+                        {getDisputeResponseExplanation(dispute) && (
+                          <div className="rounded-xl border border-amber-100 bg-amber-50 px-3 py-2">
+                            <p className="text-xs font-semibold uppercase text-amber-700">Response added to case</p>
+                            <p className="mt-1">{getDisputeResponseExplanation(dispute)}</p>
+                            <EvidenceLinks links={getDisputeEvidence(dispute, 'response')} />
+                          </div>
+                        )}
+                      </div>
 
                       {getDisputeResolutionNote(dispute) && (
                         <p className="mt-2 rounded-md bg-emerald-50 px-3 py-2 text-xs text-emerald-700">
@@ -542,13 +594,15 @@ function ClientReportPageContent() {
       </div>
 
       <Dialog open={confirmOpen} onClose={() => setConfirmOpen(false)}>
-        <DialogTitle>Confirm Report Submission</DialogTitle>
+        <DialogTitle>{isRespondingToDispute ? 'Confirm Response Submission' : 'Confirm Report Submission'}</DialogTitle>
         <div className="space-y-3">
           <p className="text-sm text-muted-foreground">
             Please note: submitting false or misleading reports may result in account penalties or suspension.
           </p>
           <p className="text-sm text-muted-foreground">
-            This booking will be marked Under Review while the report is investigated. Any payout or release process related to this booking may be paused pending review.
+            {isRespondingToDispute
+              ? 'Your response will be attached to the existing dispute case. No additional back-and-forth messages will be opened.'
+              : 'This booking will be marked Under Review while the report is investigated. Any payout or release process related to this booking may be paused pending review.'}
           </p>
           <p className="text-sm text-muted-foreground">
             Please confirm that the information you are submitting is accurate.
@@ -558,7 +612,7 @@ function ClientReportPageContent() {
               Cancel
             </Button>
             <Button onClick={confirmSubmitReport} loading={saving || uploadingEvidence}>
-              Confirm Report
+              {isRespondingToDispute ? 'Confirm Response' : 'Confirm Report'}
             </Button>
           </div>
         </div>
@@ -642,6 +696,25 @@ function ClientReportPageContent() {
         }
       `}</style>
     </>
+  )
+}
+
+function EvidenceLinks({ links }: { links: string[] }) {
+  if (links.length === 0) return null
+  return (
+    <div className="mt-2 flex flex-wrap gap-2">
+      {links.map((link, index) => (
+        <a
+          key={`${link}-${index}`}
+          href={link}
+          target="_blank"
+          rel="noreferrer"
+          className="rounded-full border border-slate-200 bg-white px-2.5 py-1 text-xs font-medium text-slate-600 hover:border-slate-300"
+        >
+          Evidence {index + 1}
+        </a>
+      ))}
+    </div>
   )
 }
 

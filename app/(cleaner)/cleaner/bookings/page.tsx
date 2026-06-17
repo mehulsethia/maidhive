@@ -370,6 +370,7 @@ export default function CleanerBookingsPage() {
                 const createdAtMs = new Date(b.created_at).getTime()
                 const reportWindowActive = isBookingReportWindowActive(b.scheduled_end)
                 const canReportProblem = ['in_progress', 'completed'].includes(b.status) && reportWindowActive
+                const canOpenDisputeCase = b.status === 'disputed' && reportWindowActive
                 const earningsLabel = getCleanerEarningsLabel({
                   status: b.status,
                   paymentStatus: b.payment?.status,
@@ -545,6 +546,14 @@ export default function CleanerBookingsPage() {
                         className="inline-flex h-8 items-center rounded-xl border border-slate-300 px-3 text-xs font-semibold text-slate-700 transition-all duration-200 hover:-translate-y-0.5 hover:bg-slate-50"
                       >
                         Report a problem
+                      </Link>
+                    )}
+                    {canOpenDisputeCase && (
+                      <Link
+                        href={`/cleaner/report?booking=${b.id}`}
+                        className="inline-flex h-8 items-center rounded-xl border border-amber-200 bg-amber-50 px-3 text-xs font-semibold text-amber-700 transition-all duration-200 hover:-translate-y-0.5 hover:bg-amber-100"
+                      >
+                        Add information to existing case
                       </Link>
                     )}
                     {canRevealPhoneWindow && (

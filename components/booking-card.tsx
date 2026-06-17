@@ -33,7 +33,9 @@ export function BookingCard({ booking, viewAs = 'client' }: BookingCardProps) {
     (booking.status === 'completed' && !payoutReleased)
   const earningsLabel = payoutReleased
     ? 'You earned'
-    : showProjectedEarnings
+    : booking.status === 'disputed'
+      ? 'Payout pending review'
+      : showProjectedEarnings
       ? 'You will earn'
       : 'Booking value'
 
@@ -79,6 +81,9 @@ export function BookingCard({ booking, viewAs = 'client' }: BookingCardProps) {
               <p className="text-xs text-muted-foreground">
                 {earningsLabel} {formatCurrency(booking.cleaner_payout)}
               </p>
+            )}
+            {viewAs === 'cleaner' && booking.status === 'disputed' && (
+              <p className="text-xs text-amber-700">Payout paused pending dispute resolution.</p>
             )}
           </div>
         </div>

@@ -384,6 +384,11 @@ model Dispute {
   status         String    @default("open")
   reporterRole   String?   @map("reporter_role")
   bookingStatusAtReport String? @map("booking_status_at_report")
+  responseExplanation String?   @map("response_explanation")
+  responseEvidence    Json?     @map("response_evidence")
+  respondedBy         String?   @map("responded_by") @db.Uuid
+  responderRole       String?   @map("responder_role")
+  respondedAt         DateTime? @map("responded_at") @db.Timestamptz(6)
   resolutionType String?   @map("resolution_type")
   resolutionNote String?   @map("resolution_note")
   refundAmount   Decimal?  @map("refund_amount") @db.Decimal(10, 2)

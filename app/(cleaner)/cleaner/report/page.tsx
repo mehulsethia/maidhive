@@ -55,6 +55,18 @@ function getFriendlyBookingReference(dispute: any) {
   return `MH-${raw.slice(-6).toUpperCase()}`
 }
 
+function getDisputeResponseExplanation(dispute: any) {
+  return dispute?.response_explanation ?? dispute?.responseExplanation ?? ''
+}
+
+function getDisputeEvidence(dispute: any, field: 'original' | 'response') {
+  const value =
+    field === 'response'
+      ? dispute?.response_evidence ?? dispute?.responseEvidence
+      : dispute?.evidence
+  return Array.isArray(value) ? value.filter(Boolean) : []
+}
+
 function disputeWindowLabel() {
   if (!Number.isFinite(DISPUTE_WINDOW_HOURS) || DISPUTE_WINDOW_HOURS <= 0) return '24 hours'
   if (DISPUTE_WINDOW_HOURS >= 1) return `${DISPUTE_WINDOW_HOURS} hours`
@@ -82,6 +94,18 @@ function CleanerReportPageContent() {
 
   function isActiveDisputeStatus(status?: string | null) {
     return status === 'open' || status === 'under_review'
+  }
+
+  function isWithinReportWindow(booking: BookingRead) {
+    const scheduledEndAt = new Date(booking.scheduled_end).getTime()
+    return Number.isFinite(scheduledEndAt) && Date.now() <= scheduledEndAt + CLEANER_WINDOW_MS
+  }
+
+  function canSubmitResponseToDispute(booking: BookingRead, dispute?: ClientDispute) {
+    if (!dispute || !isActiveDisputeStatus(dispute.status)) return false
+    if (!isWithinReportWindow(booking)) return false
+    if (dispute.reporter_role === 'cleaner' || dispute.responder_role === 'cleaner') return false
+    return !dispute.responded_by && !dispute.responded_at
   }
 
   function addEvidenceFiles(filesToAdd: File[]) {
@@ -155,9 +179,11 @@ function CleanerReportPageContent() {
 
   const eligibleBookings = deferredBookings.filter((booking) => {
     const dispute = disputeByBookingId.get(booking.id)
-    if (dispute && isActiveDisputeStatus(dispute.status)) return false
+    if (dispute && isActiveDisputeStatus(dispute.status)) {
+      return canSubmitResponseToDispute(booking, dispute)
+    }
     if (!['confirmed', 'in_progress', 'completed', 'disputed'].includes(booking.status)) return false
-    return Date.now() <= new Date(booking.scheduled_end).getTime() + CLEANER_WINDOW_MS
+    return isWithinReportWindow(booking)
   })
 
   const bookingOptions = (() => {
@@ -180,6 +206,12 @@ function CleanerReportPageContent() {
   }, [bookingOptions, bookingId])
 
   const selectedBooking = bookingOptions.find((booking) => booking.id === bookingId)
+  const selectedActiveDispute = bookingId ? disputeByBookingId.get(bookingId) : undefined
+  const isRespondingToDispute = Boolean(
+    selectedBooking &&
+    selectedActiveDispute &&
+    canSubmitResponseToDispute(selectedBooking, selectedActiveDispute),
+  )
   const canUseClientNoShowOption = selectedBooking
     ? Date.now() >= new Date(selectedBooking.scheduled_start).getTime() + NO_SHOW_DELAY_MS
     : false
@@ -194,13 +226,14 @@ function CleanerReportPageContent() {
     if (!bookingId) return toast.error('Select a booking.')
     const activeDispute = disputeByBookingId.get(bookingId)
     if (activeDispute && isActiveDisputeStatus(activeDispute.status)) {
-      return toast.error('This booking is currently under review.')
-    }
-    if (!eligibleBookings.some((booking) => booking.id === bookingId)) {
+      if (!selectedBooking || !canSubmitResponseToDispute(selectedBooking, activeDispute)) {
+        return toast.error('Booking already under review. You cannot add more information to this case.')
+      }
+    } else if (!eligibleBookings.some((booking) => booking.id === bookingId)) {
       return toast.error('This booking cannot be reported right now.')
     }
     if (!selectedBooking) return toast.error('Invalid booking selection.')
-    if (issueType === 'client_no_show') {
+    if (!isRespondingToDispute && issueType === 'client_no_show') {
       const canReportNoShowAt = new Date(selectedBooking.scheduled_start).getTime() + NO_SHOW_DELAY_MS
       if (Date.now() < canReportNoShowAt) {
         return toast.error('Client no-show can be reported 30 minutes after the scheduled start time.')
@@ -243,12 +276,17 @@ function CleanerReportPageContent() {
 
     setSaving(true)
     try {
+      const wasResponse = Boolean(
+        selectedBooking &&
+        disputeByBookingId.get(bookingId) &&
+        canSubmitResponseToDispute(selectedBooking, disputeByBookingId.get(bookingId)),
+      )
       await disputesApi.createForBooking(bookingId, {
         issue_type: issueType,
         explanation: explanation.trim(),
         evidence: [...evidence, ...uploadedUrls].length ? [...evidence, ...uploadedUrls] : undefined,
       })
-      toast.success('Report submitted. Booking is now under review and sent to admin.')
+      toast.success(wasResponse ? 'Response submitted to the existing case.' : 'Report submitted. Booking is now under review and sent to admin.')
       setIssueType('access_issue')
       setExplanation('')
       setEvidenceInput('')
@@ -315,11 +353,13 @@ function CleanerReportPageContent() {
 
       <section className="grid gap-4 xl:grid-cols-[1fr_1fr]">
         <div className="rounded-[1.5rem] border border-slate-200/80 bg-white/90 p-4 shadow-[0_18px_45px_rgba(11,33,78,0.08)] sm:p-5">
-          <h2 className={`${displayFont.className} text-2xl font-bold tracking-[-0.02em] text-slate-900`}>Report a problem</h2>
+          <h2 className={`${displayFont.className} text-2xl font-bold tracking-[-0.02em] text-slate-900`}>
+            {isRespondingToDispute ? 'Add information to existing case' : 'Report a problem'}
+          </h2>
           <p className="mt-1 text-sm text-slate-500">{REPORT_AVAILABILITY_COPY}</p>
           {isActiveDisputeStatus(queryBookingDisputeStatus) && (
             <p className="mt-2 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-700">
-              This booking is currently under review by MaidHive.
+              Booking already under review. Submit your response in the existing case if you have not already submitted.
             </p>
           )}
           {bookingOptions.length === 0 ? (
@@ -336,24 +376,32 @@ function CleanerReportPageContent() {
                   ))}
                 </Select>
               </div>
+              {!isRespondingToDispute && (
+                <div>
+                  <Label>Report reason</Label>
+                  <Select value={issueType} onChange={(event) => setIssueType(event.target.value as (typeof CLEANER_DISPUTE_ISSUES)[number]['value'])} className="mt-1">
+                    {CLEANER_DISPUTE_ISSUES.filter((option) =>
+                      option.value === 'client_no_show' ? canUseClientNoShowOption : true,
+                    ).map((option) => (
+                      <option key={option.value} value={option.value}>{option.label}</option>
+                    ))}
+                  </Select>
+                  {!canUseClientNoShowOption && (
+                    <p className="mt-1 text-xs text-slate-500">
+                      “Client no-show” becomes available 30 minutes after scheduled start.
+                    </p>
+                  )}
+                </div>
+              )}
               <div>
-                <Label>Report reason</Label>
-                <Select value={issueType} onChange={(event) => setIssueType(event.target.value as (typeof CLEANER_DISPUTE_ISSUES)[number]['value'])} className="mt-1">
-                  {CLEANER_DISPUTE_ISSUES.filter((option) =>
-                    option.value === 'client_no_show' ? canUseClientNoShowOption : true,
-                  ).map((option) => (
-                    <option key={option.value} value={option.value}>{option.label}</option>
-                  ))}
-                </Select>
-                {!canUseClientNoShowOption && (
-                  <p className="mt-1 text-xs text-slate-500">
-                    “Client no-show” becomes available 30 minutes after scheduled start.
-                  </p>
-                )}
-              </div>
-              <div>
-                <Label>Short explanation (minimum 20 characters)</Label>
-                <Textarea value={explanation} onChange={(event) => setExplanation(event.target.value)} className="mt-1" rows={4} placeholder="Describe what happened in clear detail." />
+                <Label>{isRespondingToDispute ? 'Your response (minimum 20 characters)' : 'Short explanation (minimum 20 characters)'}</Label>
+                <Textarea
+                  value={explanation}
+                  onChange={(event) => setExplanation(event.target.value)}
+                  className="mt-1"
+                  rows={4}
+                  placeholder={isRespondingToDispute ? 'Add your side of the dispute in clear detail.' : 'Describe what happened in clear detail.'}
+                />
                 <p className="mt-1 text-xs text-slate-500">{explanation.trim().length}/20 minimum</p>
               </div>
               <div>
@@ -400,7 +448,9 @@ function CleanerReportPageContent() {
                 />
               </div>
               <div className="flex justify-end">
-                <Button onClick={submitReport} loading={saving || uploadingEvidence} className="rounded-full bg-[#0d4bc9] hover:bg-[#0a3ea8]">Submit Report</Button>
+                <Button onClick={submitReport} loading={saving || uploadingEvidence} className="rounded-full bg-[#0d4bc9] hover:bg-[#0a3ea8]">
+                  {isRespondingToDispute ? 'Submit your response' : 'Submit Report'}
+                </Button>
               </div>
             </div>
           )}
@@ -442,7 +492,21 @@ function CleanerReportPageContent() {
                         {STATUS_LABELS[status]}
                       </span>
                     </div>
-                    <p className="mt-2 text-sm text-slate-700">{dispute.explanation ?? dispute.reason}</p>
+                    <div className="mt-2 space-y-2 text-sm text-slate-700">
+                      <div>
+                        <p className="text-xs font-semibold uppercase text-slate-500">Original report</p>
+                        <p className="mt-1">{dispute.reason}</p>
+                        {dispute.explanation && <p className="mt-1">{dispute.explanation}</p>}
+                        <EvidenceLinks links={getDisputeEvidence(dispute, 'original')} />
+                      </div>
+                      {getDisputeResponseExplanation(dispute) && (
+                        <div className="rounded-xl border border-amber-100 bg-amber-50 px-3 py-2">
+                          <p className="text-xs font-semibold uppercase text-amber-700">Response added to case</p>
+                          <p className="mt-1">{getDisputeResponseExplanation(dispute)}</p>
+                          <EvidenceLinks links={getDisputeEvidence(dispute, 'response')} />
+                        </div>
+                      )}
+                    </div>
                     <div className="mt-2 text-xs text-slate-500 inline-flex items-center gap-1">
                       <CalendarDays className="h-3.5 w-3.5" />
                       {formatDate(dispute.created_at)}
@@ -456,14 +520,20 @@ function CleanerReportPageContent() {
       </section>
 
       <Dialog open={confirmOpen} onClose={() => setConfirmOpen(false)}>
-        <DialogTitle>Confirm Report Submission</DialogTitle>
+        <DialogTitle>{isRespondingToDispute ? 'Confirm Response Submission' : 'Confirm Report Submission'}</DialogTitle>
         <div className="space-y-3">
           <p className="text-sm text-muted-foreground">Please note: submitting false or misleading reports may result in account penalties or suspension.</p>
-          <p className="text-sm text-muted-foreground">This booking will be marked Under Review while the report is investigated. Any payout or release process related to this booking may be paused pending review.</p>
+          <p className="text-sm text-muted-foreground">
+            {isRespondingToDispute
+              ? 'Your response will be attached to the existing dispute case. No additional back-and-forth messages will be opened.'
+              : 'This booking will be marked Under Review while the report is investigated. Any payout or release process related to this booking may be paused pending review.'}
+          </p>
           <p className="text-sm text-muted-foreground">Please confirm that the information you are submitting is accurate.</p>
           <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
             <Button variant="outline" onClick={() => setConfirmOpen(false)}>Cancel</Button>
-            <Button onClick={confirmSubmitReport} loading={saving || uploadingEvidence}>Confirm Report</Button>
+            <Button onClick={confirmSubmitReport} loading={saving || uploadingEvidence}>
+              {isRespondingToDispute ? 'Confirm Response' : 'Confirm Report'}
+            </Button>
           </div>
         </div>
       </Dialog>
@@ -532,6 +602,25 @@ function CleanerReportPageContent() {
       }
     `}</style>
     </>
+  )
+}
+
+function EvidenceLinks({ links }: { links: string[] }) {
+  if (links.length === 0) return null
+  return (
+    <div className="mt-2 flex flex-wrap gap-2">
+      {links.map((link, index) => (
+        <a
+          key={`${link}-${index}`}
+          href={link}
+          target="_blank"
+          rel="noreferrer"
+          className="rounded-full border border-slate-200 bg-white px-2.5 py-1 text-xs font-medium text-slate-600 hover:border-slate-300"
+        >
+          Evidence {index + 1}
+        </a>
+      ))}
+    </div>
   )
 }
 

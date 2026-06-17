@@ -571,6 +571,11 @@ export interface AdminDispute {
   evidence?: string[] | null
   reporter_role?: 'client' | 'cleaner' | 'admin' | null
   booking_status_at_report?: string | null
+  response_explanation?: string | null
+  response_evidence?: string[] | null
+  responded_by?: string | null
+  responder_role?: 'client' | 'cleaner' | 'admin' | null
+  responded_at?: string | null
   status: 'open' | 'under_review' | 'resolved' | 'closed'
   resolution_type?: string
   resolution_note?: string
@@ -589,6 +594,11 @@ export interface ClientDispute {
   evidence?: string[] | null
   reporter_role?: 'client' | 'cleaner' | 'admin' | null
   booking_status_at_report?: string | null
+  response_explanation?: string | null
+  response_evidence?: string[] | null
+  responded_by?: string | null
+  responder_role?: 'client' | 'cleaner' | 'admin' | null
+  responded_at?: string | null
   status: 'open' | 'under_review' | 'resolved' | 'closed'
   resolution_type?: string
   resolution_note?: string
