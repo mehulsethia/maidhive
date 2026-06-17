@@ -5,6 +5,7 @@ import { db } from './db'
 import { availabilityRepo } from './repositories/availability.repo'
 import { notificationRepo } from './repositories/notification.repo'
 import { computeCleanerOnboardingProgress } from './services/cleaner-onboarding.service'
+import { isSupabaseInvalidRefreshTokenError } from '@/lib/supabase-auth-errors'
 
 export type AppRole = 'client' | 'cleaner' | 'admin'
 
@@ -127,7 +128,16 @@ export async function bootstrapServerSession(options: BootstrapOptions = {}): Pr
     },
   )
 
-  const { data, error } = await supabase.auth.getUser()
+  let data
+  let error
+  try {
+    const result = await supabase.auth.getUser()
+    data = result.data
+    error = result.error
+  } catch (authError) {
+    if (!isSupabaseInvalidRefreshTokenError(authError)) throw authError
+    redirect('/login')
+  }
   if (error || !data.user) {
     redirect('/login')
   }

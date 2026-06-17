@@ -448,7 +448,7 @@ function CleanerReportPageContent() {
                 />
               </div>
               <div className="flex justify-end">
-                <Button onClick={submitReport} loading={saving || uploadingEvidence} className="rounded-full bg-[#0d4bc9] hover:bg-[#0a3ea8]">
+                <Button onClick={submitReport} loading={saving || uploadingEvidence} className="w-full rounded-full bg-[#0d4bc9] hover:bg-[#0a3ea8] sm:w-auto">
                   {isRespondingToDispute ? 'Submit your response' : 'Submit Report'}
                 </Button>
               </div>

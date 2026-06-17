@@ -72,18 +72,6 @@ export const GET = requireAuth(async (_req, _ctx, user) => {
         })()
       : await notificationRepo.countUnread(userId)
 
-  if ((pendingBookings === 0 && unreadChats === 0) && unreadNotifications > 0 && role !== 'admin') {
-    console.warn('counts.zero_operational_with_notifications', {
-      clientRequestId,
-      userId,
-      role,
-      browser,
-      pendingBookings,
-      unreadChats,
-      unreadNotifications,
-    })
-  }
-
   console.info('counts.result', {
     clientRequestId,
     userId,

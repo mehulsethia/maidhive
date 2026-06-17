@@ -494,7 +494,7 @@ export default function ClientBookingsPage() {
                         {canOpenDisputeCase && (
                           <Link
                             href={`/client/report?booking=${booking.id}`}
-                            className="inline-flex h-8 items-center rounded-full border border-amber-200 bg-amber-50 px-3 text-xs font-semibold text-amber-700 transition hover:bg-amber-100"
+                            className="inline-flex min-h-8 max-w-full items-center justify-center rounded-full border border-amber-200 bg-amber-50 px-3 py-1.5 text-center text-xs font-semibold leading-snug text-amber-700 transition hover:bg-amber-100"
                           >
                             Add information to existing case
                           </Link>

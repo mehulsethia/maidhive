@@ -1,5 +1,6 @@
 import { createServerClient } from '@supabase/ssr'
 import { NextResponse, type NextRequest } from 'next/server'
+import { isSupabaseInvalidRefreshTokenError } from '@/lib/supabase-auth-errors'
 
 const PROTECTED_PREFIXES = ['/client', '/cleaner', '/admin']
 const AUTH_ROUTES = ['/login', '/signup', '/verify-email']
@@ -8,6 +9,20 @@ function getPostLoginPath(role: string | null) {
   if (role === 'cleaner') return '/cleaner/dashboard'
   if (role === 'admin') return '/admin/dashboard'
   return '/client/dashboard'
+}
+
+function supabaseAuthCookieNames(request: NextRequest) {
+  return request.cookies
+    .getAll()
+    .map((cookie) => cookie.name)
+    .filter((name) =>
+      name.startsWith('sb-') &&
+      (name.includes('auth-token') || name.includes('access-token') || name.includes('refresh-token')),
+    )
+}
+
+function clearSupabaseAuthCookies(response: NextResponse, cookieNames: string[]) {
+  cookieNames.forEach((name) => response.cookies.delete(name))
 }
 
 export async function proxy(request: NextRequest) {
@@ -45,7 +60,16 @@ export async function proxy(request: NextRequest) {
 
   // getSession reads from cookies only (no network). Acceptable for routing —
   // backend re-validates JWT on every authenticated request.
-  const { data: { session } } = await supabase.auth.getSession()
+  let session = null
+  const staleAuthCookieNames = supabaseAuthCookieNames(request)
+  let shouldClearStaleAuthCookies = false
+  try {
+    const result = await supabase.auth.getSession()
+    session = result.data.session
+  } catch (error) {
+    if (!isSupabaseInvalidRefreshTokenError(error)) throw error
+    shouldClearStaleAuthCookies = true
+  }
   const user = session?.user ?? null
   const role =
     user && typeof user.user_metadata?.role === 'string'
@@ -56,7 +80,9 @@ export async function proxy(request: NextRequest) {
     const url = request.nextUrl.clone()
     url.pathname = '/login'
     url.searchParams.set('next', `${pathname}${request.nextUrl.search}`)
-    return NextResponse.redirect(url)
+    const redirectResponse = NextResponse.redirect(url)
+    if (shouldClearStaleAuthCookies) clearSupabaseAuthCookies(redirectResponse, staleAuthCookieNames)
+    return redirectResponse
   }
 
   if (isProtected && user) {
@@ -70,7 +96,9 @@ export async function proxy(request: NextRequest) {
     ) {
       const url = request.nextUrl.clone()
       url.pathname = getPostLoginPath(role)
-      return NextResponse.redirect(url)
+      const redirectResponse = NextResponse.redirect(url)
+      if (shouldClearStaleAuthCookies) clearSupabaseAuthCookies(redirectResponse, staleAuthCookieNames)
+      return redirectResponse
     }
   }
 
@@ -79,15 +107,20 @@ export async function proxy(request: NextRequest) {
     const next = request.nextUrl.searchParams.get('next')
     url.pathname = next && next.startsWith('/') ? next : getPostLoginPath(role)
     url.search = ''
-    return NextResponse.redirect(url)
+    const redirectResponse = NextResponse.redirect(url)
+    if (shouldClearStaleAuthCookies) clearSupabaseAuthCookies(redirectResponse, staleAuthCookieNames)
+    return redirectResponse
   }
 
   if (isLanding && user) {
     const url = request.nextUrl.clone()
     url.pathname = getPostLoginPath(role)
-    return NextResponse.redirect(url)
+    const redirectResponse = NextResponse.redirect(url)
+    if (shouldClearStaleAuthCookies) clearSupabaseAuthCookies(redirectResponse, staleAuthCookieNames)
+    return redirectResponse
   }
 
+  if (shouldClearStaleAuthCookies) clearSupabaseAuthCookies(response, staleAuthCookieNames)
   return response
 }
 

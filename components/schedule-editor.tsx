@@ -504,7 +504,7 @@ export function ScheduleEditor({ compact, onSave, onSaveExternal, saveRef }: Sch
   }
 
   return (
-    <div className={cn('grid gap-4', compact ? '' : 'xl:grid-cols-[minmax(0,1fr)_320px]')}>
+    <div className="grid gap-4">
       {/* ── Left: Schedule ──────────────────────────────────────────────── */}
       <div className="min-w-0 rounded-2xl border border-slate-200 bg-white">
         {/* Header */}
@@ -628,7 +628,7 @@ export function ScheduleEditor({ compact, onSave, onSaveExternal, saveRef }: Sch
 
       {/* ── Right: Block Dates + Google Calendar ────────────────────────── */}
       {!compact && (
-        <div className="min-w-0 space-y-4 xl:w-[320px]">
+        <div className="min-w-0 space-y-4">
           {/* Block Dates */}
           <div className="rounded-2xl border border-slate-200 bg-white p-5">
             <p className="text-base font-semibold text-slate-900">Block Dates</p>
@@ -679,7 +679,7 @@ export function ScheduleEditor({ compact, onSave, onSaveExternal, saveRef }: Sch
 
           {/* Google Calendar */}
           <div className="rounded-2xl border border-slate-200 bg-white p-5">
-            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between xl:flex-col xl:items-stretch 2xl:flex-row 2xl:items-center">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
               <div className="flex min-w-0 items-center gap-3">
                 <CalendarDays className="h-8 w-8 text-primary" />
                 <p className="min-w-0 text-sm font-semibold text-slate-900">Google Calendar</p>

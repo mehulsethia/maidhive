@@ -3,6 +3,7 @@ import { Bricolage_Grotesque, IBM_Plex_Mono } from 'next/font/google'
 import { createServerClient } from '@supabase/ssr'
 import { cookies } from 'next/headers'
 import { redirect } from 'next/navigation'
+import { isSupabaseInvalidRefreshTokenError } from '@/lib/supabase-auth-errors'
 
 const displayFont = Bricolage_Grotesque({ subsets: ['latin'], weight: ['400', '500', '700', '800'] })
 const monoFont = IBM_Plex_Mono({ subsets: ['latin'], weight: ['400', '500', '600'] })
@@ -30,9 +31,13 @@ export default async function AuthLayout({ children }: { children: React.ReactNo
       },
     },
   )
-  const { data } = await supabase.auth.getUser()
-  if (data.user) {
-    redirect(getPostLoginPath(data.user))
+  try {
+    const { data } = await supabase.auth.getUser()
+    if (data.user) {
+      redirect(getPostLoginPath(data.user))
+    }
+  } catch (error) {
+    if (!isSupabaseInvalidRefreshTokenError(error)) throw error
   }
 
   return (
