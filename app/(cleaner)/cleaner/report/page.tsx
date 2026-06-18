@@ -129,8 +129,8 @@ function CleanerReportPageContent() {
     setEvidenceFiles(next)
   }
 
-  async function load() {
-    setLoading(true)
+  async function load(showSkeleton = true) {
+    if (showSkeleton) setLoading(true)
     try {
       const [bookingRes, disputeRes] = await Promise.all([bookingsApi.my(), disputesApi.listMine()])
       const bookingItems = bookingRes.data?.items ?? []
@@ -140,8 +140,8 @@ function CleanerReportPageContent() {
         setDisputes(disputeItems)
         if (bookingFromQuery && bookingItems.some((booking) => booking.id === bookingFromQuery)) {
           setBookingId(bookingFromQuery)
-        } else if (!bookingId && bookingItems.length > 0) {
-          setBookingId(bookingItems[0].id)
+        } else if (!bookingFromQuery) {
+          setBookingId((current) => (bookingItems.some((booking) => booking.id === current) ? current : ''))
         }
         setLoading(false)
       })
@@ -200,10 +200,14 @@ function CleanerReportPageContent() {
       if (bookingId) setBookingId('')
       return
     }
-    if (!bookingOptions.some((booking) => booking.id === bookingId)) {
-      setBookingId(bookingOptions[0].id)
+    if (bookingFromQuery && bookingOptions.some((booking) => booking.id === bookingFromQuery)) {
+      if (bookingId !== bookingFromQuery) setBookingId(bookingFromQuery)
+      return
     }
-  }, [bookingOptions, bookingId])
+    if (bookingId && !bookingOptions.some((booking) => booking.id === bookingId)) {
+      setBookingId('')
+    }
+  }, [bookingOptions, bookingId, bookingFromQuery])
 
   const selectedBooking = bookingOptions.find((booking) => booking.id === bookingId)
   const selectedActiveDispute = bookingId ? disputeByBookingId.get(bookingId) : undefined
@@ -291,7 +295,7 @@ function CleanerReportPageContent() {
       setExplanation('')
       setEvidenceInput('')
       setEvidenceFiles([])
-      await load()
+      await load(false)
     } catch (err: any) {
       toast.error(err.message ?? 'Failed to submit report.')
     } finally {
@@ -369,6 +373,9 @@ function CleanerReportPageContent() {
               <div>
                 <Label>Booking</Label>
                 <Select value={bookingId} onChange={(event) => setBookingId(event.target.value)} className="mt-1">
+                  <option value="" disabled>
+                    Select a booking
+                  </option>
                   {bookingOptions.map((booking) => (
                     <option key={booking.id} value={booking.id}>
                       {booking.client?.user?.name ?? 'Client'} · {formatDate(booking.scheduled_start)} · {booking.city}

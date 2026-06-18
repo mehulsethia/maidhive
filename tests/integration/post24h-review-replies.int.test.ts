@@ -98,6 +98,24 @@ describe('Post-24h review replies + moderation integration', () => {
     expect(secondBody.message).toContain('cannot be edited')
   })
 
+  it('allows a short non-empty cleaner reply', async () => {
+    const route = await import('@/app/api/v1/reviews/[bookingId]/reply/route')
+
+    const res = await route.POST(
+      new NextRequest('http://localhost/api/v1/reviews/review_1/reply', {
+        method: 'POST',
+        body: JSON.stringify({ response: 'Thanks!' }),
+        headers: { 'content-type': 'application/json' },
+      }),
+      { params: Promise.resolve({ bookingId: 'review_1' }) } as any,
+    )
+    const body = await res.json()
+
+    expect(res.status).toBe(200)
+    expect(body.success).toBe(true)
+    expect(state.review.cleanerReply).toBe('Thanks!')
+  })
+
   it('allows admin to remove abusive public reply', async () => {
     state.review.cleanerReply = 'bad reply'
     state.review.cleanerReplyAt = new Date('2026-05-10T11:00:00.000Z')

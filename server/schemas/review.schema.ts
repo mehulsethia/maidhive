@@ -7,5 +7,5 @@ export const createReviewSchema = z.object({
 })
 
 export const cleanerReviewResponseSchema = z.object({
-  response: z.string().trim().min(10).max(2000),
+  response: z.string().trim().min(1, 'Reply cannot be empty.').max(2000),
 })
