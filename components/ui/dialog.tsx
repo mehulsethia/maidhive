@@ -43,6 +43,8 @@ function Dialog({ open, onClose, children, className }: DialogProps) {
       <div className="absolute inset-0 overflow-y-auto p-3 sm:p-4">
         <div className="flex min-h-full items-end justify-center py-1 sm:items-center sm:py-8">
           <div
+            role="dialog"
+            aria-modal="true"
             className={cn(
               'relative z-10 w-full max-w-md max-h-[calc(100dvh-1rem)] overflow-y-auto rounded-2xl border border-slate-200 bg-background p-5 shadow-2xl sm:max-h-[calc(100dvh-4rem)] sm:p-6',
               className,

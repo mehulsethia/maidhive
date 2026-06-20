@@ -85,7 +85,7 @@ export default function CleanerDashboardPage() {
       }
 
       try {
-        const bookingRes = await bookingsApi.my(1, undefined, 100)
+        const bookingRes = await bookingsApi.my(1, undefined, 50)
         setBookings(bookingRes.data?.items ?? [])
         resetLoadError('cleaner-dashboard-bookings')
       } catch {

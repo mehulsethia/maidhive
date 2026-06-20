@@ -41,6 +41,7 @@ import { showJobStartedToast } from '@/lib/job-start-toast'
 import { reportLoadError, resetLoadError } from '@/lib/load-error-policy'
 import { formatCurrency, formatDate } from '@/lib/utils'
 import { AMENDMENT_EXPIRY_OUTCOME_COPY, isWithinAmendStartWindow } from '@/lib/booking-amendment'
+import { getCancellationOriginLabel } from '@/lib/cancellation-origin'
 import type { BookingRead } from '@/types'
 import { toast } from 'sonner'
 
@@ -141,13 +142,6 @@ function getCleanerCancelledPayoutMessage(
       ? 'Client cancelled more than 24 hours before start. No cleaner compensation applies.'
       : 'No cleaner compensation applies for this cancellation outcome.',
   }
-}
-
-function getCancellationOriginLabel(booking: BookingRead) {
-  if (booking.status !== 'cancelled' || !booking.cancelled_by) return null
-  if (booking.cancelled_by === booking.client?.user?.id) return 'Cancelled by client'
-  if (booking.cancelled_by === booking.cleaner?.user?.id) return 'Cancelled by cleaner'
-  return 'Cancelled by platform'
 }
 
 export default function CleanerBookingDetailPage() {

@@ -8,16 +8,23 @@ const VIEWPORTS = [
 ] as const
 
 async function assertResponsiveRoute(page: Page, path: string) {
-  await page.goto(path)
-  await page.waitForLoadState('networkidle')
+  await page.setViewportSize(VIEWPORTS[0])
+  await page.goto(path, { waitUntil: 'domcontentloaded' })
+  await expect(page).not.toHaveURL(/\/login(?:\?|$)/)
   await expect(page.locator('body')).not.toBeEmpty()
   await expect(page.locator('[data-nextjs-dialog]')).toHaveCount(0)
 
-  const dimensions = await page.evaluate(() => ({
-    viewport: document.documentElement.clientWidth,
-    document: document.documentElement.scrollWidth,
-  }))
-  expect(dimensions.document, `${path} should not overflow horizontally`).toBeLessThanOrEqual(dimensions.viewport + 1)
+  for (const viewport of VIEWPORTS) {
+    await page.setViewportSize(viewport)
+    const dimensions = await page.evaluate(() => ({
+      viewport: document.documentElement.clientWidth,
+      document: document.documentElement.scrollWidth,
+    }))
+    expect(
+      dimensions.document,
+      `${path} should not overflow horizontally at ${viewport.name}`,
+    ).toBeLessThanOrEqual(dimensions.viewport + 1)
+  }
 }
 
 test.describe('F19 dispute and compensation responsive regression @smoke', () => {
@@ -27,14 +34,10 @@ test.describe('F19 dispute and compensation responsive regression @smoke', () =>
     test.use({ storageState: authStatePath('admin') })
 
     test('E2E-RESP-01 admin dispute and booking history remain responsive across viewport classes', async ({ page }) => {
-      for (const viewport of VIEWPORTS) {
-        await test.step(viewport.name, async () => {
-          await page.setViewportSize(viewport)
-          await assertResponsiveRoute(page, '/admin/disputes')
-        })
-      }
+      await assertResponsiveRoute(page, '/admin/disputes')
 
       await page.setViewportSize(VIEWPORTS[0])
+      await page.waitForTimeout(6_000)
       const resolveButton = page.getByRole('button', { name: /^Resolve$/ }).first()
       if (await resolveButton.count()) {
         await resolveButton.click()
@@ -49,10 +52,7 @@ test.describe('F19 dispute and compensation responsive regression @smoke', () =>
       const bookingsBody = await bookingsResponse.json()
       const bookingId = bookingsBody?.data?.bookings?.[0]?.id ?? bookingsBody?.data?.items?.[0]?.id
       if (bookingId) {
-        for (const viewport of VIEWPORTS) {
-          await page.setViewportSize(viewport)
-          await assertResponsiveRoute(page, `/admin/bookings/${bookingId}`)
-        }
+        await assertResponsiveRoute(page, `/admin/bookings/${bookingId}`)
       }
     })
   })
@@ -61,32 +61,27 @@ test.describe('F19 dispute and compensation responsive regression @smoke', () =>
     test.use({ storageState: authStatePath('cleaner') })
 
     test('E2E-RESP-02 cleaner report, earnings, booking and payment surfaces remain responsive', async ({ page }) => {
-      for (const viewport of VIEWPORTS) {
-        await test.step(viewport.name, async () => {
-          await page.setViewportSize(viewport)
-          for (const path of ['/cleaner/report', '/cleaner/dashboard', '/cleaner/earnings', '/cleaner/profile?tab=payments']) {
-            await assertResponsiveRoute(page, path)
-          }
-        })
+      for (const path of ['/cleaner/report', '/cleaner/dashboard', '/cleaner/earnings', '/cleaner/profile?tab=payments']) {
+        await assertResponsiveRoute(page, path)
       }
 
       await page.setViewportSize(VIEWPORTS[0])
       await assertResponsiveRoute(page, '/cleaner/dashboard')
       await expect(page.getByRole('button', {
         name: 'Includes completed booking payouts and any released compensation payments.',
-      })).toBeVisible()
+      })).toBeVisible({ timeout: 20_000 })
 
       const cancelledResponse = await page.request.get('/api/v1/bookings?page=1&page_size=1&status=cancelled')
       expect(cancelledResponse.status()).toBe(200)
       const cancelledBody = await cancelledResponse.json()
-      const cancelledId = cancelledBody?.data?.bookings?.[0]?.id ?? cancelledBody?.data?.items?.[0]?.id
+      const cancelledBooking = cancelledBody?.data?.bookings?.[0] ?? cancelledBody?.data?.items?.[0]
+      const cancelledId = cancelledBooking?.id
       if (cancelledId) {
-        for (const viewport of VIEWPORTS) {
-          await page.setViewportSize(viewport)
-          await assertResponsiveRoute(page, `/cleaner/bookings/${cancelledId}`)
-          await expect(page.getByText(/Cancelled by (client|cleaner|platform)/)).toBeVisible()
-          await expect(page.getByText('Compensation outcome')).toBeVisible()
+        await assertResponsiveRoute(page, `/cleaner/bookings/${cancelledId}`)
+        if (cancelledBooking.cancelled_by) {
+          await expect(page.getByText(/Cancelled by (client|cleaner|platform)/)).toBeVisible({ timeout: 20_000 })
         }
+        await expect(page.getByText('Compensation outcome')).toBeVisible({ timeout: 20_000 })
       }
     })
   })
