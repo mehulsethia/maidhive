@@ -84,8 +84,8 @@ function buildTimeline(booking: BookingRead): TimelineEvent[] {
   addEvent(events, payment?.created_at ? {
     id: 'payment-created',
     at: payment.created_at,
-    title: 'Payment record created',
-    description: `Payment status set to ${payment.status}.`,
+    title: `Payment status updated to ${payment.status.replace(/_/g, ' ')}`,
+    description: 'The existing payment record reflects the latest payment state.',
   } : null)
 
   addEvent(events, payment?.authorized_at ? {
@@ -190,7 +190,31 @@ function buildTimeline(booking: BookingRead): TimelineEvent[] {
     description: `${booking.review.rating}/5 rating${booking.review.comment ? `: ${booking.review.comment}` : ''}.`,
   } : null)
 
-  addEvent(events, booking.updated_at ? {
+  addEvent(events, booking.dispute?.created_at ? {
+    id: 'dispute-submitted',
+    at: booking.dispute.created_at,
+    title: `Dispute submitted by ${booking.dispute.reporter_role ?? 'participant'}`,
+    description: booking.dispute.reason,
+    tone: 'danger',
+  } : null)
+
+  addEvent(events, booking.dispute?.responded_at ? {
+    id: 'dispute-response',
+    at: booking.dispute.responded_at,
+    title: `${actorLabel(booking.dispute.responder_role)} response submitted`,
+    description: booking.dispute.response_explanation || 'A response was added to the dispute case.',
+    tone: 'warning',
+  } : null)
+
+  addEvent(events, booking.dispute?.resolved_at ? {
+    id: 'dispute-resolved',
+    at: booking.dispute.resolved_at,
+    title: 'Dispute resolved',
+    description: booking.dispute.resolution_note || 'The dispute was resolved by an administrator.',
+    tone: 'success',
+  } : null)
+
+  addEvent(events, booking.updated_at && !booking.dispute ? {
     id: 'updated',
     at: booking.updated_at,
     title: 'Booking last updated',
@@ -245,6 +269,10 @@ export default function AdminBookingDetailPage() {
   const cleanerName = booking.cleaner?.user?.name?.trim() || 'Cleaner'
   const subtotal = booking.subtotal ?? booking.total_amount - booking.platform_fee
   const paymentStatus = booking.payment?.status ?? 'not recorded'
+  const activeDispute = booking.dispute && ['open', 'under_review'].includes(booking.dispute.status)
+  const paymentStateLabel = activeDispute && paymentStatus === 'authorized'
+    ? 'Payment authorised — payout paused pending dispute'
+    : paymentStatus.replace(/_/g, ' ')
   const cancellationOutcome = isSuccessfulPaymentStatus(booking.payment?.status)
     ? getCancellationPaymentOutcome(booking)
     : null
@@ -372,7 +400,7 @@ export default function AdminBookingDetailPage() {
             </CardHeader>
             <CardContent className="space-y-3">
               <div className="grid min-w-0 gap-3 sm:grid-cols-2 xl:grid-cols-1">
-                <DetailRow label="Payment status" value={paymentStatus.replace(/_/g, ' ')} />
+                <DetailRow label="Payment status" value={paymentStateLabel} />
                 <DetailRow label="Original booking amount" value={formatCurrency(booking.total_amount)} />
                 {cancellationOutcome ? (
                   <>

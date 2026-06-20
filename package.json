@@ -15,6 +15,7 @@
     "test:e2e": "playwright test",
     "test:e2e:smoke": "playwright test --grep @smoke",
     "test:e2e:matrix": "E2E_BROWSER_MATRIX=1 playwright test --grep @smoke",
+    "test:preprod": "npm test && npm run build && npm run test:e2e:smoke",
     "backfill:notifications": "node scripts/backfill-notifications.cjs",
     "reconcile:backfill": "node scripts/reconcile-backfill.cjs"
   },

@@ -30,6 +30,7 @@ function bookingInclude() {
     cleaner: { include: { user: true } },
     payment: true,
     review: true,
+    dispute: true,
     _count: {
       select: {
         messages: true,
@@ -68,6 +69,23 @@ function bookingListInclude() {
       },
     },
     payment: true,
+    dispute: {
+      select: {
+        id: true,
+        status: true,
+        reason: true,
+        issueType: true,
+        reporterRole: true,
+        responseExplanation: true,
+        responderRole: true,
+        respondedAt: true,
+        resolutionType: true,
+        resolutionNote: true,
+        resolvedAt: true,
+        createdAt: true,
+        updatedAt: true,
+      },
+    },
     review: {
       select: {
         id: true,

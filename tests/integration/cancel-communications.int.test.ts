@@ -58,7 +58,9 @@ vi.mock('@/server/repositories/payment.repo', () => ({
 }))
 
 vi.mock('@/server/repositories/dispute.repo', () => ({
-  disputeRepo: {},
+  disputeRepo: {
+    findByBookingId: vi.fn(async () => null),
+  },
 }))
 
 vi.mock('@/server/db', () => ({

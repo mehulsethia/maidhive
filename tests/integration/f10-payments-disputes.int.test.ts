@@ -316,6 +316,39 @@ describe('F10 Payments capture/refund/dispute integration', () => {
     expect(body.data.status).toBe('under_review')
   })
 
+  it('IT-PAY-08 partial refund captures the authorized amount minus the euro refund', async () => {
+    const route = await import('@/app/api/v1/disputes/[id]/resolve/route')
+    const { stripe } = await import('@/server/stripe')
+    const res = await route.POST(
+      new NextRequest('http://localhost/api/v1/disputes/dispute_1/resolve', {
+        method: 'POST',
+        body: JSON.stringify({
+          resolution_type: 'partial_refund',
+          resolution_note: 'Half of the requested work was not completed.',
+          refund_amount: 20,
+        }),
+        headers: { 'content-type': 'application/json' },
+      }),
+      { params: Promise.resolve({ id: 'dispute_1' }) } as any,
+    )
+    const body = await res.json()
+
+    expect(res.status).toBe(200)
+    expect(body.success).toBe(true)
+    expect(stripe.paymentIntents.capture).toHaveBeenCalledWith('pi_123', {
+      amount_to_capture: 6000,
+      application_fee_amount: 600,
+    })
+    expect(state.payment.refundAmount).toBe(20)
+    expect(state.notifications).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        userId: seededUsers.admin.id,
+        type: 'dispute_resolved',
+        body: 'Dispute resolved — Partial refund €20.00 issued to client.',
+      }),
+    ]))
+  })
+
   it('IT-PAY-06 client report emails confirmation to client and against-notification to cleaner', async () => {
     state.currentUser = seededUsers.client
     state.dispute = null

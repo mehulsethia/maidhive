@@ -454,7 +454,7 @@ export default function CleanerBookingsPage() {
                       )}
                       {b.status === 'cancelled' ? (
                         <div className="mt-2">
-                          <CancellationPaymentBreakdown booking={b} compact />
+                          <CancellationPaymentBreakdown booking={b} compact audience="cleaner" />
                         </div>
                       ) : (
                         <p className="mt-2 text-sm font-semibold text-emerald-700">

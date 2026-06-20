@@ -36,4 +36,14 @@ describe('F13 Notifications + deep links unit coverage', () => {
     expect(getNotificationHref('admin', notif)).toBe('/admin/disputes')
     expect(getNotificationHref('client', notif)).toBe('/client/bookings/booking_1')
   })
+
+  it('UT-NOTIF-05 resolved disputes route admins to the related booking history', () => {
+    const resolved: any = {
+      type: 'dispute_resolved',
+      data: { dispute_id: 'disp_1', booking_id: 'booking_1' },
+    }
+
+    expect(getNotificationHref('admin', resolved)).toBe('/admin/bookings/booking_1')
+    expect(getNotificationHref('cleaner', resolved)).toBe('/cleaner/bookings/booking_1')
+  })
 })

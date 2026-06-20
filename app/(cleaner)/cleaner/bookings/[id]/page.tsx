@@ -143,6 +143,13 @@ function getCleanerCancelledPayoutMessage(
   }
 }
 
+function getCancellationOriginLabel(booking: BookingRead) {
+  if (booking.status !== 'cancelled' || !booking.cancelled_by) return null
+  if (booking.cancelled_by === booking.client?.user?.id) return 'Cancelled by client'
+  if (booking.cancelled_by === booking.cleaner?.user?.id) return 'Cancelled by cleaner'
+  return 'Cancelled by platform'
+}
+
 export default function CleanerBookingDetailPage() {
   const { id } = useParams<{ id: string }>()
   const router = useRouter()
@@ -477,6 +484,7 @@ export default function CleanerBookingDetailPage() {
   const proposalCountdownLabel = proposalExpiresMs && proposalExpiresMs > nowTick
     ? `${Math.ceil((proposalExpiresMs - nowTick) / 60_000)} min`
     : null
+  const cancellationOriginLabel = getCancellationOriginLabel(booking)
 
   return (
     <div className="w-full space-y-5">
@@ -484,13 +492,20 @@ export default function CleanerBookingDetailPage() {
         <button onClick={() => router.back()} className="inline-flex items-center gap-1 rounded-xl border border-slate-200 px-2.5 py-1.5 text-sm font-semibold text-slate-500 transition-all duration-200 hover:-translate-y-0.5 hover:text-slate-800">
           <ArrowLeft className="h-4 w-4" /> Back
         </button>
-        <BookingStatusBadge
-          status={booking.status}
-          paymentStatus={booking.payment?.status}
-          scheduledEnd={booking.scheduled_end}
-          proposalBy={booking.proposal_by}
-          showPaymentRequiredForUnpaid={false}
-        />
+        <div className="flex flex-wrap items-center gap-2">
+          <BookingStatusBadge
+            status={booking.status}
+            paymentStatus={booking.payment?.status}
+            scheduledEnd={booking.scheduled_end}
+            proposalBy={booking.proposal_by}
+            showPaymentRequiredForUnpaid={false}
+          />
+          {cancellationOriginLabel && (
+            <span className="rounded-full border border-rose-200 bg-rose-50 px-2.5 py-1 text-xs font-semibold text-rose-700">
+              {cancellationOriginLabel}
+            </span>
+          )}
+        </div>
       </div>
 
       <section className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(0,0.9fr)]">
@@ -587,7 +602,7 @@ export default function CleanerBookingDetailPage() {
             </CardContent>
           </Card>
           {booking.status === 'cancelled' && (
-            <CancellationPaymentBreakdown booking={booking} />
+            <CancellationPaymentBreakdown booking={booking} audience="cleaner" />
           )}
         </div>
 

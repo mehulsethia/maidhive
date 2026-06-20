@@ -73,7 +73,12 @@ export const disputeRepo = {
         where: { status: { not: 'closed' } },
         select: {
           ...disputeSelect,
-          booking: true,
+          booking: {
+            include: {
+              client: { include: { user: true } },
+              cleaner: { include: { user: true } },
+            },
+          },
           raisedByUser: true,
         },
         skip: (page - 1) * pageSize,

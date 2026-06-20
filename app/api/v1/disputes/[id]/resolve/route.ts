@@ -8,6 +8,7 @@ import { ok, err } from '@/server/response'
 import { resolveDisputeSchema } from '@/server/schemas/dispute.schema'
 import { pushInAppNotification } from '@/server/services/in-app-notification.service'
 import { db } from '@/server/db'
+import { getDisputeResolutionOutcome } from '@/lib/dispute-resolution'
 
 export const POST = requireAdmin(async (req: NextRequest, ctx, user) => {
   try {
@@ -73,12 +74,14 @@ export const POST = requireAdmin(async (req: NextRequest, ctx, user) => {
       }
 
       if (parsed.data.resolution_type === 'partial_refund') {
-        if (pi.status === 'requires_capture') {
-          if (!chargePct) {
-            return err('charge_percentage is required for partial capture from authorized payment', 422)
-          }
+        const explicitRefund = parsed.data.refund_amount!
+        const refundCents = Math.round(explicitRefund * 100)
+        if (refundCents >= paymentAmountCents) {
+          return err('Partial refund amount must be less than the payment amount', 422)
+        }
 
-          const amountToCapture = Math.max(1, Math.floor((paymentAmountCents * chargePct) / 100))
+        if (pi.status === 'requires_capture') {
+          const amountToCapture = paymentAmountCents - refundCents
           const proportionalFeeCents = getProportionalFeeCents(
             amountToCapture,
             paymentAmountCents,
@@ -98,15 +101,6 @@ export const POST = requireAdmin(async (req: NextRequest, ctx, user) => {
             refundReason: parsed.data.resolution_note,
           })
         } else if (pi.status === 'succeeded') {
-          const explicitRefund = parsed.data.refund_amount
-          if (!explicitRefund && !chargePct) {
-            return err('refund_amount or charge_percentage is required for partial refund', 422)
-          }
-
-          const refundCents = explicitRefund
-            ? Math.round(explicitRefund * 100)
-            : Math.max(1, paymentAmountCents - Math.floor((paymentAmountCents * (chargePct ?? 100)) / 100))
-
           const refund = await stripe.refunds.create({
             payment_intent: payment.stripePaymentIntentId,
             amount: refundCents,
@@ -167,12 +161,10 @@ export const POST = requireAdmin(async (req: NextRequest, ctx, user) => {
 
     const booking = await bookingRepo.findById(dispute.bookingId)
     if (booking) {
-      const resolutionCopy = (() => {
-        if (parsed.data.resolution_type === 'full_refund') return 'Resolution: full refund issued.'
-        if (parsed.data.resolution_type === 'partial_refund') return 'Resolution: partial refund issued.'
-        if (parsed.data.resolution_type === 'payment_released') return 'Resolution: payment released to cleaner.'
-        return 'Resolution: no refund, payment released to cleaner.'
-      })()
+      const resolutionCopy = getDisputeResolutionOutcome(
+        parsed.data.resolution_type,
+        resolvedRefundAmount,
+      )
 
       await pushInAppNotification({
         userId: booking.client.userId,
@@ -199,7 +191,7 @@ export const POST = requireAdmin(async (req: NextRequest, ctx, user) => {
             userId: admin.id,
             type: 'dispute_resolved',
             title: 'Dispute resolved',
-            body: `Dispute for booking ${booking.id.slice(0, 8)} was resolved.`,
+            body: `Dispute resolved — ${resolutionCopy}`,
             data: { booking_id: booking.id, dispute_id: updated.id },
           }),
         ),

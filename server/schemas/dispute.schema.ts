@@ -26,4 +26,21 @@ export const resolveDisputeSchema = z.object({
   resolution_note: z.string().min(1),
   refund_amount: optionalPositiveNumber,
   charge_percentage: optionalPercentage,
+}).superRefine((value, ctx) => {
+  if (value.resolution_type !== 'partial_refund') return
+
+  if (value.refund_amount === undefined) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ['refund_amount'],
+      message: 'Refund amount is required for a partial refund',
+    })
+  }
+  if (value.charge_percentage !== undefined) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ['charge_percentage'],
+      message: 'Charge percentage cannot be used for a partial refund',
+    })
+  }
 })

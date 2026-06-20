@@ -1,6 +1,6 @@
 # MAIDHIVE Test Strategy
 
-Last updated: 2026-05-28
+Last updated: 2026-06-20
 Source of truth for flow coverage: `docs/testing/flow-matrix.md`
 
 ## 1) Goals
@@ -28,13 +28,16 @@ Release signoff by human verification on staging.
 4. Current scripts:
 `npm run test:unit`, `npm run test:integration`, `npm run test:e2e`, `npm run test:e2e:smoke`
 
+5. Pre-production regression gate:
+`npm run test:preprod`
+
 ## 4) CI Gates
 1. Push gate:
 `npx tsc --noEmit` + all `P0` unit/integration tests.
 2. PR gate:
 Push gate + `P0` E2E smoke (`@smoke`) for `F01/F04/F05/F06` initially.
 3. Release gate:
-Full regression suite + UAT signoff for client/cleaner/admin checklists.
+`npm run test:preprod` + UAT signoff for client/cleaner/admin checklists. This command runs all unit/integration tests, the production build/type gate, and authenticated E2E smoke tests.
 4. Nightly:
 Full regression plus edge/time-boundary scenarios.
 

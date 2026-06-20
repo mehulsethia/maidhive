@@ -6,6 +6,7 @@ export type CleanerPaymentHistoryTone = 'ok' | 'warn' | 'issue'
 
 export type CleanerPaymentHistoryEntry = {
   booking: BookingRead
+  paymentType: 'Booking payout' | 'Cancellation compensation' | 'No-show compensation' | 'Payment issue'
   label: string
   tone: CleanerPaymentHistoryTone
   amount?: number
@@ -25,6 +26,11 @@ export function classifyCleanerPaymentHistoryBooking(
   nowMs = Date.now(),
 ): Omit<CleanerPaymentHistoryEntry, 'booking'> | null {
   const paymentStatus = String(booking.payment?.status ?? '').trim()
+  const cancellationContext = `${booking.cancellation_reason ?? ''} ${booking.payment?.refund_reason ?? ''}`
+    .toLowerCase()
+    .replace(/[_-]/g, ' ')
+  const isClientNoShowCompensation = booking.dispute?.issue_type === 'client_no_show' ||
+    cancellationContext.includes('client no show')
 
   if (booking.status === 'completed') {
     const released = isCompletedBookingReleased({
@@ -34,6 +40,7 @@ export function classifyCleanerPaymentHistoryBooking(
       nowMs,
     })
     return {
+      paymentType: isClientNoShowCompensation ? 'No-show compensation' : 'Booking payout',
       label: released ? 'Released' : 'Awaiting release',
       tone: released ? 'ok' : 'warn',
     }
@@ -41,12 +48,16 @@ export function classifyCleanerPaymentHistoryBooking(
 
   if (booking.status === 'cancelled') {
     const cancellationCompensation = Number(booking.payment?.cleaner_payout ?? booking.cleaner_payout ?? 0)
+    const paymentType = isClientNoShowCompensation
+      ? 'No-show compensation' as const
+      : 'Cancellation compensation' as const
     if (cancellationCompensation > 0) {
       if (paymentStatus === 'failed') {
-        return { label: 'Payment issue - admin review', tone: 'issue' }
+        return { paymentType: 'Payment issue', label: 'Payment issue - admin review', tone: 'issue' }
       }
       const released = paymentStatus === 'transferred' || Boolean(booking.payment?.transferred_at)
       return {
+        paymentType,
         label: released
           ? `Cancellation compensation released: ${formatCurrency(cancellationCompensation)}`
           : `Cancellation compensation: ${formatCurrency(cancellationCompensation)}`,
@@ -54,21 +65,42 @@ export function classifyCleanerPaymentHistoryBooking(
         amount: cancellationCompensation,
       }
     }
-    return { label: 'Cancelled - no payout due', tone: 'warn', amount: 0 }
+    return { paymentType, label: 'Cancelled - no payout due', tone: 'warn', amount: 0 }
   }
 
   if (paymentStatus === 'failed' || booking.status === 'disputed') {
-    return { label: 'Payment issue - admin review', tone: 'issue' }
+    return { paymentType: 'Payment issue', label: 'Payment issue - admin review', tone: 'issue' }
   }
 
   if (['accepted', 'confirmed', 'in_progress'].includes(booking.status)) {
     if (['authorized', 'captured', 'transferred'].includes(paymentStatus)) {
-      return { label: 'Payment authorised', tone: 'ok' }
+      return { paymentType: 'Booking payout', label: 'Payment authorised', tone: 'ok' }
     }
-    return { label: 'Payment issue - admin review', tone: 'issue' }
+    return { paymentType: 'Payment issue', label: 'Payment issue - admin review', tone: 'issue' }
   }
 
   return null
+}
+
+export function getReleasedCleanerEarnings(bookings: BookingRead[], nowMs = Date.now()) {
+  return bookings.reduce((sum, booking) => {
+    const payout = Number(booking.payment?.cleaner_payout ?? booking.cleaner_payout ?? 0)
+    if (!Number.isFinite(payout) || payout <= 0) return sum
+
+    if (booking.status === 'completed' && isCompletedBookingReleased({
+      status: booking.status,
+      paymentStatus: booking.payment?.status,
+      scheduledEnd: booking.scheduled_end,
+      nowMs,
+    })) {
+      return sum + payout
+    }
+
+    const compensationReleased = booking.status === 'cancelled' && (
+      booking.payment?.status === 'transferred' || Boolean(booking.payment?.transferred_at)
+    )
+    return compensationReleased ? sum + payout : sum
+  }, 0)
 }
 
 export function buildCleanerPaymentHistory(

@@ -2,11 +2,10 @@
 
 import Link from 'next/link'
 import { useEffect, useMemo, useState } from 'react'
-import { CircleCheck, Clock3, Euro, Star, ArrowUpRight, CalendarClock, MessageSquare } from 'lucide-react'
+import { CircleCheck, Clock3, Euro, Star, ArrowUpRight, CalendarClock, MessageSquare, Info } from 'lucide-react'
 import { bookingsApi, cleanersApi } from '@/lib/api'
 import { subscribeBookingsRefresh, triggerBookingsRefresh } from '@/lib/booking-sync'
 import { compareBookingsByOperationalPriority } from '@/lib/booking-priority'
-import { isCompletedBookingReleased } from '@/lib/booking-release'
 import { BookingStatusBadge } from '@/components/booking-status-badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -20,6 +19,7 @@ import { formatCurrency, formatDate } from '@/lib/utils'
 import type { BookingRead, BookingStatus, CleanerOnboardingProgress } from '@/types'
 import { deriveCleanerLifecycleStatus } from '@/lib/cleaner-status'
 import { showJobStartedToast } from '@/lib/job-start-toast'
+import { getReleasedCleanerEarnings } from '@/lib/cleaner-payment-history'
 import { setupVisiblePolling } from '@/lib/visible-polling'
 import { toast } from 'sonner'
 
@@ -85,7 +85,7 @@ export default function CleanerDashboardPage() {
       }
 
       try {
-        const bookingRes = await bookingsApi.my()
+        const bookingRes = await bookingsApi.my(1, undefined, 100)
         setBookings(bookingRes.data?.items ?? [])
         resetLoadError('cleaner-dashboard-bookings')
       } catch {
@@ -169,11 +169,6 @@ export default function CleanerDashboardPage() {
       .sort(compareBookingsByOperationalPriority)
     const activeJobs = bookings.filter((b) => ACTIVE_STATUSES.includes(b.status) || UPCOMING_STATUSES.includes(b.status))
     const completed = bookings.filter((b) => COMPLETED_STATUSES.includes(b.status))
-    const releasedCompleted = bookings.filter((b) => isCompletedBookingReleased({
-      status: b.status,
-      paymentStatus: b.payment?.status,
-      scheduledEnd: b.scheduled_end,
-    }))
     const prioritizedRecent = [...bookings].sort(compareBookingsByOperationalPriority)
 
     return {
@@ -182,7 +177,7 @@ export default function CleanerDashboardPage() {
       activeJobs,
       completed,
       prioritizedRecent,
-      releasedEarnings: releasedCompleted.reduce((sum, b) => sum + b.cleaner_payout, 0),
+      releasedEarnings: getReleasedCleanerEarnings(bookings),
     }
   }, [bookings])
 
@@ -244,7 +239,11 @@ export default function CleanerDashboardPage() {
                 Live Snapshot
               </p>
               <div className="mt-3 grid grid-cols-1 gap-2.5 sm:grid-cols-2">
-                <SnapshotStat label="Released Earnings" value={stats.releasedEarnings > 0 ? formatCurrency(stats.releasedEarnings) : '€0.00'} />
+                <SnapshotStat
+                  label="Released Earnings"
+                  value={stats.releasedEarnings > 0 ? formatCurrency(stats.releasedEarnings) : '€0.00'}
+                  tooltip="Includes completed booking payouts and any released compensation payments."
+                />
                 <SnapshotStat label="Completed" value={String(stats.completed.length)} />
                 <SnapshotStat label="Active" value={String(stats.activeJobs.length)} />
                 <SnapshotStat label="Rating" value={avgRating ? Number(avgRating).toFixed(1) : '-'} />
@@ -687,12 +686,20 @@ export default function CleanerDashboardPage() {
   )
 }
 
-function SnapshotStat({ label, value }: { label: string; value: string }) {
+function SnapshotStat({ label, value, tooltip }: { label: string; value: string; tooltip?: string }) {
   return (
     <div className="rounded-2xl border border-white/20 bg-white/10 px-3 py-2">
-      <p className="text-[0.6rem] uppercase tracking-[0.08em] text-white/65 sm:text-[0.62rem]">
-        {label}
-      </p>
+      <div className="flex items-center gap-1">
+        <p className="text-[0.6rem] uppercase tracking-[0.08em] text-white/65 sm:text-[0.62rem]">{label}</p>
+        {tooltip && (
+          <button type="button" className="group relative inline-flex" aria-label={tooltip}>
+            <Info className="h-3.5 w-3.5 text-white/70" aria-hidden="true" />
+            <span className="pointer-events-none absolute left-0 top-full z-20 mt-2 hidden w-[min(14rem,calc(100vw-3rem))] rounded-lg bg-slate-950 px-2.5 py-2 text-left text-[11px] normal-case tracking-normal text-white shadow-xl group-hover:block group-focus:block sm:left-1/2 sm:-translate-x-1/2">
+              {tooltip}
+            </span>
+          </button>
+        )}
+      </div>
       <p className="mt-1 text-xl font-bold tracking-[-0.01em] text-white">{value}</p>
     </div>
   )

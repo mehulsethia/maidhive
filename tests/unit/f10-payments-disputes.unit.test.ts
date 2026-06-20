@@ -27,7 +27,6 @@ describe('F10 payments/disputes unit coverage', () => {
       resolution_type: 'partial_refund',
       resolution_note: 'Partial completion',
       refund_amount: 20,
-      charge_percentage: 75,
     })
 
     const release = resolveDisputeSchema.safeParse({
@@ -41,21 +40,22 @@ describe('F10 payments/disputes unit coverage', () => {
     expect(release.success).toBe(true)
   })
 
-  it('UT-PAY-03 resolve schema rejects invalid refund or charge percentage bounds', () => {
+  it('UT-PAY-03 resolve schema rejects invalid or conflicting partial-refund inputs', () => {
     const invalidRefund = resolveDisputeSchema.safeParse({
       resolution_type: 'partial_refund',
       resolution_note: 'Invalid refund amount',
       refund_amount: -1,
     })
 
-    const invalidPct = resolveDisputeSchema.safeParse({
+    const conflictingPct = resolveDisputeSchema.safeParse({
       resolution_type: 'partial_refund',
-      resolution_note: 'Invalid charge percentage',
-      charge_percentage: 120,
+      resolution_note: 'Conflicting inputs',
+      refund_amount: 20,
+      charge_percentage: 75,
     })
 
     expect(invalidRefund.success).toBe(false)
-    expect(invalidPct.success).toBe(false)
+    expect(conflictingPct.success).toBe(false)
   })
 
   it('UT-PAY-04 dispute status patch schema only allows under_review transition payload', () => {

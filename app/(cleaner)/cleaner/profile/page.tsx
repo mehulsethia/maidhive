@@ -1001,12 +1001,15 @@ function CleanerProfilePageContent() {
                     </p>
                   ) : (
                     <div className="mt-3 space-y-2">
-                      {paymentHistory.map(({ booking: b, label, tone, amount }) => (
+                      {paymentHistory.map(({ booking: b, paymentType, label, tone, amount }) => (
                         <div key={b.id} className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2">
-                          <div>
-                            <p className="text-sm font-semibold text-slate-900">
+                          <div className="min-w-0">
+                            <p className="break-words text-sm font-semibold text-slate-900">
                               {(b.service_type ?? 'Service').replace(/_/g, ' ')}
                             </p>
+                            <span className="mt-1 inline-flex rounded-full border border-slate-200 bg-white px-2 py-0.5 text-[11px] font-semibold text-slate-600">
+                              {paymentType}
+                            </span>
                             <p className="text-xs text-slate-500">
                               {new Date(b.scheduled_start).toLocaleDateString('en-IE', {
                                 weekday: 'short',

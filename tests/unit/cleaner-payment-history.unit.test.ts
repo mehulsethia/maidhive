@@ -3,6 +3,7 @@ import {
   buildCleanerPaymentHistory,
   classifyCleanerPaymentHistoryBooking,
   dedupeBookingsById,
+  getReleasedCleanerEarnings,
 } from '@/lib/cleaner-payment-history'
 import { getBookingReportDeadlineMs } from '@/lib/booking-release'
 import type { BookingRead } from '@/types'
@@ -38,9 +39,23 @@ describe('Cleaner payment history mapping', () => {
     const after = classifyCleanerPaymentHistoryBooking(completed, deadline + 1)
 
     expect(before?.label).toBe('Awaiting release')
+    expect(before?.paymentType).toBe('Booking payout')
     expect(before?.tone).toBe('warn')
     expect(after?.label).toBe('Released')
     expect(after?.tone).toBe('ok')
+
+    const resolvedNoShow = booking({
+      status: 'completed',
+      payment: { id: 'p1-no-show', status: 'transferred' },
+      dispute: {
+        id: 'd1',
+        status: 'resolved',
+        reason: 'Client no-show',
+        issue_type: 'client_no_show',
+        created_at: new Date().toISOString(),
+      },
+    })
+    expect(classifyCleanerPaymentHistoryBooking(resolvedNoShow)?.paymentType).toBe('No-show compensation')
   })
 
   it('maps active authorized bookings and failed/disputed bookings to correct labels', () => {
@@ -62,6 +77,7 @@ describe('Cleaner payment history mapping', () => {
 
     expect(classifyCleanerPaymentHistoryBooking(confirmedAuthorized)?.label).toBe('Payment authorised')
     expect(classifyCleanerPaymentHistoryBooking(disputed)?.label).toBe('Payment issue - admin review')
+    expect(classifyCleanerPaymentHistoryBooking(disputed)?.paymentType).toBe('Payment issue')
     expect(classifyCleanerPaymentHistoryBooking(failed)?.label).toBe('Payment issue - admin review')
   })
 
@@ -82,6 +98,12 @@ describe('Cleaner payment history mapping', () => {
       status: 'cancelled',
       payment: { id: 'p9', status: 'transferred', cleaner_payout: 16, transferred_at: new Date().toISOString() },
     })
+    const noShowReleased = booking({
+      id: 'booking_no_show_comp_released',
+      status: 'cancelled',
+      cancellation_reason: 'Client no-show confirmed',
+      payment: { id: 'p10', status: 'transferred', cleaner_payout: 20, transferred_at: new Date().toISOString() },
+    })
 
     expect(classifyCleanerPaymentHistoryBooking(noPayout)).toMatchObject({
       label: 'Cancelled - no payout due',
@@ -94,10 +116,12 @@ describe('Cleaner payment history mapping', () => {
       tone: 'warn',
     })
     expect(classifyCleanerPaymentHistoryBooking(compensationReleased)).toMatchObject({
+      paymentType: 'Cancellation compensation',
       label: 'Cancellation compensation released: €16.00',
       amount: 16,
       tone: 'ok',
     })
+    expect(classifyCleanerPaymentHistoryBooking(noShowReleased)?.paymentType).toBe('No-show compensation')
   })
 
   it('dedupes bookings and returns history sorted by scheduled start desc', () => {
@@ -119,5 +143,37 @@ describe('Cleaner payment history mapping', () => {
 
     const history = buildCleanerPaymentHistory(deduped)
     expect(history.map((entry) => entry.booking.id)).toEqual(['newer', 'older'])
+  })
+
+  it('includes transferred cancellation and no-show compensation in released earnings', () => {
+    const completedPayout = booking({
+      id: 'completed_released',
+      status: 'completed',
+      cleaner_payout: 32,
+      payment: { id: 'p11', status: 'transferred', cleaner_payout: 32 },
+    })
+    const cancellationCompensation = booking({
+      id: 'cancelled_released',
+      status: 'cancelled',
+      payment: { id: 'p12', status: 'transferred', cleaner_payout: 16 },
+    })
+    const noShowCompensation = booking({
+      id: 'no_show_released',
+      status: 'cancelled',
+      cancellation_reason: 'Client no-show',
+      payment: { id: 'p13', status: 'transferred', cleaner_payout: 20 },
+    })
+    const pendingCompensation = booking({
+      id: 'cancelled_pending',
+      status: 'cancelled',
+      payment: { id: 'p14', status: 'captured', cleaner_payout: 12 },
+    })
+
+    expect(getReleasedCleanerEarnings([
+      completedPayout,
+      cancellationCompensation,
+      noShowCompensation,
+      pendingCompensation,
+    ])).toBe(68)
   })
 })

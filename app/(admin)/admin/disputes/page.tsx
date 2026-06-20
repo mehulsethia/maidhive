@@ -84,6 +84,11 @@ function DisputeCard({
   const resolutionLabel = RESOLUTION_TYPES.find(r => r.value === dispute.resolution_type)?.label
   const originalEvidence = getEvidenceLinks(dispute.evidence)
   const responseEvidence = getEvidenceLinks(dispute.response_evidence)
+  const clientName = dispute.booking?.client?.user?.name?.trim() || 'Not recorded'
+  const cleanerName = dispute.booking?.cleaner?.user?.name?.trim() || 'Not recorded'
+  const reporterLabel = dispute.reporter_role
+    ? `${dispute.reporter_role.charAt(0).toUpperCase()}${dispute.reporter_role.slice(1)} Report`
+    : 'Reporter Unknown'
 
   return (
     <Card>
@@ -94,10 +99,15 @@ function DisputeCard({
               <span className="font-mono text-xs text-muted-foreground">
                 Booking #{dispute.booking_id.slice(0, 8)}
               </span>
+              <Badge variant="outline">{reporterLabel}</Badge>
               <Badge variant={cfg.variant}>
                 <cfg.icon className="h-3 w-3 mr-1" />
                 {cfg.label}
               </Badge>
+            </div>
+            <div className="mt-2 grid gap-1 text-sm sm:grid-cols-2">
+              <p><span className="font-medium text-slate-700">Client:</span> {clientName}</p>
+              <p><span className="font-medium text-slate-700">Cleaner:</span> {cleanerName}</p>
             </div>
             <div className="mt-2 space-y-2 text-sm">
               <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2">
@@ -127,9 +137,9 @@ function DisputeCard({
             <p className="text-xs text-muted-foreground mt-0.5">
               Raised {formatDate(dispute.created_at)}
             </p>
-            {(dispute.reporter_role || dispute.booking_status_at_report) && (
+            {dispute.booking_status_at_report && (
               <p className="text-xs text-muted-foreground mt-0.5">
-                Reporter: {dispute.reporter_role ?? 'unknown'} · Booking status at report: {dispute.booking_status_at_report ?? 'unknown'}
+                Booking status at report: {dispute.booking_status_at_report}
               </p>
             )}
             <p className="text-xs text-muted-foreground mt-0.5">
@@ -256,8 +266,8 @@ export default function AdminDisputesPage() {
     const refund = refundAmount.trim() ? Number(refundAmount) : null
     const chargePct = chargePercentage.trim() ? Number(chargePercentage) : null
 
-    if (resolveType === 'partial_refund' && refund === null && chargePct === null) {
-      toast.error('Enter either refund amount or charge percentage for partial refund.'); return
+    if (resolveType === 'partial_refund' && refund === null) {
+      toast.error('Enter a refund amount for partial refund.'); return
     }
 
     if (chargePct !== null && (Number.isNaN(chargePct) || chargePct < 1 || chargePct > 100)) {
@@ -282,7 +292,7 @@ export default function AdminDisputesPage() {
       if (resolveType === 'partial_refund' && refund !== null) {
         payload.refund_amount = refund
       }
-      if (['partial_refund', 'no_refund', 'payment_released'].includes(resolveType) && chargePct !== null) {
+      if (['no_refund', 'payment_released'].includes(resolveType) && chargePct !== null) {
         payload.charge_percentage = chargePct
       }
 
@@ -412,7 +422,7 @@ export default function AdminDisputesPage() {
               </div>
             )}
 
-            {['partial_refund', 'no_refund', 'payment_released'].includes(resolveType) && (
+            {['no_refund', 'payment_released'].includes(resolveType) && (
               <div>
                 <Label>Charge percentage (%)</Label>
                 <Input
@@ -423,7 +433,7 @@ export default function AdminDisputesPage() {
                   value={chargePercentage}
                   onChange={e => setChargePercentage(e.target.value)}
                   className="mt-1"
-                  placeholder={resolveType === 'partial_refund' ? 'Optional if refund amount is entered' : 'Optional, defaults to 100'}
+                  placeholder="Optional, defaults to 100"
                 />
                 <p className="mt-1 text-xs text-muted-foreground">
                   Use this to capture only part of the authorized amount.

@@ -254,6 +254,21 @@ export interface BookingRead {
     created_at?: string
     updated_at?: string
   } | null
+  dispute?: {
+    id: string
+    status: 'open' | 'under_review' | 'resolved' | 'closed'
+    reason: string
+    issue_type?: string | null
+    reporter_role?: 'client' | 'cleaner' | 'admin' | null
+    response_explanation?: string | null
+    responder_role?: 'client' | 'cleaner' | 'admin' | null
+    responded_at?: string | null
+    resolution_type?: string | null
+    resolution_note?: string | null
+    resolved_at?: string | null
+    created_at: string
+    updated_at?: string
+  } | null
 }
 
 export interface BookingFlowDraftRead {
@@ -582,6 +597,10 @@ export interface AdminDispute {
   refund_amount?: number
   resolved_at?: string
   created_at: string
+  booking?: {
+    client?: { user?: Pick<UserRead, 'name'> | null } | null
+    cleaner?: { user?: Pick<UserRead, 'name'> | null } | null
+  } | null
 }
 
 export interface ClientDispute {

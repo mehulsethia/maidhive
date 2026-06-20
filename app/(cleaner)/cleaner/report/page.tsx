@@ -16,6 +16,7 @@ import { Textarea } from '@/components/ui/textarea'
 import { CLEANER_DISPUTE_ISSUES } from '@/lib/dispute-issues'
 import { reportLoadError, resetLoadError } from '@/lib/load-error-policy'
 import { formatDate } from '@/lib/utils'
+import { getDisputeResolutionOutcome } from '@/lib/dispute-resolution'
 import type { BookingRead, ClientDispute } from '@/types'
 import { toast } from 'sonner'
 
@@ -489,7 +490,7 @@ function CleanerReportPageContent() {
                     <div className="flex flex-wrap items-start justify-between gap-2">
                       <div>
                         <p className={`${displayFont.className} text-base font-semibold tracking-[-0.01em] text-slate-900`}>
-                          {dispute.booking?.service_type ?? 'Service booking'}
+                          <span className="break-words">{dispute.booking?.service_type ?? 'Service booking'}</span>
                         </p>
                         <p className={`${monoFont.className} text-[0.68rem] tracking-wide text-slate-500`}>
                           Booking Reference: {bookingReference}
@@ -513,10 +514,26 @@ function CleanerReportPageContent() {
                           <EvidenceLinks links={getDisputeEvidence(dispute, 'response')} />
                         </div>
                       )}
+                      {(status === 'resolved' || status === 'closed') && (
+                        <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2">
+                          <p className="text-xs font-semibold uppercase text-emerald-700">Resolution Outcome</p>
+                          <p className="mt-1 font-medium text-emerald-950">
+                            {getDisputeResolutionOutcome(dispute.resolution_type, dispute.refund_amount)}
+                          </p>
+                        </div>
+                      )}
                     </div>
-                    <div className="mt-2 text-xs text-slate-500 inline-flex items-center gap-1">
-                      <CalendarDays className="h-3.5 w-3.5" />
-                      {formatDate(dispute.created_at)}
+                    <div className="mt-2 space-y-1 text-xs text-slate-500">
+                      <div className="inline-flex items-center gap-1">
+                        <CalendarDays className="h-3.5 w-3.5" />
+                        Reported on: {formatDate(dispute.created_at)}
+                      </div>
+                      {(status === 'resolved' || status === 'closed') && dispute.resolved_at && (
+                        <div className="flex items-center gap-1">
+                          <CalendarDays className="h-3.5 w-3.5" />
+                          Resolved on: {formatDate(dispute.resolved_at)}
+                        </div>
+                      )}
                     </div>
                   </article>
                 )

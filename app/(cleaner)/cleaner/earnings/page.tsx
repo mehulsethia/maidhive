@@ -10,6 +10,7 @@ import { Separator } from '@/components/ui/separator'
 import { reportLoadError, resetLoadError } from '@/lib/load-error-policy'
 import { formatCurrency, formatDate } from '@/lib/utils'
 import type { BookingRead } from '@/types'
+import { classifyCleanerPaymentHistoryBooking } from '@/lib/cleaner-payment-history'
 
 export default function EarningsPage() {
   const [bookings, setBookings] = useState<BookingRead[]>([])
@@ -106,12 +107,15 @@ export default function EarningsPage() {
             <div className="space-y-0">
               {settled.map((b, i) => (
                 <div key={b.id}>
-                  <div className="flex items-center justify-between py-3">
-                    <div>
+                  <div className="flex min-w-0 flex-col gap-2 py-3 sm:flex-row sm:items-center sm:justify-between">
+                    <div className="min-w-0">
                       <p className="font-medium text-sm capitalize">{b.service_type.replace('_', ' ')}</p>
-                      <p className="text-xs text-muted-foreground">{formatDate(b.scheduled_start)} · {b.duration_hours}h · {b.city}</p>
+                      <p className="mt-0.5 text-[11px] font-semibold text-slate-600">
+                        {classifyCleanerPaymentHistoryBooking(b)?.paymentType ?? 'Booking payout'}
+                      </p>
+                      <p className="break-words text-xs text-muted-foreground">{formatDate(b.scheduled_start)} · {b.duration_hours}h · {b.city}</p>
                     </div>
-                    <div className="text-right">
+                    <div className="shrink-0 text-left sm:text-right">
                       <p className="font-semibold text-green-700">+{formatCurrency(b.cleaner_payout)}</p>
                       <p className="text-xs text-muted-foreground">{formatCurrency(b.hourly_rate)}/hr</p>
                     </div>

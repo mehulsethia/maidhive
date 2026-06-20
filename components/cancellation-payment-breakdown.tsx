@@ -15,19 +15,44 @@ export function CancellationPaymentBreakdown({
   booking,
   compact = false,
   showAdminRows = false,
+  audience = 'client',
 }: {
   booking: BookingRead
   compact?: boolean
   showAdminRows?: boolean
+  audience?: 'client' | 'cleaner'
 }) {
   const outcome = getCancellationPaymentOutcome(booking)
   if (!outcome) return null
 
   if (compact) {
+    if (audience === 'cleaner') {
+      return (
+        <p className="min-w-0 text-sm font-semibold text-emerald-700">
+          {outcome.cleanerPayoutDue > 0
+            ? `Cleaner compensation: ${formatCurrency(outcome.cleanerPayoutDue)}`
+            : 'No cleaner compensation'}
+        </p>
+      )
+    }
     return (
       <p className="min-w-0 text-sm font-semibold text-rose-700">
         Cancellation charge: {formatCurrency(outcome.cancellationFee)}
       </p>
+    )
+  }
+
+  if (audience === 'cleaner') {
+    const compensationReleased = booking.payment?.status === 'transferred' || booking.payment?.transferred_at
+      ? outcome.cleanerPayoutDue
+      : 0
+    return (
+      <div className="min-w-0 space-y-2 rounded-2xl border border-emerald-100 bg-emerald-50/70 p-4 text-sm">
+        <h4 className="font-semibold tracking-tight text-emerald-950">Compensation outcome</h4>
+        <Row label="Cleaner compensation" value={formatCurrency(outcome.cleanerPayoutDue)} />
+        <Row label="Original booking value" value={formatCurrency(outcome.originalAmount)} />
+        <Row label="Compensation released" value={formatCurrency(compensationReleased)} />
+      </div>
     )
   }
 

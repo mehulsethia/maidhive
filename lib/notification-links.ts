@@ -31,10 +31,11 @@ export function getNotificationHref(role: UserRole, notification: NotificationRe
       return bookingId ? `${bookingDetailBase(role)}/${bookingId}` : bookingDetailBase(role)
     case 'dispute_raised':
     case 'dispute_under_review':
-    case 'dispute_resolved':
       if (role === 'admin') return '/admin/disputes'
       if (role === 'cleaner') return disputeId ? `/cleaner/bookings/${bookingId ?? ''}` : '/cleaner/bookings'
       return disputeId ? `/client/bookings/${bookingId ?? ''}` : '/client/bookings'
+    case 'dispute_resolved':
+      return bookingId ? `${bookingDetailBase(role)}/${bookingId}` : bookingDetailBase(role)
     case 'cleaner_application_submitted':
     case 'cleaner_application_approved':
     case 'cleaner_application_rejected':
