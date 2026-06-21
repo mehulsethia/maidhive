@@ -2,6 +2,7 @@ import { requireAdmin } from '@/server/auth'
 import { db } from '@/server/db'
 import { ok } from '@/server/response'
 import { addUtcDays, endOfUtcDate, startOfUtcDate, todayUtcDateOnly } from '@/lib/datetime'
+import { getAdminDisputeQueueStage } from '@/lib/admin-dispute-queue'
 
 function bestEffortName(name?: string | null, email?: string | null): string {
   const trimmed = name?.trim()
@@ -32,6 +33,9 @@ export const GET = requireAdmin(async () => {
     failedPayments,
     cancelledBookings,
     noShowDisputes,
+    openDisputeCount,
+    awaitingResponseDisputeCount,
+    underReviewDisputeCount,
   ] =
     await Promise.all([
       db.cleaner.findMany({
@@ -113,6 +117,27 @@ export const GET = requireAdmin(async () => {
         orderBy: { createdAt: 'desc' },
         take: 10,
       }),
+      db.dispute.count({
+        where: { status: 'open' },
+      }),
+      db.dispute.count({
+        where: {
+          status: 'under_review',
+          respondedAt: null,
+          respondedBy: null,
+          responseExplanation: null,
+        },
+      }),
+      db.dispute.count({
+        where: {
+          status: 'under_review',
+          OR: [
+            { respondedAt: { not: null } },
+            { respondedBy: { not: null } },
+            { responseExplanation: { not: null } },
+          ],
+        },
+      }),
     ])
 
   const cancellationNoShowItems = [
@@ -168,11 +193,17 @@ export const GET = requireAdmin(async () => {
       })),
     },
     active_disputes: {
-      count: activeDisputes.length,
+      count: openDisputeCount + awaitingResponseDisputeCount + underReviewDisputeCount,
+      breakdown: {
+        open: openDisputeCount,
+        awaiting_response: awaitingResponseDisputeCount,
+        under_review: underReviewDisputeCount,
+      },
       items: activeDisputes.map((dispute) => ({
         id: dispute.id,
         booking_id: dispute.bookingId,
         status: dispute.status,
+        queue_stage: getAdminDisputeQueueStage(dispute),
         reason: dispute.reason,
         created_at: dispute.createdAt.toISOString(),
       })),

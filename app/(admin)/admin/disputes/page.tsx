@@ -1,6 +1,7 @@
 'use client'
 
 import { useCallback, useEffect, useState } from 'react'
+import Link from 'next/link'
 import { AlertTriangle, CheckCircle2, Clock } from 'lucide-react'
 import { adminApi } from '@/lib/api'
 import { Button } from '@/components/ui/button'
@@ -15,7 +16,8 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { LoadingSpinner } from '@/components/loading-spinner'
 import { EmptyState } from '@/components/empty-state'
 import { reportLoadError, resetLoadError } from '@/lib/load-error-policy'
-import { formatDate, formatCurrency } from '@/lib/utils'
+import { formatDate } from '@/lib/utils'
+import { getDisputeResolutionOutcome } from '@/lib/dispute-resolution'
 import type { AdminDispute } from '@/types'
 import { toast } from 'sonner'
 
@@ -43,13 +45,14 @@ const ISSUE_QUEUE_LABEL: Record<string, string> = {
   access_issue: 'Payment / Booking',
 }
 
-const DISPUTE_FILTERS = ['all', 'urgent', 'no_show', 'payment'] as const
+const DISPUTE_FILTERS = ['all', 'urgent', 'no_show', 'payment', 'resolved'] as const
 type DisputeFilter = (typeof DISPUTE_FILTERS)[number]
 const DISPUTE_FILTER_LABELS: Record<DisputeFilter, string> = {
-  all: 'All',
+  all: 'Active',
   urgent: 'Urgent Safety',
   no_show: 'No-Show',
   payment: 'Payment / Booking',
+  resolved: 'Resolved Disputes',
 }
 
 function classifyQueue(dispute: AdminDispute): 'urgent' | 'no_show' | 'payment' {
@@ -81,7 +84,9 @@ function DisputeCard({
   actionLoading: boolean
 }) {
   const cfg = STATUS_CONFIG[dispute.status] ?? STATUS_CONFIG.closed
-  const resolutionLabel = RESOLUTION_TYPES.find(r => r.value === dispute.resolution_type)?.label
+  const resolutionLabel = ['resolved', 'closed'].includes(dispute.status)
+    ? getDisputeResolutionOutcome(dispute.resolution_type, dispute.refund_amount)
+    : null
   const originalEvidence = getEvidenceLinks(dispute.evidence)
   const responseEvidence = getEvidenceLinks(dispute.response_evidence)
   const clientName = dispute.booking?.client?.user?.name?.trim() || 'Not recorded'
@@ -176,9 +181,8 @@ function DisputeCard({
 
         {resolutionLabel && (
           <div className="mt-2 text-xs bg-green-50 border border-green-200 rounded px-3 py-2 text-green-800">
-            <span className="font-medium">Resolution: </span>
+            <span className="font-medium">Resolution outcome: </span>
             {resolutionLabel}
-            {dispute.refund_amount ? ` — ${formatCurrency(dispute.refund_amount)}` : ''}
           </div>
         )}
         {dispute.resolution_note && (
@@ -190,6 +194,14 @@ function DisputeCard({
           <p className="text-xs text-muted-foreground mt-1">
             Resolved {formatDate(dispute.resolved_at)}
           </p>
+        )}
+        {['resolved', 'closed'].includes(dispute.status) && (
+          <Link
+            href={`/admin/bookings/${dispute.booking_id}`}
+            className="mt-3 inline-flex min-h-9 items-center rounded-lg border border-slate-300 px-3 text-xs font-semibold text-slate-700 transition hover:bg-slate-50"
+          >
+            View booking history
+          </Link>
         )}
       </CardContent>
     </Card>
@@ -219,6 +231,10 @@ function EvidenceLinks({ links }: { links: string[] }) {
 
 export default function AdminDisputesPage() {
   const [disputes, setDisputes] = useState<AdminDispute[]>([])
+  const [resolvedDisputes, setResolvedDisputes] = useState<AdminDispute[]>([])
+  const [resolvedTotal, setResolvedTotal] = useState(0)
+  const [resolvedPage, setResolvedPage] = useState(1)
+  const [loadingMoreResolved, setLoadingMoreResolved] = useState(false)
   const [activeFilter, setActiveFilter] = useState<DisputeFilter>('all')
   const [loading, setLoading] = useState(true)
   const [actionLoading, setActionLoading] = useState<string | null>(null)
@@ -234,8 +250,14 @@ export default function AdminDisputesPage() {
   const load = useCallback(async () => {
     setLoading(true)
     try {
-      const res = await adminApi.listDisputes()
-      setDisputes(res.data ?? [])
+      const [activeRes, resolvedRes] = await Promise.all([
+        adminApi.listDisputes({ status: 'active', page: 1, page_size: 50 }),
+        adminApi.listDisputes({ status: 'resolved', page: 1, page_size: 50 }),
+      ])
+      setDisputes(activeRes.data?.items ?? [])
+      setResolvedDisputes(resolvedRes.data?.items ?? [])
+      setResolvedTotal(resolvedRes.data?.total ?? 0)
+      setResolvedPage(1)
       resetLoadError('admin-disputes')
     } catch {
       reportLoadError('admin-disputes', 'Failed to load disputes.')
@@ -245,6 +267,21 @@ export default function AdminDisputesPage() {
   }, [])
 
   useEffect(() => { load() }, [load])
+
+  async function loadMoreResolved() {
+    const nextPage = resolvedPage + 1
+    setLoadingMoreResolved(true)
+    try {
+      const res = await adminApi.listDisputes({ status: 'resolved', page: nextPage, page_size: 50 })
+      setResolvedDisputes((current) => [...current, ...(res.data?.items ?? [])])
+      setResolvedTotal(res.data?.total ?? resolvedTotal)
+      setResolvedPage(nextPage)
+    } catch (err: any) {
+      toast.error(err.message ?? 'Failed to load more resolved disputes.')
+    } finally {
+      setLoadingMoreResolved(false)
+    }
+  }
 
   async function markUnderReview(dispute: AdminDispute) {
     setActionLoading(dispute.id)
@@ -324,6 +361,7 @@ export default function AdminDisputesPage() {
     urgent,
     no_show: noShow,
     payment: paymentBooking,
+    resolved: resolvedDisputes,
   }
 
   return (
@@ -340,7 +378,7 @@ export default function AdminDisputesPage() {
             <TabsTrigger key={filter} value={filter} className="gap-1.5">
               {DISPUTE_FILTER_LABELS[filter]}
               <span className="text-xs text-muted-foreground">
-                {activeByFilter[filter].length}
+                {filter === 'resolved' ? resolvedTotal : activeByFilter[filter].length}
               </span>
             </TabsTrigger>
           ))}
@@ -351,7 +389,9 @@ export default function AdminDisputesPage() {
               <EmptyState
                 title={
                   filter === 'all'
-                    ? 'No disputes'
+                    ? 'No active disputes'
+                    : filter === 'resolved'
+                      ? 'No resolved disputes'
                     : `No ${DISPUTE_FILTER_LABELS[filter].toLowerCase()} disputes`
                 }
               />
@@ -366,6 +406,18 @@ export default function AdminDisputesPage() {
                     onResolve={() => setResolveTarget(d)}
                   />
                 ))}
+                {filter === 'resolved' && resolvedDisputes.length < resolvedTotal && (
+                  <div className="flex justify-center pt-2">
+                    <Button
+                      variant="outline"
+                      onClick={loadMoreResolved}
+                      loading={loadingMoreResolved}
+                      className="w-full sm:w-auto"
+                    >
+                      Load more resolved disputes
+                    </Button>
+                  </div>
+                )}
               </div>
             )}
           </TabsContent>

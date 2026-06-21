@@ -93,6 +93,20 @@ vi.mock('@/server/repositories/dispute.repo', () => ({
       state.dispute = { id: 'dispute_created_1', status: 'open', ...payload }
       return state.dispute
     }),
+    listForAdmin: vi.fn(async (_page: number, _pageSize: number, queue: string) => {
+      const dispute = {
+        id: queue === 'resolved' ? 'dispute_resolved_1' : 'dispute_active_1',
+        bookingId: state.booking.id,
+        status: queue === 'resolved' ? 'resolved' : 'under_review',
+        reason: 'Service issue',
+        resolutionType: queue === 'resolved' ? 'partial_refund' : null,
+        refundAmount: queue === 'resolved' ? 20 : null,
+        resolvedAt: queue === 'resolved' ? new Date('2026-06-19T04:03:00.000Z') : null,
+        createdAt: new Date('2026-06-18T04:03:00.000Z'),
+      }
+      return [[dispute], 1]
+    }),
+    listByParticipantUserId: vi.fn(async () => [[], 0]),
     update: vi.fn(async (_id: string, patch: any) => {
       state.dispute = {
         id: _id,
@@ -244,6 +258,23 @@ describe('F10 Payments capture/refund/dispute integration', () => {
     state.webhookEventType = 'charge.captured'
     state.webhookEventId = 'evt_1'
     state.transfersSeen.clear()
+  })
+
+  it('IT-PAY-00 admin can fetch resolved dispute history separately from the active queue', async () => {
+    const route = await import('@/app/api/v1/disputes/route')
+    const res = await route.GET(
+      new NextRequest('http://localhost/api/v1/disputes?status=resolved&page=1&page_size=50'),
+      { params: Promise.resolve({}) } as any,
+    )
+    const body = await res.json()
+
+    expect(res.status).toBe(200)
+    expect(body.data.total).toBe(1)
+    expect(body.data.disputes[0]).toMatchObject({
+      status: 'resolved',
+      resolution_type: 'partial_refund',
+      refund_amount: 20,
+    })
   })
 
   it('IT-PAY-01 capture endpoint captures authorized payment for completed booking', async () => {

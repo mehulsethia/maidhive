@@ -89,6 +89,9 @@ vi.mock('@/server/db', () => ({
     review: {
       aggregate: vi.fn(async () => ({ _avg: { rating: 4.5 } })),
     },
+    payment: {
+      aggregate: vi.fn(async () => ({ _sum: { cleanerPayout: 68 } })),
+    },
   },
 }))
 
@@ -126,6 +129,7 @@ describe('Cleaner metrics endpoints', () => {
     expect(body.data.cleaner.on_time_percentage).toBe(50)
     expect(body.data.cleaner.avg_response_minutes).toBe(30)
     expect(body.data.cleaner.average_rating).toBe(4.5)
+    expect(body.data.cleaner.released_earnings).toBe(68)
   })
 
   it('returns public cleaner trust stats without exposing email/phone', async () => {

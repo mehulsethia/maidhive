@@ -758,10 +758,14 @@ export const adminApi = {
   getBooking: (id: string) =>
     request<APIResponse<BookingRead>>(`/admin/bookings/${encodeURIComponent(id)}`),
 
-  listDisputes: async () => {
-    const res = await request<APIResponse<any>>('/disputes')
-    const disputes = (res.data?.disputes ?? res.data ?? []) as AdminDispute[]
-    return { ...res, data: disputes }
+  listDisputes: async (params: { status?: 'active' | 'resolved'; page?: number; page_size?: number } = {}) => {
+    const qs = new URLSearchParams(
+      Object.entries(params)
+        .filter(([, value]) => value !== undefined)
+        .map(([key, value]) => [key, String(value)]),
+    ).toString()
+    const res = await request<APIResponse<any>>(`/disputes${qs ? `?${qs}` : ''}`)
+    return { ...res, data: normalizePaginated<AdminDispute>(res.data ?? {}, 'disputes') }
   },
   markDisputeUnderReview: (id: string) =>
     request<APIResponse<AdminDispute>>(`/disputes/${id}/status`, {

@@ -137,7 +137,7 @@ export default function AdminDashboard() {
         </div>
       </div>
 
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
         <KpiCard
           label="Pending booking requests"
           value={queues?.pending_booking_requests.count ?? 0}
@@ -159,13 +159,46 @@ export default function AdminDashboard() {
           icon={CreditCard}
           href="/admin/bookings?filter=failed_payments"
         />
-        <KpiCard
-          label="Active Disputes"
-          value={queues?.active_disputes.count ?? stats?.open_disputes ?? 0}
-          sub="Open + under review"
-          icon={AlertTriangle}
-        />
       </div>
+
+      <section aria-labelledby="dispute-overview-heading" className="space-y-3">
+        <div className="flex flex-wrap items-end justify-between gap-2">
+          <div>
+            <h2 id="dispute-overview-heading" className="text-base font-semibold text-slate-900">
+              Active disputes
+            </h2>
+            <p className="text-xs text-muted-foreground">
+              {queues?.active_disputes.count ?? stats?.open_disputes ?? 0} cases requiring action
+            </p>
+          </div>
+          <Link href="/admin/disputes" className="text-xs font-medium text-primary hover:underline">
+            View dispute queue
+          </Link>
+        </div>
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+          <KpiCard
+            label="Open Disputes"
+            value={queues?.active_disputes.breakdown.open ?? 0}
+            sub="New cases not yet triaged"
+            icon={AlertTriangle}
+            href="/admin/disputes"
+          />
+          <KpiCard
+            label="Awaiting Response"
+            value={queues?.active_disputes.breakdown.awaiting_response ?? 0}
+            sub="Waiting for the other party"
+            icon={Clock}
+            href="/admin/disputes"
+          />
+          <KpiCard
+            label="Under Review"
+            value={queues?.active_disputes.breakdown.under_review ?? 0}
+            sub="Response received; decision pending"
+            icon={AlertCircle}
+            href="/admin/disputes"
+          />
+        </div>
+      </section>
 
       <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
         <WidgetShell
@@ -210,7 +243,13 @@ export default function AdminDashboard() {
               <div key={dispute.id} className="rounded-xl border border-slate-200 bg-slate-50/60 p-3">
                 <div className="flex items-center justify-between gap-2">
                   <p className="text-xs font-mono text-muted-foreground">#{dispute.booking_id.slice(0, 8)}</p>
-                  <Badge variant={dispute.status === 'under_review' ? 'secondary' : 'warning'}>{dispute.status.replace('_', ' ')}</Badge>
+                  <Badge variant={dispute.queue_stage === 'open' ? 'warning' : 'secondary'}>
+                    {dispute.queue_stage === 'awaiting_response'
+                      ? 'Awaiting response'
+                      : dispute.queue_stage === 'under_review'
+                        ? 'Under review'
+                        : 'Open'}
+                  </Badge>
                 </div>
                 <p className="mt-1 line-clamp-1 text-sm text-slate-800">{dispute.reason}</p>
                 <p className="mt-1 text-xs text-muted-foreground">Raised {formatDate(dispute.created_at)}</p>

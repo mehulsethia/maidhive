@@ -71,7 +71,7 @@ export const GET = requireCleaner(async (req, _ctx, user) => {
   const schedules = await availabilityRepo.getSchedule(cleaner.id)
   const hasAvailabilitySlots = schedules.some((s) => s.isActive)
   const onboarding = computeCleanerOnboardingProgress({ cleaner, hasAvailabilitySlots })
-  const [completedBookings, respondedBookings, reviewAgg] = await Promise.all([
+  const [completedBookings, respondedBookings, reviewAgg, releasedEarningsAgg] = await Promise.all([
     db.booking.findMany({
       where: {
         cleanerId: cleaner.id,
@@ -95,6 +95,16 @@ export const GET = requireCleaner(async (req, _ctx, user) => {
     db.review.aggregate({
       where: { cleanerId: cleaner.id },
       _avg: { rating: true },
+    }),
+    db.payment.aggregate({
+      where: {
+        booking: { cleanerId: cleaner.id },
+        OR: [
+          { status: 'transferred' },
+          { transferredAt: { not: null } },
+        ],
+      },
+      _sum: { cleanerPayout: true },
     }),
   ])
   const onTimeThresholdMs = 15 * 60 * 1000
@@ -125,6 +135,7 @@ export const GET = requireCleaner(async (req, _ctx, user) => {
         : undefined,
       totalJobs: completedBookings.length,
       averageRating: reviewAgg._avg.rating ?? null,
+      releasedEarnings: Number(releasedEarningsAgg._sum.cleanerPayout ?? 0),
       on_time_percentage: onTimePercentage,
       avg_response_minutes: avgResponseMinutes,
       lifecycle_status: deriveCleanerLifecycleStatus({

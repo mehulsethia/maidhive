@@ -35,6 +35,7 @@ test.describe('F19 dispute and compensation responsive regression @smoke', () =>
 
     test('E2E-RESP-01 admin dispute and booking history remain responsive across viewport classes', async ({ page }) => {
       await assertResponsiveRoute(page, '/admin/disputes')
+      await expect(page.getByRole('tab', { name: /Resolved Disputes/ })).toBeVisible({ timeout: 20_000 })
 
       await page.setViewportSize(VIEWPORTS[0])
       await page.waitForTimeout(6_000)

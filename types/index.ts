@@ -93,6 +93,7 @@ export interface CleanerRead {
   total_jobs: number
   new_cleaner_badge?: boolean
   average_rating?: number
+  released_earnings?: number
   created_at: string
   user?: UserRead
   service_areas?: Array<{ city: string; postcode_prefix?: string; radius_km?: number }>
@@ -508,6 +509,7 @@ export interface AdminOpsQueueItemDispute {
   id: string
   booking_id: string
   status: string
+  queue_stage: 'open' | 'awaiting_response' | 'under_review' | null
   reason: string
   created_at: string
 }
@@ -545,6 +547,11 @@ export interface AdminOpsQueues {
   }
   active_disputes: {
     count: number
+    breakdown: {
+      open: number
+      awaiting_response: number
+      under_review: number
+    }
     items: AdminOpsQueueItemDispute[]
   }
   pending_booking_requests: {

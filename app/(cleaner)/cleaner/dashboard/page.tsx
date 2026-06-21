@@ -53,6 +53,7 @@ export default function CleanerDashboardPage() {
   const [rejectionReason, setRejectionReason] = useState<string>('')
   const [profileComplete, setProfileComplete] = useState(false)
   const [avgRating, setAvgRating] = useState<number | null>(null)
+  const [releasedEarningsTotal, setReleasedEarningsTotal] = useState<number | null>(null)
   const [loading, setLoading] = useState(true)
   const [actionLoading, setActionLoading] = useState<string | null>(null)
   const [submittingApproval, setSubmittingApproval] = useState(false)
@@ -79,6 +80,9 @@ export default function CleanerDashboardPage() {
         setRejectionReason(cleaner?.rejection_reason ?? '')
         setProfileComplete(cleaner?.profile_complete ?? false)
         setAvgRating(cleaner?.average_rating ?? null)
+        setReleasedEarningsTotal(
+          cleaner?.released_earnings == null ? null : Number(cleaner.released_earnings),
+        )
         resetLoadError('cleaner-dashboard-profile')
       } catch {
         reportLoadError('cleaner-dashboard-profile', 'Failed to load profile data.')
@@ -177,9 +181,9 @@ export default function CleanerDashboardPage() {
       activeJobs,
       completed,
       prioritizedRecent,
-      releasedEarnings: getReleasedCleanerEarnings(bookings),
+      releasedEarnings: releasedEarningsTotal ?? getReleasedCleanerEarnings(bookings),
     }
-  }, [bookings])
+  }, [bookings, releasedEarningsTotal])
 
   const nextUpcoming = useMemo(() => {
     if (stats.upcoming.length === 0) return null

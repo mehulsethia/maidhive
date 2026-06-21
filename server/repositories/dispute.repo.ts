@@ -67,10 +67,20 @@ export const disputeRepo = {
   update: (id: string, data: Prisma.DisputeUpdateInput) =>
     db.dispute.update({ where: { id }, data, select: disputeSelect }),
 
-  listOpen: (page: number, pageSize: number) =>
-    Promise.all([
+  listForAdmin: (
+    page: number,
+    pageSize: number,
+    queue: 'active' | 'resolved' | 'all' = 'all',
+  ) => {
+    const where: Prisma.DisputeWhereInput = queue === 'active'
+      ? { status: { in: ['open', 'under_review'] } }
+      : queue === 'resolved'
+        ? { status: { in: ['resolved', 'closed'] } }
+        : {}
+
+    return Promise.all([
       db.dispute.findMany({
-        where: { status: { not: 'closed' } },
+        where,
         select: {
           ...disputeSelect,
           booking: {
@@ -83,10 +93,13 @@ export const disputeRepo = {
         },
         skip: (page - 1) * pageSize,
         take: pageSize,
-        orderBy: { createdAt: 'desc' },
+        orderBy: queue === 'resolved'
+          ? [{ resolvedAt: 'desc' }, { updatedAt: 'desc' }]
+          : { createdAt: 'desc' },
       }),
-      db.dispute.count({ where: { status: { not: 'closed' } } }),
-    ]),
+      db.dispute.count({ where }),
+    ])
+  },
 
   listByRaisedBy: (raisedBy: string, page: number, pageSize: number) =>
     Promise.all([

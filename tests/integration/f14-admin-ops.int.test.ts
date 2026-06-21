@@ -226,7 +226,12 @@ vi.mock('@/server/db', () => {
         }),
       },
       dispute: {
-        count: vi.fn(async () => 1),
+        count: vi.fn(async (args?: any) => {
+          if (args?.where?.status === 'open') return 2
+          if (args?.where?.status === 'under_review' && args?.where?.OR) return 4
+          if (args?.where?.status === 'under_review') return 3
+          return 1
+        }),
         findMany: vi.fn(async (args: any) => {
           disputeFindManyCall += 1
           if (args?.where?.status?.in) {
@@ -236,6 +241,26 @@ vi.mock('@/server/db', () => {
                 bookingId: 'booking_pending_1',
                 status: 'open',
                 reason: 'Service issue',
+                createdAt: new Date(),
+              },
+              {
+                id: 'dispute_awaiting_1',
+                bookingId: 'booking_pending_1',
+                status: 'under_review',
+                reason: 'Damage issue',
+                respondedAt: null,
+                respondedBy: null,
+                responseExplanation: null,
+                createdAt: new Date(),
+              },
+              {
+                id: 'dispute_review_1',
+                bookingId: 'booking_pending_1',
+                status: 'under_review',
+                reason: 'Quality issue',
+                respondedAt: new Date(),
+                respondedBy: 'cleaner_1',
+                responseExplanation: 'Response submitted',
                 createdAt: new Date(),
               },
             ]
@@ -315,7 +340,17 @@ describe('F14 Admin routes integration', () => {
     expect(body.success).toBe(true)
     expect(body.data.pending_cleaner_approvals.count).toBeGreaterThanOrEqual(1)
     expect(body.data.pending_booking_requests.count).toBeGreaterThanOrEqual(1)
-    expect(body.data.active_disputes.count).toBeGreaterThanOrEqual(1)
+    expect(body.data.active_disputes.count).toBe(9)
+    expect(body.data.active_disputes.breakdown).toEqual({
+      open: 2,
+      awaiting_response: 3,
+      under_review: 4,
+    })
+    expect(body.data.active_disputes.items.map((item: any) => item.queue_stage)).toEqual([
+      'open',
+      'awaiting_response',
+      'under_review',
+    ])
   })
 
   it('IT-ADMIN-04 admin bookings filters preserve status + pagination arguments', async () => {
