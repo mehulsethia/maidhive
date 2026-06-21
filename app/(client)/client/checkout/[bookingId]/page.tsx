@@ -243,6 +243,7 @@ export default function CheckoutPage() {
                     paymentStatus={booking.payment?.status}
                     scheduledEnd={booking.scheduled_end}
                     proposalBy={booking.proposal_by}
+                    audience="client"
                   />
                 </div>
                 <div className="flex justify-between">

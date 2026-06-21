@@ -36,6 +36,8 @@ import { canViewChatHistoryForBooking, getChatReadOnlyMessage, isChatReadOnly } 
 import { isCompletedBookingReleased } from '@/lib/booking-release'
 import { getClientBookingRequestDeadlineCopy } from '@/lib/booking-expiry-copy'
 import { computeConfirmedCancellationPolicy, moneyFromCents } from '@/lib/cancellation-policy'
+import { getCancellationOriginLabel } from '@/lib/cancellation-origin'
+import { getClientCancellationContext } from '@/lib/client-cancellation-context'
 import { AMENDMENT_EXPIRY_OUTCOME_COPY, isWithinAmendStartWindow } from '@/lib/booking-amendment'
 import type { BookingRead } from '@/types'
 import { toast } from 'sonner'
@@ -418,6 +420,8 @@ export default function ClientBookingDetailPage() {
       ],
     }
   })()
+  const cancellationOriginLabel = getCancellationOriginLabel(booking)
+  const cancellationContext = getClientCancellationContext(booking)
   const proposalContext =
     booking.proposal_context ??
     (booking.status === 'pending' ? 'pre_confirmation' : booking.status === 'accepted' || booking.status === 'confirmed' ? 'post_confirmation' : null)
@@ -516,7 +520,13 @@ export default function ClientBookingDetailPage() {
                     paymentStatus={booking.payment?.status}
                     scheduledEnd={booking.scheduled_end}
                     proposalBy={booking.proposal_by}
+                    audience="client"
                   />
+                  {cancellationOriginLabel && (
+                    <span className="rounded-full border border-rose-200 bg-rose-50 px-2.5 py-1 text-xs font-semibold text-rose-700">
+                      {cancellationOriginLabel}
+                    </span>
+                  )}
                   <p className={`${displayFont.className} text-xl font-bold tracking-[-0.02em] text-white`}>
                     {new Intl.NumberFormat('en-IE', { style: 'currency', currency: 'EUR' }).format(booking.total_amount)}
                   </p>
@@ -575,7 +585,14 @@ export default function ClientBookingDetailPage() {
               }}
             />
             {booking.status === 'cancelled' && (
-              <CancellationPaymentBreakdown booking={booking} />
+              <div className="space-y-2">
+                {cancellationContext && (
+                  <p className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900">
+                    {cancellationContext}
+                  </p>
+                )}
+                <CancellationPaymentBreakdown booking={booking} />
+              </div>
             )}
 
           </div>

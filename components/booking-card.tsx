@@ -7,6 +7,7 @@ import { CancellationPaymentBreakdown } from '@/components/cancellation-payment-
 import { isCompletedBookingReleased } from '@/lib/booking-release'
 import { formatCurrency, formatDate } from '@/lib/utils'
 import type { BookingRead } from '@/types'
+import { getCancellationOriginLabel } from '@/lib/cancellation-origin'
 
 const SERVICE_LABELS: Record<string, string> = {
   standard: 'Standard Clean',
@@ -52,7 +53,13 @@ export function BookingCard({ booking, viewAs = 'client' }: BookingCardProps) {
                 scheduledEnd={booking.scheduled_end}
                 proposalBy={booking.proposal_by}
                 showPaymentRequiredForUnpaid={viewAs !== 'cleaner'}
+                audience={viewAs}
               />
+              {viewAs === 'client' && getCancellationOriginLabel(booking) && (
+                <span className="inline-flex rounded-full border border-rose-200 bg-rose-50 px-2 py-0.5 text-[11px] font-semibold text-rose-700">
+                  {getCancellationOriginLabel(booking)}
+                </span>
+              )}
             </div>
 
             <div className="space-y-1 text-sm text-muted-foreground">

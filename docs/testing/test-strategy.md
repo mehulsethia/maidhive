@@ -1,6 +1,6 @@
 # MAIDHIVE Test Strategy
 
-Last updated: 2026-06-20
+Last updated: 2026-06-21
 Source of truth for flow coverage: `docs/testing/flow-matrix.md`
 
 ## 1) Goals
@@ -32,14 +32,16 @@ Release signoff by human verification on staging.
 `npm run test:preprod`
 
 ## 4) CI Gates
-1. Push gate:
-`npx tsc --noEmit` + all `P0` unit/integration tests.
-2. PR gate:
-Push gate + `P0` E2E smoke (`@smoke`) for `F01/F04/F05/F06` initially.
+1. Push/PR gate (`.github/workflows/preproduction.yml`):
+`test-build` runs the complete Vitest suite and production build.
+2. Responsive browser gate:
+`responsive-smoke` runs authenticated admin, cleaner, and client checks at mobile (390px), tablet (768px), and desktop (1440px) widths.
 3. Release gate:
 `npm run test:preprod` + UAT signoff for client/cleaner/admin checklists. This command runs all unit/integration tests, the production build/type gate, and authenticated E2E smoke tests.
 4. Nightly:
 Full regression plus edge/time-boundary scenarios.
+5. Repository configuration:
+Protect the production branch and require both `test-build` and `responsive-smoke` checks before merge. Configure the Supabase, database, and `E2E_*` repository secrets referenced by the workflow.
 
 ## 5) Test ID Contract
 1. Keep IDs from the flow matrix unchanged:
@@ -68,7 +70,7 @@ Use test mode keys and replay-safe idempotent endpoints.
 `F01`, `F04`, `F05`, `F06`.
 2. Convert integration skeletons to executable specs against seeded test DB.
 3. Convert E2E `fixme` smoke specs into runnable flows with Playwright fixtures.
-4. Add CI workflow files for push/PR/release gates.
+4. Keep the pre-production workflow and authenticated role credentials operational.
 
 ## 9) Definition of Done per Flow
 1. Required layer coverage implemented for target phase.

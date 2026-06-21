@@ -31,14 +31,18 @@ export function BookingStatusBadge({
   scheduledEnd,
   proposalBy,
   showPaymentRequiredForUnpaid = true,
+  audience,
 }: {
   status: BookingStatus
   paymentStatus?: string | null
   scheduledEnd?: string | Date | null
   proposalBy?: 'client' | 'cleaner' | null
   showPaymentRequiredForUnpaid?: boolean
+  audience?: 'client' | 'cleaner' | 'admin'
 }) {
-  const completedLabel = isCompletedBookingReleased({ status, paymentStatus, scheduledEnd })
+  const completedLabel = audience === 'client'
+    ? 'Completed'
+    : isCompletedBookingReleased({ status, paymentStatus, scheduledEnd })
     ? 'Completed - Released'
     : STATUS_CONFIG.completed.label
 

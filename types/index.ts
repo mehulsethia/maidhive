@@ -49,6 +49,7 @@ export interface ClientProfileRead {
   id_file_url?: string | null
   id_submitted_at?: string | null
   created_at?: string
+  total_spent?: number
   user?: UserRead
 }
 

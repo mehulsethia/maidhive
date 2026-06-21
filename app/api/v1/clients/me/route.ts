@@ -6,6 +6,8 @@ import { userRepo } from '@/server/repositories/user.repo'
 import { ok, err } from '@/server/response'
 import { isCyprusPostcode, isMvpCity, MVP_CITY, MVP_COUNTRY_CODE } from '@/lib/location-policy'
 import { isLikelyE164, normalizePhoneE164 } from '@/server/lib/phone'
+import { db } from '@/server/db'
+import { getClientTotalSpent } from '@/lib/client-spend'
 
 const updateClientMeSchema = z.object({
   name: z.string().trim().min(1).max(120).optional(),
@@ -22,8 +24,16 @@ export const GET = requireClient(async (req, _ctx, user) => {
     client = await clientRepo.create(user.id)
   }
   const authSessionUser = await getAuthSessionUser(req)
+  const successfulPayments = await db.payment.findMany({
+    where: {
+      booking: { clientId: client.id },
+      status: { in: ['captured', 'transferred', 'partially_refunded'] },
+    },
+    select: { status: true, amount: true, refundAmount: true },
+  })
   return ok({
     ...client,
+    totalSpent: getClientTotalSpent(successfulPayments),
     user: client.user
       ? {
           ...client.user,

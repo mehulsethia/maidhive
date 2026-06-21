@@ -20,6 +20,7 @@ import { reportLoadError, resetLoadError } from '@/lib/load-error-policy'
 import { recoverBookingsFromNotifications } from '@/lib/booking-data-recovery'
 import { createClient } from '@/lib/supabase'
 import { setupVisiblePolling } from '@/lib/visible-polling'
+import { getCancellationOriginLabel } from '@/lib/cancellation-origin'
 import { UserAvatar } from '@/components/ui/user-avatar'
 import { formatCurrency, formatDate } from '@/lib/utils'
 import type { BookingRead, BookingStatus, FavoriteCleaner } from '@/types'
@@ -365,7 +366,13 @@ export default function ClientDashboardPage() {
                         paymentStatus={booking.payment?.status}
                         scheduledEnd={booking.scheduled_end}
                         proposalBy={booking.proposal_by}
+                        audience="client"
                       />
+                      {getCancellationOriginLabel(booking) && (
+                        <span className="inline-flex rounded-full border border-rose-200 bg-rose-50 px-2 py-0.5 text-[11px] font-semibold text-rose-700">
+                          {getCancellationOriginLabel(booking)}
+                        </span>
+                      )}
                       {isActiveProposal && (
                         <p className="text-xs font-semibold text-blue-700">
                           {proposalSummary}

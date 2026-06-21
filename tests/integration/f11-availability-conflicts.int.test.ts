@@ -157,8 +157,8 @@ describe('F11 Availability and conflict prevention integration', () => {
       new NextRequest('http://localhost/api/v1/availability/me/blocked', {
         method: 'POST',
         body: JSON.stringify({
-          start_datetime: '2026-06-20T00:00:00.000Z',
-          end_datetime: '2026-06-20T23:59:59.000Z',
+          start_datetime: '2099-06-20T00:00:00.000Z',
+          end_datetime: '2099-06-20T23:59:59.000Z',
           reason: 'Holiday',
         }),
         headers: { 'content-type': 'application/json' },
@@ -169,8 +169,8 @@ describe('F11 Availability and conflict prevention integration', () => {
     state.blocked = [
       {
         id: 'block_existing',
-        startDatetime: new Date('2026-06-20T00:00:00.000Z'),
-        endDatetime: new Date('2026-06-20T23:59:59.000Z'),
+        startDatetime: new Date('2099-06-20T00:00:00.000Z'),
+        endDatetime: new Date('2099-06-20T23:59:59.000Z'),
       },
     ]
 
@@ -178,8 +178,8 @@ describe('F11 Availability and conflict prevention integration', () => {
       new NextRequest('http://localhost/api/v1/availability/me/blocked', {
         method: 'POST',
         body: JSON.stringify({
-          start_datetime: '2026-06-20T12:00:00.000Z',
-          end_datetime: '2026-06-21T12:00:00.000Z',
+          start_datetime: '2099-06-20T12:00:00.000Z',
+          end_datetime: '2099-06-21T12:00:00.000Z',
         }),
         headers: { 'content-type': 'application/json' },
       }),

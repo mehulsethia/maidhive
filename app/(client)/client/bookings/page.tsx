@@ -22,6 +22,7 @@ import { createClient } from '@/lib/supabase'
 import { setupVisiblePolling } from '@/lib/visible-polling'
 import { formatCurrency, formatDate } from '@/lib/utils'
 import { hasPendingAmendmentRequest } from '@/lib/booking-amendment'
+import { getCancellationOriginLabel } from '@/lib/cancellation-origin'
 import type { BookingRead, BookingStatus } from '@/types'
 import { toast } from 'sonner'
 
@@ -400,7 +401,15 @@ export default function ClientBookingsPage() {
                             paymentStatus={booking.payment?.status}
                             scheduledEnd={booking.scheduled_end}
                             proposalBy={booking.proposal_by}
+                            audience="client"
                           />
+                          {getCancellationOriginLabel(booking) && (
+                            <div className="mt-2">
+                              <span className="inline-flex rounded-full border border-rose-200 bg-rose-50 px-2 py-0.5 text-left text-[11px] font-semibold text-rose-700">
+                                {getCancellationOriginLabel(booking)}
+                              </span>
+                            </div>
+                          )}
                           {amendmentPending && (
                             <div className="mt-2">
                               <span className="inline-flex max-w-full rounded-full border border-blue-200 bg-blue-50 px-2 py-0.5 text-left text-[11px] font-semibold leading-4 text-blue-700 whitespace-normal">

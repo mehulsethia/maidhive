@@ -16,6 +16,7 @@ import { Textarea } from '@/components/ui/textarea'
 import { CLIENT_DISPUTE_ISSUES } from '@/lib/dispute-issues'
 import { reportLoadError, resetLoadError } from '@/lib/load-error-policy'
 import { formatDate } from '@/lib/utils'
+import { getDisputeResolutionOutcome } from '@/lib/dispute-resolution'
 import type { BookingRead, ClientDispute } from '@/types'
 import { toast } from 'sonner'
 
@@ -59,8 +60,8 @@ function getDisputeCreatedAt(dispute: any) {
   return dispute?.created_at ?? dispute?.createdAt ?? new Date().toISOString()
 }
 
-function getDisputeResolutionNote(dispute: any) {
-  return dispute?.resolution_note ?? dispute?.resolutionNote ?? ''
+function getDisputeResolvedAt(dispute: any) {
+  return dispute?.resolved_at ?? dispute?.resolvedAt ?? null
 }
 
 function getDisputeResponseExplanation(dispute: any) {
@@ -580,17 +581,23 @@ function ClientReportPageContent() {
                         )}
                       </div>
 
-                      {getDisputeResolutionNote(dispute) && (
+                      {(status === 'resolved' || status === 'closed') && (
                         <p className="mt-2 rounded-md bg-emerald-50 px-3 py-2 text-xs text-emerald-700">
-                          Resolution: {getDisputeResolutionNote(dispute)}
+                          Resolution outcome: {getDisputeResolutionOutcome(dispute.resolution_type, dispute.refund_amount)}
                         </p>
                       )}
 
-                      <div className="mt-2 text-xs text-slate-500">
+                      <div className="mt-2 space-y-1 text-xs text-slate-500">
                         <span className="inline-flex items-center gap-1">
                           <CalendarDays className="h-3.5 w-3.5" />
-                          {formatDate(getDisputeCreatedAt(dispute))}
+                          Reported on: {formatDate(getDisputeCreatedAt(dispute))}
                         </span>
+                        {(status === 'resolved' || status === 'closed') && getDisputeResolvedAt(dispute) && (
+                          <span className="flex items-center gap-1">
+                            <CalendarDays className="h-3.5 w-3.5" />
+                            Resolved on: {formatDate(getDisputeResolvedAt(dispute))}
+                          </span>
+                        )}
                       </div>
                     </article>
                   )

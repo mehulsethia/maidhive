@@ -32,5 +32,9 @@ describe('Cleaner cancellation origin label', () => {
     expect(getCancellationOriginLabel(cancelledBooking('cleaner_user'))).toBe('Cancelled by cleaner')
     expect(getCancellationOriginLabel(cancelledBooking('admin_user'))).toBe('Cancelled by platform')
     expect(getCancellationOriginLabel(cancelledBooking(null))).toBeNull()
+    expect(getCancellationOriginLabel({
+      ...cancelledBooking(null),
+      cancellation_reason: 'Cancelled by client within 24 hours of scheduled start',
+    })).toBe('Cancelled by client')
   })
 })

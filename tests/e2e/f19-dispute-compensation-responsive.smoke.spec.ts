@@ -35,7 +35,7 @@ test.describe('F19 dispute and compensation responsive regression @smoke', () =>
 
     test('E2E-RESP-01 admin dispute and booking history remain responsive across viewport classes', async ({ page }) => {
       await assertResponsiveRoute(page, '/admin/disputes')
-      await expect(page.getByRole('tab', { name: /Resolved Disputes/ })).toBeVisible({ timeout: 20_000 })
+      await expect(page.getByRole('button', { name: /Resolved Disputes/ })).toBeVisible({ timeout: 20_000 })
 
       await page.setViewportSize(VIEWPORTS[0])
       await page.waitForTimeout(6_000)
@@ -83,6 +83,36 @@ test.describe('F19 dispute and compensation responsive regression @smoke', () =>
           await expect(page.getByText(/Cancelled by (client|cleaner|platform)/)).toBeVisible({ timeout: 20_000 })
         }
         await expect(page.getByText('Compensation outcome')).toBeVisible({ timeout: 20_000 })
+      }
+    })
+  })
+
+  test.describe('client session', () => {
+    test.use({ storageState: authStatePath('client') })
+
+    test('E2E-RESP-03 client cancellation, completed status, reports and spend remain responsive', async ({ page }) => {
+      for (const path of ['/client/bookings', '/client/report', '/client/profile']) {
+        await assertResponsiveRoute(page, path)
+      }
+
+      await page.setViewportSize(VIEWPORTS[0])
+      await page.goto('/client/profile')
+      await expect(page.getByRole('button', {
+        name: 'Includes completed bookings and any cancellation or no-show charges paid through MaidHive.',
+      })).toBeVisible({ timeout: 20_000 })
+
+      await page.goto('/client/bookings')
+      await expect(page.getByText(/Completed - (Awaiting Release|Released)/)).toHaveCount(0)
+
+      const cancelledResponse = await page.request.get('/api/v1/bookings?page=1&page_size=1&status=cancelled')
+      expect(cancelledResponse.status()).toBe(200)
+      const cancelledBody = await cancelledResponse.json()
+      const cancelledBooking = cancelledBody?.data?.bookings?.[0] ?? cancelledBody?.data?.items?.[0]
+      if (cancelledBooking?.id) {
+        await assertResponsiveRoute(page, `/client/bookings/${cancelledBooking.id}`)
+        if (cancelledBooking.cancelled_by) {
+          await expect(page.getByText(/Cancelled by (client|cleaner|platform)/)).toBeVisible({ timeout: 20_000 })
+        }
       }
     })
   })

@@ -2,7 +2,7 @@
 
 import { useDeferredValue, useEffect, useState, startTransition } from 'react'
 import { Bricolage_Grotesque, IBM_Plex_Mono } from 'next/font/google'
-import { CreditCard, ShieldCheck } from 'lucide-react'
+import { CreditCard, Info, ShieldCheck } from 'lucide-react'
 import { loadStripe } from '@stripe/stripe-js'
 import { Elements, PaymentElement, useElements, useStripe } from '@stripe/react-stripe-js'
 import { bookingsApi, clientsApi, paymentsApi, phoneVerificationApi } from '@/lib/api'
@@ -32,6 +32,7 @@ export default function ClientProfilePage() {
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [bookings, setBookings] = useState<BookingRead[]>([])
+  const [totalSpent, setTotalSpent] = useState(0)
 
   const [firstName, setFirstName] = useState('')
   const [lastName, setLastName] = useState('')
@@ -125,6 +126,7 @@ export default function ClientProfilePage() {
           setEmailVerified(Boolean(user?.email_confirmed_at))
           setPhoneVerified(Boolean(user?.phone_verified_at))
           setBookings(bookingItems)
+          setTotalSpent(Number(client?.total_spent ?? 0))
           setLoading(false)
         })
         if (clientRes.status === 'fulfilled') {
@@ -155,9 +157,6 @@ export default function ClientProfilePage() {
 
   const deferredBookings = useDeferredValue(bookings)
   const totalBookings = deferredBookings.length
-  const totalSpent = deferredBookings
-    .filter((booking) => booking.status === 'completed')
-    .reduce((sum, booking) => sum + Number(booking.total_amount ?? 0), 0)
 
   async function saveProfile() {
     if (!firstName.trim()) return toast.error('First name is required.')
@@ -574,7 +573,13 @@ export default function ClientProfilePage() {
                 </p>
                 <div className="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-2">
                   <StatTile label="Bookings" value={totalBookings} monoFont={monoFont.className} displayFont={displayFont.className} />
-                  <StatTile label="Spent" value={formatCurrency(totalSpent)} monoFont={monoFont.className} displayFont={displayFont.className} />
+                  <StatTile
+                    label="Spent"
+                    value={formatCurrency(totalSpent)}
+                    monoFont={monoFont.className}
+                    displayFont={displayFont.className}
+                    tooltip="Includes completed bookings and any cancellation or no-show charges paid through MaidHive."
+                  />
                 </div>
               </div>
             </div>
@@ -1216,15 +1221,27 @@ function StatTile({
   value,
   monoFont,
   displayFont,
+  tooltip,
 }: {
   label: string
   value: string | number
   monoFont: string
   displayFont: string
+  tooltip?: string
 }) {
   return (
     <div className="rounded-2xl border border-white/25 bg-white/10 p-3 text-white">
-      <p className={`${monoFont} text-[0.6rem] uppercase tracking-[0.18em] text-white/70`}>{label}</p>
+      <div className="flex items-center gap-1">
+        <p className={`${monoFont} text-[0.6rem] uppercase tracking-[0.18em] text-white/70`}>{label}</p>
+        {tooltip && (
+          <button type="button" className="group relative inline-flex" aria-label={tooltip}>
+            <Info className="h-3.5 w-3.5 text-white/70" aria-hidden="true" />
+            <span className="pointer-events-none absolute right-0 top-full z-20 mt-2 hidden w-[min(15rem,calc(100vw-3rem))] rounded-lg bg-slate-950 px-2.5 py-2 text-left text-[11px] normal-case tracking-normal text-white shadow-xl group-hover:block group-focus:block">
+              {tooltip}
+            </span>
+          </button>
+        )}
+      </div>
       <p className={`${displayFont} mt-1 text-lg font-bold tracking-[-0.02em]`}>{value}</p>
     </div>
   )
