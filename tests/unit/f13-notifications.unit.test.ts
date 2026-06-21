@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { getNotificationHref } from '@/lib/notification-links'
+import { normalizeNotificationCopyForRole } from '@/lib/notification-copy'
 
 describe('F13 Notifications + deep links unit coverage', () => {
   it('UT-NOTIF-01 booking notification types map to role-scoped booking detail routes', () => {
@@ -45,5 +46,21 @@ describe('F13 Notifications + deep links unit coverage', () => {
 
     expect(getNotificationHref('admin', resolved)).toBe('/admin/bookings/booking_1')
     expect(getNotificationHref('cleaner', resolved)).toBe('/cleaner/bookings/booking_1')
+  })
+
+  it('UT-NOTIF-06 client completed notifications hide cleaner payout release states', () => {
+    const awaiting = normalizeNotificationCopyForRole('client', {
+      title: 'Completed - Awaiting Release',
+      body: 'Booking completed - awaiting release.',
+    } as any)
+    const released = normalizeNotificationCopyForRole('client', {
+      title: 'Completed - Released',
+      body: 'Your booking is Completed — Released.',
+    } as any)
+
+    expect(awaiting.title).toBe('Completed')
+    expect(awaiting.body).toBe('Booking Completed.')
+    expect(released.title).toBe('Completed')
+    expect(released.body).toBe('Your booking is Completed.')
   })
 })

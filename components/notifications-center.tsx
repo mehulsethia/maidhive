@@ -9,6 +9,7 @@ import { createClient } from '@/lib/supabase'
 import { cn } from '@/lib/utils'
 import { triggerCountsRefresh } from '@/lib/counts-sync'
 import { reportLoadError, resetLoadError } from '@/lib/load-error-policy'
+import { normalizeNotificationCopyForRole } from '@/lib/notification-copy'
 import type { NotificationRead } from '@/types'
 import { toast } from 'sonner'
 
@@ -126,26 +127,6 @@ export function NotificationsCenter({ role }: { role: NotificationRole }) {
     }
   }
 
-  function normalizeNotificationCopy(notification: NotificationRead): NotificationRead {
-    if (role === 'client') {
-      const simplifyCompletedStatus = (copy: string) => copy
-        .replace(/Completed\s*[-–—]\s*Awaiting Release/gi, 'Completed')
-        .replace(/Completed\s*[-–—]\s*Released/gi, 'Completed')
-      return {
-        ...notification,
-        title: simplifyCompletedStatus(String(notification.title ?? '')),
-        body: simplifyCompletedStatus(String(notification.body ?? '')),
-      }
-    }
-    if (role !== 'cleaner') return notification
-    const nextTitle = String(notification.title ?? '')
-      .replace(/Payment Required/gi, 'Awaiting payment authorisation')
-      .replace(/New Booking Request/gi, 'New Request')
-    const nextBody = String(notification.body ?? '')
-      .replace(/Payment Required/gi, 'Awaiting payment authorisation')
-    return { ...notification, title: nextTitle, body: nextBody }
-  }
-
   return (
     <section className="rounded-3xl border border-slate-200 bg-white/90 p-4 shadow-[0_18px_45px_rgba(11,33,78,0.08)] sm:p-6">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
@@ -205,7 +186,7 @@ export function NotificationsCenter({ role }: { role: NotificationRole }) {
       ) : (
         <div className="mt-5 space-y-3">
           {visibleNotifications.map((rawNotification) => {
-            const notification = normalizeNotificationCopy(rawNotification)
+            const notification = normalizeNotificationCopyForRole(role, rawNotification)
             const working = workingId === notification.id
             const href = getNotificationHref(role, notification)
             return (

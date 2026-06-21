@@ -1,5 +1,5 @@
 import { db } from '../db'
-import type { Prisma } from '@prisma/client'
+import { Prisma } from '@prisma/client'
 
 const disputeSelect = {
   id: true,
@@ -19,6 +19,29 @@ const disputeSelect = {
   resolutionNote: true,
   refundAmount: true,
   resolvedBy: true,
+  resolvedAt: true,
+  createdAt: true,
+  updatedAt: true,
+  reporterRole: true,
+  bookingStatusAtReport: true,
+} satisfies Prisma.DisputeSelect
+
+const participantDisputeSelect = {
+  id: true,
+  bookingId: true,
+  raisedBy: true,
+  reason: true,
+  issueType: true,
+  explanation: true,
+  evidence: true,
+  status: true,
+  responseExplanation: true,
+  responseEvidence: true,
+  respondedBy: true,
+  responderRole: true,
+  respondedAt: true,
+  resolutionType: true,
+  refundAmount: true,
   resolvedAt: true,
   createdAt: true,
   updatedAt: true,
@@ -66,6 +89,30 @@ export const disputeRepo = {
 
   update: (id: string, data: Prisma.DisputeUpdateInput) =>
     db.dispute.update({ where: { id }, data, select: disputeSelect }),
+
+  attachParticipantResponse: (id: string, data: {
+    explanation: string
+    evidence?: string[]
+    respondedBy: string
+    responderRole: string
+    respondedAt: Date
+  }) => db.dispute.updateMany({
+    where: {
+      id,
+      status: { in: ['open', 'under_review'] },
+      respondedBy: null,
+      responderRole: null,
+      respondedAt: null,
+    },
+    data: {
+      responseExplanation: data.explanation,
+      responseEvidence: data.evidence ?? Prisma.JsonNull,
+      respondedBy: data.respondedBy,
+      responderRole: data.responderRole,
+      respondedAt: data.respondedAt,
+      status: 'under_review',
+    },
+  }),
 
   listForAdmin: (
     page: number,
@@ -130,7 +177,7 @@ export const disputeRepo = {
       db.dispute.findMany({
         where,
         select: {
-          ...disputeSelect,
+          ...participantDisputeSelect,
           booking: {
             include: {
               client: { include: { user: true } },

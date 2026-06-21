@@ -86,21 +86,23 @@ export function getReleasedCleanerEarnings(bookings: BookingRead[], nowMs = Date
   return bookings.reduce((sum, booking) => {
     const payout = Number(booking.payment?.cleaner_payout ?? booking.cleaner_payout ?? 0)
     if (!Number.isFinite(payout) || payout <= 0) return sum
+    return isCleanerEarningReleased(booking, nowMs) ? sum + payout : sum
+  }, 0)
+}
 
-    if (booking.status === 'completed' && isCompletedBookingReleased({
+export function isCleanerEarningReleased(booking: BookingRead, nowMs = Date.now()) {
+  if (booking.status === 'completed') {
+    return isCompletedBookingReleased({
       status: booking.status,
       paymentStatus: booking.payment?.status,
       scheduledEnd: booking.scheduled_end,
       nowMs,
-    })) {
-      return sum + payout
-    }
+    })
+  }
 
-    const compensationReleased = booking.status === 'cancelled' && (
-      booking.payment?.status === 'transferred' || Boolean(booking.payment?.transferred_at)
-    )
-    return compensationReleased ? sum + payout : sum
-  }, 0)
+  return booking.status === 'cancelled' && (
+    booking.payment?.status === 'transferred' || Boolean(booking.payment?.transferred_at)
+  )
 }
 
 export function buildCleanerPaymentHistory(

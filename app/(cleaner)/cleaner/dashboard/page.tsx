@@ -21,6 +21,7 @@ import { deriveCleanerLifecycleStatus } from '@/lib/cleaner-status'
 import { showJobStartedToast } from '@/lib/job-start-toast'
 import { getReleasedCleanerEarnings } from '@/lib/cleaner-payment-history'
 import { setupVisiblePolling } from '@/lib/visible-polling'
+import { getCleanerEarningsLabel } from '@/lib/cleaner-earnings-label'
 import { toast } from 'sonner'
 
 const REQUEST_STATUSES: BookingStatus[] = ['pending']
@@ -561,8 +562,18 @@ export default function CleanerDashboardPage() {
                 const proposalSummary = isAmendProposal
                   ? `${proposalActor} requested Amend Start Time: ${formatDate(b.scheduled_start)} → ${formatDate(b.proposed_start ?? b.scheduled_start)}`
                   : `${proposalActor} proposed: ${formatDate(b.scheduled_start)} → ${formatDate(b.proposed_start ?? b.scheduled_start)}`
+                const earningsLabel = getCleanerEarningsLabel({
+                  status: b.status,
+                  paymentStatus: b.payment?.status,
+                  scheduledEnd: b.scheduled_end,
+                })
                 return (
-                  <Link key={b.id} href={`/cleaner/bookings/${b.id}`} className="rounded-xl border border-slate-200 bg-white p-3 hover:border-primary/40 hover:shadow-sm">
+                  <Link
+                    key={b.id}
+                    href={`/cleaner/bookings/${b.id}`}
+                    data-testid={`recent-activity-${b.id}`}
+                    className="rounded-xl border border-slate-200 bg-white p-3 hover:border-primary/40 hover:shadow-sm"
+                  >
                     <p className="font-medium text-slate-900">{resolveJobTypeTitle(b)}</p>
                     <p className="mt-1 text-xs text-slate-500">{formatDate(b.scheduled_start)}</p>
                     <p className="mt-2 text-xs text-slate-500">{b.city}, {b.postcode}</p>
@@ -577,7 +588,14 @@ export default function CleanerDashboardPage() {
                         proposalBy={b.proposal_by}
                         showPaymentRequiredForUnpaid={false}
                       />
-                      <p className="text-sm font-semibold text-slate-900">{formatCurrency(b.cleaner_payout)}</p>
+                      <p className={`max-w-[11rem] text-right font-semibold leading-tight ${
+                        b.status === 'disputed'
+                          ? 'text-xs text-amber-700 sm:text-sm'
+                          : 'text-sm text-slate-900'
+                      }`}>
+                        {b.status === 'disputed' ? `${earningsLabel} ` : ''}
+                        {formatCurrency(b.cleaner_payout)}
+                      </p>
                     </div>
                   </Link>
                 )

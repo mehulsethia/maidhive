@@ -168,12 +168,18 @@ describe('Cleaner payment history mapping', () => {
       status: 'cancelled',
       payment: { id: 'p14', status: 'captured', cleaner_payout: 12 },
     })
+    const disputedCapturedPayout = booking({
+      id: 'disputed_captured',
+      status: 'disputed',
+      payment: { id: 'p15', status: 'captured', cleaner_payout: 32 },
+    })
 
     expect(getReleasedCleanerEarnings([
       completedPayout,
       cancellationCompensation,
       noShowCompensation,
       pendingCompensation,
+      disputedCapturedPayout,
     ])).toBe(68)
   })
 })

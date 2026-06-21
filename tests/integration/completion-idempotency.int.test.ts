@@ -29,7 +29,13 @@ vi.mock('@/server/repositories/booking.repo', () => ({
 }))
 
 vi.mock('@/server/repositories/client.repo', () => ({ clientRepo: {} }))
-vi.mock('@/server/repositories/cleaner.repo', () => ({ cleanerRepo: {} }))
+vi.mock('@/server/repositories/cleaner.repo', () => ({
+  cleanerRepo: {
+    findByUserId: vi.fn(async (userId: string) => (
+      userId === seeded.cleanerUser.id ? { id: 'cleaner-1' } : null
+    )),
+  },
+}))
 vi.mock('@/server/repositories/availability.repo', () => ({ availabilityRepo: {} }))
 vi.mock('@/server/repositories/payment.repo', () => ({ paymentRepo: {} }))
 vi.mock('@/server/repositories/dispute.repo', () => ({
@@ -107,6 +113,7 @@ describe('booking completion idempotency', () => {
     vi.resetModules()
     state.booking = {
       id: '99999999-9999-9999-9999-999999999999',
+      cleanerId: 'cleaner-1',
       status: 'in_progress',
       scheduledEnd: new Date('2026-06-10T10:00:00.000Z'),
       completedAt: null,
@@ -142,5 +149,20 @@ describe('booking completion idempotency', () => {
     ].sort())
     expect(state.completionEmails).toBe(1)
     expect(state.reviewEmails).toBe(1)
+  })
+
+  it('rejects cleaner completion after a booking enters dispute review', async () => {
+    state.booking.status = 'disputed'
+    state.booking.completedAt = new Date('2026-06-10T10:00:00.000Z')
+    const { bookingService } = await import('@/server/services/booking.service')
+
+    await expect(
+      bookingService.completeByCleaner(state.booking.id, seeded.cleanerUser as any),
+    ).rejects.toMatchObject({
+      message: "Cannot complete a booking in status 'disputed'",
+      status: 400,
+    })
+
+    expect(state.updateManyCalls).toBe(0)
   })
 })

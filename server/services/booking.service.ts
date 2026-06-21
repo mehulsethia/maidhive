@@ -1027,7 +1027,7 @@ export const bookingService = {
       throw new ServiceError('Only assigned cleaner can complete this booking', 403)
     }
 
-    if (!['in_progress', 'disputed'].includes(booking.status)) {
+    if (booking.status !== 'in_progress') {
       throw new ServiceError(`Cannot complete a booking in status '${booking.status}'`, 400)
     }
 

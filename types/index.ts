@@ -628,7 +628,6 @@ export interface ClientDispute {
   responded_at?: string | null
   status: 'open' | 'under_review' | 'resolved' | 'closed'
   resolution_type?: string
-  resolution_note?: string
   refund_amount?: number
   resolved_at?: string
   created_at: string

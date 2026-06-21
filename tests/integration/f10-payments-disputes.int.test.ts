@@ -117,6 +117,19 @@ vi.mock('@/server/repositories/dispute.repo', () => ({
       }
       return state.dispute
     }),
+    attachParticipantResponse: vi.fn(async (_id: string, payload: any) => {
+      if (!state.dispute || state.dispute.respondedBy || state.dispute.respondedAt) return { count: 0 }
+      state.dispute = {
+        ...state.dispute,
+        responseExplanation: payload.explanation,
+        responseEvidence: payload.evidence ?? null,
+        respondedBy: payload.respondedBy,
+        responderRole: payload.responderRole,
+        respondedAt: payload.respondedAt,
+        status: 'under_review',
+      }
+      return { count: 1 }
+    }),
   },
 }))
 
@@ -458,6 +471,54 @@ describe('F10 Payments capture/refund/dispute integration', () => {
         }),
       ]),
     )
+  })
+
+  it('IT-PAY-09 attaches the counterparty response to the existing case exactly once', async () => {
+    state.currentUser = seededUsers.client
+    state.dispute = null
+    const route = await import('@/app/api/v1/disputes/[id]/route')
+    const first = await route.POST(
+      new NextRequest('http://localhost/api/v1/disputes/booking_pay_1', {
+        method: 'POST',
+        body: JSON.stringify({
+          issue_type: 'service_issue',
+          explanation: 'Cleaner did not complete the agreed service scope.',
+        }),
+        headers: { 'content-type': 'application/json' },
+      }),
+      { params: Promise.resolve({ id: 'booking_pay_1' }) } as any,
+    )
+
+    const disputeId = state.dispute.id
+    state.currentUser = seededUsers.cleaner
+    const responseRequest = () => new NextRequest('http://localhost/api/v1/disputes/booking_pay_1', {
+      method: 'POST',
+      body: JSON.stringify({
+        issue_type: 'access_issue',
+        explanation: 'The property access issue prevented completion of the agreed scope.',
+        evidence: ['https://example.test/access.png'],
+      }),
+      headers: { 'content-type': 'application/json' },
+    })
+    const response = await route.POST(
+      responseRequest(),
+      { params: Promise.resolve({ id: 'booking_pay_1' }) } as any,
+    )
+    const duplicate = await route.POST(
+      responseRequest(),
+      { params: Promise.resolve({ id: 'booking_pay_1' }) } as any,
+    )
+
+    expect(first.status).toBe(201)
+    expect(response.status).toBe(200)
+    expect(duplicate.status).toBe(409)
+    expect(state.dispute).toMatchObject({
+      id: disputeId,
+      bookingId: state.booking.id,
+      respondedBy: seededUsers.cleaner.id,
+      responderRole: 'cleaner',
+      status: 'under_review',
+    })
   })
 
   it('IT-PAY-05 transfer webhook marks payment transferred and pushes payout notification once', async () => {

@@ -71,6 +71,10 @@ test.describe('F19 dispute and compensation responsive regression @smoke', () =>
       await expect(page.getByRole('button', {
         name: 'Includes completed booking payouts and any released compensation payments.',
       })).toBeVisible({ timeout: 20_000 })
+      const disputedRecentCard = page.locator('[data-testid^="recent-activity-"]:has-text("Under Review")').first()
+      if (await disputedRecentCard.count()) {
+        await expect(disputedRecentCard.getByText(/Payout pending review €\d/)).toBeVisible()
+      }
 
       const cancelledResponse = await page.request.get('/api/v1/bookings?page=1&page_size=1&status=cancelled')
       expect(cancelledResponse.status()).toBe(200)

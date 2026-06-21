@@ -67,14 +67,18 @@ export const POST = requireAuth(async (req: NextRequest, ctx, user) => {
       return err('The other party has already submitted a response for this dispute.', 409)
     }
 
-    const updated = await disputeRepo.update(existing.id, {
-      responseExplanation: disputePayload.explanation,
-      responseEvidence: disputePayload.evidence ? disputePayload.evidence : undefined,
+    const responseWrite = await disputeRepo.attachParticipantResponse(existing.id, {
+      explanation: disputePayload.explanation,
+      evidence: disputePayload.evidence,
       respondedBy: user.id,
       responderRole: participantRole,
       respondedAt: new Date(),
-      status: 'under_review',
     })
+    if (responseWrite.count === 0) {
+      return err('A response has already been submitted for this dispute.', 409)
+    }
+    const updated = await disputeRepo.findByBookingId(bookingRecord.id)
+    if (!updated) return err('Dispute not found', 404)
 
     await pushInAppNotification({
       userId: existing.raisedBy,

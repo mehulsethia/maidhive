@@ -10,7 +10,11 @@ import { Separator } from '@/components/ui/separator'
 import { reportLoadError, resetLoadError } from '@/lib/load-error-policy'
 import { formatCurrency, formatDate } from '@/lib/utils'
 import type { BookingRead } from '@/types'
-import { classifyCleanerPaymentHistoryBooking } from '@/lib/cleaner-payment-history'
+import {
+  classifyCleanerPaymentHistoryBooking,
+  getReleasedCleanerEarnings,
+  isCleanerEarningReleased,
+} from '@/lib/cleaner-payment-history'
 
 export default function EarningsPage() {
   const [bookings, setBookings] = useState<BookingRead[]>([])
@@ -26,12 +30,12 @@ export default function EarningsPage() {
       .finally(() => setLoading(false))
   }, [])
 
-  const settledStatuses = new Set(['captured', 'transferred'])
-  const settled = bookings.filter((b) => settledStatuses.has(String(b.payment?.status ?? '')))
-  const totalEarned = settled.reduce((sum, b) => sum + b.cleaner_payout, 0)
+  const settled = bookings.filter((booking) => isCleanerEarningReleased(booking))
+  const totalEarned = getReleasedCleanerEarnings(bookings)
   const totalHours = settled.reduce((sum, b) => sum + b.duration_hours, 0)
 
-  const unsettled = bookings.filter((b) => !settledStatuses.has(String(b.payment?.status ?? '')))
+  const settledBookingIds = new Set(settled.map((booking) => booking.id))
+  const unsettled = bookings.filter((booking) => !settledBookingIds.has(booking.id))
   const upcoming = unsettled.filter((b) => ['confirmed', 'in_progress', 'completed', 'disputed'].includes(b.status))
 
   if (loading) return <ListPageSkeleton />
