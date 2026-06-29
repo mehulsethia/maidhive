@@ -263,7 +263,7 @@ export default function TermsPage() {
             </SubSection>
 
             <SubSection number="4.9" title="Platform Service Fee">
-              <p>MaidHive charges a flat ten per cent (10%) service fee on the total booking value (calculated as the Cleaner\u2019s hourly rate multiplied by the booked duration).</p>
+              <p>MaidHive charges a service fee equal to ten per cent (10%) of the total booking value (calculated as the Cleaner\u2019s hourly rate multiplied by the booked duration), subject to a minimum fee of two euros (\u20AC2.00), inclusive of VAT.</p>
               <p>The service fee is incorporated into the transaction structure and retained by MaidHive in accordance with the Platform\u2019s payment and cancellation policies.</p>
             </SubSection>
           </Section>
@@ -295,13 +295,13 @@ export default function TermsPage() {
               <p>Where a Client cancels less than twelve (12) hours before the scheduled start time:</p>
               <BulletList items={[
                 'MaidHive will capture an amount equal to fifty per cent (50%) of the service subtotal (being the Cleaner\u2019s hourly rate multiplied by the booked duration), plus',
-                'The full ten per cent (10%) platform service fee calculated on the service subtotal;',
+                'The full applicable platform service fee recorded for the booking;',
                 'The remainder of the authorised amount will be released to the Client.',
               ]} />
               <p>For the avoidance of doubt:</p>
               <BulletList items={[
                 'The Cleaner will receive fifty per cent (50%) of the service subtotal;',
-                'MaidHive will retain the full ten per cent (10%) platform service fee.',
+                'MaidHive will retain the full applicable platform service fee recorded for the booking.',
               ]} />
               <p>All calculations are performed automatically by the Platform based on the booking value recorded at the time of confirmation.</p>
               <p>Where a cancellation fee becomes payable under this Section, MaidHive may capture the applicable amount immediately at the time the cancellation is recorded.</p>
@@ -393,12 +393,12 @@ export default function TermsPage() {
             </SubSection>
 
             <SubSection number="6.2" title="Platform Service Fee">
-              <p>MaidHive charges a platform service fee of ten per cent (10%) of the service subtotal for each confirmed booking.</p>
+              <p>MaidHive charges a platform service fee of ten per cent (10%) of the service subtotal for each confirmed booking, subject to a minimum fee of two euros (\u20AC2.00), inclusive of VAT.</p>
               <p>The Platform Service Fee applies to bookings completed through the Platform and may also apply to certain cancellation outcomes as described in Section 5.</p>
               <p>For the purposes of these Terms:</p>
               <BulletList items={[
                 'Service Subtotal means the Cleaner\u2019s hourly rate multiplied by the booked duration.',
-                'The Platform Service Fee is calculated as ten per cent (10%) of the service subtotal.',
+                'The Platform Service Fee is calculated as ten per cent (10%) of the service subtotal, with a minimum charge of two euros (\u20AC2.00).',
               ]} />
               <p>The Platform Service Fee is displayed to the Client during the booking process and forms part of the total transaction amount authorised at the time the booking request is submitted.</p>
               <p>The Platform Service Fee is retained by MaidHive in accordance with the booking flow, cancellation rules and dispute procedures described in these Terms.</p>

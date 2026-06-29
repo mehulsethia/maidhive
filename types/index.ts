@@ -271,6 +271,13 @@ export interface BookingRead {
     created_at: string
     updated_at?: string
   } | null
+  action_events?: Array<{
+    id: string
+    type: string
+    actor_role?: 'client' | 'cleaner' | 'admin' | 'system' | null
+    metadata?: Record<string, unknown> | null
+    created_at: string
+  }>
 }
 
 export interface BookingFlowDraftRead {

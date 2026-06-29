@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { getCancellationOriginLabel } from '@/lib/cancellation-origin'
+import { getCancellationOriginLabel, getCleanerCancellationOriginLabel } from '@/lib/cancellation-origin'
 import type { BookingRead } from '@/types'
 
 function cancelledBooking(cancelledBy: string | null): BookingRead {
@@ -36,5 +36,11 @@ describe('Cleaner cancellation origin label', () => {
       ...cancelledBooking(null),
       cancellation_reason: 'Cancelled by client within 24 hours of scheduled start',
     })).toBe('Cancelled by client')
+  })
+
+  it('uses cleaner-facing cancellation source labels', () => {
+    expect(getCleanerCancellationOriginLabel(cancelledBooking('cleaner_user'))).toBe('Cancelled by you')
+    expect(getCleanerCancellationOriginLabel(cancelledBooking('client_user'))).toBe('Cancelled by client')
+    expect(getCleanerCancellationOriginLabel(cancelledBooking('admin_user'))).toBe('Cancelled by MaidHive')
   })
 })

@@ -42,6 +42,7 @@ import { reportLoadError, resetLoadError } from '@/lib/load-error-policy'
 import { formatCurrency, formatDate } from '@/lib/utils'
 import { AMENDMENT_EXPIRY_OUTCOME_COPY, isWithinAmendStartWindow } from '@/lib/booking-amendment'
 import { getCancellationOriginLabel } from '@/lib/cancellation-origin'
+import { getCleanerCancellationConfirmationCopy } from '@/lib/cleaner-cancellation-copy'
 import type { BookingRead } from '@/types'
 import { toast } from 'sonner'
 
@@ -387,6 +388,7 @@ export default function CleanerBookingDetailPage() {
   const bookingEndsAtMs = new Date(booking.scheduled_end).getTime()
   const millisUntilStart = bookingStartsAtMs - Date.now()
   const moreThan24HoursAway = Number.isFinite(bookingStartsAtMs) && millisUntilStart > RESCHEDULE_CUTOFF_MS
+  const cancellationConfirmation = getCleanerCancellationConfirmationCopy(moreThan24HoursAway)
   const startWindowExpired = Number.isFinite(bookingEndsAtMs) && Date.now() > bookingEndsAtMs + 24 * 60 * 60 * 1000
   const canStartJobNow = Number.isFinite(bookingStartsAtMs) && Date.now() >= bookingStartsAtMs - START_JOB_EARLY_WINDOW_MS && !startWindowExpired
   const canReportProblem = ['in_progress', 'completed'].includes(booking.status) &&
@@ -1079,11 +1081,17 @@ export default function CleanerBookingDetailPage() {
           setCancelBookingOpen(false)
         }}
       >
-        <DialogTitle>Cancel booking?</DialogTitle>
-        <div className="space-y-3">
-          <p className="text-sm text-muted-foreground">
-            Are you sure you want to cancel this booking? This may affect your reliability record depending on timing and platform rules.
+        <DialogTitle>{cancellationConfirmation.title}</DialogTitle>
+        <div className="min-w-0 space-y-3" data-testid="cleaner-cancellation-confirmation">
+          <p className="break-words text-sm text-muted-foreground">
+            {cancellationConfirmation.prompt}
           </p>
+          <p className="text-sm font-medium text-slate-800">If you continue:</p>
+          <ul className="list-disc space-y-1 pl-5 text-sm text-muted-foreground">
+            {cancellationConfirmation.consequences.map((consequence) => (
+              <li key={consequence} className="break-words">{consequence}</li>
+            ))}
+          </ul>
           <div className="flex flex-col gap-2 sm:flex-row">
             <Button
               variant="outline"
@@ -1091,7 +1099,7 @@ export default function CleanerBookingDetailPage() {
               onClick={() => setCancelBookingOpen(false)}
               disabled={Boolean(actionLoading)}
             >
-              Keep booking
+              {cancellationConfirmation.keepButton}
             </Button>
             <Button
               variant="destructive"
@@ -1100,7 +1108,7 @@ export default function CleanerBookingDetailPage() {
               loading={actionLoading === 'cancel'}
               disabled={Boolean(actionLoading) && actionLoading !== 'cancel'}
             >
-              Cancel booking
+              {cancellationConfirmation.cancelButton}
             </Button>
           </div>
         </div>

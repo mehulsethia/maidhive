@@ -14,6 +14,15 @@ describe('F13 Notifications + deep links unit coverage', () => {
     expect(getNotificationHref('admin', notification)).toBe('/admin/bookings/booking_123')
   })
 
+  it('routes a cleaner self-cancellation notification to that booking', () => {
+    const notification: any = {
+      type: 'booking_cancelled',
+      data: { booking_id: 'booking_123' },
+    }
+
+    expect(getNotificationHref('cleaner', notification)).toBe('/cleaner/bookings/booking_123')
+  })
+
   it('UT-NOTIF-02 malformed or missing context falls back to safe role default routes', () => {
     const missingBooking: any = { type: 'booking_confirmed', data: {} }
     const unknownType: any = { type: 'unknown_event', data: { booking_id: 12345 } }

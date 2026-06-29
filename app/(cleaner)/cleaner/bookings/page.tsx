@@ -39,6 +39,7 @@ import { showJobStartedToast } from '@/lib/job-start-toast'
 import { setupVisiblePolling } from '@/lib/visible-polling'
 import { formatCurrency, formatDate } from '@/lib/utils'
 import { hasPendingAmendmentRequest } from '@/lib/booking-amendment'
+import { getCleanerCancellationOriginLabel } from '@/lib/cancellation-origin'
 import type { BookingRead, BookingStatus } from '@/types'
 import { toast } from 'sonner'
 
@@ -396,6 +397,7 @@ export default function CleanerBookingsPage() {
                 const clientName = b.client?.user?.name?.trim() || 'Client'
                 const clientAvatarUrl = b.client?.user?.avatar_url ?? null
                 const amendmentPending = hasPendingAmendmentRequest(b)
+                const cancellationOrigin = getCleanerCancellationOriginLabel(b)
                 return (
                   <div key={b.id} className="rounded-2xl border border-slate-200 bg-white p-4 transition-all duration-200 hover:-translate-y-0.5 hover:shadow-[0_10px_26px_rgba(15,23,42,0.08)] sm:p-5">
                   <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
@@ -453,7 +455,12 @@ export default function CleanerBookingsPage() {
                         </div>
                       )}
                       {b.status === 'cancelled' ? (
-                        <div className="mt-2">
+                        <div className="mt-2 space-y-1">
+                          {cancellationOrigin && (
+                            <p className="break-words text-sm font-medium text-slate-700" data-testid="cleaner-cancellation-source">
+                              {cancellationOrigin}
+                            </p>
+                          )}
                           <CancellationPaymentBreakdown booking={b} compact audience="cleaner" />
                         </div>
                       ) : (

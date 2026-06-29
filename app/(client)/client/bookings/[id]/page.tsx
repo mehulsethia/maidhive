@@ -578,7 +578,7 @@ export default function ClientBookingDetailPage() {
                 hourly_rate: booking.hourly_rate,
                 duration_hours: booking.duration_hours,
                 subtotal: booking.subtotal ?? booking.total_amount - booking.platform_fee,
-                platform_fee_pct: 10,
+                platform_fee_pct: booking.platform_fee_pct ?? 10,
                 platform_fee: booking.platform_fee,
                 cleaner_payout: booking.cleaner_payout,
                 total_amount: booking.total_amount,

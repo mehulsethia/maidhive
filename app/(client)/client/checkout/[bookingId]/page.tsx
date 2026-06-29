@@ -11,8 +11,10 @@ import { CheckoutPageSkeleton } from '@/components/page-skeletons'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { BookingStatusBadge } from '@/components/booking-status-badge'
+import { PlatformFeeNotice } from '@/components/platform-fee-notice'
 import { formatDate } from '@/lib/utils'
 import { getClientBookingRequestDeadlineCopy } from '@/lib/booking-expiry-copy'
+import { isMinimumPlatformFeeApplied } from '@/lib/platform-fee'
 import type { BookingRead } from '@/types'
 import { toast } from 'sonner'
 
@@ -182,6 +184,12 @@ export default function CheckoutPage() {
 
   if (loading) return <CheckoutPageSkeleton />
   if (!booking || !clientSecret) return <div className="py-16 text-center text-muted-foreground">Unable to load checkout.</div>
+  const bookingSubtotal = booking.subtotal ?? (booking.total_amount - booking.platform_fee)
+  const minimumFeeApplied = isMinimumPlatformFeeApplied({
+    subtotal: bookingSubtotal,
+    platformFee: booking.platform_fee,
+    platformFeePct: booking.platform_fee_pct ?? 10,
+  })
 
   return (
     <>
@@ -278,13 +286,18 @@ export default function CheckoutPage() {
                     <p>
                       {new Intl.NumberFormat('en-IE', { style: 'currency', currency: 'EUR' }).format(booking.hourly_rate)} × {booking.duration_hours}h ={' '}
                       {new Intl.NumberFormat('en-IE', { style: 'currency', currency: 'EUR' }).format(
-                        booking.subtotal ?? (booking.total_amount - booking.platform_fee),
+                        bookingSubtotal,
                       )}
                     </p>
                     <p>
-                      Secure booking &amp; support fee (10%) ={' '}
+                      Secure booking &amp; support fee{minimumFeeApplied ? '' : ' (10%)'} ={' '}
                       {new Intl.NumberFormat('en-IE', { style: 'currency', currency: 'EUR' }).format(booking.platform_fee)}
                     </p>
+                    <PlatformFeeNotice
+                      subtotal={bookingSubtotal}
+                      platformFee={booking.platform_fee}
+                      platformFeePct={booking.platform_fee_pct ?? 10}
+                    />
                     <p className="font-semibold text-slate-900">
                       Total = {new Intl.NumberFormat('en-IE', { style: 'currency', currency: 'EUR' }).format(booking.total_amount)}
                     </p>

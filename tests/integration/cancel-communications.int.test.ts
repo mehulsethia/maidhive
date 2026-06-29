@@ -23,6 +23,8 @@ const state = vi.hoisted(() => ({
   clientCancellationEmails: 0,
   clientRejectedEmails: 0,
   amendmentDeclinedPayloads: [] as any[],
+  actionEvents: [] as any[],
+  paymentUpdates: [] as any[],
   removeCalendarCalls: 0,
 }))
 
@@ -30,6 +32,10 @@ vi.mock('@/server/repositories/booking.repo', () => ({
   bookingRepo: {
     findById: vi.fn(async () => state.booking),
     update: vi.fn(async (_id: string, patch: any) => ({ ...state.booking, ...patch })),
+    updateWithActionEvent: vi.fn(async (_id: string, patch: any, event: any) => {
+      state.actionEvents.push(event)
+      return { ...state.booking, ...patch }
+    }),
   },
 }))
 
@@ -53,7 +59,10 @@ vi.mock('@/server/repositories/availability.repo', () => ({
 
 vi.mock('@/server/repositories/payment.repo', () => ({
   paymentRepo: {
-    update: vi.fn(async () => true),
+    update: vi.fn(async (_id: string, patch: any) => {
+      state.paymentUpdates.push(patch)
+      return true
+    }),
   },
 }))
 
@@ -136,6 +145,8 @@ describe('Booking cancellation communications', () => {
     state.clientCancellationEmails = 0
     state.clientRejectedEmails = 0
     state.amendmentDeclinedPayloads = []
+    state.actionEvents = []
+    state.paymentUpdates = []
     state.removeCalendarCalls = 0
   })
 
@@ -224,6 +235,42 @@ describe('Booking cancellation communications', () => {
     expect(state.removeCalendarCalls).toBe(1)
   })
 
+  it('releases authorization and creates a permanent cleaner notification when the cleaner cancels', async () => {
+    state.booking = {
+      id: 'booking_cleaner_cancelled_1',
+      status: 'confirmed',
+      clientId: 'client_profile_1',
+      cleanerId: 'cleaner_profile_1',
+      acceptedAt: new Date('2099-06-18T09:00:00.000Z'),
+      confirmedAt: new Date('2099-06-18T09:05:00.000Z'),
+      scheduledStart: new Date('2099-06-20T10:00:00.000Z'),
+      durationHours: 2,
+      payment: { id: 'payment_1', status: 'authorized', stripePaymentIntentId: 'pi_1' },
+      client: { userId: seeded.clientUser.id, user: { email: seeded.clientUser.email, name: seeded.clientUser.name } },
+      cleaner: { userId: seeded.cleanerUser.id, user: { email: seeded.cleanerUser.email, name: seeded.cleanerUser.name } },
+    }
+
+    const { bookingService } = await import('@/server/services/booking.service')
+    await bookingService.cancel(
+      state.booking.id,
+      seeded.cleanerUser as any,
+      'Cancelled by cleaner more than 24 hours before scheduled start',
+    )
+
+    expect(state.paymentUpdates).toContainEqual(expect.objectContaining({
+      status: 'failed',
+      cleanerPayout: 0,
+      platformFee: 0,
+      payoutScheduledAt: null,
+    }))
+    expect(state.notifications).toContainEqual(expect.objectContaining({
+      userId: seeded.cleanerUser.id,
+      title: 'Booking cancelled',
+      body: 'You cancelled this booking. No payout applies for this booking. This cancellation has been recorded on your account.',
+      data: { booking_id: state.booking.id },
+    }))
+  })
+
   it('sends cleaner cancellation email for accepted-but-not-confirmed client cancellation', async () => {
     state.booking = {
       id: 'booking_accepted_1',
@@ -305,6 +352,14 @@ describe('Booking cancellation communications', () => {
         originalStart: state.booking.scheduledStart,
       }),
     ])
+    expect(state.actionEvents).toContainEqual(expect.objectContaining({
+      type: 'amend_start_declined',
+      actorRole: 'cleaner',
+      metadata: expect.objectContaining({
+        original_time_unchanged: true,
+        proposed_by: 'client',
+      }),
+    }))
   })
 
   it('sends amendment declined email to cleaner when client declines cleaner amendment request', async () => {
@@ -335,5 +390,13 @@ describe('Booking cancellation communications', () => {
         originalStart: state.booking.scheduledStart,
       }),
     ])
+    expect(state.actionEvents).toContainEqual(expect.objectContaining({
+      type: 'amend_start_declined',
+      actorRole: 'client',
+      metadata: expect.objectContaining({
+        original_time_unchanged: true,
+        proposed_by: 'cleaner',
+      }),
+    }))
   })
 })

@@ -11,3 +11,11 @@ export function getCancellationOriginLabel(booking: BookingRead) {
   if (reason.includes('cancelled by cleaner')) return 'Cancelled by cleaner'
   return null
 }
+
+export function getCleanerCancellationOriginLabel(booking: BookingRead) {
+  const origin = getCancellationOriginLabel(booking)
+  if (origin === 'Cancelled by cleaner') return 'Cancelled by you'
+  if (origin === 'Cancelled by client') return 'Cancelled by client'
+  if (origin === 'Cancelled by platform') return 'Cancelled by MaidHive'
+  return null
+}

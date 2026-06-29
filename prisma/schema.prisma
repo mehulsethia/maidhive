@@ -281,6 +281,7 @@ model Booking {
   messages         Message[]
   blockedTimes     BlockedTime[]
   strikes          CleanerStrike[]
+  actionEvents     BookingActionEvent[]
   bookingFlowDraft BookingFlowDraft?
 
   @@index([clientId, createdAt(sort: Desc)], map: "bookings_client_created_desc_idx")
@@ -292,6 +293,21 @@ model Booking {
   @@index([status, completedAt], map: "bookings_status_completed_at_idx")
   @@index([cleanerId, scheduledStart, scheduledEnd], map: "bookings_cleaner_schedule_idx")
   @@map("bookings")
+  @@schema("public")
+}
+
+model BookingActionEvent {
+  id        String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  bookingId String   @map("booking_id") @db.Uuid
+  type      String
+  actorRole String?  @map("actor_role")
+  metadata  Json?
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  booking Booking @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+
+  @@index([bookingId, createdAt], map: "booking_action_events_booking_created_idx")
+  @@map("booking_action_events")
   @@schema("public")
 }
 

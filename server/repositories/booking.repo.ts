@@ -31,6 +31,9 @@ function bookingInclude() {
     payment: true,
     review: true,
     dispute: true,
+    actionEvents: {
+      orderBy: { createdAt: 'asc' },
+    },
     _count: {
       select: {
         messages: true,
@@ -198,6 +201,29 @@ export const bookingRepo = {
 
   update: (id: string, data: Prisma.BookingUpdateInput) =>
     db.booking.update({ where: { id }, data, include: bookingInclude() }),
+
+  updateWithActionEvent: (
+    id: string,
+    update: Prisma.BookingUpdateInput,
+    event: {
+      type: string
+      actorRole?: string
+      metadata?: Prisma.InputJsonValue
+    },
+  ) =>
+    db.$transaction(async (tx) => {
+      await tx.bookingActionEvent.create({
+        data: {
+          bookingId: id,
+          ...event,
+        },
+      })
+      return tx.booking.update({
+        where: { id },
+        data: update,
+        include: bookingInclude(),
+      })
+    }),
 
   findOverlappingDraftForClient: (params: {
     clientId: string

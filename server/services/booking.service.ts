@@ -13,9 +13,9 @@ import { config } from '../config'
 import { calculatePriceSnapshot } from '../lib/pricing'
 import { computeConfirmedCancellationPolicy, moneyFromCents } from '@/lib/cancellation-policy'
 import { AMENDMENT_EXPIRED_BODY, AMENDMENT_EXPIRED_TITLE, AMENDMENT_EXPIRY_OUTCOME_COPY } from '@/lib/booking-amendment'
+import { DEFAULT_PLATFORM_FEE_PCT } from '@/lib/platform-fee'
 import type { User } from '@prisma/client'
 
-const PLATFORM_FEE_PCT = 10
 const BOOKING_ACCEPT_TTL_MINUTES = Number(process.env.BOOKING_ACCEPT_TTL_MINUTES ?? 1440)
 const BOOKING_ACCEPT_CUTOFF_BEFORE_START_MINUTES = Number(process.env.BOOKING_ACCEPT_CUTOFF_BEFORE_START_MINUTES ?? 60)
 const BOOKING_PAY_TTL_MINUTES = Number(process.env.BOOKING_PAY_TTL_MINUTES ?? 15)
@@ -38,7 +38,7 @@ const START_JOB_EARLY_MINUTES = 15
 const START_JOB_LATE_BUFFER_HOURS = 24
 
 export const bookingService = {
-  previewPrice(hourlyRate: number, durationHours: number, platformFeePct = PLATFORM_FEE_PCT) {
+  previewPrice(hourlyRate: number, durationHours: number, platformFeePct = DEFAULT_PLATFORM_FEE_PCT) {
     return calculatePriceSnapshot(hourlyRate, durationHours, platformFeePct)
   },
 
@@ -745,13 +745,25 @@ export const bookingService = {
 
       if (proposalContext === 'amend_start') {
         assertAmendRequestStillValid(booking)
-        const updated = await bookingRepo.update(bookingId, {
-          scheduledStart: booking.proposedStart,
-          scheduledEnd: booking.proposedEnd,
-          ...clearedProposalState({ preserveRescheduleUsage: true, preserveAmendUsage: true }),
-          cleanerProposals: 1,
-          clientProposals: 1,
-        })
+        const updated = await bookingRepo.updateWithActionEvent(
+          bookingId,
+          {
+            scheduledStart: booking.proposedStart,
+            scheduledEnd: booking.proposedEnd,
+            ...clearedProposalState({ preserveRescheduleUsage: true, preserveAmendUsage: true }),
+            cleanerProposals: 1,
+            clientProposals: 1,
+          },
+          {
+            type: 'amend_start_accepted',
+            actorRole: isClient ? 'client' : 'cleaner',
+            metadata: {
+              original_start: booking.scheduledStart.toISOString(),
+              proposed_start: booking.proposedStart.toISOString(),
+              proposed_by: booking.proposalBy,
+            },
+          },
+        )
         const acceptanceBody = `The booking start time has been updated to ${formatBookingTimeForMessage(booking.proposedStart)}.`
         await pushInAppNotification({
           userId: booking.client.userId,
@@ -899,12 +911,29 @@ export const bookingService = {
         return updated
       }
 
-      const updated = await bookingRepo.update(bookingId, {
-        ...clearedProposalState({
-          preserveRescheduleUsage: proposalContext === 'amend_start',
-          preserveAmendUsage: proposalContext === 'amend_start',
-        }),
-      })
+      const updated = proposalContext === 'amend_start'
+        ? await bookingRepo.updateWithActionEvent(
+          bookingId,
+          {
+            ...clearedProposalState({
+              preserveRescheduleUsage: true,
+              preserveAmendUsage: true,
+            }),
+          },
+          {
+            type: 'amend_start_declined',
+            actorRole: isClient ? 'client' : 'cleaner',
+            metadata: {
+              original_start: booking.scheduledStart.toISOString(),
+              proposed_start: booking.proposedStart?.toISOString() ?? null,
+              proposed_by: booking.proposalBy,
+              original_time_unchanged: true,
+            },
+          },
+        )
+        : await bookingRepo.update(bookingId, {
+          ...clearedProposalState(),
+        })
       await pushInAppNotification({
         userId: isClient ? booking.cleaner.userId : booking.client.userId,
         type: 'booking_request_declined',
@@ -971,15 +1000,27 @@ export const bookingService = {
       const hoursUntilBooking = (booking.scheduledStart.getTime() - Date.now()) / (60 * 60 * 1000)
       const ttlMinutes = hoursUntilBooking < 2 ? AMEND_FAST_RESPONSE_MINUTES : AMEND_STANDARD_RESPONSE_MINUTES
       const proposalExpiresAt = new Date(Date.now() + ttlMinutes * 60 * 1000)
-      const updated = await bookingRepo.update(bookingId, {
-        proposedStart,
-        proposedEnd,
-        proposalBy: actor,
-        proposalContext: 'amend_start',
-        proposalExpiresAt,
-        cleanerProposals: actor === 'cleaner' ? { increment: 1 } : undefined,
-        clientProposals: actor === 'client' ? { increment: 1 } : undefined,
-      })
+      const updated = await bookingRepo.updateWithActionEvent(
+        bookingId,
+        {
+          proposedStart,
+          proposedEnd,
+          proposalBy: actor,
+          proposalContext: 'amend_start',
+          proposalExpiresAt,
+          cleanerProposals: actor === 'cleaner' ? { increment: 1 } : undefined,
+          clientProposals: actor === 'client' ? { increment: 1 } : undefined,
+        },
+        {
+          type: 'amend_start_proposed',
+          actorRole: actor,
+          metadata: {
+            original_start: booking.scheduledStart.toISOString(),
+            proposed_start: proposedStart.toISOString(),
+            proposed_by: actor,
+          },
+        },
+      )
       await pushInAppNotification({
         userId: actor === 'cleaner' ? booking.client.userId : booking.cleaner.userId,
         type: 'booking_proposed_new_time',
@@ -1084,7 +1125,9 @@ export const bookingService = {
     if (!isParty && user.role !== 'admin') throw new ServiceError('Forbidden', 403)
 
     try {
-      await applyCancellationPaymentPolicy(booking, booking.status)
+      await applyCancellationPaymentPolicy(booking, booking.status, {
+        cancelledByCleaner: Boolean(cleaner && booking.cleanerId === cleaner.id),
+      })
     } catch (error) {
       console.error('booking.cancel.payment_policy failed; proceeding with cancellation fallback', {
         bookingId,
@@ -1121,6 +1164,13 @@ export const bookingService = {
         cleanerId: cleaner.id,
         cancelledByUserId: user.id,
         cancellationReason: reason,
+      })
+      await pushInAppNotification({
+        userId: booking.cleaner.userId,
+        type: 'booking_cancelled',
+        title: 'Booking cancelled',
+        body: 'You cancelled this booking. No payout applies for this booking. This cancellation has been recorded on your account.',
+        data: { booking_id: bookingId },
       })
     }
 
@@ -1820,6 +1870,7 @@ function normalizeCancellationReason(reason?: string) {
 async function applyCancellationPaymentPolicy(
   booking: Awaited<ReturnType<typeof bookingRepo.findById>>,
   bookingStatus: string,
+  options: { cancelledByCleaner?: boolean } = {},
 ) {
   if (!booking?.payment) return
 
@@ -1833,6 +1884,18 @@ async function applyCancellationPaymentPolicy(
   }
 
   if (payment.status !== 'authorized') return
+
+  if (options.cancelledByCleaner) {
+    await stripe.paymentIntents.cancel(payment.stripePaymentIntentId)
+    await paymentRepo.update(payment.id, {
+      status: 'failed',
+      failedAt: new Date(),
+      cleanerPayout: 0,
+      platformFee: 0,
+      payoutScheduledAt: null,
+    })
+    return
+  }
 
   // Pending cleaner acceptance cancellations should always release auth in full.
   if (bookingStatus === 'pending') {

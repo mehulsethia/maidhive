@@ -18,11 +18,13 @@ import { Separator } from '@/components/ui/separator'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { BookableCalendar } from '@/components/ui/bookable-calendar'
 import { UserAvatar } from '@/components/ui/user-avatar'
+import { PlatformFeeNotice } from '@/components/platform-fee-notice'
 import { reportLoadError, resetLoadError } from '@/lib/load-error-policy'
 import { formatCurrency, cn, APP_TIMEZONE } from '@/lib/utils'
 import { MAX_SAVED_ADDRESSES, MVP_CITY, normalizeCyprusPostcode } from '@/lib/location-policy'
 import { pickupFullLabel } from '@/lib/transport-pickup'
 import { getClientBookingRequestDeadlineCopy } from '@/lib/booking-expiry-copy'
+import { calculatePlatformFee, isMinimumPlatformFeeApplied, roundMoney } from '@/lib/platform-fee'
 import type { CleanerRead, PriceBreakdown, BookingRead, ClientProfileRead, ClientAddressRead } from '@/types'
 import { toast } from 'sonner'
 
@@ -323,9 +325,14 @@ function BookingSummary({
 }) {
   const [showBreakdown, setShowBreakdown] = useState(false)
   const cleanerName = cleaner.user?.name ?? 'Professional Cleaner'
-  const total = breakdown?.total_amount ?? Number((cleaner.hourly_rate * duration * 1.1).toFixed(2))
-  const serviceCost = breakdown?.subtotal ?? cleaner.hourly_rate * duration
-  const platformFee = breakdown?.platform_fee ?? Number((serviceCost * 0.1).toFixed(2))
+  const serviceCost = breakdown?.subtotal ?? roundMoney(cleaner.hourly_rate * duration)
+  const platformFee = breakdown?.platform_fee ?? calculatePlatformFee(serviceCost)
+  const total = breakdown?.total_amount ?? roundMoney(serviceCost + platformFee)
+  const minimumFeeApplied = isMinimumPlatformFeeApplied({
+    subtotal: serviceCost,
+    platformFee,
+    platformFeePct: breakdown?.platform_fee_pct ?? 10,
+  })
   const transportLabel =
     cleaner.transport_mode === 'own_car'
       ? 'Own transport'
@@ -436,9 +443,16 @@ function BookingSummary({
                 <span className="font-semibold text-slate-900">{formatCurrency(serviceCost)}</span>
               </div>
               <div className="flex justify-between items-center">
-                <span className="text-slate-500">Secure booking &amp; support fee (10%)</span>
+                <span className="text-slate-500">
+                  Secure booking &amp; support fee{minimumFeeApplied ? '' : ' (10%)'}
+                </span>
                 <span className="font-semibold text-slate-900">{formatCurrency(platformFee)}</span>
               </div>
+              <PlatformFeeNotice
+                subtotal={serviceCost}
+                platformFee={platformFee}
+                platformFeePct={breakdown?.platform_fee_pct ?? 10}
+              />
               <Separator className="my-2" />
               <div className="flex justify-between items-center font-bold">
                 <span className="text-slate-900">Total</span>
@@ -505,6 +519,12 @@ function StripePaymentForm({
   }>>([])
   const [selectedSavedCardId, setSelectedSavedCardId] = useState<string>('')
   const [showBreakdown, setShowBreakdown] = useState(false)
+  const bookingSubtotal = booking.subtotal ?? (booking.total_amount - booking.platform_fee)
+  const minimumFeeApplied = isMinimumPlatformFeeApplied({
+    subtotal: bookingSubtotal,
+    platformFee: booking.platform_fee,
+    platformFeePct: booking.platform_fee_pct ?? 10,
+  })
 
   useEffect(() => {
     paymentsApi.listMethods()
@@ -653,8 +673,13 @@ function StripePaymentForm({
         <p className="text-xs text-slate-500">Includes secure booking &amp; support fee</p>
         {showBreakdown && (
           <div className="rounded-lg border border-slate-200 bg-slate-50 p-3 text-sm text-slate-700 space-y-1">
-            <p>{formatCurrency(booking.hourly_rate)} × {booking.duration_hours}h = {formatCurrency(booking.subtotal ?? (booking.total_amount - booking.platform_fee))}</p>
-            <p>Secure booking &amp; support fee (10%) = {formatCurrency(booking.platform_fee)}</p>
+            <p>{formatCurrency(booking.hourly_rate)} × {booking.duration_hours}h = {formatCurrency(bookingSubtotal)}</p>
+            <p>Secure booking &amp; support fee{minimumFeeApplied ? '' : ' (10%)'} = {formatCurrency(booking.platform_fee)}</p>
+            <PlatformFeeNotice
+              subtotal={bookingSubtotal}
+              platformFee={booking.platform_fee}
+              platformFeePct={booking.platform_fee_pct ?? 10}
+            />
             <p className="font-semibold text-slate-900">Total = {formatCurrency(booking.total_amount)}</p>
           </div>
         )}
@@ -1328,7 +1353,7 @@ export default function BookingFlowPage() {
 
   const estimatedCost = useMemo(() => {
     if (!cleaner) return 0
-    return cleaner.hourly_rate * duration
+    return roundMoney(cleaner.hourly_rate * duration)
   }, [cleaner, duration])
   const sidebarDuration = step === 3 && booking ? Number(booking.duration_hours) : duration
   const sidebarBreakdown = step === 3 && booking
@@ -1336,7 +1361,7 @@ export default function BookingFlowPage() {
         hourly_rate: Number(booking.hourly_rate),
         duration_hours: Number(booking.duration_hours),
         subtotal: Number(booking.subtotal ?? (booking.total_amount - booking.platform_fee)),
-        platform_fee_pct: 10,
+        platform_fee_pct: Number(booking.platform_fee_pct ?? 10),
         platform_fee: Number(booking.platform_fee),
         cleaner_payout: Number(booking.cleaner_payout),
         total_amount: Number(booking.total_amount),
@@ -1845,7 +1870,7 @@ export default function BookingFlowPage() {
                   <div className="md:px-5 md:py-4">
                     <Label className="text-sm font-semibold text-slate-700">Total Price</Label>
                     <p className="mt-1 text-lg font-bold text-primary">
-                      {formatCurrency(breakdown?.total_amount ?? Number((estimatedCost * 1.1).toFixed(2)))}
+                      {formatCurrency(breakdown?.total_amount ?? roundMoney(estimatedCost + calculatePlatformFee(estimatedCost)))}
                     </p>
                     <p className="mt-1 text-xs text-slate-500">Includes secure booking &amp; support fee.</p>
                   </div>

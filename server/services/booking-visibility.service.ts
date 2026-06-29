@@ -10,8 +10,10 @@ const ADDRESS_VISIBLE_STATUSES = new Set([
 ])
 
 export function sanitizeBookingForRole<T extends Record<string, any>>(booking: T, role: Role): T {
-  if (role !== 'cleaner') return booking
-  return sanitizeBookingForCleaner(booking)
+  if (role === 'admin') return booking
+  const withoutAdminAudit = { ...booking, actionEvents: undefined }
+  if (role === 'client') return withoutAdminAudit
+  return sanitizeBookingForCleaner(withoutAdminAudit)
 }
 
 export function sanitizeBookingsForRole<T extends Record<string, any>>(bookings: T[], role: Role): T[] {

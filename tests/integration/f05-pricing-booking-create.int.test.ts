@@ -69,7 +69,7 @@ vi.mock('@/server/services/booking.service', () => {
     bookingService: {
       previewPrice: vi.fn((hourlyRate: number, durationHours: number, platformFeePct = 10) => {
         const subtotal = hourlyRate * durationHours
-        const platformFee = Number((subtotal * (platformFeePct / 100)).toFixed(2))
+        const platformFee = Math.max(2, Number((subtotal * (platformFeePct / 100)).toFixed(2)))
         const total = Number((subtotal + platformFee).toFixed(2))
         return {
           hourly_rate: hourlyRate,
@@ -84,7 +84,7 @@ vi.mock('@/server/services/booking.service', () => {
       create: vi.fn(async (_user: any, data: any) => {
         const hourly = state.cleanerRate
         const subtotal = Number((hourly * data.duration_hours).toFixed(2))
-        const platformFee = Number((subtotal * 0.1).toFixed(2))
+        const platformFee = Math.max(2, Number((subtotal * 0.1).toFixed(2)))
         const booking = {
           id: `booking_${state.createdBookings.length + 1}`,
           cleanerId: data.cleaner_id,
@@ -186,6 +186,25 @@ describe('F05 Pricing + booking creation integration', () => {
     expect(body.data.subtotal).toBe(60)
     expect(body.data.platform_fee).toBe(6)
     expect(body.data.total_amount).toBe(66)
+  })
+
+  it('stores the €2 minimum platform fee for a low-value booking', async () => {
+    state.cleanerRate = 6
+    const route = await import('@/app/api/v1/bookings/route')
+    const res = await route.POST(
+      new NextRequest('http://localhost/api/v1/bookings', {
+        method: 'POST',
+        body: JSON.stringify({ ...validCreateBookingPayload(), duration_hours: 1 }),
+        headers: { 'content-type': 'application/json' },
+      }),
+      { params: Promise.resolve({}) } as any,
+    )
+    const body = await res.json()
+
+    expect(res.status).toBe(201)
+    expect(body.data.subtotal).toBe(6)
+    expect(body.data.platform_fee).toBe(2)
+    expect(body.data.total_amount).toBe(8)
   })
 
   it('IT-PRICE-03 cleaner rate change does not mutate existing booking totals', async () => {

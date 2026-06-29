@@ -1,4 +1,5 @@
 import { getCancellationPaymentOutcome } from '@/lib/booking-payment-outcome'
+import { getCancellationOriginLabel } from '@/lib/cancellation-origin'
 import { formatCurrency } from '@/lib/utils'
 import type { BookingRead } from '@/types'
 
@@ -35,9 +36,14 @@ export function CancellationPaymentBreakdown({
         </p>
       )
     }
+    const noClientCancellationCharge =
+      outcome.cancellationFee <= 0 &&
+      getCancellationOriginLabel(booking) === 'Cancelled by cleaner'
     return (
       <p className="min-w-0 text-sm font-semibold text-rose-700">
-        Cancellation charge: {formatCurrency(outcome.cancellationFee)}
+        {noClientCancellationCharge
+          ? 'No cancellation charge'
+          : `Cancellation charge: ${formatCurrency(outcome.cancellationFee)}`}
       </p>
     )
   }

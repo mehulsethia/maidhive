@@ -69,6 +69,11 @@ function proposalContextLabel(context?: string | null) {
   return 'pre-confirmation proposal'
 }
 
+function actionEventDate(metadata: Record<string, unknown> | null | undefined, key: string) {
+  const value = metadata?.[key]
+  return typeof value === 'string' && isValidDate(value) ? value : null
+}
+
 function buildTimeline(booking: BookingRead): TimelineEvent[] {
   const events: TimelineEvent[] = []
   const payment = booking.payment
@@ -112,13 +117,55 @@ function buildTimeline(booking: BookingRead): TimelineEvent[] {
     tone: 'success',
   } : null)
 
-  addEvent(events, booking.proposed_start && (booking.updated_at || booking.proposal_expires_at) ? {
+  const hasRecordedAmendmentProposal = booking.action_events?.some((event) => event.type === 'amend_start_proposed')
+  addEvent(events, booking.proposed_start && (booking.updated_at || booking.proposal_expires_at) && !hasRecordedAmendmentProposal ? {
     id: 'proposal',
     at: booking.updated_at ?? booking.proposal_expires_at!,
     title: `${actorLabel(booking.proposal_by)} proposed a time change`,
     description: `${proposalContextLabel(booking.proposal_context)} from ${formatDate(booking.scheduled_start)} to ${formatDate(booking.proposed_start)}${booking.proposal_expires_at ? `, expires ${formatDate(booking.proposal_expires_at)}` : ''}.`,
     tone: 'warning',
   } : null)
+
+  for (const event of booking.action_events ?? []) {
+    const metadata = event.metadata
+    const originalStart = actionEventDate(metadata, 'original_start')
+    const proposedStart = actionEventDate(metadata, 'proposed_start')
+    const proposedBy = metadata?.proposed_by === 'client' ? 'Client' : 'Cleaner'
+
+    if (event.type === 'amend_start_proposed') {
+      addEvent(events, {
+        id: event.id,
+        at: event.created_at,
+        title: `${proposedBy} proposed Amend Start Time`,
+        description: originalStart && proposedStart
+          ? `Original: ${formatDate(originalStart)}. Proposed: ${formatDate(proposedStart)}.`
+          : 'An amended start time was proposed.',
+        tone: 'warning',
+      })
+    }
+
+    if (event.type === 'amend_start_declined') {
+      addEvent(events, {
+        id: event.id,
+        at: event.created_at,
+        title: `${actorLabel(event.actor_role)} declined Amend Start Time`,
+        description: 'Original booking time remained unchanged.',
+        tone: 'warning',
+      })
+    }
+
+    if (event.type === 'amend_start_accepted') {
+      addEvent(events, {
+        id: event.id,
+        at: event.created_at,
+        title: `${actorLabel(event.actor_role)} accepted Amend Start Time`,
+        description: proposedStart
+          ? `Booking start time updated to ${formatDate(proposedStart)}.`
+          : 'The amended start time was accepted.',
+        tone: 'success',
+      })
+    }
+  }
 
   addEvent(events, booking.started_at ? {
     id: 'started',
@@ -269,10 +316,7 @@ export default function AdminBookingDetailPage() {
   const cleanerName = booking.cleaner?.user?.name?.trim() || 'Cleaner'
   const subtotal = booking.subtotal ?? booking.total_amount - booking.platform_fee
   const paymentStatus = booking.payment?.status ?? 'not recorded'
-  const activeDispute = booking.dispute && ['open', 'under_review'].includes(booking.dispute.status)
-  const paymentStateLabel = activeDispute && paymentStatus === 'authorized'
-    ? 'Payment authorised — payout paused pending dispute'
-    : paymentStatus.replace(/_/g, ' ')
+  const paymentStateLabel = paymentStatus.replace(/_/g, ' ')
   const cancellationOutcome = isSuccessfulPaymentStatus(booking.payment?.status)
     ? getCancellationPaymentOutcome(booking)
     : null
@@ -399,8 +443,8 @@ export default function AdminBookingDetailPage() {
               </CardTitle>
             </CardHeader>
             <CardContent className="space-y-3">
-              <div className="grid min-w-0 gap-3 sm:grid-cols-2 xl:grid-cols-1">
-                <DetailRow label="Payment status" value={paymentStateLabel} />
+              <div className="grid min-w-0 gap-3 sm:grid-cols-2 xl:grid-cols-1" data-testid="admin-payment-state">
+                <DetailRow label="Stripe Payment Status" value={paymentStateLabel} />
                 <DetailRow label="Original booking amount" value={formatCurrency(booking.total_amount)} />
                 {cancellationOutcome ? (
                   <>
@@ -437,7 +481,7 @@ export default function AdminBookingDetailPage() {
               </CardTitle>
             </CardHeader>
             <CardContent className="space-y-3">
-              <div className="grid min-w-0 gap-3 sm:grid-cols-2 xl:grid-cols-1">
+              <div className="grid min-w-0 gap-3 sm:grid-cols-2 xl:grid-cols-1" data-testid="admin-booking-state">
                 <DetailRow label="Created" value={formatDate(booking.created_at)} />
                 <DetailRow label="Accept by" value={booking.accept_by ? formatDate(booking.accept_by) : null} />
                 <DetailRow label="Pay by" value={booking.pay_by ? formatDate(booking.pay_by) : null} />
@@ -445,6 +489,15 @@ export default function AdminBookingDetailPage() {
                 <DetailRow label="Confirmed" value={booking.confirmed_at ? formatDate(booking.confirmed_at) : null} />
                 <DetailRow label="Started" value={booking.started_at ? formatDate(booking.started_at) : null} />
                 <DetailRow label="Completed" value={booking.completed_at ? formatDate(booking.completed_at) : null} />
+                {booking.dispute?.created_at && (
+                  <DetailRow label="Under Review" value={formatDate(booking.dispute.created_at)} />
+                )}
+                {booking.dispute?.resolved_at && (
+                  <DetailRow label="Dispute Resolved" value={formatDate(booking.dispute.resolved_at)} />
+                )}
+                {booking.status === 'completed' && booking.payment?.transferred_at && (
+                  <DetailRow label="Completed – Released" value={formatDate(booking.payment.transferred_at)} />
+                )}
                 <DetailRow label="Cancelled" value={booking.cancelled_at ? formatDate(booking.cancelled_at) : null} />
               </div>
               {booking.cancellation_reason && (
@@ -485,7 +538,7 @@ export default function AdminBookingDetailPage() {
           {timeline.length === 0 ? (
             <p className="text-sm text-muted-foreground">No booking activity has been recorded yet.</p>
           ) : (
-            <ol className="space-y-3">
+            <ol className="min-w-0 space-y-3" data-testid="admin-booking-action-log">
               {timeline.map((event) => (
                 <li key={event.id} className="flex min-w-0 flex-col gap-2 rounded-lg border border-slate-100 bg-slate-50/70 px-3 py-3 sm:flex-row sm:gap-3">
                   <div className="mt-0.5">

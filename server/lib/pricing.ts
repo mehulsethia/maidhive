@@ -1,3 +1,5 @@
+import { calculatePlatformFee, roundMoney } from '@/lib/platform-fee'
+
 export type PriceSnapshot = {
   hourly_rate: number
   duration_hours: number
@@ -13,22 +15,18 @@ export function calculatePriceSnapshot(
   durationHours: number,
   platformFeePct: number,
 ): PriceSnapshot {
-  const subtotal = hourlyRate * durationHours
-  const platformFee = (subtotal * platformFeePct) / 100
+  const subtotal = roundMoney(hourlyRate * durationHours)
+  const platformFee = calculatePlatformFee(subtotal, platformFeePct)
   const cleanerPayout = subtotal
-  const totalAmount = subtotal + platformFee
+  const totalAmount = roundMoney(subtotal + platformFee)
 
   return {
     hourly_rate: hourlyRate,
     duration_hours: durationHours,
-    subtotal: round2(subtotal),
+    subtotal,
     platform_fee_pct: platformFeePct,
-    platform_fee: round2(platformFee),
-    cleaner_payout: round2(cleanerPayout),
-    total_amount: round2(totalAmount),
+    platform_fee: platformFee,
+    cleaner_payout: cleanerPayout,
+    total_amount: totalAmount,
   }
-}
-
-function round2(n: number) {
-  return Math.round((n + Number.EPSILON) * 100) / 100
 }
