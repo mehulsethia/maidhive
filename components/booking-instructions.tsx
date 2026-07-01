@@ -1,5 +1,7 @@
 'use client'
 
+import { getCleaningSuppliesResponsibility } from '@/lib/cleaning-supplies'
+
 type ParsedBookingInstructions = {
   jobType?: string
   bedrooms?: string
@@ -58,7 +60,9 @@ function parseSpecialInstructions(raw: string): ParsedBookingInstructions {
       continue
     }
     if (line.startsWith('Cleaning supplies:')) {
-      parsed.cleaningSupplies = sanitizeValue(line.replace('Cleaning supplies:', ''))
+      parsed.cleaningSupplies = getCleaningSuppliesResponsibility(
+        line.replace('Cleaning supplies:', ''),
+      )
       continue
     }
     if (line.startsWith('What needs to be cleaned:')) {

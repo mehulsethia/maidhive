@@ -262,6 +262,10 @@ export const bookingRepo = {
       ? {
           ...baseStatusWhere,
           payment: { is: { status: 'failed' } },
+          NOT: {
+            status: 'cancelled',
+            cancelledBy: { not: null },
+          },
         }
       : baseStatusWhere
     return Promise.all([

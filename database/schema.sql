@@ -376,6 +376,7 @@ CREATE TABLE public.payments (
     -- transferred   : Payout sent to cleaner's Stripe account
     -- refunded      : Fully refunded to client
     -- partially_refunded : Partial refund issued (disputed settlement)
+    -- released      : Payment authorisation released without capture
     -- failed        : Payment failed or was declined
     status                      TEXT    NOT NULL DEFAULT 'pending'
                                     CHECK (status IN (
@@ -385,6 +386,7 @@ CREATE TABLE public.payments (
                                         'transferred',
                                         'refunded',
                                         'partially_refunded',
+                                        'released',
                                         'failed'
                                     )),
 

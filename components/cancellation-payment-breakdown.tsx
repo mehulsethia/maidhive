@@ -1,5 +1,4 @@
 import { getCancellationPaymentOutcome } from '@/lib/booking-payment-outcome'
-import { getCancellationOriginLabel } from '@/lib/cancellation-origin'
 import { formatCurrency } from '@/lib/utils'
 import type { BookingRead } from '@/types'
 
@@ -27,23 +26,25 @@ export function CancellationPaymentBreakdown({
   if (!outcome) return null
 
   if (compact) {
+    const cancellationCharge = outcome.cancellationFee <= 0
+      ? 'No cancellation charge'
+      : `Cancellation charge: ${formatCurrency(outcome.cancellationFee)}`
+
     if (audience === 'cleaner') {
       return (
-        <p className="min-w-0 text-sm font-semibold text-emerald-700">
-          {outcome.cleanerPayoutDue > 0
-            ? `Cleaner compensation: ${formatCurrency(outcome.cleanerPayoutDue)}`
-            : 'No cleaner compensation'}
-        </p>
+        <div className="min-w-0 space-y-0.5">
+          <p className="text-sm font-semibold text-rose-700">{cancellationCharge}</p>
+          <p className="text-sm font-semibold text-emerald-700">
+            {outcome.cleanerPayoutDue > 0
+              ? `Cleaner compensation: ${formatCurrency(outcome.cleanerPayoutDue)}`
+              : 'No cleaner compensation'}
+          </p>
+        </div>
       )
     }
-    const noClientCancellationCharge =
-      outcome.cancellationFee <= 0 &&
-      getCancellationOriginLabel(booking) === 'Cancelled by cleaner'
     return (
       <p className="min-w-0 text-sm font-semibold text-rose-700">
-        {noClientCancellationCharge
-          ? 'No cancellation charge'
-          : `Cancellation charge: ${formatCurrency(outcome.cancellationFee)}`}
+        {cancellationCharge}
       </p>
     )
   }
@@ -65,7 +66,9 @@ export function CancellationPaymentBreakdown({
   return (
     <div className="min-w-0 space-y-2 rounded-2xl border border-rose-100 bg-rose-50/70 p-4 text-sm">
       <h4 className="font-semibold tracking-tight text-rose-950">Cancellation payment outcome</h4>
-      <Row label="Cancellation charge" value={formatCurrency(outcome.cancellationFee)} />
+      {outcome.cancellationFee <= 0
+        ? <p className="font-medium text-rose-900">No cancellation charge</p>
+        : <Row label="Cancellation charge" value={formatCurrency(outcome.cancellationFee)} />}
       <Row label="Original booking total" value={formatCurrency(outcome.originalAmount)} />
       <Row label="Refund/released amount" value={formatCurrency(outcome.releasedAmount)} />
       {showAdminRows && (

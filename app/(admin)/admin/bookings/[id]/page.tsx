@@ -29,6 +29,11 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Separator } from '@/components/ui/separator'
 import { reportLoadError, resetLoadError } from '@/lib/load-error-policy'
 import { getCancellationPaymentOutcome, isNonPayableBookingState, isSuccessfulPaymentStatus } from '@/lib/booking-payment-outcome'
+import {
+  getAdminPaymentStateLabel,
+  getPaymentReleaseDescription,
+  isNormalCancellationPaymentRelease,
+} from '@/lib/cancellation-payment-state'
 import { formatCurrency, formatDate } from '@/lib/utils'
 import type { BookingRead } from '@/types'
 
@@ -78,6 +83,7 @@ function buildTimeline(booking: BookingRead): TimelineEvent[] {
   const events: TimelineEvent[] = []
   const payment = booking.payment
   const cancellationOutcome = getCancellationPaymentOutcome(booking)
+  const paymentReleaseDescription = getPaymentReleaseDescription(booking)
 
   addEvent(events, {
     id: 'created',
@@ -89,7 +95,7 @@ function buildTimeline(booking: BookingRead): TimelineEvent[] {
   addEvent(events, payment?.created_at ? {
     id: 'payment-created',
     at: payment.created_at,
-    title: `Payment status updated to ${payment.status.replace(/_/g, ' ')}`,
+    title: `Payment status updated to ${getAdminPaymentStateLabel(booking)}`,
     description: 'The existing payment record reflects the latest payment state.',
   } : null)
 
@@ -206,12 +212,20 @@ function buildTimeline(booking: BookingRead): TimelineEvent[] {
     tone: 'success',
   } : null)
 
-  addEvent(events, payment?.failed_at ? {
+  addEvent(events, payment?.failed_at && !paymentReleaseDescription ? {
     id: 'payment-failed',
     at: payment.failed_at,
     title: 'Payment failed',
     description: 'The payment attempt failed and requires review.',
     tone: 'danger',
+  } : null)
+
+  addEvent(events, paymentReleaseDescription && booking.cancelled_at ? {
+    id: 'payment-released',
+    at: booking.cancelled_at,
+    title: 'Payment released',
+    description: paymentReleaseDescription,
+    tone: 'success',
   } : null)
 
   addEvent(events, payment?.refunded_at ? {
@@ -315,9 +329,11 @@ export default function AdminBookingDetailPage() {
   const clientName = booking.client?.user?.name?.trim() || 'Client'
   const cleanerName = booking.cleaner?.user?.name?.trim() || 'Cleaner'
   const subtotal = booking.subtotal ?? booking.total_amount - booking.platform_fee
-  const paymentStatus = booking.payment?.status ?? 'not recorded'
-  const paymentStateLabel = paymentStatus.replace(/_/g, ' ')
-  const cancellationOutcome = isSuccessfulPaymentStatus(booking.payment?.status)
+  const paymentStateLabel = getAdminPaymentStateLabel(booking)
+  const cancellationOutcome = (
+    isSuccessfulPaymentStatus(booking.payment?.status) ||
+    isNormalCancellationPaymentRelease(booking)
+  )
     ? getCancellationPaymentOutcome(booking)
     : null
   const useProjectedPaymentLabels = isNonPayableBookingState(booking)

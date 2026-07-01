@@ -1124,6 +1124,11 @@ export const bookingService = {
 
     if (!isParty && user.role !== 'admin') throw new ServiceError('Forbidden', 403)
 
+    const cancellationTime = new Date()
+    const isClientCancelling = Boolean(client && booking.clientId === client.id)
+    const isMoreThan24HoursBeforeStart =
+      booking.scheduledStart.getTime() - cancellationTime.getTime() > 24 * 60 * 60 * 1000
+
     try {
       await applyCancellationPaymentPolicy(booking, booking.status, {
         cancelledByCleaner: Boolean(cleaner && booking.cleanerId === cleaner.id),
@@ -1151,11 +1156,11 @@ export const bookingService = {
       }
     }
 
-      const updated = await bookingRepo.update(bookingId, {
-        status: 'cancelled',
+    const updated = await bookingRepo.update(bookingId, {
+      status: 'cancelled',
       cancellationReason: reason,
       cancelledByUser: { connect: { id: user.id } },
-      cancelledAt: new Date(),
+      cancelledAt: cancellationTime,
     })
 
     if (cleaner && booking.cleanerId === cleaner.id) {
@@ -1180,11 +1185,11 @@ export const bookingService = {
     const clientUserId = booking.client?.userId ?? null
     const clientEmail = booking.client?.user?.email ?? null
     const clientName = booking.client?.user?.name ?? 'Client'
-    const isClientCancelling = Boolean(client && booking.clientId === client.id)
     const isPendingRequestCancellation = booking.status === 'pending'
     const isConfirmedBookingCancellation = booking.status === 'confirmed'
     const isAcceptedOrConfirmedCancellation = booking.status === 'accepted' || booking.status === 'confirmed'
     const scheduledStartLabel = formatBookingTimeForMessage(booking.scheduledStart)
+    const scheduledStartAtLabel = formatBookingDateAtTimeForMessage(booking.scheduledStart)
     const isDraftLikePreAuthorisation =
       isClientCancelling &&
       (booking.status === 'draft' || (booking.status === 'pending' && !isPaymentAuthorizedStatus(booking.payment?.status)))
@@ -1224,7 +1229,9 @@ export const bookingService = {
         userId: clientUserId,
         type: 'booking_cancelled',
         title: 'Booking cancelled',
-        body: `Your booking scheduled for ${scheduledStartLabel} has been cancelled.`,
+        body: isMoreThan24HoursBeforeStart
+          ? `You cancelled your booking for ${scheduledStartAtLabel}. No cancellation charge applies.`
+          : `Your booking scheduled for ${scheduledStartLabel} has been cancelled.`,
         data: { booking_id: bookingId },
       })
     }
@@ -1442,6 +1449,22 @@ function formatBookingTimeForMessage(value: Date) {
   })
 }
 
+function formatBookingDateAtTimeForMessage(value: Date) {
+  const date = value.toLocaleDateString('en-IE', {
+    day: 'numeric',
+    month: 'short',
+    year: 'numeric',
+    timeZone: 'Europe/Nicosia',
+  })
+  const time = value.toLocaleTimeString('en-IE', {
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false,
+    timeZone: 'Europe/Nicosia',
+  })
+  return `${date} at ${time}`
+}
+
 function formatDisputeWindowLabel(hours: number) {
   if (!Number.isFinite(hours) || hours <= 0) return '24 hours'
   if (hours >= 1) return `${hours} hours`
@@ -1518,8 +1541,9 @@ async function releasePaymentAuthorization(
 
   try {
     await paymentRepo.update(paymentId, {
-      status: 'failed',
-      failedAt: new Date(),
+      status: 'released',
+      failedAt: null,
+      refundReason: 'payment_authorisation_released',
     })
   } catch (error) {
     // Cancellation flow must remain non-blocking even if legacy payment rows are inconsistent.
@@ -1879,7 +1903,11 @@ async function applyCancellationPaymentPolicy(
 
   if (payment.status === 'pending') {
     await stripe.paymentIntents.cancel(payment.stripePaymentIntentId)
-    await paymentRepo.update(payment.id, { status: 'failed', failedAt: new Date() })
+    await paymentRepo.update(payment.id, {
+      status: 'released',
+      failedAt: null,
+      refundReason: 'payment_authorisation_released',
+    })
     return
   }
 
@@ -1888,8 +1916,9 @@ async function applyCancellationPaymentPolicy(
   if (options.cancelledByCleaner) {
     await stripe.paymentIntents.cancel(payment.stripePaymentIntentId)
     await paymentRepo.update(payment.id, {
-      status: 'failed',
-      failedAt: new Date(),
+      status: 'released',
+      failedAt: null,
+      refundReason: 'payment_authorisation_released',
       cleanerPayout: 0,
       platformFee: 0,
       payoutScheduledAt: null,
@@ -1900,7 +1929,11 @@ async function applyCancellationPaymentPolicy(
   // Pending cleaner acceptance cancellations should always release auth in full.
   if (bookingStatus === 'pending') {
     await stripe.paymentIntents.cancel(payment.stripePaymentIntentId)
-    await paymentRepo.update(payment.id, { status: 'failed', failedAt: new Date() })
+    await paymentRepo.update(payment.id, {
+      status: 'released',
+      failedAt: null,
+      refundReason: 'payment_authorisation_released',
+    })
     return
   }
 
@@ -1914,7 +1947,11 @@ async function applyCancellationPaymentPolicy(
 
   if (policy.window === 'more_than_24h') {
     await stripe.paymentIntents.cancel(payment.stripePaymentIntentId)
-    await paymentRepo.update(payment.id, { status: 'failed', failedAt: new Date() })
+    await paymentRepo.update(payment.id, {
+      status: 'released',
+      failedAt: null,
+      refundReason: 'payment_authorisation_released',
+    })
     return
   }
 

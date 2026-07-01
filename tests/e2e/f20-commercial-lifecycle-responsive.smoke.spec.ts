@@ -30,6 +30,12 @@ async function expectNoHorizontalOverflow(page: Page, context: string) {
     .toBeLessThanOrEqual(dimensions.viewport + 1)
 }
 
+async function expectClientProvidedSupplies(page: Page) {
+  await expect(
+    page.getByText('Cleaning supplies: Provided by client', { exact: true }),
+  ).toBeVisible()
+}
+
 async function mockBookingMessages(page: Page) {
   await page.route(`**/api/v1/messages/${RESPONSIVE_BOOKING_ID}`, (route) => fulfill(route, []))
 }
@@ -80,6 +86,11 @@ function bookingFixture(overrides: Record<string, unknown> = {}) {
     platform_fee: 2,
     cleaner_payout: 6,
     total_amount: 8,
+    special_instructions: [
+      'Job type: Regular clean',
+      'Cleaning supplies: I will provide cleaning supplies',
+      'What needs to be cleaned: Kitchen and bathroom',
+    ].join('\n'),
     accepted_at: isoHoursFromNow(-24),
     confirmed_at: isoHoursFromNow(-23),
     created_at: isoHoursFromNow(-48),
@@ -211,7 +222,49 @@ test.describe('F20 commercial and lifecycle responsive regression @smoke', () =>
         await expect(page.getByTestId('admin-booking-action-log').getByText('Cleaner proposed Amend Start Time')).toBeVisible()
         await expect(page.getByTestId('admin-booking-action-log').getByText('Client declined Amend Start Time')).toBeVisible()
         await expect(page.getByText('Original booking time remained unchanged.')).toBeVisible()
+        await expectClientProvidedSupplies(page)
         await expectNoHorizontalOverflow(page, `admin booking at ${viewport.name}`)
+      }
+    })
+
+    test('E2E-RESP-10 normal cancellation payment releases stay readable at all viewports', async ({ page }) => {
+      test.skip(!hasRoleCredentialCandidates('admin'), 'Admin E2E credentials are required')
+
+      const cancelledAt = isoHoursFromNow(-48)
+      const adminBooking = bookingFixture({
+        status: 'cancelled',
+        cancelled_by: 'client-user',
+        cancelled_at: cancelledAt,
+        cancellation_reason: 'Cancelled by client more than 24 hours before scheduled start',
+        payment: {
+          id: 'payment-responsive',
+          status: 'released',
+          amount: 8,
+          platform_fee: 0,
+          cleaner_payout: 0,
+          currency: 'eur',
+          refund_reason: 'payment_authorisation_released',
+          authorized_at: isoHoursFromNow(-72),
+          created_at: isoHoursFromNow(-74),
+        },
+      })
+
+      await page.route(`**/api/v1/admin/bookings/${RESPONSIVE_BOOKING_ID}`, (route) => fulfill(route, adminBooking))
+
+      for (const viewport of VIEWPORTS) {
+        await page.setViewportSize(viewport)
+        await page.goto(`/admin/bookings/${RESPONSIVE_BOOKING_ID}`, { waitUntil: 'domcontentloaded' })
+
+        await expect(page.getByTestId('admin-payment-state').getByText('payment released', { exact: true })).toBeVisible()
+        const actionLog = page.getByTestId('admin-booking-action-log')
+        await expect(actionLog.getByText('Payment released', { exact: true })).toBeVisible()
+        await expect(actionLog.getByText(
+          'Client payment authorisation was released because the client cancelled more than 24 hours before the scheduled start.',
+          { exact: true },
+        )).toBeVisible()
+        await expect(page.getByText('No cancellation charge', { exact: true })).toBeVisible()
+        await expectClientProvidedSupplies(page)
+        await expectNoHorizontalOverflow(page, `admin payment release at ${viewport.name}`)
       }
     })
   })
@@ -235,6 +288,7 @@ test.describe('F20 commercial and lifecycle responsive regression @smoke', () =>
         await expect(notice.getByText('Minimum platform fee of €2.00 applies.', { exact: true })).toBeVisible()
         await notice.locator('summary').click()
         await expect(notice.getByText(/Platform fees are normally 10%/)).toBeVisible()
+        await expectClientProvidedSupplies(page)
         await expectNoHorizontalOverflow(page, `client minimum-fee booking at ${viewport.name}`)
       }
     })
@@ -249,12 +303,11 @@ test.describe('F20 commercial and lifecycle responsive regression @smoke', () =>
         cancellation_reason: 'Cancelled by cleaner more than 24 hours before scheduled start',
         payment: {
           id: 'payment-responsive',
-          status: 'failed',
+          status: 'released',
           amount: 8,
           platform_fee: 0,
           cleaner_payout: 0,
           currency: 'eur',
-          failed_at: isoHoursFromNow(-2),
           created_at: isoHoursFromNow(-24),
         },
       })
@@ -272,6 +325,37 @@ test.describe('F20 commercial and lifecycle responsive regression @smoke', () =>
         await expect(page.getByText('Cancelled by cleaner', { exact: true })).toBeVisible()
         await expect(page.getByText('No cancellation charge', { exact: true })).toBeVisible()
         await expectNoHorizontalOverflow(page, `client cancelled card at ${viewport.name}`)
+      }
+    })
+
+    test('E2E-RESP-11 early cancellation notification wraps cleanly at all viewports', async ({ page }) => {
+      test.skip(!hasRoleCredentialCandidates('client'), 'Client E2E credentials are required')
+
+      const notificationBody = 'You cancelled your booking for 3 Jul 2026 at 10:00. No cancellation charge applies.'
+      await page.route('**/api/v1/notifications?*', (route) => fulfill(route, {
+        notifications: [{
+          id: 'notification-responsive',
+          user_id: 'client-user',
+          type: 'booking_cancelled',
+          title: 'Booking cancelled',
+          body: notificationBody,
+          data: { booking_id: RESPONSIVE_BOOKING_ID },
+          is_read: false,
+          created_at: isoHoursFromNow(-1),
+        }],
+        total: 1,
+        page: 1,
+        page_size: 250,
+      }))
+      await page.route('**/api/v1/auth/me', (route) => fulfill(route, bookingFixture().client.user))
+
+      for (const viewport of VIEWPORTS) {
+        await page.setViewportSize(viewport)
+        await page.goto('/client/notifications', { waitUntil: 'domcontentloaded' })
+        await expect(page.getByText(notificationBody, { exact: true })).toBeVisible()
+        await expect(page.getByRole('button', { name: 'Mark read' })).toBeVisible()
+        await expect(page.getByRole('button', { name: 'Delete' })).toBeVisible()
+        await expectNoHorizontalOverflow(page, `client cancellation notification at ${viewport.name}`)
       }
     })
 
@@ -324,6 +408,7 @@ test.describe('F20 commercial and lifecycle responsive regression @smoke', () =>
         await expect(dialog.getByText('The client will receive a full refund.')).toBeVisible()
         await expect(dialog.getByText('You will not receive any payout for this booking.')).toBeVisible()
         await expect(dialog.getByRole('button', { name: 'Keep booking' })).toBeVisible()
+        await expectClientProvidedSupplies(page)
         await expectNoHorizontalOverflow(page, `early cleaner cancellation modal at ${viewport.name}`)
         await dialog.getByRole('button', { name: 'Keep booking' }).click()
       }
@@ -351,12 +436,11 @@ test.describe('F20 commercial and lifecycle responsive regression @smoke', () =>
         cancellation_reason: 'Cancelled by cleaner more than 24 hours before scheduled start',
         payment: {
           id: 'payment-responsive',
-          status: 'failed',
+          status: 'released',
           amount: 8,
           platform_fee: 0,
           cleaner_payout: 0,
           currency: 'eur',
-          failed_at: isoHoursFromNow(-2),
           created_at: isoHoursFromNow(-24),
         },
       })
@@ -376,8 +460,40 @@ test.describe('F20 commercial and lifecycle responsive regression @smoke', () =>
         await page.setViewportSize(viewport)
         await page.goto('/cleaner/bookings', { waitUntil: 'domcontentloaded' })
         await expect(page.getByTestId('cleaner-cancellation-source').getByText('Cancelled by you')).toBeVisible()
+        await expect(page.getByText('No cancellation charge', { exact: true })).toBeVisible()
         await expect(page.getByText('No cleaner compensation')).toBeVisible()
+        await expectClientProvidedSupplies(page)
         await expectNoHorizontalOverflow(page, `cleaner cancelled card at ${viewport.name}`)
+      }
+    })
+
+    test('E2E-RESP-12 cleaner dashboard supplies responsibility stays explicit at all viewports', async ({ page }) => {
+      test.skip(!hasRoleCredentialCandidates('cleaner'), 'Cleaner E2E credentials are required')
+
+      const pendingBooking = bookingFixture({ status: 'pending', confirmed_at: null })
+      await page.route('**/api/v1/bookings?*', (route) => fulfill(route, {
+        bookings: [pendingBooking],
+        total: 1,
+        page: 1,
+        page_size: 50,
+        has_next: false,
+      }))
+      await page.route('**/api/v1/cleaners/me', (route) => fulfill(route, {
+        cleaner: {
+          id: 'cleaner-profile',
+          status: 'approved',
+          lifecycle_status: 'live',
+          stripe_onboarding_complete: true,
+          profile_complete: true,
+        },
+        onboarding: { completion_pct: 100, steps: {} },
+      }))
+
+      for (const viewport of VIEWPORTS) {
+        await page.setViewportSize(viewport)
+        await page.goto('/cleaner/dashboard', { waitUntil: 'domcontentloaded' })
+        await expectClientProvidedSupplies(page)
+        await expectNoHorizontalOverflow(page, `cleaner dashboard supplies at ${viewport.name}`)
       }
     })
   })

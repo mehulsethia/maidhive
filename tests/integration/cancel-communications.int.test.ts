@@ -258,7 +258,9 @@ describe('Booking cancellation communications', () => {
     )
 
     expect(state.paymentUpdates).toContainEqual(expect.objectContaining({
-      status: 'failed',
+      status: 'released',
+      failedAt: null,
+      refundReason: 'payment_authorisation_released',
       cleanerPayout: 0,
       platformFee: 0,
       payoutScheduledAt: null,
@@ -268,6 +270,39 @@ describe('Booking cancellation communications', () => {
       title: 'Booking cancelled',
       body: 'You cancelled this booking. No payout applies for this booking. This cancellation has been recorded on your account.',
       data: { booking_id: state.booking.id },
+    }))
+  })
+
+  it('tells the client that their early cancellation has no charge', async () => {
+    state.booking = {
+      id: 'booking_client_early_cancel_1',
+      status: 'confirmed',
+      clientId: 'client_profile_1',
+      cleanerId: 'cleaner_profile_1',
+      acceptedAt: new Date('2099-06-18T09:00:00.000Z'),
+      confirmedAt: new Date('2099-06-18T09:05:00.000Z'),
+      scheduledStart: new Date('2099-07-03T07:00:00.000Z'),
+      durationHours: 2,
+      payment: { id: 'payment_early_1', status: 'authorized', stripePaymentIntentId: 'pi_early_1' },
+      client: { userId: seeded.clientUser.id, user: { email: seeded.clientUser.email, name: seeded.clientUser.name } },
+      cleaner: { userId: seeded.cleanerUser.id, user: { email: seeded.cleanerUser.email, name: seeded.cleanerUser.name } },
+    }
+
+    const { bookingService } = await import('@/server/services/booking.service')
+    await bookingService.cancel(
+      state.booking.id,
+      seeded.clientUser as any,
+      'Cancelled by client more than 24 hours before scheduled start',
+    )
+
+    expect(state.paymentUpdates).toContainEqual(expect.objectContaining({
+      status: 'released',
+      failedAt: null,
+    }))
+    expect(state.notifications).toContainEqual(expect.objectContaining({
+      userId: seeded.clientUser.id,
+      title: 'Booking cancelled',
+      body: 'You cancelled your booking for 3 Jul 2099 at 10:00. No cancellation charge applies.',
     }))
   })
 

@@ -63,8 +63,8 @@ const PROPERTY_CONDITION_OPTIONS = [
 ] as const
 
 const SUPPLIES_OPTIONS = [
-  { value: 'client_provides', label: 'I will provide cleaning supplies' },
-  { value: 'cleaner_brings', label: 'Cleaner should bring supplies' },
+  { value: 'client_provides', label: 'Provided by client' },
+  { value: 'cleaner_brings', label: 'Provided by cleaner' },
 ] as const
 
 const STEP_INFO = [
@@ -2252,7 +2252,7 @@ export default function BookingFlowPage() {
                       ))}
                     </div>
                     {cleanerNeedsClientSupplies && (
-                      <p className="text-xs text-amber-700">This cleaner requires client-provided supplies, so this is locked to: I will provide cleaning supplies.</p>
+                      <p className="text-xs text-amber-700">This cleaner requires client-provided supplies, so this is locked to: Provided by client.</p>
                     )}
                   </div>
 

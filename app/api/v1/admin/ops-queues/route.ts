@@ -91,6 +91,14 @@ export const GET = requireAdmin(async () => {
         where: {
           status: 'failed',
           failedAt: { gte: new Date(Date.now() - 14 * 24 * 60 * 60 * 1000) },
+          booking: {
+            is: {
+              NOT: {
+                status: 'cancelled',
+                cancelledBy: { not: null },
+              },
+            },
+          },
         },
         include: {
           booking: { include: { client: { include: { user: true } } } },

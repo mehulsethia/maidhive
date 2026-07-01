@@ -12,6 +12,7 @@ const state = vi.hoisted(() => ({
   currentUser: seededUsers.admin as User | null,
   listAllArgs: null as any,
   findByIdArgs: null as any,
+  paymentFindManyArgs: null as any,
 }))
 
 vi.mock('@/server/auth', () => {
@@ -278,7 +279,9 @@ vi.mock('@/server/db', () => {
       },
       payment: {
         aggregate: vi.fn(async () => ({ _sum: { amount: 320, platformFee: 40 } })),
-        findMany: vi.fn(async () => [
+        findMany: vi.fn(async (args: any) => {
+          state.paymentFindManyArgs = args
+          return [
           {
             id: 'payment_failed_1',
             bookingId: 'booking_pending_1',
@@ -287,7 +290,8 @@ vi.mock('@/server/db', () => {
             updatedAt: new Date(),
             booking: { client: { user: { name: 'Client A', email: 'cla@test.local' } } },
           },
-        ]),
+        ]
+        }),
       },
     },
   }
@@ -351,6 +355,10 @@ describe('F14 Admin routes integration', () => {
       'awaiting_response',
       'under_review',
     ])
+    expect(state.paymentFindManyArgs.where.booking.is.NOT).toEqual({
+      status: 'cancelled',
+      cancelledBy: { not: null },
+    })
   })
 
   it('IT-ADMIN-04 admin bookings filters preserve status + pagination arguments', async () => {

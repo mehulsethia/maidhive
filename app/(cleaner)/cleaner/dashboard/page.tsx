@@ -7,6 +7,7 @@ import { bookingsApi, cleanersApi } from '@/lib/api'
 import { subscribeBookingsRefresh, triggerBookingsRefresh } from '@/lib/booking-sync'
 import { compareBookingsByOperationalPriority } from '@/lib/booking-priority'
 import { BookingStatusBadge } from '@/components/booking-status-badge'
+import { BookingInstructions } from '@/components/booking-instructions'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Dialog, DialogTitle } from '@/components/ui/dialog'
@@ -418,7 +419,7 @@ export default function CleanerDashboardPage() {
                   </div>
                   <p className="mt-2 text-sm text-slate-600">{b.city}, {b.postcode} · {b.duration_hours}h</p>
                   {b.special_instructions && (
-                    <p className="mt-2 line-clamp-2 rounded-md bg-white px-2 py-1 text-xs text-slate-500">{b.special_instructions}</p>
+                    <BookingInstructions value={b.special_instructions} compact />
                   )}
                   <div className="mt-3 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
                     <p className="text-sm font-semibold text-emerald-700">{formatCurrency(b.cleaner_payout)}</p>
