@@ -21,6 +21,8 @@ const state = vi.hoisted(() => ({
   cleanerCancelledByClientEmails: 0,
   cleanerCancelledByClientPayloads: [] as any[],
   clientCancellationEmails: 0,
+  clientCancellationPayloads: [] as any[],
+  clientCancelledByCleanerEmails: 0,
   clientRejectedEmails: 0,
   amendmentDeclinedPayloads: [] as any[],
   actionEvents: [] as any[],
@@ -90,8 +92,13 @@ vi.mock('@/server/db', () => ({
 
 vi.mock('@/server/services/loops-email.service', () => ({
   loopsEmailService: {
-    sendClientCancellationConfirmation: vi.fn(async () => {
+    sendClientSelfCancellationConfirmation: vi.fn(async (payload: any) => {
       state.clientCancellationEmails += 1
+      state.clientCancellationPayloads.push(payload)
+      return true
+    }),
+    sendClientBookingCancelledByCleaner: vi.fn(async () => {
+      state.clientCancelledByCleanerEmails += 1
       return true
     }),
     sendCleanerBookingCancelledByClient: vi.fn(async (payload: any) => {
@@ -143,6 +150,8 @@ describe('Booking cancellation communications', () => {
     state.cleanerCancelledByClientEmails = 0
     state.cleanerCancelledByClientPayloads = []
     state.clientCancellationEmails = 0
+    state.clientCancellationPayloads = []
+    state.clientCancelledByCleanerEmails = 0
     state.clientRejectedEmails = 0
     state.amendmentDeclinedPayloads = []
     state.actionEvents = []
@@ -171,7 +180,7 @@ describe('Booking cancellation communications', () => {
     expect(state.notifications[0].title).toBe('Client cancelled booking request')
     expect(String(state.notifications[0].body)).toContain('before confirmation')
     expect(state.cleanerCancelledByClientEmails).toBe(0)
-    expect(state.clientCancellationEmails).toBe(1)
+    expect(state.clientCancellationEmails).toBe(0)
   })
 
   it('skips cancellation notifications/emails for draft-like pending bookings without authorization', async () => {
@@ -271,6 +280,7 @@ describe('Booking cancellation communications', () => {
       body: 'You cancelled this booking. No payout applies for this booking. This cancellation has been recorded on your account.',
       data: { booking_id: state.booking.id },
     }))
+    expect(state.clientCancelledByCleanerEmails).toBe(1)
   })
 
   it('tells the client that their early cancellation has no charge', async () => {
@@ -283,6 +293,9 @@ describe('Booking cancellation communications', () => {
       confirmedAt: new Date('2099-06-18T09:05:00.000Z'),
       scheduledStart: new Date('2099-07-03T07:00:00.000Z'),
       durationHours: 2,
+      totalAmount: 35.2,
+      subtotal: 32,
+      platformFee: 3.2,
       payment: { id: 'payment_early_1', status: 'authorized', stripePaymentIntentId: 'pi_early_1' },
       client: { userId: seeded.clientUser.id, user: { email: seeded.clientUser.email, name: seeded.clientUser.name } },
       cleaner: { userId: seeded.cleanerUser.id, user: { email: seeded.cleanerUser.email, name: seeded.cleanerUser.name } },
@@ -304,7 +317,73 @@ describe('Booking cancellation communications', () => {
       title: 'Booking cancelled',
       body: 'You cancelled your booking for 3 Jul 2099 at 10:00. No cancellation charge applies.',
     }))
+    expect(state.clientCancellationPayloads).toContainEqual(expect.objectContaining({
+      cancellationWindowMessage: 'You cancelled more than 24 hours before the scheduled start.',
+      cancellationChargeMessage: 'No cancellation charge applies.',
+      refundOrReleaseMessage: 'Your full payment of €35.20 will be refunded or released.',
+    }))
   })
+
+  it.each([
+    {
+      hoursUntilStart: 18,
+      cancellationWindowMessage: 'You cancelled between 12 and 24 hours before the scheduled start.',
+      cancellationChargeMessage: 'Cancellation charge: €5.00.',
+      refundOrReleaseMessage: '€30.20 will be refunded or released.',
+    },
+    {
+      hoursUntilStart: 6,
+      cancellationWindowMessage: 'You cancelled less than 12 hours before the scheduled start.',
+      cancellationChargeMessage: 'Cancellation charge: €17.60.',
+      refundOrReleaseMessage: 'You will receive a 50% refund of €17.60.',
+    },
+  ])(
+    'sends the client self-cancellation email $hoursUntilStart hours before start',
+    async ({
+      hoursUntilStart,
+      cancellationWindowMessage,
+      cancellationChargeMessage,
+      refundOrReleaseMessage,
+    }) => {
+      state.booking = {
+        id: `booking_client_cancel_${hoursUntilStart}h`,
+        status: 'confirmed',
+        clientId: 'client_profile_1',
+        cleanerId: 'cleaner_profile_1',
+        scheduledStart: new Date(Date.now() + hoursUntilStart * 60 * 60 * 1000),
+        durationHours: 2,
+        totalAmount: 35.2,
+        subtotal: 32,
+        platformFee: 3.2,
+        payment: {
+          id: `payment_client_cancel_${hoursUntilStart}h`,
+          status: 'authorized',
+          stripePaymentIntentId: `pi_client_cancel_${hoursUntilStart}h`,
+        },
+        client: { userId: seeded.clientUser.id, user: { email: seeded.clientUser.email, name: seeded.clientUser.name } },
+        cleaner: { userId: seeded.cleanerUser.id, user: { email: seeded.cleanerUser.email, name: seeded.cleanerUser.name } },
+      }
+
+      const { bookingService } = await import('@/server/services/booking.service')
+      await bookingService.cancel(
+        state.booking.id,
+        seeded.clientUser as any,
+        `Cancelled by client ${hoursUntilStart} hours before scheduled start`,
+      )
+
+      expect(state.clientCancellationEmails).toBe(1)
+      expect(state.clientCancellationPayloads[0]).toMatchObject({
+        email: seeded.clientUser.email,
+        clientName: seeded.clientUser.name,
+        cleanerName: seeded.cleanerUser.name,
+        bookingDate: state.booking.scheduledStart,
+        cancellationWindowMessage,
+        cancellationChargeMessage,
+        refundOrReleaseMessage,
+      })
+      expect(state.clientCancelledByCleanerEmails).toBe(0)
+    },
+  )
 
   it('sends cleaner cancellation email for accepted-but-not-confirmed client cancellation', async () => {
     state.booking = {
@@ -330,7 +409,7 @@ describe('Booking cancellation communications', () => {
       bookingId: 'booking_accepted_1',
       cancellationReason: 'Accepted cancellation',
     })
-    expect(state.clientCancellationEmails).toBe(1)
+    expect(state.clientCancellationEmails).toBe(0)
   })
 
   it('cancels confirmed booking even when cleaner relation data is incomplete', async () => {

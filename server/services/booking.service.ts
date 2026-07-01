@@ -12,6 +12,7 @@ import { stripe } from '../stripe'
 import { config } from '../config'
 import { calculatePriceSnapshot } from '../lib/pricing'
 import { computeConfirmedCancellationPolicy, moneyFromCents } from '@/lib/cancellation-policy'
+import { getClientSelfCancellationEmailOutcome } from '@/lib/client-self-cancellation-email'
 import { AMENDMENT_EXPIRED_BODY, AMENDMENT_EXPIRED_TITLE, AMENDMENT_EXPIRY_OUTCOME_COPY } from '@/lib/booking-amendment'
 import { DEFAULT_PLATFORM_FEE_PCT } from '@/lib/platform-fee'
 import type { User } from '@prisma/client'
@@ -1236,18 +1237,41 @@ export const bookingService = {
       })
     }
 
-    if (!isDraftLikePreAuthorisation) {
+    if (isClientCancelling && isConfirmedBookingCancellation) {
       try {
         if (!clientEmail) throw new Error('Missing client email for cancellation confirmation')
-        await loopsEmailService.sendClientCancellationConfirmation({
+        const policy = computeConfirmedCancellationPolicy({
+          scheduledStart: booking.scheduledStart,
+          cancelledAt: cancellationTime,
+          totalAmount: booking.totalAmount,
+          subtotal: booking.subtotal,
+          platformFee: booking.platformFee,
+        })
+        if (!policy) throw new Error('Unable to calculate client cancellation email outcome')
+        const emailOutcome = getClientSelfCancellationEmailOutcome(policy)
+        await loopsEmailService.sendClientSelfCancellationConfirmation({
+          email: clientEmail,
+          clientName,
+          cleanerName,
+          bookingDate: booking.scheduledStart,
+          ...emailOutcome,
+        })
+      } catch (emailError) {
+        console.error('Failed to send client self-cancellation confirmation email via Loops:', emailError)
+      }
+    }
+
+    if (cleaner && booking.cleanerId === cleaner.id && isAcceptedOrConfirmedCancellation) {
+      try {
+        if (!clientEmail) throw new Error('Missing client email for cleaner cancellation notification')
+        await loopsEmailService.sendClientBookingCancelledByCleaner({
           email: clientEmail,
           fullName: clientName,
           date: booking.scheduledStart,
-          cleanerName,
-          durationHours: Number(booking.durationHours),
+          bookingId: booking.id,
         })
       } catch (emailError) {
-        console.error('Failed to send client cancellation confirmation email via Loops:', emailError)
+        console.error('Failed to send client cleaner-cancellation email via Loops:', emailError)
       }
     }
 

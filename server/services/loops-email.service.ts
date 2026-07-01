@@ -18,7 +18,8 @@ const CLIENT_PAYMENT_RECEIPT_TRANSACTIONAL_ID = 'cmo2rrvdv2ppa0izkfm5zk7ov'
 const CLIENT_REVIEW_REQUEST_TRANSACTIONAL_ID = 'cmo2rtf800f500iyxs4d16x8x'
 const CLIENT_BOOKING_COMPLETED_TRANSACTIONAL_ID =
   process.env.LOOPS_CLIENT_BOOKING_COMPLETED_TRANSACTIONAL_ID ?? ''
-const CLIENT_CANCELLATION_CONFIRMATION_TRANSACTIONAL_ID = 'cmo2ruvdu07yk0iw5gw79hvew'
+const CLIENT_BOOKING_CANCELLED_BY_CLEANER_TRANSACTIONAL_ID = 'cmo2ruvdu07yk0iw5gw79hvew'
+const CLIENT_SELF_CANCELLATION_CONFIRMATION_TRANSACTIONAL_ID = 'cmr27985005h00j2p70wb14a6'
 const DISPUTE_SUBMITTED_CONFIRMATION_TRANSACTIONAL_ID = 'cmqf1rb7r7z9q0jx99f8lq615'
 const DISPUTE_RAISED_AGAINST_NOTIFICATION_TRANSACTIONAL_ID = 'cmqf1u9ly4ujo0jyq9kfdcfbw'
 const CLEANER_SIGNUP_TRANSACTIONAL_ID = 'cmo5hbjfv0lbm0iya3k626pjl'
@@ -356,25 +357,43 @@ export const loopsEmailService = {
     })
   },
 
-  async sendClientCancellationConfirmation(args: {
+  async sendClientBookingCancelledByCleaner(args: {
     email: string
     fullName: string
     date: Date
-    cleanerName?: string
-    durationHours?: number
+    bookingId: string
   }) {
     return sendTransactionalEmail({
-      transactionalId: CLIENT_CANCELLATION_CONFIRMATION_TRANSACTIONAL_ID,
+      transactionalId: CLIENT_BOOKING_CANCELLED_BY_CLEANER_TRANSACTIONAL_ID,
       email: args.email,
       dataVariables: {
-        first_name: firstName(args.fullName),
-        date: formatBookingDate(args.date),
-        time: formatBookingTime(args.date),
-        cleaner_name: args.cleanerName ?? 'Cleaner',
-        booking_duration: args.durationHours
-          ? `${args.durationHours} hour${args.durationHours === 1 ? '' : 's'}`
-          : '',
-        cta_link: `${appUrl()}/client/bookings`,
+        client_name: args.fullName,
+        booking_date: formatBookingDate(args.date),
+        booking_link: `${appUrl()}/client/bookings/${args.bookingId}`,
+      },
+    })
+  },
+
+  async sendClientSelfCancellationConfirmation(args: {
+    email: string
+    clientName: string
+    cleanerName: string
+    bookingDate: Date
+    cancellationWindowMessage: string
+    cancellationChargeMessage: string
+    refundOrReleaseMessage: string
+  }) {
+    return sendTransactionalEmail({
+      transactionalId: CLIENT_SELF_CANCELLATION_CONFIRMATION_TRANSACTIONAL_ID,
+      email: args.email,
+      dataVariables: {
+        client_name: args.clientName,
+        cleaner_name: args.cleanerName,
+        booking_date: formatBookingDate(args.bookingDate),
+        booking_time: formatBookingTime(args.bookingDate),
+        cancellation_window_message: args.cancellationWindowMessage,
+        cancellation_charge_message: args.cancellationChargeMessage,
+        refund_or_release_message: args.refundOrReleaseMessage,
       },
     })
   },
