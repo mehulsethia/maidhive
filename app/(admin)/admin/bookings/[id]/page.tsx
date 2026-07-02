@@ -34,6 +34,7 @@ import {
   getPaymentReleaseDescription,
   isNormalCancellationPaymentRelease,
 } from '@/lib/cancellation-payment-state'
+import { getAdminClientCancellationCopy } from '@/lib/client-cancellation-context'
 import { formatCurrency, formatDate } from '@/lib/utils'
 import type { BookingRead } from '@/types'
 
@@ -84,6 +85,7 @@ function buildTimeline(booking: BookingRead): TimelineEvent[] {
   const payment = booking.payment
   const cancellationOutcome = getCancellationPaymentOutcome(booking)
   const paymentReleaseDescription = getPaymentReleaseDescription(booking)
+  const clientCancellationCopy = getAdminClientCancellationCopy(booking)
 
   addEvent(events, {
     id: 'created',
@@ -240,7 +242,9 @@ function buildTimeline(booking: BookingRead): TimelineEvent[] {
     id: 'cancelled',
     at: booking.cancelled_at,
     title: 'Booking cancelled',
-    description: booking.cancellation_reason || 'No cancellation reason was recorded.',
+    description: clientCancellationCopy?.actionLogDescription
+      || booking.cancellation_reason
+      || 'No cancellation reason was recorded.',
     tone: 'danger',
   } : null)
 
@@ -516,9 +520,9 @@ export default function AdminBookingDetailPage() {
                 )}
                 <DetailRow label="Cancelled" value={booking.cancelled_at ? formatDate(booking.cancelled_at) : null} />
               </div>
-              {booking.cancellation_reason && (
+              {(getAdminClientCancellationCopy(booking)?.stateLabel || booking.cancellation_reason) && (
                 <p className="break-words rounded-lg border border-rose-100 bg-rose-50 px-3 py-2 text-sm text-rose-800">
-                  {booking.cancellation_reason}
+                  {getAdminClientCancellationCopy(booking)?.stateLabel || booking.cancellation_reason}
                 </p>
               )}
             </CardContent>

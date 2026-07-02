@@ -2,7 +2,10 @@ import { createElement } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it } from 'vitest'
 import { BookingStatusBadge } from '@/components/booking-status-badge'
-import { getClientCancellationContext } from '@/lib/client-cancellation-context'
+import {
+  getAdminClientCancellationCopy,
+  getClientCancellationContext,
+} from '@/lib/client-cancellation-context'
 import { getClientTotalSpent } from '@/lib/client-spend'
 import type { BookingRead } from '@/types'
 
@@ -43,6 +46,19 @@ describe('client account display rules', () => {
       .toContain('more than 24 hours')
     expect(getClientCancellationContext(cancelledBooking({ cancelled_by: 'cleaner_user' })))
       .toBe('Cleaner cancelled this booking. No client cancellation charge applies.')
+  })
+
+  it('uses the exact 12-24 hour policy outcome in the admin audit copy', () => {
+    const copy = getAdminClientCancellationCopy(cancelledBooking({
+      cancelled_at: '2026-06-19T18:00:00.000Z',
+      cancellation_reason: 'Cancelled by client within 24 hours of scheduled start',
+    }))
+
+    expect(copy).toEqual({
+      stateLabel: 'Cancelled by client between 12 and 24 hours before scheduled start',
+      actionLogDescription:
+        'Client cancelled between 12 and 24 hours before scheduled start. €5 cancellation charge applied. No cleaner payout due.',
+    })
   })
 
   it('defines spend as net successfully captured money across payment outcomes', () => {

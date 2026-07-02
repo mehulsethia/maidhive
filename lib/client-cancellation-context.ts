@@ -36,3 +36,30 @@ export function getClientCancellationContext(booking: BookingRead) {
   }
   return 'Client cancelled less than 12 hours before start. Late cancellation policy applied.'
 }
+
+export function getAdminClientCancellationCopy(booking: BookingRead) {
+  if (booking.status !== 'cancelled' || getCancellationOriginLabel(booking) !== 'Cancelled by client') {
+    return null
+  }
+  if (!booking.cancelled_at || (!booking.accepted_at && !booking.confirmed_at)) return null
+
+  const policy = computeConfirmedCancellationPolicy({
+    scheduledStart: booking.scheduled_start,
+    cancelledAt: booking.cancelled_at,
+    totalAmount: booking.total_amount,
+    subtotal: booking.subtotal ?? Math.max(Number(booking.total_amount) - Number(booking.platform_fee), 0),
+    platformFee: booking.platform_fee,
+  })
+  if (policy?.window !== 'between_12h_and_24h') return null
+
+  const cancellationCharge = moneyFromCents(policy.captureCents)
+  const formattedCharge = Number.isInteger(cancellationCharge)
+    ? `€${cancellationCharge}`
+    : formatCurrency(cancellationCharge)
+
+  return {
+    stateLabel: 'Cancelled by client between 12 and 24 hours before scheduled start',
+    actionLogDescription:
+      `Client cancelled between 12 and 24 hours before scheduled start. ${formattedCharge} cancellation charge applied. No cleaner payout due.`,
+  }
+}

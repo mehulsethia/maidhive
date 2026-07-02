@@ -1127,8 +1127,22 @@ export const bookingService = {
 
     const cancellationTime = new Date()
     const isClientCancelling = Boolean(client && booking.clientId === client.id)
+    const clientCancellationPolicy =
+      isClientCancelling && (booking.status === 'accepted' || booking.status === 'confirmed')
+        ? computeConfirmedCancellationPolicy({
+            scheduledStart: booking.scheduledStart,
+            cancelledAt: cancellationTime,
+            totalAmount: booking.totalAmount,
+            subtotal: booking.subtotal,
+            platformFee: booking.platformFee,
+          })
+        : null
     const isMoreThan24HoursBeforeStart =
       booking.scheduledStart.getTime() - cancellationTime.getTime() > 24 * 60 * 60 * 1000
+    const recordedCancellationReason =
+      clientCancellationPolicy?.window === 'between_12h_and_24h'
+        ? 'Cancelled by client between 12 and 24 hours before scheduled start'
+        : reason
 
     try {
       await applyCancellationPaymentPolicy(booking, booking.status, {
@@ -1159,7 +1173,7 @@ export const bookingService = {
 
     const updated = await bookingRepo.update(bookingId, {
       status: 'cancelled',
-      cancellationReason: reason,
+      cancellationReason: recordedCancellationReason,
       cancelledByUser: { connect: { id: user.id } },
       cancelledAt: cancellationTime,
     })
@@ -1240,13 +1254,7 @@ export const bookingService = {
     if (isClientCancelling && isConfirmedBookingCancellation) {
       try {
         if (!clientEmail) throw new Error('Missing client email for cancellation confirmation')
-        const policy = computeConfirmedCancellationPolicy({
-          scheduledStart: booking.scheduledStart,
-          cancelledAt: cancellationTime,
-          totalAmount: booking.totalAmount,
-          subtotal: booking.subtotal,
-          platformFee: booking.platformFee,
-        })
+        const policy = clientCancellationPolicy
         if (!policy) throw new Error('Unable to calculate client cancellation email outcome')
         const emailOutcome = getClientSelfCancellationEmailOutcome(policy)
         await loopsEmailService.sendClientSelfCancellationConfirmation({
