@@ -1,6 +1,6 @@
 'use client'
 
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import Link from 'next/link'
 import { useSearchParams } from 'next/navigation'
 import { ChevronLeft, ChevronRight, Eye } from 'lucide-react'
@@ -137,14 +137,19 @@ function BookingTable({ bookings }: { bookings: BookingRead[] }) {
 
 export default function AdminBookingsPage() {
   const searchParams = useSearchParams()
-  const [activeGroup, setActiveGroup] = useState('all')
+  const [activeGroup, setActiveGroup] = useState(() => {
+    const filter = searchParams.get('filter')
+    return filter && GROUPS.some((group) => group.key === filter) ? filter : 'all'
+  })
   const [bookings, setBookings] = useState<BookingRead[]>([])
   const [page, setPage] = useState(1)
   const [total, setTotal] = useState(0)
   const [hasNext, setHasNext] = useState(false)
   const [loading, setLoading] = useState(true)
+  const loadRequestRef = useRef(0)
 
   const load = useCallback(async (group: string, p: number) => {
+    const requestId = ++loadRequestRef.current
     setLoading(true)
     try {
       const g = GROUPS.find(g => g.key === group)
@@ -153,37 +158,37 @@ export default function AdminBookingsPage() {
         : undefined
 
       const res = await adminApi.listBookings({ page: p, status: statusParam })
+      if (requestId !== loadRequestRef.current) return
+
       setBookings(res.data?.items ?? [])
       setTotal(res.data?.total ?? 0)
       setHasNext(res.data?.has_next ?? false)
       resetLoadError('admin-bookings')
     } catch {
+      if (requestId !== loadRequestRef.current) return
       reportLoadError('admin-bookings', 'Failed to load bookings.')
     } finally {
-      setLoading(false)
+      if (requestId === loadRequestRef.current) setLoading(false)
     }
   }, [])
 
   useEffect(() => {
-    setPage(1)
-    load(activeGroup, 1)
-  }, [activeGroup, load])
-
-  useEffect(() => {
     load(activeGroup, page)
-  }, [page]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [activeGroup, page, load])
 
   useEffect(() => {
     const filter = searchParams.get('filter')
-    if (filter && GROUPS.some((g) => g.key === filter)) {
-      setActiveGroup(filter)
-      setPage(1)
-    }
+    const nextGroup = filter && GROUPS.some((group) => group.key === filter) ? filter : 'all'
+    setActiveGroup(nextGroup)
+    setPage(1)
   }, [searchParams])
 
   return (
     <div className="space-y-6">
-      <Tabs value={activeGroup} onValueChange={v => { setActiveGroup(v) }}>
+      <Tabs value={activeGroup} onValueChange={v => {
+        setActiveGroup(v)
+        setPage(1)
+      }}>
       <TabsList className="scrollbar-hide h-auto w-full justify-start gap-1 overflow-x-auto whitespace-nowrap pb-1 [-webkit-overflow-scrolling:touch]">
           {GROUPS.map(g => (
             <TabsTrigger key={g.key} value={g.key}>
