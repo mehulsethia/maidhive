@@ -6,6 +6,7 @@ import { clientRepo } from '@/server/repositories/client.repo'
 import { pushInAppNotification } from '@/server/services/in-app-notification.service'
 import { ok, err } from '@/server/response'
 import { createReviewSchema } from '@/server/schemas/review.schema'
+import { cleanerReliabilityService } from '@/server/services/cleaner-reliability.service'
 
 export const POST = requireClient(async (req: NextRequest, ctx, user) => {
   const { bookingId } = await ctx.params
@@ -35,6 +36,12 @@ export const POST = requireClient(async (req: NextRequest, ctx, user) => {
     comment: parsed.data.comment,
     isPublic: parsed.data.is_public,
   })
+  try {
+    await cleanerReliabilityService.recalculate(booking.cleanerId)
+  } catch (reliabilityError) {
+    await cleanerReliabilityService.markDirty(booking.cleanerId)
+    console.error('reviews.create.reliability failed', reliabilityError)
+  }
 
   try {
     await pushInAppNotification({

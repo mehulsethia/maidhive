@@ -17,7 +17,8 @@
     "test:e2e:matrix": "E2E_BROWSER_MATRIX=1 playwright test --grep @smoke",
     "test:preprod": "npm test && npm run build && npm run test:e2e:smoke",
     "backfill:notifications": "node scripts/backfill-notifications.cjs",
-    "reconcile:backfill": "node scripts/reconcile-backfill.cjs"
+    "reconcile:backfill": "node scripts/reconcile-backfill.cjs",
+    "reliability:backfill": "node scripts/backfill-cleaner-reliability.cjs"
   },
   "dependencies": {
     "@hookform/resolvers": "^3.9.1",

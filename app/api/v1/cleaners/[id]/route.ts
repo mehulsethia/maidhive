@@ -2,6 +2,7 @@ import { cleanerRepo } from '@/server/repositories/cleaner.repo'
 import { db } from '@/server/db'
 import { ok, err } from '@/server/response'
 import { isNewCleanerByCompletedJobs } from '@/lib/cleaner-badges'
+import { cleanerReliabilityService } from '@/server/services/cleaner-reliability.service'
 
 export async function GET(_req: Request, ctx: { params: Promise<{ id: string }> }) {
   const { id } = await ctx.params
@@ -20,6 +21,7 @@ export async function GET(_req: Request, ctx: { params: Promise<{ id: string }> 
       where: {
         cleanerId: cleaner.id,
         status: 'completed',
+        payment: { is: { status: 'transferred' } },
       },
       select: {
         scheduledStart: true,
@@ -67,13 +69,21 @@ export async function GET(_req: Request, ctx: { params: Promise<{ id: string }> 
       }
     : cleaner.user
 
+  const publicSuperCleanerEnabled =
+    await cleanerReliabilityService.publicFeatureEnabled()
+  const { reliabilitySnapshot: _privateReliability, ...publicCleaner } = cleaner
+
   return ok({
-    ...cleaner,
+    ...publicCleaner,
     totalJobs: completedBookings.length,
     newCleanerBadge: isNewCleanerByCompletedJobs(completedBookings.length),
-    averageRating: reviewAgg._avg.rating ?? null,
+    averageRating:
+      completedBookings.length >= 5 ? reviewAgg._avg.rating ?? null : null,
     user: sanitizedUser,
-    on_time_percentage: onTimePercentage,
+    ...cleanerReliabilityService.publicMetrics(
+      cleaner.reliabilitySnapshot,
+      publicSuperCleanerEnabled,
+    ),
     avg_response_minutes: avgResponseMinutes,
   })
 }

@@ -195,6 +195,11 @@ export const bookingRepo = {
     totalAmount: number
     acceptBy: Date
     originalScheduledStart?: Date
+    serviceLatitude?: number
+    serviceLongitude?: number
+    geocodingProvider?: string
+    geocodedAt?: Date
+    geocodingStatus?: string
     status?: string
   }) =>
     db.booking.create({ data, include: bookingInclude() }),

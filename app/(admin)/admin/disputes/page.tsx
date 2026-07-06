@@ -139,6 +139,11 @@ function DisputeCard({
                 </p>
               )}
             </div>
+            {dispute.issue_type === 'cleaner_no_show' && dispute.no_show_finding && (
+              <p className="mt-2 text-xs font-medium text-slate-700">
+                Reliability finding: {dispute.no_show_finding === 'confirmed' ? 'Confirmed cleaner no-show' : 'Report not confirmed'}
+              </p>
+            )}
             <p className="text-xs text-muted-foreground mt-0.5">
               Raised {formatDate(dispute.created_at)}
             </p>
@@ -245,6 +250,7 @@ export default function AdminDisputesPage() {
   const [resolveNote, setResolveNote] = useState('')
   const [refundAmount, setRefundAmount] = useState('')
   const [chargePercentage, setChargePercentage] = useState('')
+  const [noShowFinding, setNoShowFinding] = useState('')
   const [resolving, setResolving] = useState(false)
 
   const load = useCallback(async () => {
@@ -314,6 +320,14 @@ export default function AdminDisputesPage() {
     if (refund !== null && (Number.isNaN(refund) || refund <= 0)) {
       toast.error('Refund amount must be greater than 0.'); return
     }
+    if (
+      resolveTarget.issue_type === 'cleaner_no_show' &&
+      noShowFinding !== 'confirmed' &&
+      noShowFinding !== 'rejected'
+    ) {
+      toast.error('Confirm or reject the cleaner no-show finding.')
+      return
+    }
 
     setResolving(true)
     try {
@@ -322,6 +336,7 @@ export default function AdminDisputesPage() {
         resolution_note: string
         refund_amount?: number
         charge_percentage?: number
+        no_show_finding?: 'confirmed' | 'rejected'
       } = {
         resolution_type: resolveType,
         resolution_note: resolveNote,
@@ -331,6 +346,9 @@ export default function AdminDisputesPage() {
       }
       if (['no_refund', 'payment_released'].includes(resolveType) && chargePct !== null) {
         payload.charge_percentage = chargePct
+      }
+      if (resolveTarget.issue_type === 'cleaner_no_show') {
+        payload.no_show_finding = noShowFinding as 'confirmed' | 'rejected'
       }
 
       await adminApi.resolveDispute(resolveTarget.id, {
@@ -342,6 +360,7 @@ export default function AdminDisputesPage() {
       setRefundAmount('')
       setChargePercentage('')
       setResolveType('no_refund')
+      setNoShowFinding('')
       load()
     } catch (err: any) {
       toast.error(err.message ?? 'Failed to resolve dispute.')
@@ -433,6 +452,7 @@ export default function AdminDisputesPage() {
           setRefundAmount('')
           setChargePercentage('')
           setResolveType('no_refund')
+          setNoShowFinding('')
         }}
       >
         <DialogTitle>Resolve dispute</DialogTitle>
@@ -455,6 +475,24 @@ export default function AdminDisputesPage() {
                 ))}
               </Select>
             </div>
+
+            {resolveTarget.issue_type === 'cleaner_no_show' && (
+              <div>
+                <Label>Cleaner no-show finding</Label>
+                <Select
+                  value={noShowFinding}
+                  onChange={e => setNoShowFinding(e.target.value)}
+                  className="mt-1"
+                >
+                  <option value="">Select a finding</option>
+                  <option value="confirmed">Confirmed cleaner no-show</option>
+                  <option value="rejected">Report not confirmed</option>
+                </Select>
+                <p className="mt-1 text-xs text-muted-foreground">
+                  A confirmed finding immediately updates reliability and issues a 90-day strike.
+                </p>
+              </div>
+            )}
 
             {resolveType === 'partial_refund' && (
               <div>

@@ -7,6 +7,7 @@ import { computeCleanerOnboardingProgress, validateCleanerSubmissionRequirements
 import { ok, err } from '@/server/response'
 import { updateCleanerSchema } from '@/server/schemas/cleaner.schema'
 import { deriveCleanerLifecycleStatus } from '@/lib/cleaner-status'
+import { cleanerReliabilityService } from '@/server/services/cleaner-reliability.service'
 
 function withCleanerAliases(cleaner: any) {
   const rawSupplies = cleaner.cleaningSupplies
@@ -76,6 +77,7 @@ export const GET = requireCleaner(async (req, _ctx, user) => {
       where: {
         cleanerId: cleaner.id,
         status: 'completed',
+        payment: { is: { status: 'transferred' } },
       },
       select: {
         scheduledStart: true,
@@ -123,6 +125,15 @@ export const GET = requireCleaner(async (req, _ctx, user) => {
   const avgResponseMinutes =
     respondedBookings.length > 0 ? Math.round(totalResponseMinutes / respondedBookings.length) : 0
   const authSessionUser = await getAuthSessionUser(req)
+  let reliability = cleaner.reliabilitySnapshot
+  try {
+    reliability = await cleanerReliabilityService.recalculate(cleaner.id)
+  } catch (error) {
+    console.error('cleaner.me.reliability_recalculate_failed', {
+      cleaner_id: cleaner.id,
+      message: error instanceof Error ? error.message : String(error),
+    })
+  }
 
   return ok({
     cleaner: {
@@ -143,6 +154,26 @@ export const GET = requireCleaner(async (req, _ctx, user) => {
         stripeOnboardingComplete: cleaner.stripeOnboardingComplete,
         profileComplete: cleaner.profileComplete,
       }),
+      reliability: reliability
+        ? {
+            is_super_cleaner: reliability.isSuperCleaner,
+            completed_released_count: reliability.completedReleasedCount,
+            average_rating: reliability.averageRating === null ? null : Number(reliability.averageRating),
+            cancellation_rate: reliability.cancellationRate === null ? null : Number(reliability.cancellationRate),
+            cancellation_numerator: reliability.cancellationNumerator,
+            cancellation_denominator: reliability.cancellationDenominator,
+            last_minute_incidents_30d: reliability.lastMinuteIncidentCount30d,
+            no_shows_60d: reliability.noShowCount60d,
+            verified_job_count: reliability.verifiedJobCount,
+            on_time_percentage:
+              reliability.onTimeRate === null ? null : Math.round(Number(reliability.onTimeRate) * 100),
+            active_strike_count: reliability.activeStrikeCount,
+            criteria: reliability.criteria,
+            recovery_cancellation_started_at: reliability.recoveryCancellationStartedAt,
+            recovery_no_show_started_at: reliability.recoveryNoShowStartedAt,
+            last_calculated_at: reliability.lastCalculatedAt,
+          }
+        : null,
     },
     onboarding,
   })

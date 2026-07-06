@@ -5,6 +5,8 @@ import { loopsEmailService } from './loops-email.service'
 import { bookingService } from './booking.service'
 import { pushInAppNotification } from './in-app-notification.service'
 import { AMENDMENT_EXPIRED_BODY, AMENDMENT_EXPIRED_TITLE } from '@/lib/booking-amendment'
+import type Stripe from 'stripe'
+import { cleanerReliabilityService } from './cleaner-reliability.service'
 
 const AUTO_COMPLETION_GRACE_MINUTES = 5
 
@@ -222,6 +224,16 @@ export const paymentLifecycleService = {
         }
 
         summary.released += 1
+        try {
+          await cleanerReliabilityService.recalculate(payment.booking.cleanerId, releasedAt)
+        } catch (error) {
+          await cleanerReliabilityService.markDirty(payment.booking.cleanerId)
+          console.error('cleaner_reliability.release_recalculate_failed', {
+            cleaner_id: payment.booking.cleanerId,
+            booking_id: payment.booking.id,
+            message: error instanceof Error ? error.message : String(error),
+          })
+        }
 
         await pushInAppNotification({
           userId: payment.booking.cleaner.userId,
@@ -233,6 +245,103 @@ export const paymentLifecycleService = {
       } catch (e: any) {
         summary.failed += 1
         summary.errors.push(`${payment.id}: ${e?.message ?? 'release_transition_failed'}`)
+      }
+    }
+
+    return summary
+  },
+
+  async reconcileCancelledPaymentTransfers(limit = 200) {
+    const safeLimit = Math.min(Math.max(1, limit), 50)
+    const candidates = await db.payment.findMany({
+      where: {
+        status: 'captured',
+        transferredAt: null,
+        stripeTransferId: null,
+        booking: {
+          status: 'cancelled',
+        },
+      },
+      include: {
+        booking: {
+          include: {
+            cleaner: true,
+          },
+        },
+      },
+      orderBy: { capturedAt: 'desc' },
+      take: safeLimit,
+    })
+
+    const summary = {
+      checked: candidates.length,
+      reconciled: 0,
+      missing_transfer: 0,
+      invalid_transfer: 0,
+      skipped_concurrent: 0,
+      failed: 0,
+      errors: [] as string[],
+    }
+
+    for (const payment of candidates) {
+      try {
+        const intent = await stripe.paymentIntents.retrieve(payment.stripePaymentIntentId, {
+          expand: ['latest_charge.transfer'],
+        })
+        const charge = await resolvePaymentIntentCharge(intent)
+        const transfer = await resolveChargeTransfer(charge)
+
+        if (!charge || !transfer) {
+          summary.missing_transfer += 1
+          continue
+        }
+
+        const destination = typeof transfer.destination === 'string'
+          ? transfer.destination
+          : transfer.destination?.id ?? null
+        const expectedDestination = payment.booking.cleaner.stripeAccountId
+        const netTransferCents = transfer.amount - transfer.amount_reversed
+
+        if (
+          intent.status !== 'succeeded' ||
+          charge.status !== 'succeeded' ||
+          charge.captured !== true ||
+          transfer.currency !== payment.currency.toLowerCase() ||
+          !expectedDestination ||
+          destination !== expectedDestination ||
+          netTransferCents <= 0
+        ) {
+          summary.invalid_transfer += 1
+          continue
+        }
+
+        const transferredAt = new Date(transfer.created * 1000)
+        const updated = await db.payment.updateMany({
+          where: {
+            id: payment.id,
+            status: 'captured',
+            transferredAt: null,
+            stripeTransferId: null,
+          },
+          data: {
+            status: 'transferred',
+            stripeChargeId: charge.id,
+            stripeTransferId: transfer.id,
+            cleanerPayout: netTransferCents / 100,
+            transferredAt,
+            payoutScheduledAt: payment.payoutScheduledAt ?? transferredAt,
+          },
+        })
+
+        if (updated.count === 0) {
+          summary.skipped_concurrent += 1
+          continue
+        }
+
+        summary.reconciled += 1
+      } catch (e: any) {
+        summary.failed += 1
+        summary.errors.push(`${payment.id}: ${e?.message ?? 'cancelled_transfer_reconcile_failed'}`)
       }
     }
 
@@ -532,4 +641,18 @@ export const paymentLifecycleService = {
       cancelled_pending_intents: cancelledIntents + cancelledPendingIntents + cancelledDraftIntents,
     }
   },
+}
+
+async function resolvePaymentIntentCharge(intent: Stripe.PaymentIntent) {
+  if (!intent.latest_charge) return null
+  if (typeof intent.latest_charge !== 'string') return intent.latest_charge
+  return stripe.charges.retrieve(intent.latest_charge, {
+    expand: ['transfer'],
+  })
+}
+
+async function resolveChargeTransfer(charge: Stripe.Charge | null) {
+  if (!charge?.transfer) return null
+  if (typeof charge.transfer !== 'string') return charge.transfer
+  return stripe.transfers.retrieve(charge.transfer)
 }

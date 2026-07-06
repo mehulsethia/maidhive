@@ -467,6 +467,53 @@ test.describe('F20 commercial and lifecycle responsive regression @smoke', () =>
       }
     })
 
+    test('E2E-RESP-13 client-cancelled cleaner cards show compensation without client charges', async ({ page }) => {
+      test.skip(!hasRoleCredentialCandidates('cleaner'), 'Cleaner E2E credentials are required')
+
+      const cancelledBooking = bookingFixture({
+        status: 'cancelled',
+        subtotal: 32,
+        platform_fee: 3.2,
+        cleaner_payout: 32,
+        total_amount: 35.2,
+        cancelled_by: 'client-user',
+        cancelled_at: isoHoursFromNow(-2),
+        cancellation_reason: 'Client Cancellation Less Than 12 Hours Before Scheduled Start',
+        payment: {
+          id: 'payment-responsive',
+          status: 'transferred',
+          amount: 35.2,
+          refund_amount: 22,
+          platform_fee: 1.2,
+          cleaner_payout: 12,
+          currency: 'eur',
+          transferred_at: isoHoursFromNow(-1),
+          created_at: isoHoursFromNow(-24),
+        },
+      })
+      await page.route('**/api/v1/bookings?*', (route) => fulfill(route, {
+        bookings: [cancelledBooking],
+        total: 1,
+        page: 1,
+        page_size: 20,
+        has_next: false,
+      }))
+      await page.route('**/api/v1/cleaners/me', (route) => fulfill(route, {
+        cleaner: { id: 'cleaner-profile', stripe_onboarding_complete: true },
+        onboarding: {},
+      }))
+
+      for (const viewport of VIEWPORTS) {
+        await page.setViewportSize(viewport)
+        await page.goto('/cleaner/bookings', { waitUntil: 'domcontentloaded' })
+        await expect(page.getByTestId('cleaner-cancellation-source').getByText('Cancelled by client')).toBeVisible()
+        await expect(page.getByText('Cleaner compensation: €12.00', { exact: true })).toBeVisible()
+        await expect(page.getByText('Cancellation charge: €13.20', { exact: true })).toHaveCount(0)
+        await expect(page.getByText('No cancellation charge', { exact: true })).toHaveCount(0)
+        await expectNoHorizontalOverflow(page, `client-cancelled cleaner card at ${viewport.name}`)
+      }
+    })
+
     test('E2E-RESP-12 cleaner dashboard supplies responsibility stays explicit at all viewports', async ({ page }) => {
       test.skip(!hasRoleCredentialCandidates('cleaner'), 'Cleaner E2E credentials are required')
 

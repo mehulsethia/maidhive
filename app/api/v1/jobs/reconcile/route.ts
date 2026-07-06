@@ -4,6 +4,7 @@ import { config } from '@/server/config'
 import { paymentLifecycleService } from '@/server/services/payment-lifecycle.service'
 import { db } from '@/server/db'
 import { timingSafeEqual } from 'crypto'
+import { cleanerReliabilityService } from '@/server/services/cleaner-reliability.service'
 
 export const runtime = 'nodejs'
 export const maxDuration = 60
@@ -17,16 +18,20 @@ type ReconcileSummary = {
   expiry: Record<string, unknown>
   captures: Record<string, unknown>
   releases: Record<string, unknown>
+  cancellation_transfers: Record<string, unknown>
   auto_starts: Record<string, unknown>
   auto_completions: Record<string, unknown>
+  reliability: Record<string, unknown>
 }
 
-// POST /api/v1/jobs/reconcile
-// Intended for cron/scheduler usage.
-export async function POST(req: NextRequest) {
+export const GET = handleReconcile
+export const POST = handleReconcile
+
+async function handleReconcile(req: NextRequest) {
   const startedAt = Date.now()
   const runId = `reconcile_${crypto.randomUUID()}`
-  const source = req.headers.get('user-agent')?.toLowerCase().includes('vercel cron')
+  const userAgent = req.headers.get('user-agent')?.toLowerCase() ?? ''
+  const source = userAgent.includes('vercel cron') || userAgent.includes('vercel-cron')
     ? 'vercel_cron'
     : 'manual_or_api'
 
@@ -71,13 +76,58 @@ export async function POST(req: NextRequest) {
     const autoCompletionSummary = await runBatched((limit) => paymentLifecycleService.processAutoCompletions(limit))
     const captureSummary = await runBatched((limit) => paymentLifecycleService.processDueCaptures(limit))
     const releaseSummary = await runBatched((limit) => paymentLifecycleService.processDueReleaseTransitions(limit))
+    const cancellationTransferSummary = await paymentLifecycleService.reconcileCancelledPaymentTransfers(BATCH_LIMIT)
+    const reliabilityDueSummary = await runReliabilityStep(
+      () => cleanerReliabilityService.reconcileDue(BATCH_LIMIT),
+      'due',
+    )
+    const reliabilityCancellationSummary = await runReliabilityStep(
+      () => cleanerReliabilityService.reconcileCancellationEvents(BATCH_LIMIT),
+      'cancellation_events',
+    )
+    const reliabilityMissingSummary = await runReliabilityStep(
+      () => cleanerReliabilityService.reconcileMissing(BATCH_LIMIT),
+      'missing',
+    )
+    const previousReliabilityAuditAt =
+      await readPlatformConfigDate('super_cleaner.last_full_audit_at')
+    const shouldRunReliabilityAudit =
+      !previousReliabilityAuditAt ||
+      Date.now() - previousReliabilityAuditAt.getTime() >= 24 * 60 * 60 * 1000
+    const reliabilityAuditSummary = shouldRunReliabilityAudit
+      ? await runReliabilityStep(
+          () => runBatched((limit) => cleanerReliabilityService.reconcileAll(limit)),
+          'full_audit',
+        )
+      : { checked: 0, recalculated: 0, failed: 0, errors: [] }
+    if (
+      shouldRunReliabilityAudit &&
+      Number(reliabilityAuditSummary.failed ?? 0) === 0
+    ) {
+      await setPlatformConfig(
+        'super_cleaner.last_full_audit_at',
+        new Date().toISOString(),
+        'Last full cleaner reliability drift audit timestamp (UTC).',
+      )
+    }
 
     const summary: ReconcileSummary = {
       expiry: expirySummary as Record<string, unknown>,
       captures: captureSummary as Record<string, unknown>,
       releases: releaseSummary as Record<string, unknown>,
+      cancellation_transfers: cancellationTransferSummary as Record<string, unknown>,
       auto_starts: autoStartSummary as Record<string, unknown>,
       auto_completions: autoCompletionSummary as Record<string, unknown>,
+      reliability: mergeSummary(
+        mergeSummary(
+          mergeSummary(
+            reliabilityDueSummary as Record<string, unknown>,
+            reliabilityCancellationSummary as Record<string, unknown>,
+          ),
+          reliabilityMissingSummary as Record<string, unknown>,
+        ),
+        reliabilityAuditSummary as Record<string, unknown>,
+      ),
     }
 
     const failureCount = countSummaryFailures(summary)
@@ -122,6 +172,26 @@ export async function POST(req: NextRequest) {
       error: error instanceof Error ? error.message : String(error),
     })
     return err('Reconcile run failed', 500)
+  }
+}
+
+async function runReliabilityStep(
+  fn: () => Promise<Record<string, unknown>>,
+  stage: string,
+) {
+  try {
+    return await fn()
+  } catch (error) {
+    console.error('cleaner_reliability.reconcile_stage_failed', {
+      stage,
+      message: error instanceof Error ? error.message : String(error),
+    })
+    return {
+      checked: 0,
+      recalculated: 0,
+      failed: 1,
+      errors: [error instanceof Error ? error.message : String(error)],
+    }
   }
 }
 

@@ -26,6 +26,7 @@ import { formatCurrency, formatDate } from '@/lib/utils'
 import { pickupFullLabel } from '@/lib/transport-pickup'
 import type { CleanerRead, ReviewRead } from '@/types'
 import { toast } from 'sonner'
+import { SuperCleanerBadge } from '@/components/super-cleaner-badge'
 
 const displayFont = Bricolage_Grotesque({ subsets: ['latin'], weight: ['400', '500', '700', '800'] })
 const monoFont = IBM_Plex_Mono({ subsets: ['latin'], weight: ['400', '500', '600'] })
@@ -167,6 +168,7 @@ export default function CleanerProfilePage() {
   const nextAvailable = closestSlots[0]
   const cleanerImageUrl = (cleaner as any)?.profile_image_url ?? (cleaner as any)?.profileImageUrl ?? cleaner.user?.avatar_url
   const showNewCleanerBadge = cleaner.new_cleaner_badge ?? cleaner.total_jobs < 5
+  const publicAverageRating = cleaner.total_jobs >= 5 ? avgRating : 0
 
   function suppliesText(value?: string) {
     if (value === 'own_supplies') return 'Brings own supplies'
@@ -205,6 +207,7 @@ export default function CleanerProfilePage() {
                 <h1 className={`${displayFont.className} text-xl font-extrabold tracking-[-0.03em] text-white sm:text-3xl lg:text-4xl`}>
                   {cleanerName}
                 </h1>
+                {cleaner.super_cleaner && <SuperCleanerBadge onDark />}
                 {showNewCleanerBadge && (
                   <span
                     title="Newly approved cleaner on MaidHive."
@@ -275,10 +278,13 @@ export default function CleanerProfilePage() {
 
         <section className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
           <MetricCard title="Jobs Completed" value={cleaner.total_jobs} icon={<CheckCircle className="h-6 w-6 text-[#0d4bc9]" />} displayFont={displayFont.className} />
-          <MetricCard title="Average Rating" value={avgRating > 0 ? `${avgRating.toFixed(1)}/5` : 'No reviews yet'} icon={<Star className="h-6 w-6 text-amber-400" />} displayFont={displayFont.className} />
-          {completionRate !== null && (
-            <MetricCard title="On-time Rate" value={`${completionRate}%`} icon={<TrendingUp className="h-6 w-6 text-emerald-500" />} displayFont={displayFont.className} />
-          )}
+          <MetricCard title="Average Rating" value={publicAverageRating > 0 ? `${publicAverageRating.toFixed(1)}/5` : 'Not enough data yet'} icon={<Star className="h-6 w-6 text-amber-400" />} displayFont={displayFont.className} />
+          <MetricCard
+            title="On-time Rate"
+            value={completionRate !== null ? `${completionRate}%` : cleaner.on_time_label ?? 'Not enough data yet'}
+            icon={<TrendingUp className="h-6 w-6 text-emerald-500" />}
+            displayFont={displayFont.className}
+          />
         </section>
 
         <section className="rounded-[1.5rem] border border-slate-200/80 bg-white/90 p-5 shadow-[0_18px_45px_rgba(11,33,78,0.08)] backdrop-blur-sm sm:p-6">
@@ -442,9 +448,9 @@ export default function CleanerProfilePage() {
               <Card className="h-fit border-slate-200">
                 <CardContent className="px-5 pb-5 pt-6 text-center sm:px-6 sm:pb-6 sm:pt-6">
                   <p className={`${displayFont.className} text-4xl font-bold tracking-[-0.02em] text-slate-900`}>
-                    {avgRating > 0 ? avgRating.toFixed(1) : '—'}
+                    {publicAverageRating > 0 ? publicAverageRating.toFixed(1) : '—'}
                   </p>
-                  <StarRating rating={avgRating} size="md" showValue={false} className="mt-1 justify-center" />
+                  <StarRating rating={publicAverageRating} size="md" showValue={false} className="mt-1 justify-center" />
                   <p className="mt-1 text-sm text-slate-500">
                     {deferredReviews.length} Review{deferredReviews.length !== 1 ? 's' : ''}
                   </p>

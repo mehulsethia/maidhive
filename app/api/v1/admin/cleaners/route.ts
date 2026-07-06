@@ -29,6 +29,25 @@ export const GET = requireAdmin(async (req: NextRequest) => {
         _avg: { rating: true },
       })
     : []
+  const cancellationWindowAgg = cleanerIds.length && db.cleanerCancellationEvent?.groupBy
+    ? await db.cleanerCancellationEvent.groupBy({
+        by: ['cleanerId', 'cancellationWindow'],
+        where: {
+          cleanerId: { in: cleanerIds },
+          acceptedBooking: true,
+        },
+        _count: { _all: true },
+      })
+    : []
+  const cancellationWindowsByCleaner = new Map<
+    string,
+    Record<string, number>
+  >()
+  for (const entry of cancellationWindowAgg) {
+    const counts = cancellationWindowsByCleaner.get(entry.cleanerId) ?? {}
+    counts[entry.cancellationWindow] = entry._count._all
+    cancellationWindowsByCleaner.set(entry.cleanerId, counts)
+  }
   const completedJobsByCleanerId = new Map<string, number>(
     completedJobsAgg.map((entry) => [entry.cleanerId, entry._count._all]),
   )
@@ -77,6 +96,64 @@ export const GET = requireAdmin(async (req: NextRequest) => {
       trial_period_flag: completedJobs < 10,
       total_jobs: completedJobs,
       average_rating: avgRatingByCleanerId.get(cleaner.id) ?? null,
+      reliability: cleaner.reliabilitySnapshot
+        ? {
+            is_super_cleaner: cleaner.reliabilitySnapshot.isSuperCleaner,
+            completed_released_count: cleaner.reliabilitySnapshot.completedReleasedCount,
+            cancellation_rate:
+              cleaner.reliabilitySnapshot.cancellationRate === null
+                ? null
+                : Number(cleaner.reliabilitySnapshot.cancellationRate),
+            cancellation_numerator: cleaner.reliabilitySnapshot.cancellationNumerator,
+            cancellation_denominator: cleaner.reliabilitySnapshot.cancellationDenominator,
+            last_minute_incidents_30d:
+              cleaner.reliabilitySnapshot.lastMinuteIncidentCount30d,
+            no_shows_60d: cleaner.reliabilitySnapshot.noShowCount60d,
+            verified_job_count: cleaner.reliabilitySnapshot.verifiedJobCount,
+            on_time_percentage:
+              cleaner.reliabilitySnapshot.onTimeRate === null
+                ? null
+                : Math.round(Number(cleaner.reliabilitySnapshot.onTimeRate) * 100),
+            active_strike_count: cleaner.reliabilitySnapshot.activeStrikeCount,
+            criteria: cleaner.reliabilitySnapshot.criteria,
+            recovery_cancellation_started_at:
+              cleaner.reliabilitySnapshot.recoveryCancellationStartedAt,
+            recovery_no_show_started_at:
+              cleaner.reliabilitySnapshot.recoveryNoShowStartedAt,
+            last_calculated_at: cleaner.reliabilitySnapshot.lastCalculatedAt,
+          }
+        : null,
+      reliability_incidents: (cleaner.reliabilityIncidents ?? []).map((incident) => ({
+        id: incident.id,
+        type: incident.incidentType,
+        incident_date: incident.incidentDate,
+        booking_count: incident.bookingIds.length,
+        occurred_at: incident.occurredAt,
+      })),
+      cancellation_windows: {
+        more_than_24h:
+          cancellationWindowsByCleaner.get(cleaner.id)?.more_than_24h ?? 0,
+        between_12h_24h:
+          cancellationWindowsByCleaner.get(cleaner.id)?.between_12h_24h ?? 0,
+        less_than_12h:
+          cancellationWindowsByCleaner.get(cleaner.id)?.less_than_12h ?? 0,
+      },
+      cancellation_events: (cleaner.cancellationEvents ?? []).map((event) => ({
+        id: event.id,
+        booking_id: event.bookingId,
+        window: event.cancellationWindow,
+        accepted_booking: event.acceptedBooking,
+        incident_id: event.incidentId,
+        hours_before_start: Number(event.hoursBeforeStart),
+        cancelled_at: event.cancelledAt,
+      })),
+      reliability_strikes: (cleaner.strikes ?? []).map((strike) => ({
+        id: strike.id,
+        type: strike.strikeType,
+        reason: strike.reason,
+        issued_at: strike.createdAt,
+        expires_at: strike.expiresAt,
+      })),
       created_at: cleaner.createdAt,
     }
   })

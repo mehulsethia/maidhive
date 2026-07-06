@@ -777,6 +777,7 @@ export const adminApi = {
     resolution_note: string
     refund_amount?: number
     charge_percentage?: number
+    no_show_finding?: 'confirmed' | 'rejected'
   }) =>
     request<APIResponse<AdminDispute>>(`/disputes/${id}/resolve`, {
       method: 'POST',

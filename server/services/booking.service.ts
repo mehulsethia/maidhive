@@ -15,6 +15,8 @@ import { computeConfirmedCancellationPolicy, moneyFromCents } from '@/lib/cancel
 import { getClientSelfCancellationEmailOutcome } from '@/lib/client-self-cancellation-email'
 import { AMENDMENT_EXPIRED_BODY, AMENDMENT_EXPIRED_TITLE, AMENDMENT_EXPIRY_OUTCOME_COPY } from '@/lib/booking-amendment'
 import { DEFAULT_PLATFORM_FEE_PCT } from '@/lib/platform-fee'
+import { cleanerReliabilityService } from './cleaner-reliability.service'
+import { geocodingService } from './geocoding.service'
 import type { User } from '@prisma/client'
 
 const BOOKING_ACCEPT_TTL_MINUTES = Number(process.env.BOOKING_ACCEPT_TTL_MINUTES ?? 1440)
@@ -29,7 +31,6 @@ const AMEND_FAST_RESPONSE_MINUTES = 15
 const AMEND_STANDARD_RESPONSE_MINUTES = 60
 const REAUTH_IMMEDIATE_THRESHOLD_HOURS = 48
 const REAUTH_FAILURE_GRACE_HOURS = 24
-const CLEANER_REPEAT_CANCELLATION_WINDOW_DAYS = 30
 const BOOKING_PRE_BUFFER_MS = 15 * 60 * 1000
 const BOOKING_POST_BUFFER_MS = 15 * 60 * 1000
 const NO_SHOW_REPORT_DELAY_MINUTES = 30
@@ -202,6 +203,12 @@ export const bookingService = {
       requiresPickup && !data.special_instructions.includes('Pickup location snapshot:')
         ? `${data.special_instructions}\n\nPickup location snapshot: ${pickupSnapshot}`
         : data.special_instructions
+    const geocoding = await geocodingService.geocodeServiceAddress({
+      address: data.address,
+      city: data.city,
+      postcode: data.postcode,
+      country: data.country,
+    })
 
     const baseCreatePayload = {
       clientId: client.id,
@@ -225,6 +232,11 @@ export const bookingService = {
       totalAmount: pricing.total_amount,
       acceptBy,
       originalScheduledStart: scheduledStart,
+      serviceLatitude: geocoding.latitude ?? undefined,
+      serviceLongitude: geocoding.longitude ?? undefined,
+      geocodingProvider: geocoding.provider,
+      geocodedAt: geocoding.status === 'verified' ? new Date() : undefined,
+      geocodingStatus: geocoding.status,
     }
 
     const overlappingDraft = await bookingRepo.findOverlappingDraftForClient({
@@ -254,6 +266,11 @@ export const bookingService = {
         cleanerPayout: baseCreatePayload.cleanerPayout,
         totalAmount: baseCreatePayload.totalAmount,
         acceptBy: baseCreatePayload.acceptBy,
+        serviceLatitude: baseCreatePayload.serviceLatitude,
+        serviceLongitude: baseCreatePayload.serviceLongitude,
+        geocodingProvider: baseCreatePayload.geocodingProvider,
+        geocodedAt: baseCreatePayload.geocodedAt,
+        geocodingStatus: baseCreatePayload.geocodingStatus,
       })
     }
 
@@ -313,7 +330,11 @@ export const bookingService = {
       if (!Number.isFinite(startWindowClosesAtMs) || Date.now() > startWindowClosesAtMs) {
         throw new ServiceError('Start Job is unavailable more than 24 hours after scheduled end time.', 400)
       }
-      return startBookingFlow(bookingId, { initiatedBy: 'cleaner', startedAt: new Date() })
+      return startBookingFlow(bookingId, {
+        initiatedBy: 'cleaner',
+        startedAt: new Date(),
+        startLocation: payload.start_location,
+      })
     }
 
     if (action === 'accept') {
@@ -332,6 +353,7 @@ export const bookingService = {
         payBy: null,
         ...clearedProposalState(),
       })
+      await refreshReliabilitySafely(cleaner!.id, 'booking_accepted')
       await pushInAppNotification({
         userId: booking.client.userId,
         type: 'booking_accepted',
@@ -1179,12 +1201,23 @@ export const bookingService = {
     })
 
     if (cleaner && booking.cleanerId === cleaner.id) {
-      await maybeApplyCleanerCancellationStrike({
-        booking,
-        cleanerId: cleaner.id,
-        cancelledByUserId: user.id,
-        cancellationReason: reason,
-      })
+      try {
+        await cleanerReliabilityService.recordCleanerCancellation({
+          cleanerId: cleaner.id,
+          bookingId: booking.id,
+          scheduledStart: booking.scheduledStart,
+          cancelledAt: cancellationTime,
+          issuedBy: user.id,
+          acceptedBooking: ['accepted', 'confirmed'].includes(booking.status),
+        })
+      } catch (error) {
+        await cleanerReliabilityService.markDirty(cleaner.id)
+        console.error('cleaner_reliability.cancellation_record_failed', {
+          cleaner_id: cleaner.id,
+          booking_id: booking.id,
+          message: error instanceof Error ? error.message : String(error),
+        })
+      }
       await pushInAppNotification({
         userId: booking.cleaner.userId,
         type: 'booking_cancelled',
@@ -1781,6 +1814,11 @@ async function startBookingFlow(
   args: {
     initiatedBy: 'cleaner' | 'system'
     startedAt: Date
+    startLocation?: {
+      latitude: number
+      longitude: number
+      accuracy_m?: number
+    }
   },
 ) {
   const booking = await bookingRepo.findById(bookingId)
@@ -1835,6 +1873,26 @@ async function startBookingFlow(
 
   if (args.initiatedBy === 'cleaner') {
     try {
+      await cleanerReliabilityService.recordStartVerification({
+        bookingId,
+        cleanerId: booking.cleanerId,
+        scheduledStart: booking.scheduledStart,
+        startedAt: args.startedAt,
+        serviceLatitude:
+          booking.serviceLatitude === null ? null : Number(booking.serviceLatitude),
+        serviceLongitude:
+          booking.serviceLongitude === null ? null : Number(booking.serviceLongitude),
+        startLocation: args.startLocation,
+      })
+    } catch (error) {
+      await cleanerReliabilityService.markDirty(booking.cleanerId)
+      console.error('cleaner_reliability.start_verification_failed', {
+        cleaner_id: booking.cleanerId,
+        booking_id: bookingId,
+        message: error instanceof Error ? error.message : String(error),
+      })
+    }
+    try {
       await loopsEmailService.sendClientBookingStarted({
         email: booking.client.user.email,
         fullName: booking.client.user.name ?? 'Client',
@@ -1849,78 +1907,6 @@ async function startBookingFlow(
   }
 
   return updated
-}
-
-async function maybeApplyCleanerCancellationStrike(args: {
-  booking: NonNullable<Awaited<ReturnType<typeof bookingRepo.findById>>>
-  cleanerId: string
-  cancelledByUserId: string
-  cancellationReason?: string
-}) {
-  const { booking, cleanerId, cancelledByUserId, cancellationReason } = args
-  if (!['accepted', 'confirmed'].includes(booking.status)) return
-
-  const now = new Date()
-  const cancelledLocalDay = cyprusDateStr(now)
-  const bookingLocalDay = cyprusDateStr(booking.scheduledStart)
-  if (cancelledLocalDay !== bookingLocalDay) return
-
-  const normalizedReason = normalizeCancellationReason(cancellationReason)
-  const eventKey = `${bookingLocalDay}|${normalizedReason}`
-  const eventReason = `event_key=${eventKey}|Same-day cleaner cancellation event`
-
-  const dayStart = startOfDayCyprus(now)
-  const dayEnd = endOfDayCyprus(now)
-  const existingTodayEvent = await db.cleanerStrike.findFirst({
-    where: {
-      cleanerId,
-      strikeType: 'cleaner_same_day_cancellation_event',
-      reason: { startsWith: `event_key=${eventKey}|` },
-      createdAt: { gte: dayStart, lte: dayEnd },
-    },
-  })
-  if (existingTodayEvent) return
-
-  await db.cleanerStrike.create({
-    data: {
-      cleanerId,
-      bookingId: booking.id,
-      strikeType: 'cleaner_same_day_cancellation_event',
-      reason: eventReason,
-      issuedBy: cancelledByUserId,
-    },
-  })
-
-  const repeatWindowStart = new Date(now.getTime() - CLEANER_REPEAT_CANCELLATION_WINDOW_DAYS * 24 * 60 * 60 * 1000)
-  const previousEvents = await db.cleanerStrike.count({
-    where: {
-      cleanerId,
-      strikeType: 'cleaner_same_day_cancellation_event',
-      reason: { contains: `|${normalizedReason}|` },
-      createdAt: { gte: repeatWindowStart, lt: dayStart },
-    },
-  })
-
-  if (previousEvents < 1) return
-
-  await db.cleanerStrike.create({
-    data: {
-      cleanerId,
-      bookingId: booking.id,
-      strikeType: 'cleaner_repeat_cancellation_strike',
-      reason: `Repeat same-day cancellation event within ${CLEANER_REPEAT_CANCELLATION_WINDOW_DAYS} days (${normalizedReason})`,
-      issuedBy: cancelledByUserId,
-    },
-  })
-}
-
-function normalizeCancellationReason(reason?: string) {
-  const normalized = String(reason ?? 'unspecified')
-    .trim()
-    .toLowerCase()
-    .replace(/\s+/g, ' ')
-    .slice(0, 120)
-  return normalized || 'unspecified'
 }
 
 async function applyCancellationPaymentPolicy(
@@ -2007,6 +1993,19 @@ async function applyCancellationPaymentPolicy(
   })
 }
 
+async function refreshReliabilitySafely(cleanerId: string, trigger: string) {
+  try {
+    await cleanerReliabilityService.recalculate(cleanerId)
+  } catch (error) {
+    await cleanerReliabilityService.markDirty(cleanerId)
+    console.error('cleaner_reliability.recalculate_failed', {
+      cleaner_id: cleanerId,
+      trigger,
+      message: error instanceof Error ? error.message : String(error),
+    })
+  }
+}
+
 async function maybeAutoReleaseCompletedBooking(booking: BookingWithRelations) {
   if (booking.status !== 'completed') return null
   if (!booking.payment) return null
@@ -2038,6 +2037,8 @@ async function maybeAutoReleaseCompletedBooking(booking: BookingWithRelations) {
   })
 
   if (releaseUpdate.count === 0) return null
+
+  await refreshReliabilitySafely(booking.cleanerId, 'completed_released')
 
   await pushInAppNotification({
     userId: booking.cleaner.userId,

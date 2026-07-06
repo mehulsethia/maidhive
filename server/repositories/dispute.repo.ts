@@ -16,6 +16,7 @@ const disputeSelect = {
   responderRole: true,
   respondedAt: true,
   resolutionType: true,
+  noShowFinding: true,
   resolutionNote: true,
   refundAmount: true,
   resolvedBy: true,

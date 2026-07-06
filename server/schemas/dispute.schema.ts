@@ -26,6 +26,7 @@ export const resolveDisputeSchema = z.object({
   resolution_note: z.string().min(1),
   refund_amount: optionalPositiveNumber,
   charge_percentage: optionalPercentage,
+  no_show_finding: z.enum(['confirmed', 'rejected']).optional(),
 }).superRefine((value, ctx) => {
   if (value.resolution_type !== 'partial_refund') return
 

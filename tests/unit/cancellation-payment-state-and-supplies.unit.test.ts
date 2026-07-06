@@ -60,7 +60,7 @@ describe('normal cancellation payment releases', () => {
     expect(getAdminPaymentStateLabel(booking)).toBe('failed')
   })
 
-  it('renders semantic zero-charge copy on client and cleaner cards', () => {
+  it('keeps client cancellation charges off cleaner cards', () => {
     const booking = cancelledBooking({ payment: { id: 'payment_1', status: 'released' } })
     const clientMarkup = renderToStaticMarkup(
       createElement(CancellationPaymentBreakdown, { booking, compact: true }),
@@ -71,6 +71,40 @@ describe('normal cancellation payment releases', () => {
 
     expect(clientMarkup).toContain('No cancellation charge')
     expect(clientMarkup).not.toContain('€0.00')
+    expect(cleanerMarkup).not.toContain('cancellation charge')
+    expect(cleanerMarkup).toContain('No cleaner compensation')
+  })
+
+  it('shows only cleaner compensation for a charged client cancellation', () => {
+    const booking = cancelledBooking({
+      payment: {
+        id: 'payment_1',
+        status: 'transferred',
+        amount: 35.2,
+        refund_amount: 22,
+        platform_fee: 1.2,
+        cleaner_payout: 12,
+        transferred_at: '2026-07-01T06:01:00.000Z',
+      },
+    })
+    const cleanerMarkup = renderToStaticMarkup(
+      createElement(CancellationPaymentBreakdown, { booking, compact: true, audience: 'cleaner' }),
+    )
+
+    expect(cleanerMarkup).toContain('Cleaner compensation: €12.00')
+    expect(cleanerMarkup).not.toContain('Cancellation charge')
+    expect(cleanerMarkup).not.toContain('€13.20')
+  })
+
+  it('retains no-charge confirmation when the cleaner cancelled', () => {
+    const booking = cancelledBooking({
+      cancelled_by: 'cleaner_user',
+      payment: { id: 'payment_1', status: 'released' },
+    })
+    const cleanerMarkup = renderToStaticMarkup(
+      createElement(CancellationPaymentBreakdown, { booking, compact: true, audience: 'cleaner' }),
+    )
+
     expect(cleanerMarkup).toContain('No cancellation charge')
     expect(cleanerMarkup).toContain('No cleaner compensation')
   })

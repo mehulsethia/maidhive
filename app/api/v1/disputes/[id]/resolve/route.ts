@@ -9,6 +9,7 @@ import { resolveDisputeSchema } from '@/server/schemas/dispute.schema'
 import { pushInAppNotification } from '@/server/services/in-app-notification.service'
 import { db } from '@/server/db'
 import { getDisputeResolutionOutcome } from '@/lib/dispute-resolution'
+import { cleanerReliabilityService } from '@/server/services/cleaner-reliability.service'
 
 export const POST = requireAdmin(async (req: NextRequest, ctx, user) => {
   try {
@@ -23,6 +24,12 @@ export const POST = requireAdmin(async (req: NextRequest, ctx, user) => {
       // Idempotent behavior prevents confusing "already resolved" hard failures
       // when admin retries resolution from a stale UI state.
       return ok(dispute)
+    }
+    if (
+      dispute.issueType === 'cleaner_no_show' &&
+      !parsed.data.no_show_finding
+    ) {
+      return err('Confirm or reject the cleaner no-show finding', 422)
     }
 
     const payment = await paymentRepo.findByBookingId(dispute.bookingId)
@@ -147,6 +154,7 @@ export const POST = requireAdmin(async (req: NextRequest, ctx, user) => {
       status: 'resolved',
       resolutionType: parsed.data.resolution_type,
       resolutionNote: parsed.data.resolution_note,
+      noShowFinding: parsed.data.no_show_finding,
       refundAmount: resolvedRefundAmount,
       resolvedByUser: { connect: { id: user.id } },
       resolvedAt: new Date(),
@@ -161,6 +169,26 @@ export const POST = requireAdmin(async (req: NextRequest, ctx, user) => {
 
     const booking = await bookingRepo.findById(dispute.bookingId)
     if (booking) {
+      if (
+        dispute.issueType === 'cleaner_no_show' &&
+        parsed.data.no_show_finding === 'confirmed'
+      ) {
+        try {
+          await cleanerReliabilityService.recordConfirmedNoShow({
+            cleanerId: booking.cleanerId,
+            bookingId: booking.id,
+            occurredAt: booking.scheduledStart,
+            confirmedBy: user.id,
+          })
+        } catch (error) {
+          await cleanerReliabilityService.markDirty(booking.cleanerId)
+          console.error('cleaner_reliability.no_show_record_failed', {
+            cleaner_id: booking.cleanerId,
+            booking_id: booking.id,
+            message: error instanceof Error ? error.message : String(error),
+          })
+        }
+      }
       const resolutionCopy = getDisputeResolutionOutcome(
         parsed.data.resolution_type,
         resolvedRefundAmount,

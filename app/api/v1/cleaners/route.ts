@@ -4,6 +4,7 @@ import { db } from '@/server/db'
 import { ok, err } from '@/server/response'
 import { cleanerSearchSchema } from '@/server/schemas/cleaner.schema'
 import { isNewCleanerByCompletedJobs } from '@/lib/cleaner-badges'
+import { cleanerReliabilityService } from '@/server/services/cleaner-reliability.service'
 
 export async function GET(req: NextRequest) {
   const params = Object.fromEntries(req.nextUrl.searchParams)
@@ -29,6 +30,7 @@ export async function GET(req: NextRequest) {
         .filter(Boolean)
     : undefined
 
+  const publicSuperCleanerEnabled = await cleanerReliabilityService.publicFeatureEnabled()
   const [cleaners, total] = await cleanerRepo.search({
     city,
     availability,
@@ -40,6 +42,7 @@ export async function GET(req: NextRequest) {
     maxPrice: max_price,
     page,
     pageSize: page_size,
+    prioritizeSuperCleaner: publicSuperCleanerEnabled,
   })
   const cleanerIds = cleaners.map((cleaner) => cleaner.id)
   const completedJobsAgg = cleanerIds.length
@@ -48,6 +51,7 @@ export async function GET(req: NextRequest) {
       where: {
         cleanerId: { in: cleanerIds },
         status: 'completed',
+        payment: { is: { status: 'transferred' } },
       },
       _count: { _all: true },
     })
@@ -74,7 +78,12 @@ export async function GET(req: NextRequest) {
       hourly_rate: Number(cleaner.hourlyRate),
       total_jobs: completedJobs,
       new_cleaner_badge: isNewCleanerByCompletedJobs(completedJobs),
-      average_rating: avgRatingByCleanerId.get(cleaner.id) ?? null,
+      average_rating:
+        completedJobs >= 5 ? avgRatingByCleanerId.get(cleaner.id) ?? null : null,
+      ...cleanerReliabilityService.publicMetrics(
+        cleaner.reliabilitySnapshot,
+        publicSuperCleanerEnabled,
+      ),
       years_experience: cleaner.yearsExperience,
       transport_mode: cleaner.transportMode,
       cleaning_supplies: cleaner.cleaningSupplies,

@@ -4,19 +4,19 @@ export const cleanerRepo = {
   findById: (id: string) =>
     db.cleaner.findUnique({
       where: { id },
-      include: { user: true, serviceAreas: true },
+      include: { user: true, serviceAreas: true, reliabilitySnapshot: true },
     }),
 
   findByUserId: (userId: string) =>
     db.cleaner.findUnique({
       where: { userId },
-      include: { user: true, serviceAreas: true },
+      include: { user: true, serviceAreas: true, reliabilitySnapshot: true },
     }),
 
   create: (userId: string) =>
     db.cleaner.create({
       data: { userId, hourlyRate: 15 },
-      include: { user: true, serviceAreas: true },
+      include: { user: true, serviceAreas: true, reliabilitySnapshot: true },
     }),
 
   update: (id: string, data: Partial<{
@@ -58,7 +58,7 @@ export const cleanerRepo = {
     db.cleaner.update({
       where: { id },
       data,
-      include: { user: true, serviceAreas: true },
+      include: { user: true, serviceAreas: true, reliabilitySnapshot: true },
     }),
 
   search: (params: {
@@ -72,6 +72,7 @@ export const cleanerRepo = {
     maxPrice?: number
     page: number
     pageSize: number
+    prioritizeSuperCleaner?: boolean
   }) => {
     const where = {
       status: 'approved' as const,
@@ -95,10 +96,15 @@ export const cleanerRepo = {
     return Promise.all([
       db.cleaner.findMany({
         where,
-        include: { user: true, serviceAreas: true },
+        include: { user: true, serviceAreas: true, reliabilitySnapshot: true },
         skip: (params.page - 1) * params.pageSize,
         take: params.pageSize,
-        orderBy: { averageRating: 'desc' },
+        orderBy: params.prioritizeSuperCleaner
+          ? [
+              { reliabilitySnapshot: { isSuperCleaner: 'desc' } },
+              { averageRating: 'desc' },
+            ]
+          : { averageRating: 'desc' },
       }),
       db.cleaner.count({ where }),
     ])
@@ -128,7 +134,27 @@ export const cleanerRepo = {
     return Promise.all([
       db.cleaner.findMany({
         where,
-        include: { user: true },
+        include: {
+          user: true,
+          reliabilitySnapshot: true,
+          reliabilityIncidents: {
+            orderBy: { occurredAt: 'desc' },
+            take: 10,
+          },
+          cancellationEvents: {
+            orderBy: { cancelledAt: 'desc' },
+            take: 10,
+          },
+          strikes: {
+            where: {
+              strikeType: {
+                in: ['reliability_last_minute_cancellation', 'reliability_no_show'],
+              },
+            },
+            orderBy: { createdAt: 'desc' },
+            take: 10,
+          },
+        },
         skip: (params.page - 1) * params.pageSize,
         take: params.pageSize,
         orderBy: { createdAt: 'desc' },

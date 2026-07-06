@@ -28,6 +28,7 @@ const state = vi.hoisted(() => ({
     auto_completions: { checked: 1, completed: 1, paused_by_dispute: 0, failed: 0, errors: [] as string[] },
     captures: { checked: 0, captured: 0, paused_by_dispute: 0, skipped_non_due: 0, failed: 0, errors: [] as string[] },
     releases: { checked: 0, released: 0, failed: 0, errors: [] as string[] },
+    cancellation_transfers: { checked: 0, reconciled: 0, missing_transfer: 0, invalid_transfer: 0, skipped_concurrent: 0, failed: 0, errors: [] as string[] },
   },
 }))
 
@@ -85,6 +86,7 @@ vi.mock('@/server/services/payment-lifecycle.service', () => ({
     processAutoCompletions: vi.fn(async () => state.reconcileSummary.auto_completions),
     processDueCaptures: vi.fn(async () => state.reconcileSummary.captures),
     processDueReleaseTransitions: vi.fn(async () => state.reconcileSummary.releases),
+    reconcileCancelledPaymentTransfers: vi.fn(async () => state.reconcileSummary.cancellation_transfers),
   },
 }))
 

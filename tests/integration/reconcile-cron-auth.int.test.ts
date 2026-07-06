@@ -7,6 +7,17 @@ const reconcileState = vi.hoisted(() => ({
   autoCompletions: { checked: 0, completed: 0, failed: 0, errors: [] as string[] },
   captures: { checked: 0, captured: 0, failed: 0, errors: [] as string[] },
   releases: { checked: 0, released: 0, failed: 0, errors: [] as string[] },
+  cancellationTransfers: { checked: 0, reconciled: 0, missing_transfer: 0, invalid_transfer: 0, skipped_concurrent: 0, failed: 0, errors: [] as string[] },
+  reliability: { checked: 0, recalculated: 0, failed: 0, errors: [] as string[] },
+}))
+
+vi.mock('@/server/services/cleaner-reliability.service', () => ({
+  cleanerReliabilityService: {
+    reconcileDue: vi.fn(async () => reconcileState.reliability),
+    reconcileCancellationEvents: vi.fn(async () => reconcileState.reliability),
+    reconcileMissing: vi.fn(async () => reconcileState.reliability),
+    reconcileAll: vi.fn(async () => reconcileState.reliability),
+  },
 }))
 
 vi.mock('@/server/services/payment-lifecycle.service', () => ({
@@ -16,6 +27,7 @@ vi.mock('@/server/services/payment-lifecycle.service', () => ({
     processAutoCompletions: vi.fn(async () => reconcileState.autoCompletions),
     processDueCaptures: vi.fn(async () => reconcileState.captures),
     processDueReleaseTransitions: vi.fn(async () => reconcileState.releases),
+    reconcileCancelledPaymentTransfers: vi.fn(async () => reconcileState.cancellationTransfers),
   },
 }))
 
@@ -48,7 +60,23 @@ describe('Reconcile cron auth integration', () => {
     expect(res.status).toBe(200)
     expect(body.success).toBe(true)
     expect(body.data).toHaveProperty('expiry')
+    expect(body.data).toHaveProperty('cancellation_transfers')
+    expect(body.data).toHaveProperty('reliability')
     expect(res.headers.get('x-request-id')).toBeTruthy()
+  })
+
+  it('supports authenticated Vercel Cron GET requests', async () => {
+    const route = await import('@/app/api/v1/jobs/reconcile/route')
+    const res = await route.GET(
+      new NextRequest('http://localhost/api/v1/jobs/reconcile', {
+        method: 'GET',
+        headers: {
+          authorization: 'Bearer cron_test_secret',
+          'user-agent': 'vercel-cron/1.0',
+        },
+      }),
+    )
+    expect(res.status).toBe(200)
   })
 
   it('rejects invalid secret with 401', async () => {

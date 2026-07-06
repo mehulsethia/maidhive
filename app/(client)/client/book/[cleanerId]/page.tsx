@@ -27,6 +27,7 @@ import { getClientBookingRequestDeadlineCopy } from '@/lib/booking-expiry-copy'
 import { calculatePlatformFee, isMinimumPlatformFeeApplied, roundMoney } from '@/lib/platform-fee'
 import type { CleanerRead, PriceBreakdown, BookingRead, ClientProfileRead, ClientAddressRead } from '@/types'
 import { toast } from 'sonner'
+import { SuperCleanerBadge } from '@/components/super-cleaner-badge'
 
 const stripePromise = loadStripe(process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY!)
 const displayFont = Bricolage_Grotesque({ subsets: ['latin'], weight: ['400', '500', '700', '800'] })
@@ -379,7 +380,10 @@ function BookingSummary({
             fallback="C"
           />
           <div className="min-w-0 flex-1">
-            <p className="font-semibold text-sm text-slate-900 truncate">{cleanerName}</p>
+            <div className="flex flex-wrap items-center gap-1.5">
+              <p className="font-semibold text-sm text-slate-900 truncate">{cleanerName}</p>
+              {cleaner.super_cleaner && <SuperCleanerBadge />}
+            </div>
             <div className="flex items-center gap-1">
               <div className="flex items-center">
                 {Array.from({ length: 5 }).map((_, i) => (

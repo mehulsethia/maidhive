@@ -194,6 +194,58 @@ function CleanerCard({
           </div>
         </div>
 
+        {cleaner.reliability && (
+          <div className="mb-4 rounded-xl border border-slate-200 bg-slate-50 p-3">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <p className="text-sm font-semibold text-slate-900">Reliability</p>
+              <Badge variant={cleaner.reliability.is_super_cleaner ? 'success' : 'outline'}>
+                {cleaner.reliability.is_super_cleaner ? 'Super Cleaner' : 'Not qualified'}
+              </Badge>
+            </div>
+            <div className="mt-2 grid grid-cols-2 gap-2 text-xs sm:grid-cols-3 lg:grid-cols-6">
+              <p><span className="text-muted-foreground">Released:</span> {cleaner.reliability.completed_released_count}</p>
+              <p><span className="text-muted-foreground">Cancel rate:</span> {(Number(cleaner.reliability.cancellation_rate ?? 0) * 100).toFixed(1)}%</p>
+              <p><span className="text-muted-foreground">Late incidents:</span> {cleaner.reliability.last_minute_incidents_30d}</p>
+              <p><span className="text-muted-foreground">No-shows:</span> {cleaner.reliability.no_shows_60d}</p>
+              <p><span className="text-muted-foreground">Verified:</span> {cleaner.reliability.verified_job_count}</p>
+              <p><span className="text-muted-foreground">On time:</span> {cleaner.reliability.on_time_percentage === null ? 'N/A' : `${cleaner.reliability.on_time_percentage}%`}</p>
+            </div>
+            <p className="mt-2 text-[11px] text-muted-foreground">
+              {cleaner.reliability.active_strike_count} active strike(s) · Last calculated {formatDate(cleaner.reliability.last_calculated_at)}
+            </p>
+            {cleaner.cancellation_windows && (
+              <p className="mt-1 text-[11px] text-muted-foreground">
+                Cleaner cancellations: {cleaner.cancellation_windows.more_than_24h} over 24h · {cleaner.cancellation_windows.between_12h_24h} at 12–24h · {cleaner.cancellation_windows.less_than_12h} under 12h
+              </p>
+            )}
+            {Boolean(cleaner.cancellation_events?.length || cleaner.reliability_incidents?.length || cleaner.reliability_strikes?.length) && (
+              <details className="mt-2 border-t border-slate-200 pt-2">
+                <summary className="cursor-pointer text-xs font-medium text-slate-700">
+                  Recent reliability history
+                </summary>
+                <div className="mt-2 space-y-1 text-xs text-muted-foreground">
+                  {cleaner.cancellation_events?.map((event) => (
+                    <p key={event.id}>
+                      Cancellation: {event.window.replaceAll('_', ' ')} · {event.hours_before_start.toFixed(1)}h before start · {formatDate(event.cancelled_at)}
+                    </p>
+                  ))}
+                  {cleaner.reliability_incidents?.map((incident) => (
+                    <p key={incident.id}>
+                      {incident.incident_date}: {incident.type.replaceAll('_', ' ')} ({incident.booking_count} booking{incident.booking_count === 1 ? '' : 's'})
+                    </p>
+                  ))}
+                  {cleaner.reliability_strikes?.map((strike) => (
+                    <p key={strike.id}>
+                      Strike: {strike.reason}
+                      {strike.expires_at ? ` · expires ${formatDate(strike.expires_at)}` : ''}
+                    </p>
+                  ))}
+                </div>
+              </details>
+            )}
+          </div>
+        )}
+
         {cleaner.id_type && (
           <div className="mb-4 flex items-start gap-2 text-sm">
             <FileText className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />

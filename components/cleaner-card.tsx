@@ -5,6 +5,7 @@ import { UserAvatar } from '@/components/ui/user-avatar'
 import { formatCurrency } from '@/lib/utils'
 import type { CleanerSummary } from '@/types'
 import { cn } from '@/lib/utils'
+import { SuperCleanerBadge } from '@/components/super-cleaner-badge'
 
 interface CleanerCardProps {
   cleaner: CleanerSummary & {
@@ -63,6 +64,7 @@ export function CleanerCard({ cleaner, isFavorite, onToggleFavorite }: CleanerCa
                     <h3 className="truncate text-[18px] leading-[1.15] font-bold tracking-[-0.01em] text-[#0f1733]">
                       {name}
                     </h3>
+                    {cleaner.super_cleaner && <SuperCleanerBadge />}
                     {showNewCleanerBadge && (
                       <span
                         title="Newly approved cleaner on MaidHive."

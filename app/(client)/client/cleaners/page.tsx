@@ -15,6 +15,7 @@ import { reportLoadError, resetLoadError } from '@/lib/load-error-policy'
 import { formatCurrency } from '@/lib/utils'
 import type { CleanerSummary } from '@/types'
 import { toast } from 'sonner'
+import { SuperCleanerBadge } from '@/components/super-cleaner-badge'
 
 type ViewMode = 'card' | 'list'
 type AvailabilityFilter = 'any' | 'next_7_days'
@@ -330,6 +331,7 @@ export default function ClientCleanersPage() {
                         <h3 className={`${displayFont.className} truncate text-[20px] font-bold tracking-[-0.02em] text-[#0f1733]`}>
                           {cleaner.name}
                         </h3>
+                        {cleaner.super_cleaner && <SuperCleanerBadge />}
                         {(cleaner.new_cleaner_badge ?? Number(cleaner.total_jobs ?? 0) < 5) && (
                           <span
                             title="Newly approved cleaner on MaidHive."

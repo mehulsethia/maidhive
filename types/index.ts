@@ -94,6 +94,9 @@ export interface CleanerRead {
   total_jobs: number
   new_cleaner_badge?: boolean
   average_rating?: number
+  super_cleaner?: boolean
+  on_time_percentage?: number | null
+  on_time_label?: string
   released_earnings?: number
   created_at: string
   user?: UserRead
@@ -110,7 +113,9 @@ export interface CleanerSummary {
   years_experience?: number
   transport_mode?: 'own_car' | 'bus_walk' | 'requires_pickup'
   cleaning_supplies?: 'own_supplies' | 'client_supplies'
-  on_time_percentage?: number
+  on_time_percentage?: number | null
+  on_time_label?: string
+  super_cleaner?: boolean
   avg_response_minutes?: number
   created_at?: string
   bio?: string
@@ -497,6 +502,50 @@ export interface AdminCleaner {
   trial_period_flag?: boolean
   total_jobs: number
   average_rating?: number
+  reliability?: {
+    is_super_cleaner: boolean
+    completed_released_count: number
+    cancellation_rate: number | null
+    cancellation_numerator: number
+    cancellation_denominator: number
+    last_minute_incidents_30d: number
+    no_shows_60d: number
+    verified_job_count: number
+    on_time_percentage: number | null
+    active_strike_count: number
+    criteria: Record<string, boolean>
+    recovery_cancellation_started_at?: string | null
+    recovery_no_show_started_at?: string | null
+    last_calculated_at: string
+  } | null
+  reliability_incidents?: Array<{
+    id: string
+    type: string
+    incident_date: string
+    booking_count: number
+    occurred_at: string
+  }>
+  cancellation_windows?: {
+    more_than_24h: number
+    between_12h_24h: number
+    less_than_12h: number
+  }
+  cancellation_events?: Array<{
+    id: string
+    booking_id: string
+    window: 'more_than_24h' | 'between_12h_24h' | 'less_than_12h'
+    accepted_booking: boolean
+    incident_id?: string | null
+    hours_before_start: number
+    cancelled_at: string
+  }>
+  reliability_strikes?: Array<{
+    id: string
+    type: string
+    reason: string
+    issued_at: string
+    expires_at?: string | null
+  }>
   created_at: string
 }
 
@@ -609,6 +658,7 @@ export interface AdminDispute {
   status: 'open' | 'under_review' | 'resolved' | 'closed'
   resolution_type?: string
   resolution_note?: string
+  no_show_finding?: 'confirmed' | 'rejected'
   refund_amount?: number
   resolved_at?: string
   created_at: string
