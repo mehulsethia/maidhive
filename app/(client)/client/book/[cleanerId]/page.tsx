@@ -380,8 +380,8 @@ function BookingSummary({
             fallback="C"
           />
           <div className="min-w-0 flex-1">
-            <div className="flex flex-wrap items-center gap-1.5">
-              <p className="font-semibold text-sm text-slate-900 truncate">{cleanerName}</p>
+            <div className="flex min-w-0 flex-wrap items-center gap-1.5">
+              <p className="min-w-0 truncate text-sm font-semibold text-slate-900">{cleanerName}</p>
               {cleaner.super_cleaner && <SuperCleanerBadge />}
             </div>
             <div className="flex items-center gap-1">

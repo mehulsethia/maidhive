@@ -204,7 +204,7 @@ export default function CleanerProfilePage() {
                   textClassName="text-lg font-bold"
                   fallback="C"
                 />
-                <h1 className={`${displayFont.className} text-xl font-extrabold tracking-[-0.03em] text-white sm:text-3xl lg:text-4xl`}>
+                <h1 className={`${displayFont.className} min-w-0 break-words text-xl font-extrabold tracking-[-0.03em] text-white sm:text-3xl lg:text-4xl`}>
                   {cleanerName}
                 </h1>
                 {cleaner.super_cleaner && <SuperCleanerBadge onDark />}

@@ -327,8 +327,8 @@ export default function ClientCleanersPage() {
                       fallback="C"
                     />
                     <div className="min-w-0">
-                      <div className="flex flex-wrap items-center gap-2">
-                        <h3 className={`${displayFont.className} truncate text-[20px] font-bold tracking-[-0.02em] text-[#0f1733]`}>
+                      <div className="flex min-w-0 flex-wrap items-center gap-2">
+                        <h3 className={`${displayFont.className} min-w-0 truncate text-[20px] font-bold tracking-[-0.02em] text-[#0f1733]`}>
                           {cleaner.name}
                         </h3>
                         {cleaner.super_cleaner && <SuperCleanerBadge />}

@@ -58,10 +58,10 @@ export function CleanerCard({ cleaner, isFavorite, onToggleFavorite }: CleanerCa
               fallback="C"
             />
             <div className="min-w-0 flex-1">
-	              <div className="flex min-w-0 flex-col gap-2.5 min-[420px]:flex-row min-[420px]:items-start min-[420px]:justify-between sm:gap-3">
+              <div className="flex min-w-0 flex-col gap-2.5 min-[420px]:flex-row min-[420px]:items-start min-[420px]:justify-between sm:gap-3">
                 <div className="min-w-0 pr-2">
-                  <div className="flex flex-wrap items-center gap-2">
-                    <h3 className="truncate text-[18px] leading-[1.15] font-bold tracking-[-0.01em] text-[#0f1733]">
+                  <div className="flex min-w-0 flex-wrap items-center gap-2">
+                    <h3 className="min-w-0 truncate text-[18px] leading-[1.15] font-bold tracking-[-0.01em] text-[#0f1733]">
                       {name}
                     </h3>
                     {cleaner.super_cleaner && <SuperCleanerBadge />}
