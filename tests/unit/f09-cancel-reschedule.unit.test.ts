@@ -13,6 +13,16 @@ describe('F09 cancel/reschedule policy unit coverage', () => {
     expect(invalid.success).toBe(false)
   })
 
+  it('UT-CANCEL-02 cancellation validator accepts rest-of-today cleaner cancellation flag', () => {
+    const valid = cancelBookingSchema.safeParse({
+      reason: 'Cleaner unavailable today',
+      cancel_rest_of_today: true,
+    })
+
+    expect(valid.success).toBe(true)
+    expect(valid.data?.cancel_rest_of_today).toBe(true)
+  })
+
   it('UT-CANCEL-02 reschedule/amend actions require proposed_start', () => {
     const amendMissing = bookingActionSchema.safeParse({ action: 'amend_start_time' })
     const proposeMissing = bookingActionSchema.safeParse({ action: 'propose_alternative' })

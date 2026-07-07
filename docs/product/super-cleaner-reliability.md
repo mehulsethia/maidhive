@@ -54,6 +54,27 @@ rate.
 - Reliability strikes expire after 90 days and do not automatically suspend
   the cleaner.
 
+## Rest-of-today cancellation flow
+
+The former “Full Day Off” behaviour is part of the normal cleaner cancellation
+flow, not a separate feature. When cancelling a booking scheduled today, the
+cleaner may select `I am unavailable for the rest of today`.
+
+When selected, MaidHive:
+
+- blocks the cleaner from now until the end of the current Cyprus calendar day;
+- automatically cancels the cleaner’s remaining accepted or confirmed bookings
+  scheduled for that same day;
+- applies the normal cancellation/payment handling and client notification for
+  each affected booking;
+- records per-booking reliability events for every cancelled booking.
+
+For reliability strikes, same-day affected cancellations still form one
+incident. If one or more affected accepted bookings are cancelled less than
+12 hours before scheduled start, that same-day incident is treated as a
+last-minute cancellation incident. Cancellation-rate calculations still count
+each accepted cleaner-cancelled booking individually.
+
 An admin-confirmed cleaner no-show creates its own incident, issues a 90-day
 strike, and removes Super Cleaner immediately. A client report alone does not.
 

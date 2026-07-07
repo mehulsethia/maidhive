@@ -73,6 +73,7 @@ export const bookingActionSchema = z.object({
 
 export const cancelBookingSchema = z.object({
   reason: z.string().min(1).max(500).optional(),
+  cancel_rest_of_today: z.boolean().optional().default(false),
 })
 
 export const myBookingsQuerySchema = z.object({

@@ -338,4 +338,29 @@ export const bookingRepo = {
         },
       })
     },
+
+  findRemainingTodayForCleaner: (params: {
+    cleanerId: string
+    excludeBookingId: string
+    now: Date
+    dayStart: Date
+    dayEnd: Date
+  }) =>
+    db.booking.findMany({
+      where: {
+        cleanerId: params.cleanerId,
+        id: { not: params.excludeBookingId },
+        status: { in: ['accepted', 'confirmed'] },
+        scheduledStart: {
+          gte: params.dayStart,
+          lt: params.dayEnd,
+        },
+        scheduledEnd: { gt: params.now },
+      },
+      select: {
+        id: true,
+        scheduledStart: true,
+      },
+      orderBy: { scheduledStart: 'asc' },
+    }),
 }

@@ -155,6 +155,7 @@ export default function CleanerBookingDetailPage() {
   const [actionLoading, setActionLoading] = useState<string | null>(null)
   const [cancelOpen, setCancelOpen] = useState(false)
   const [cancelBookingOpen, setCancelBookingOpen] = useState(false)
+  const [cancelRestOfToday, setCancelRestOfToday] = useState(false)
   const [declineCounterOfferOpen, setDeclineCounterOfferOpen] = useState(false)
   const [proposalOpen, setProposalOpen] = useState(false)
   const [proposalAction, setProposalAction] = useState<'propose_alternative' | 'counter_proposal' | 'amend_start_time'>('propose_alternative')
@@ -312,9 +313,15 @@ export default function CleanerBookingDetailPage() {
       const reason = moreThan24HoursAway
         ? 'Cancelled by cleaner more than 24 hours before scheduled start'
         : 'Cancelled by cleaner within 24 hours of scheduled start'
-      await bookingsApi.cancel(booking.id, reason)
-      toast.success('Booking cancelled.')
+      const res = await bookingsApi.cancel(booking.id, reason, { cancelRestOfToday })
+      const restOfTodayCancelledCount = Number((res.data as any)?.rest_of_today_cancelled_count ?? 0)
+      toast.success(
+        cancelRestOfToday && restOfTodayCancelledCount > 0
+          ? `Booking cancelled. ${restOfTodayCancelledCount} remaining booking${restOfTodayCancelledCount === 1 ? '' : 's'} for today also cancelled.`
+          : 'Booking cancelled.',
+      )
       setCancelBookingOpen(false)
+      setCancelRestOfToday(false)
       await refresh()
       router.push('/cleaner/bookings')
     } catch (err: any) {
@@ -461,6 +468,10 @@ export default function CleanerBookingDetailPage() {
     !((booking.cleaner_proposals ?? 0) >= 1 && (booking.client_proposals ?? 0) >= 1)
   const isPostConfirmationDecline = proposalContext === 'post_confirmation' && booking.proposal_by === 'client' && ['accepted', 'confirmed'].includes(booking.status)
   const canCancelConfirmedBooking = isConfirmed && millisUntilStart > 0
+  const canCancelRestOfToday =
+    canCancelConfirmedBooking &&
+    Number.isFinite(bookingStartsAtMs) &&
+    cyprusDateStr(new Date(bookingStartsAtMs)) === cyprusDateStr(new Date())
   const isAmendDateFlow =
     proposalAction === 'amend_start_time' ||
     (proposalAction === 'counter_proposal' && proposalContext === 'amend_start')
@@ -1079,6 +1090,7 @@ export default function CleanerBookingDetailPage() {
         onClose={() => {
           if (actionLoading === 'cancel') return
           setCancelBookingOpen(false)
+          setCancelRestOfToday(false)
         }}
       >
         <DialogTitle>{cancellationConfirmation.title}</DialogTitle>
@@ -1092,6 +1104,23 @@ export default function CleanerBookingDetailPage() {
               <li key={consequence} className="break-words">{consequence}</li>
             ))}
           </ul>
+          {canCancelRestOfToday && (
+            <label className="flex min-w-0 items-start gap-3 rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-950">
+              <input
+                type="checkbox"
+                className="mt-1 h-4 w-4 shrink-0 rounded border-amber-300"
+                checked={cancelRestOfToday}
+                onChange={(event) => setCancelRestOfToday(event.target.checked)}
+                disabled={Boolean(actionLoading)}
+              />
+              <span className="min-w-0">
+                <span className="block font-medium">I am unavailable for the rest of today.</span>
+                <span className="mt-1 block text-xs leading-relaxed text-amber-800">
+                  MaidHive will cancel your remaining confirmed bookings for today, notify affected clients, and treat same-day last-minute cancellations as one reliability incident.
+                </span>
+              </span>
+            </label>
+          )}
           <div className="flex flex-col gap-2 sm:flex-row">
             <Button
               variant="outline"

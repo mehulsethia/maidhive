@@ -17,6 +17,8 @@ const seeded = vi.hoisted(() => ({
 
 const state = vi.hoisted(() => ({
   booking: null as any,
+  bookingsById: {} as Record<string, any>,
+  remainingToday: [] as any[],
   notifications: [] as any[],
   cleanerCancelledByClientEmails: 0,
   cleanerCancelledByClientPayloads: [] as any[],
@@ -28,16 +30,24 @@ const state = vi.hoisted(() => ({
   actionEvents: [] as any[],
   paymentUpdates: [] as any[],
   removeCalendarCalls: 0,
+  blockedTimes: [] as any[],
 }))
 
 vi.mock('@/server/repositories/booking.repo', () => ({
   bookingRepo: {
-    findById: vi.fn(async () => state.booking),
-    update: vi.fn(async (_id: string, patch: any) => ({ ...state.booking, ...patch })),
+    findById: vi.fn(async (id: string) => state.bookingsById[id] ?? state.booking),
+    update: vi.fn(async (id: string, patch: any) => {
+      const base = state.bookingsById[id] ?? state.booking
+      const updated = { ...base, ...patch }
+      state.bookingsById[id] = updated
+      if (state.booking?.id === id) state.booking = updated
+      return updated
+    }),
     updateWithActionEvent: vi.fn(async (_id: string, patch: any, event: any) => {
       state.actionEvents.push(event)
       return { ...state.booking, ...patch }
     }),
+    findRemainingTodayForCleaner: vi.fn(async () => state.remainingToday),
   },
 }))
 
@@ -56,7 +66,12 @@ vi.mock('@/server/repositories/cleaner.repo', () => ({
 }))
 
 vi.mock('@/server/repositories/availability.repo', () => ({
-  availabilityRepo: {},
+  availabilityRepo: {
+    addBlockedTime: vi.fn(async (_cleanerId: string, data: any) => {
+      state.blockedTimes.push(data)
+      return { id: `blocked_${state.blockedTimes.length}`, ...data }
+    }),
+  },
 }))
 
 vi.mock('@/server/repositories/payment.repo', () => ({
@@ -147,6 +162,8 @@ describe('Booking cancellation communications', () => {
   beforeEach(() => {
     vi.resetModules()
     state.notifications = []
+    state.bookingsById = {}
+    state.remainingToday = []
     state.cleanerCancelledByClientEmails = 0
     state.cleanerCancelledByClientPayloads = []
     state.clientCancellationEmails = 0
@@ -157,6 +174,7 @@ describe('Booking cancellation communications', () => {
     state.actionEvents = []
     state.paymentUpdates = []
     state.removeCalendarCalls = 0
+    state.blockedTimes = []
   })
 
   it('uses request-cancel wording for pending request cancellations before confirmation', async () => {
@@ -281,6 +299,51 @@ describe('Booking cancellation communications', () => {
       data: { booking_id: state.booking.id },
     }))
     expect(state.clientCancelledByCleanerEmails).toBe(1)
+  })
+
+  it('cancels remaining same-day bookings when cleaner marks rest of today unavailable', async () => {
+    const primary = {
+      id: 'booking_rest_today_primary',
+      status: 'confirmed',
+      clientId: 'client_profile_1',
+      cleanerId: 'cleaner_profile_1',
+      acceptedAt: new Date('2099-07-03T07:00:00.000Z'),
+      confirmedAt: new Date('2099-07-03T07:05:00.000Z'),
+      scheduledStart: new Date(),
+      scheduledEnd: new Date(Date.now() + 60 * 60 * 1000),
+      durationHours: 1,
+      payment: { id: 'payment_primary', status: 'authorized', stripePaymentIntentId: null },
+      client: { userId: seeded.clientUser.id, user: { email: seeded.clientUser.email, name: seeded.clientUser.name } },
+      cleaner: { userId: seeded.cleanerUser.id, user: { email: seeded.cleanerUser.email, name: seeded.cleanerUser.name } },
+    }
+    const secondary = {
+      ...primary,
+      id: 'booking_rest_today_secondary',
+      payment: { id: 'payment_secondary', status: 'authorized', stripePaymentIntentId: null },
+      scheduledStart: new Date(Date.now() + 2 * 60 * 60 * 1000),
+      scheduledEnd: new Date(Date.now() + 3 * 60 * 60 * 1000),
+    }
+    state.booking = primary
+    state.bookingsById = {
+      [primary.id]: primary,
+      [secondary.id]: secondary,
+    }
+    state.remainingToday = [{ id: secondary.id, scheduledStart: secondary.scheduledStart }]
+
+    const { bookingService } = await import('@/server/services/booking.service')
+    const updated = await bookingService.cancel(
+      primary.id,
+      seeded.cleanerUser as any,
+      'Cancelled by cleaner within 24 hours of scheduled start',
+      { cancelRestOfToday: true },
+    )
+
+    expect(updated.status).toBe('cancelled')
+    expect((updated as any).rest_of_today_cancelled_count).toBe(1)
+    expect(state.bookingsById[secondary.id].status).toBe('cancelled')
+    expect(state.bookingsById[secondary.id].cancellationReason).toBe('Cancelled by cleaner: unavailable for the rest of today')
+    expect(state.blockedTimes).toHaveLength(1)
+    expect(state.clientCancelledByCleanerEmails).toBe(2)
   })
 
   it('tells the client that their early cancellation has no charge', async () => {

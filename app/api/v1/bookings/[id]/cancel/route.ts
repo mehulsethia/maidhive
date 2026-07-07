@@ -12,7 +12,9 @@ export const POST = requireAuth(async (req: NextRequest, ctx, user) => {
   if (!parsed.success) return err(parsed.error.message, 422)
 
   try {
-    const booking = await bookingService.cancel(id, user, parsed.data.reason)
+    const booking = await bookingService.cancel(id, user, parsed.data.reason, {
+      cancelRestOfToday: parsed.data.cancel_rest_of_today,
+    })
     return ok(sanitizeBookingForRole(booking as any, user.role as 'client' | 'cleaner' | 'admin'))
   } catch (e) {
     if (e instanceof ServiceError) return err(e.message, e.status)

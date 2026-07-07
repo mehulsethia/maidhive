@@ -526,10 +526,13 @@ export const bookingsApi = {
     request<APIResponse<BookingRead>>(`/bookings/${id}/complete`, {
       method: 'POST',
     }),
-  cancel: (id: string, reason: string) =>
+  cancel: (id: string, reason: string, options?: { cancelRestOfToday?: boolean }) =>
     request<APIResponse<BookingRead>>(`/bookings/${id}/cancel`, {
       method: 'POST',
-      body: JSON.stringify({ reason }),
+      body: JSON.stringify({
+        reason,
+        ...(options?.cancelRestOfToday ? { cancel_rest_of_today: true } : {}),
+      }),
     }),
   getFlowDraft: (cleanerId: string) =>
     request<APIResponse<BookingFlowDraftRead | null>>(`/bookings/draft?cleaner_id=${encodeURIComponent(cleanerId)}`),

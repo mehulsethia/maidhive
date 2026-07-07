@@ -1129,7 +1129,15 @@ export const bookingService = {
     })
   },
 
-  async cancel(bookingId: string, user: User, reason?: string) {
+  async cancel(
+    bookingId: string,
+    user: User,
+    reason?: string,
+    options?: {
+      cancelRestOfToday?: boolean
+      suppressCleanerWarningEmail?: boolean
+    },
+  ) {
     const booking = await bookingRepo.findById(bookingId)
     if (!booking) throw new ServiceError('Booking not found', 404)
 
@@ -1149,6 +1157,20 @@ export const bookingService = {
 
     const cancellationTime = new Date()
     const isClientCancelling = Boolean(client && booking.clientId === client.id)
+    const isCleanerCancelling = Boolean(cleaner && booking.cleanerId === cleaner.id)
+
+    if (options?.cancelRestOfToday) {
+      if (!isCleanerCancelling) {
+        throw new ServiceError('Rest-of-today cancellation is only available to the assigned cleaner.', 403)
+      }
+      if (!['accepted', 'confirmed'].includes(booking.status)) {
+        throw new ServiceError('Rest-of-today cancellation is only available for accepted or confirmed bookings.', 400)
+      }
+      if (cyprusDateStr(booking.scheduledStart) !== cyprusDateStr(cancellationTime)) {
+        throw new ServiceError('Rest-of-today cancellation is only available for bookings scheduled today.', 400)
+      }
+    }
+
     const clientCancellationPolicy =
       isClientCancelling && (booking.status === 'accepted' || booking.status === 'confirmed')
         ? computeConfirmedCancellationPolicy({
@@ -1168,7 +1190,7 @@ export const bookingService = {
 
     try {
       await applyCancellationPaymentPolicy(booking, booking.status, {
-        cancelledByCleaner: Boolean(cleaner && booking.cleanerId === cleaner.id),
+        cancelledByCleaner: isCleanerCancelling,
       })
     } catch (error) {
       console.error('booking.cancel.payment_policy failed; proceeding with cancellation fallback', {
@@ -1200,7 +1222,7 @@ export const bookingService = {
       cancelledAt: cancellationTime,
     })
 
-    if (cleaner && booking.cleanerId === cleaner.id) {
+    if (isCleanerCancelling && cleaner) {
       try {
         await cleanerReliabilityService.recordCleanerCancellation({
           cleanerId: cleaner.id,
@@ -1302,7 +1324,7 @@ export const bookingService = {
       }
     }
 
-    if (cleaner && booking.cleanerId === cleaner.id && isAcceptedOrConfirmedCancellation) {
+    if (isCleanerCancelling && cleaner && isAcceptedOrConfirmedCancellation) {
       try {
         if (!clientEmail) throw new Error('Missing client email for cleaner cancellation notification')
         await loopsEmailService.sendClientBookingCancelledByCleaner({
@@ -1333,7 +1355,7 @@ export const bookingService = {
       }
     }
 
-    if (cleaner && booking.cleanerId === cleaner.id) {
+    if (isCleanerCancelling && cleaner && !options?.suppressCleanerWarningEmail) {
       try {
         if (!cleanerEmail) throw new Error('Missing cleaner email for strike warning')
         await loopsEmailService.sendCleanerCancellationWarningOrStrike({
@@ -1342,6 +1364,71 @@ export const bookingService = {
         })
       } catch (emailError) {
         console.error('Failed to send cleaner cancellation warning/strike email via Loops:', emailError)
+      }
+    }
+
+    if (options?.cancelRestOfToday && isCleanerCancelling && cleaner) {
+      const dayStart = startOfDayCyprus(cancellationTime)
+      const dayEnd = endOfDayCyprus(cancellationTime)
+
+      try {
+        if (dayEnd.getTime() > cancellationTime.getTime()) {
+          await availabilityRepo.addBlockedTime(cleaner.id, {
+            startDatetime: cancellationTime,
+            endDatetime: dayEnd,
+            reason: 'Cleaner unavailable for the rest of today',
+          })
+        }
+      } catch (error) {
+        console.error('booking.cancel.rest_of_today_block_failed', {
+          cleaner_id: cleaner.id,
+          booking_id: booking.id,
+          message: error instanceof Error ? error.message : String(error),
+        })
+      }
+
+      const remaining = await bookingRepo.findRemainingTodayForCleaner({
+        cleanerId: cleaner.id,
+        excludeBookingId: booking.id,
+        now: cancellationTime,
+        dayStart,
+        dayEnd,
+      })
+      let cancelledCount = 0
+      let failedCount = 0
+
+      for (const remainingBooking of remaining) {
+        try {
+          await this.cancel(
+            remainingBooking.id,
+            user,
+            'Cancelled by cleaner: unavailable for the rest of today',
+            {
+              cancelRestOfToday: false,
+              suppressCleanerWarningEmail: true,
+            },
+          )
+          cancelledCount += 1
+        } catch (error) {
+          failedCount += 1
+          console.error('booking.cancel.rest_of_today_secondary_failed', {
+            cleaner_id: cleaner.id,
+            primary_booking_id: booking.id,
+            booking_id: remainingBooking.id,
+            message: error instanceof Error ? error.message : String(error),
+          })
+        }
+      }
+
+      return {
+        ...(updated as any),
+        restOfTodayCancellation: {
+          requested: true,
+          cancelledCount,
+          failedCount,
+        },
+        rest_of_today_cancelled_count: cancelledCount,
+        rest_of_today_failed_count: failedCount,
       }
     }
 

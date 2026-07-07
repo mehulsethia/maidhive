@@ -8,6 +8,7 @@ const seededUsers = vi.hoisted(() => ({
 
 const state = vi.hoisted(() => ({
   currentUser: seededUsers.client as any | null,
+  cancelCalls: [] as any[],
   cancelResult: {
     id: 'booking_cancel_1',
     status: 'cancelled',
@@ -45,11 +46,14 @@ vi.mock('@/server/services/booking.service', () => {
   return {
     ServiceError,
     bookingService: {
-      cancel: vi.fn(async (_id: string, user: any, reason?: string) => ({
+      cancel: vi.fn(async (_id: string, user: any, reason?: string, options?: any) => {
+        state.cancelCalls.push({ id: _id, user, reason, options })
+        return {
         ...state.cancelResult,
         cancelledByRole: user.role,
         cancelReason: reason ?? state.cancelResult.cancelReason,
-      })),
+        }
+      }),
       reconcileSingleBookingDeadline: vi.fn(async () => true),
       applyAction: vi.fn(async (_id: string, user: any, payload: any) => ({
         ...state.actionResult,
@@ -68,6 +72,7 @@ describe('F09 Reschedule and cancel policy integration', () => {
   beforeEach(() => {
     vi.resetModules()
     state.currentUser = seededUsers.client as any
+    state.cancelCalls = []
     state.cancelResult = {
       id: 'booking_cancel_1',
       status: 'cancelled',
@@ -146,6 +151,36 @@ describe('F09 Reschedule and cancel policy integration', () => {
     expect(res.status).toBe(200)
     expect(body.success).toBe(true)
     expect(body.data.cancelledByRole ?? body.data.cancelled_by_role).toBe('cleaner')
+  })
+
+  it('IT-CANCEL-05 cleaner can request rest-of-today cancellation from cancellation route', async () => {
+    state.currentUser = seededUsers.cleaner as any
+    state.cancelResult = {
+      ...state.cancelResult,
+      id: 'booking_cleaner_cancel_today_1',
+      cancelReason: 'Cleaner unavailable today',
+    }
+
+    const route = await import('@/app/api/v1/bookings/[id]/cancel/route')
+    const res = await route.POST(
+      new NextRequest('http://localhost/api/v1/bookings/booking_cleaner_cancel_today_1/cancel', {
+        method: 'POST',
+        body: JSON.stringify({
+          reason: 'Cleaner unavailable today',
+          cancel_rest_of_today: true,
+        }),
+        headers: { 'content-type': 'application/json' },
+      }),
+      { params: Promise.resolve({ id: 'booking_cleaner_cancel_today_1' }) } as any,
+    )
+    const body = await res.json()
+
+    expect(res.status).toBe(200)
+    expect(body.success).toBe(true)
+    expect(state.cancelCalls[0]).toMatchObject({
+      id: 'booking_cleaner_cancel_today_1',
+      options: { cancelRestOfToday: true },
+    })
   })
 
   it('IT-CANCEL-04 reschedule proposal acceptance updates schedule fields and proposal context', async () => {
