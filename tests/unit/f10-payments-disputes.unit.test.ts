@@ -58,6 +58,15 @@ describe('F10 payments/disputes unit coverage', () => {
     expect(conflictingPct.success).toBe(false)
   })
 
+  it('requires a non-empty resolution note after trimming whitespace', () => {
+    const result = resolveDisputeSchema.safeParse({
+      resolution_type: 'no_refund',
+      resolution_note: '   ',
+    })
+
+    expect(result.success).toBe(false)
+  })
+
   it('UT-PAY-04 dispute status patch schema only allows under_review transition payload', () => {
     const valid = updateDisputeStatusSchema.safeParse({ status: 'under_review' })
     const invalid = updateDisputeStatusSchema.safeParse({ status: 'resolved' })

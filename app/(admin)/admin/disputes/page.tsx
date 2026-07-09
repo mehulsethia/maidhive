@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from 'react'
 import Link from 'next/link'
+import { useSearchParams } from 'next/navigation'
 import { AlertTriangle, CheckCircle2, Clock } from 'lucide-react'
 import { adminApi } from '@/lib/api'
 import { Button } from '@/components/ui/button'
@@ -16,7 +17,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { LoadingSpinner } from '@/components/loading-spinner'
 import { EmptyState } from '@/components/empty-state'
 import { reportLoadError, resetLoadError } from '@/lib/load-error-policy'
-import { formatDate } from '@/lib/utils'
+import { cn, formatDate } from '@/lib/utils'
 import { getDisputeResolutionOutcome } from '@/lib/dispute-resolution'
 import type { AdminDispute } from '@/types'
 import { toast } from 'sonner'
@@ -77,11 +78,13 @@ function DisputeCard({
   onMarkUnderReview,
   onResolve,
   actionLoading,
+  highlighted = false,
 }: {
   dispute: AdminDispute
   onMarkUnderReview?: () => void
   onResolve?: () => void
   actionLoading: boolean
+  highlighted?: boolean
 }) {
   const cfg = STATUS_CONFIG[dispute.status] ?? STATUS_CONFIG.closed
   const resolutionLabel = ['resolved', 'closed'].includes(dispute.status)
@@ -96,7 +99,7 @@ function DisputeCard({
     : 'Reporter Unknown'
 
   return (
-    <Card>
+    <Card className={cn(highlighted && 'border-primary/60 ring-2 ring-primary/20')}>
       <CardContent className="px-5 pb-5 pt-6">
         <div className="mb-3 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
           <div className="flex-1 min-w-0">
@@ -235,6 +238,8 @@ function EvidenceLinks({ links }: { links: string[] }) {
 // ── Main ─────────────────────────────────────────────────────────────────────
 
 export default function AdminDisputesPage() {
+  const searchParams = useSearchParams()
+  const selectedDisputeId = searchParams.get('dispute')
   const [disputes, setDisputes] = useState<AdminDispute[]>([])
   const [resolvedDisputes, setResolvedDisputes] = useState<AdminDispute[]>([])
   const [resolvedTotal, setResolvedTotal] = useState(0)
@@ -273,6 +278,17 @@ export default function AdminDisputesPage() {
   }, [])
 
   useEffect(() => { load() }, [load])
+
+  useEffect(() => {
+    if (!selectedDisputeId) return
+    if (resolvedDisputes.some((dispute) => dispute.id === selectedDisputeId)) {
+      setActiveFilter('resolved')
+      return
+    }
+    if (disputes.some((dispute) => dispute.id === selectedDisputeId)) {
+      setActiveFilter('all')
+    }
+  }, [disputes, resolvedDisputes, selectedDisputeId])
 
   async function loadMoreResolved() {
     const nextPage = resolvedPage + 1
@@ -382,6 +398,10 @@ export default function AdminDisputesPage() {
     payment: paymentBooking,
     resolved: resolvedDisputes,
   }
+  const prioritizeSelected = (items: AdminDispute[]) =>
+    selectedDisputeId
+      ? [...items].sort((a, b) => Number(b.id === selectedDisputeId) - Number(a.id === selectedDisputeId))
+      : items
 
   return (
     <div className="space-y-6 w-full">
@@ -416,11 +436,12 @@ export default function AdminDisputesPage() {
               />
             ) : (
               <div className="space-y-3">
-                {activeByFilter[filter].map((d) => (
+                {prioritizeSelected(activeByFilter[filter]).map((d) => (
                   <DisputeCard
                     key={d.id}
                     dispute={d}
                     actionLoading={actionLoading === d.id}
+                    highlighted={d.id === selectedDisputeId}
                     onMarkUnderReview={() => markUnderReview(d)}
                     onResolve={() => setResolveTarget(d)}
                   />
@@ -509,6 +530,9 @@ export default function AdminDisputesPage() {
                     placeholder="0.00"
                   />
                 </div>
+                <p className="mt-1 text-xs text-muted-foreground">
+                  Enter the amount to refund to the client. The remaining captured amount will be handled according to the selected dispute resolution outcome.
+                </p>
               </div>
             )}
 
@@ -532,13 +556,14 @@ export default function AdminDisputesPage() {
             )}
 
             <div>
-              <Label>Resolution note</Label>
+              <Label>Resolution note required</Label>
               <Textarea
                 value={resolveNote}
                 onChange={e => setResolveNote(e.target.value)}
                 placeholder="Explain your decision clearly. This will be visible to both parties."
                 className="mt-1"
                 rows={3}
+                required
               />
             </div>
 

@@ -37,14 +37,25 @@ describe('F13 Notifications + deep links unit coverage', () => {
     expect(getNotificationHref('cleaner', approved)).toBe('/cleaner/profile?tab=payments')
   })
 
-  it('UT-NOTIF-04 dispute notifications route to admin disputes and role booking pages', () => {
+  it('UT-NOTIF-04 dispute notifications route to admin disputes and role report pages', () => {
     const notif: any = {
       type: 'dispute_under_review',
       data: { dispute_id: 'disp_1', booking_id: 'booking_1' },
     }
 
-    expect(getNotificationHref('admin', notif)).toBe('/admin/disputes')
-    expect(getNotificationHref('client', notif)).toBe('/client/bookings/booking_1')
+    expect(getNotificationHref('admin', notif)).toBe('/admin/disputes?dispute=disp_1')
+    expect(getNotificationHref('client', notif)).toBe('/client/report?booking=booking_1')
+    expect(getNotificationHref('cleaner', notif)).toBe('/cleaner/report?booking=booking_1')
+  })
+
+  it('routes dispute response notifications directly to the dispute case', () => {
+    const notif: any = {
+      type: 'dispute_response_submitted',
+      data: { dispute_id: 'disp_1', booking_id: 'booking_1' },
+    }
+
+    expect(getNotificationHref('admin', notif)).toBe('/admin/disputes?dispute=disp_1')
+    expect(getNotificationHref('client', notif)).toBe('/client/report?booking=booking_1')
   })
 
   it('UT-NOTIF-05 resolved disputes route admins to the related booking history', () => {

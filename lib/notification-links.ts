@@ -8,6 +8,12 @@ function bookingDetailBase(role: UserRole) {
   return '/client/bookings'
 }
 
+function disputeBase(role: UserRole) {
+  if (role === 'cleaner') return '/cleaner/report'
+  if (role === 'admin') return '/admin/disputes'
+  return '/client/report'
+}
+
 export function getNotificationHref(role: UserRole, notification: NotificationRead) {
   const bookingId = notification.data?.booking_id as string | undefined
   const disputeId = notification.data?.dispute_id as string | undefined
@@ -31,9 +37,10 @@ export function getNotificationHref(role: UserRole, notification: NotificationRe
       return bookingId ? `${bookingDetailBase(role)}/${bookingId}` : bookingDetailBase(role)
     case 'dispute_raised':
     case 'dispute_under_review':
-      if (role === 'admin') return '/admin/disputes'
-      if (role === 'cleaner') return disputeId ? `/cleaner/bookings/${bookingId ?? ''}` : '/cleaner/bookings'
-      return disputeId ? `/client/bookings/${bookingId ?? ''}` : '/client/bookings'
+    case 'dispute_response_submitted':
+      if (role === 'admin') return disputeId ? `/admin/disputes?dispute=${encodeURIComponent(disputeId)}` : '/admin/disputes'
+      if (bookingId) return `${disputeBase(role)}?booking=${encodeURIComponent(bookingId)}`
+      return disputeBase(role)
     case 'dispute_resolved':
       return bookingId ? `${bookingDetailBase(role)}/${bookingId}` : bookingDetailBase(role)
     case 'cleaner_application_submitted':

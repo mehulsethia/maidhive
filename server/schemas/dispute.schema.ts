@@ -23,7 +23,7 @@ const optionalPercentage = z.preprocess(
 
 export const resolveDisputeSchema = z.object({
   resolution_type: z.enum(['full_refund', 'partial_refund', 'no_refund', 'payment_released']),
-  resolution_note: z.string().min(1),
+  resolution_note: z.string().trim().min(1, 'Resolution note is required'),
   refund_amount: optionalPositiveNumber,
   charge_percentage: optionalPercentage,
   no_show_finding: z.enum(['confirmed', 'rejected']).optional(),

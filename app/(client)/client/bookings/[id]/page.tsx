@@ -34,6 +34,7 @@ import { createClient } from '@/lib/supabase'
 import { formatCurrency, formatDate } from '@/lib/utils'
 import { canViewChatHistoryForBooking, getChatReadOnlyMessage, isChatReadOnly } from '@/lib/chat-window'
 import { isCompletedBookingReleased } from '@/lib/booking-release'
+import { getDisputeParticipantAction } from '@/lib/dispute-actions'
 import { getClientBookingRequestDeadlineCopy } from '@/lib/booking-expiry-copy'
 import { computeConfirmedCancellationPolicy, moneyFromCents } from '@/lib/cancellation-policy'
 import { getCancellationOriginLabel } from '@/lib/cancellation-origin'
@@ -484,6 +485,7 @@ export default function ClientBookingDetailPage() {
   const reportableStatus = booking.status === 'completed' || booking.status === 'disputed'
   const reportWindowActive = Boolean(reportableStatus && reportAnchorMs && Date.now() <= reportDeadlineMs)
   const reportWindowExpired = Boolean(reportableStatus && reportAnchorMs && Date.now() > reportDeadlineMs)
+  const disputeAction = getDisputeParticipantAction('client', booking.dispute, currentUserId)
   const proposalExpiresMs = booking.proposal_expires_at ? new Date(booking.proposal_expires_at).getTime() : null
   const proposalCountdownLabel = proposalExpiresMs && proposalExpiresMs > nowTick
     ? `${Math.ceil((proposalExpiresMs - nowTick) / 60_000)} min`
@@ -819,9 +821,9 @@ export default function ClientBookingDetailPage() {
                       Report a problem
                     </Button>
                   )}
-                  {reportWindowActive && booking.status === 'disputed' && (
+                  {reportWindowActive && booking.status === 'disputed' && disputeAction.kind !== 'none' && (
                     <Button variant="outline" className="w-full sm:w-auto" onClick={() => router.push(`/client/report?booking=${id}`)}>
-                      Add information to existing case
+                      {disputeAction.label}
                     </Button>
                   )}
                   {isCompletedReleased && (

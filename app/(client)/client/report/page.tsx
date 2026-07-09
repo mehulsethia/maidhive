@@ -14,6 +14,7 @@ import { Label } from '@/components/ui/label'
 import { Select } from '@/components/ui/select'
 import { Textarea } from '@/components/ui/textarea'
 import { CLIENT_DISPUTE_ISSUES } from '@/lib/dispute-issues'
+import { getDisputeParticipantAction } from '@/lib/dispute-actions'
 import { reportLoadError, resetLoadError } from '@/lib/load-error-policy'
 import { formatDate } from '@/lib/utils'
 import { getDisputeResolutionOutcome } from '@/lib/dispute-resolution'
@@ -236,11 +237,16 @@ function ClientReportPageContent() {
 
   const selectedBooking = bookingOptions.find((booking) => booking.id === bookingId)
   const selectedActiveDispute = bookingId ? disputeByBookingId.get(bookingId) : undefined
+  const selectedDisputeAction = getDisputeParticipantAction('client', selectedActiveDispute)
   const isRespondingToDispute = Boolean(
     selectedBooking &&
     selectedActiveDispute &&
+    selectedDisputeAction.kind === 'add_response' &&
     canSubmitResponseToDispute(selectedBooking, selectedActiveDispute),
   )
+  const isViewingActiveDispute = Boolean(selectedActiveDispute && !isRespondingToDispute)
+  const disputePanelTitle = selectedActiveDispute ? selectedDisputeAction.label : 'Report a problem'
+  const activeDisputeStatus = selectedActiveDispute?.status ?? queryBookingDisputeStatus
   const canUseCleanerNoShowOption = selectedBooking
     ? Date.now() >= new Date(selectedBooking.scheduled_start).getTime() + NO_SHOW_DELAY_MS
     : false
@@ -392,12 +398,14 @@ function ClientReportPageContent() {
         <section className="grid gap-4 xl:grid-cols-[1fr_1fr]">
           <div className="rounded-[1.5rem] border border-slate-200/80 bg-white/90 p-5 shadow-[0_18px_45px_rgba(11,33,78,0.08)] backdrop-blur-sm">
             <h2 className={`${displayFont.className} text-2xl font-bold tracking-[-0.02em] text-slate-900`}>
-              {isRespondingToDispute ? 'Add information to existing case' : 'Report a problem'}
+              {isRespondingToDispute ? 'Add your response' : disputePanelTitle}
             </h2>
             <p className="mt-1 text-sm text-slate-500">{REPORT_AVAILABILITY_COPY}</p>
-            {isActiveDisputeStatus(queryBookingDisputeStatus) && (
+            {isActiveDisputeStatus(activeDisputeStatus) && (
               <p className="mt-2 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-700">
-                Booking already under review. Submit your response in the existing case if you have not already submitted.
+                {isRespondingToDispute
+                  ? 'Booking already under review. Submit your response in the existing case.'
+                  : 'Booking already under review. You can view the existing case details below.'}
               </p>
             )}
 
@@ -421,6 +429,12 @@ function ClientReportPageContent() {
                   </Select>
                 </div>
 
+                {isViewingActiveDispute ? (
+                  <div className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-600">
+                    This case is already under review. No additional response can be submitted from your account.
+                  </div>
+                ) : (
+                  <>
                 {!isRespondingToDispute && (
                   <div>
                     <Label>Report reason</Label>
@@ -506,6 +520,8 @@ function ClientReportPageContent() {
                     {isRespondingToDispute ? 'Submit your response' : 'Submit Report'}
                   </Button>
                 </div>
+                  </>
+                )}
               </div>
             )}
           </div>

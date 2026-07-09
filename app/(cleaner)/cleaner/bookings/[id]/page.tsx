@@ -31,6 +31,7 @@ import {
 } from '@/lib/booking-proposal'
 import { canViewChatHistoryForBooking, getChatReadOnlyMessage, isChatReadOnly } from '@/lib/chat-window'
 import { isBookingReportWindowActive } from '@/lib/booking-release'
+import { getDisputeParticipantAction } from '@/lib/dispute-actions'
 import { getCleanerEarningsLabel } from '@/lib/cleaner-earnings-label'
 import { getClientTrustMetadata } from '@/lib/client-trust'
 import { getCleanerBookingRequestDeadlineCopy } from '@/lib/booking-expiry-copy'
@@ -401,6 +402,7 @@ export default function CleanerBookingDetailPage() {
   const canReportProblem = ['in_progress', 'completed'].includes(booking.status) &&
     isBookingReportWindowActive(booking.scheduled_end)
   const canOpenDisputeCase = booking.status === 'disputed' && isBookingReportWindowActive(booking.scheduled_end)
+  const disputeAction = getDisputeParticipantAction('cleaner', booking.dispute, currentUserId)
   const earningsLabel = getCleanerEarningsLabel({
     status: booking.status,
     paymentStatus: booking.payment?.status,
@@ -869,13 +871,13 @@ export default function CleanerBookingDetailPage() {
             Report a problem
           </Button>
         )}
-        {!isCancelledPreConfirmation && canOpenDisputeCase && (
+        {!isCancelledPreConfirmation && canOpenDisputeCase && disputeAction.kind !== 'none' && (
           <Button
             variant="outline"
             size="lg"
             onClick={() => router.push(`/cleaner/report?booking=${booking.id}`)}
           >
-            Add information to existing case
+            {disputeAction.label}
           </Button>
         )}
         {!isCancelledPreConfirmation && booking.status === 'disputed' && (

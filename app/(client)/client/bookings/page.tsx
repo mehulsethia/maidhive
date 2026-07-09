@@ -16,6 +16,7 @@ import { Dialog, DialogTitle } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import { Select } from '@/components/ui/select'
 import { canShowActiveMessageCta, getDisputeWindowMs } from '@/lib/chat-window'
+import { getDisputeParticipantAction, isActiveDisputeStatus } from '@/lib/dispute-actions'
 import { recoverBookingsFromNotifications } from '@/lib/booking-data-recovery'
 import { reportLoadError, resetLoadError } from '@/lib/load-error-policy'
 import { createClient } from '@/lib/supabase'
@@ -23,7 +24,7 @@ import { setupVisiblePolling } from '@/lib/visible-polling'
 import { formatCurrency, formatDate } from '@/lib/utils'
 import { hasPendingAmendmentRequest } from '@/lib/booking-amendment'
 import { getCancellationOriginLabel } from '@/lib/cancellation-origin'
-import type { BookingRead, BookingStatus } from '@/types'
+import type { BookingRead, BookingStatus, ClientDispute } from '@/types'
 import { toast } from 'sonner'
 
 const displayFont = Bricolage_Grotesque({ subsets: ['latin'], weight: ['400', '500', '700', '800'] })
@@ -83,7 +84,7 @@ export default function ClientBookingsPage() {
   const [loading, setLoading] = useState(true)
   const [bookings, setBookings] = useState<BookingRead[]>([])
   const [listError, setListError] = useState<string | null>(null)
-  const [bookingDisputeStatus, setBookingDisputeStatus] = useState<Map<string, string>>(new Map())
+  const [bookingDisputes, setBookingDisputes] = useState<Map<string, ClientDispute>>(new Map())
   const [actionLoadingId, setActionLoadingId] = useState<string | null>(null)
   const [query, setQuery] = useState('')
   const [filter, setFilter] = useState<ClientStatusFilter>('all')
@@ -103,13 +104,13 @@ export default function ClientBookingsPage() {
         recoveryAttemptedRef.current = true
         recoveredBookings = await recoverBookingsFromNotifications().catch(() => [])
       }
-      const disputeMap = new Map<string, string>()
+      const disputeMap = new Map<string, ClientDispute>()
       for (const dispute of disputes?.data?.items ?? []) {
-        if (dispute?.booking_id) disputeMap.set(dispute.booking_id, dispute.status)
+        if (dispute?.booking_id) disputeMap.set(dispute.booking_id, dispute)
       }
       startTransition(() => {
         setBookings(listItems.length > 0 ? listItems : recoveredBookings)
-        setBookingDisputeStatus(disputeMap)
+        setBookingDisputes(disputeMap)
         setLoading(false)
       })
       if (res || recoveredBookings.length > 0) {
@@ -352,7 +353,8 @@ export default function ClientBookingsPage() {
             ) : (
               <div className="space-y-3">
                 {filtered.map((booking, index) => {
-                  const disputeStatusForBooking = bookingDisputeStatus.get(booking.id)
+                  const disputeForBooking = bookingDisputes.get(booking.id) ?? booking.dispute
+                  const disputeStatusForBooking = disputeForBooking?.status
                   const scheduledEndMs = new Date(booking.scheduled_end).getTime()
                   const isWithinDisputeWindow =
                     Number.isFinite(scheduledEndMs) && Date.now() <= scheduledEndMs + DISPUTE_WINDOW_MS
@@ -360,7 +362,8 @@ export default function ClientBookingsPage() {
                   const canOpenDisputeCase =
                     booking.status === 'disputed' &&
                     isWithinDisputeWindow &&
-                    (disputeStatusForBooking === 'open' || disputeStatusForBooking === 'under_review')
+                    isActiveDisputeStatus(disputeStatusForBooking)
+                  const disputeAction = getDisputeParticipantAction('client', disputeForBooking)
                   const reviewWindowOpened = Number.isFinite(scheduledEndMs) && Date.now() >= scheduledEndMs
                   const canLeaveReview = Boolean(booking.completed_at) && booking.status === 'completed' && !booking.review && reviewWindowOpened
                   const reviewSubmitted = Boolean(booking.review)
@@ -495,17 +498,17 @@ export default function ClientBookingsPage() {
                             Review submitted
                           </span>
                         )}
-                        {(disputeStatusForBooking === 'open' || disputeStatusForBooking === 'under_review') && (
+                        {isActiveDisputeStatus(disputeStatusForBooking) && (
                           <span className="inline-flex h-8 items-center rounded-full border border-amber-200 bg-amber-50 px-3 text-xs font-semibold text-amber-700">
                             This booking is currently under review.
                           </span>
                         )}
-                        {canOpenDisputeCase && (
+                        {canOpenDisputeCase && disputeAction.kind !== 'none' && (
                           <Link
                             href={`/client/report?booking=${booking.id}`}
                             className="inline-flex min-h-8 max-w-full items-center justify-center rounded-full border border-amber-200 bg-amber-50 px-3 py-1.5 text-center text-xs font-semibold leading-snug text-amber-700 transition hover:bg-amber-100"
                           >
-                            Add information to existing case
+                            {disputeAction.label}
                           </Link>
                         )}
 
