@@ -15,6 +15,7 @@ import {
   getReleasedCleanerEarnings,
   isCleanerEarningReleased,
 } from '@/lib/cleaner-payment-history'
+import { getCleanerPayoutSummary } from '@/lib/cleaner-payout'
 
 export default function EarningsPage() {
   const [bookings, setBookings] = useState<BookingRead[]>([])
@@ -87,6 +88,7 @@ export default function EarningsPage() {
                   <BookingStatusBadge
                     status={b.status}
                     paymentStatus={b.payment?.status}
+                    transferredAt={b.payment?.transferred_at}
                     scheduledEnd={b.scheduled_end}
                     proposalBy={b.proposal_by}
                     showPaymentRequiredForUnpaid={false}
@@ -109,7 +111,9 @@ export default function EarningsPage() {
             <EmptyState title="No completed jobs yet" description="Earnings from completed jobs will appear here." />
           ) : (
             <div className="space-y-0">
-              {settled.map((b, i) => (
+              {settled.map((b, i) => {
+                const payoutSummary = getCleanerPayoutSummary(b)
+                return (
                 <div key={b.id}>
                   <div className="flex min-w-0 flex-col gap-2 py-3 sm:flex-row sm:items-center sm:justify-between">
                     <div className="min-w-0">
@@ -120,13 +124,14 @@ export default function EarningsPage() {
                       <p className="break-words text-xs text-muted-foreground">{formatDate(b.scheduled_start)} · {b.duration_hours}h · {b.city}</p>
                     </div>
                     <div className="shrink-0 text-left sm:text-right">
-                      <p className="font-semibold text-green-700">+{formatCurrency(b.cleaner_payout)}</p>
+                      <p className="font-semibold text-green-700">+{formatCurrency(payoutSummary.finalCleanerPayout)}</p>
                       <p className="text-xs text-muted-foreground">{formatCurrency(b.hourly_rate)}/hr</p>
                     </div>
                   </div>
                   {i < settled.length - 1 && <Separator />}
                 </div>
-              ))}
+                )
+              })}
             </div>
           )}
         </CardContent>

@@ -6,6 +6,7 @@ import {
   getAdminClientCancellationCopy,
   getClientCancellationContext,
 } from '@/lib/client-cancellation-context'
+import { getClientPaymentSummary } from '@/lib/client-payment-summary'
 import { getClientTotalSpent } from '@/lib/client-spend'
 import type { BookingRead } from '@/types'
 
@@ -65,9 +66,31 @@ describe('client account display rules', () => {
     expect(getClientTotalSpent([
       { status: 'transferred', amount: 35.2 },
       { status: 'captured', amount: 35.2, refundAmount: 30.2 },
+      { status: 'transferred', amount: 26.4, refundAmount: 8 },
       { status: 'partially_refunded', amount: 80, refundAmount: 20 },
       { status: 'refunded', amount: 40, refundAmount: 40 },
       { status: 'authorized', amount: 50 },
-    ])).toBe(100.2)
+    ])).toBe(118.6)
+  })
+
+  it('summarises partial refunds as original, refund, and final paid amount', () => {
+    const summary = getClientPaymentSummary({
+      ...cancelledBooking({ status: 'completed' }),
+      total_amount: 26.4,
+      payment: {
+        id: 'payment_1',
+        status: 'captured',
+        amount: 26.4,
+        refund_amount: 8,
+      },
+    })
+
+    expect(summary).toMatchObject({
+      originalTotal: 26.4,
+      refundAmount: 8,
+      finalAmountPaid: 18.4,
+      isPartiallyRefunded: true,
+      financialStatusLabel: 'Partially refunded',
+    })
   })
 })

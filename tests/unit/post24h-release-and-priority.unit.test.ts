@@ -16,7 +16,7 @@ describe('Post-24h release and booking priority', () => {
     expect(isBookingReportWindowActive(scheduledEnd, deadline + 1)).toBe(false)
   })
 
-  it('marks completed booking as released after report window even if payment not transferred yet', () => {
+  it('does not mark completed booking as released until payment is transferred', () => {
     const scheduledEnd = '2026-05-10T10:00:00.000Z'
     const deadline = getBookingReportDeadlineMs(scheduledEnd)
 
@@ -32,14 +32,21 @@ describe('Post-24h release and booking priority', () => {
       paymentStatus: 'authorized',
       scheduledEnd,
       nowMs: deadline + 1,
-    })).toBe(true)
+    })).toBe(false)
   })
 
-  it('treats transferred payment as released immediately', () => {
+  it('treats transferred payment status or timestamp as released immediately', () => {
     const scheduledEnd = '2099-05-10T10:00:00.000Z'
     expect(isCompletedBookingReleased({
       status: 'completed',
       paymentStatus: 'transferred',
+      scheduledEnd,
+      nowMs: Date.now(),
+    })).toBe(true)
+    expect(isCompletedBookingReleased({
+      status: 'completed',
+      paymentStatus: 'captured',
+      transferredAt: new Date().toISOString(),
       scheduledEnd,
       nowMs: Date.now(),
     })).toBe(true)
@@ -51,7 +58,7 @@ describe('Post-24h release and booking priority', () => {
 
     const bookings: any[] = [
       { id: 'cancelled', status: 'cancelled', created_at: new Date(now).toISOString(), scheduled_start: new Date(now + 8 * oneHour).toISOString() },
-      { id: 'completed-released', status: 'completed', payment: { status: 'authorized' }, created_at: new Date(now).toISOString(), scheduled_start: new Date(now - 4 * oneHour).toISOString(), scheduled_end: new Date(now - 30 * oneHour).toISOString() },
+      { id: 'completed-released', status: 'completed', payment: { status: 'transferred' }, created_at: new Date(now).toISOString(), scheduled_start: new Date(now - 4 * oneHour).toISOString(), scheduled_end: new Date(now - 30 * oneHour).toISOString() },
       { id: 'completed-awaiting', status: 'completed', payment: { status: 'authorized' }, created_at: new Date(now).toISOString(), scheduled_start: new Date(now - 2 * oneHour).toISOString(), scheduled_end: new Date(now - 2 * oneHour).toISOString() },
       { id: 'confirmed', status: 'confirmed', created_at: new Date(now).toISOString(), scheduled_start: new Date(now + 2 * oneHour).toISOString() },
       { id: 'in-progress', status: 'in_progress', created_at: new Date(now).toISOString(), scheduled_start: new Date(now - oneHour).toISOString() },

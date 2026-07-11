@@ -24,6 +24,7 @@ import { setupVisiblePolling } from '@/lib/visible-polling'
 import { formatCurrency, formatDate } from '@/lib/utils'
 import { hasPendingAmendmentRequest } from '@/lib/booking-amendment'
 import { getCancellationOriginLabel } from '@/lib/cancellation-origin'
+import { getClientPaymentSummary } from '@/lib/client-payment-summary'
 import type { BookingRead, BookingStatus, ClientDispute } from '@/types'
 import { toast } from 'sonner'
 
@@ -372,6 +373,7 @@ export default function ClientBookingsPage() {
                   const canContinuePayment = !isOverdueDraftState && (booking.status === 'draft' || (booking.status === 'pending' && !isPaymentAuthorized(booking.payment?.status)))
                   const canCancelDraft = !isOverdueDraftState && (booking.status === 'draft' || (booking.status === 'pending' && !isPaymentAuthorized(booking.payment?.status)))
                   const amendmentPending = hasPendingAmendmentRequest(booking)
+                  const paymentSummary = getClientPaymentSummary(booking)
 
                   return (
                     <article
@@ -402,6 +404,7 @@ export default function ClientBookingsPage() {
                           <BookingStatusBadge
                             status={booking.status}
                             paymentStatus={booking.payment?.status}
+                            transferredAt={booking.payment?.transferred_at}
                             scheduledEnd={booking.scheduled_end}
                             proposalBy={booking.proposal_by}
                             audience="client"
@@ -423,6 +426,13 @@ export default function ClientBookingsPage() {
                           <div className={`${displayFont.className} mt-2 text-base font-semibold text-slate-900`}>
                             {booking.status === 'cancelled' ? (
                               <CancellationPaymentBreakdown booking={booking} compact />
+                            ) : paymentSummary.hasRefund ? (
+                              <div className="space-y-0.5 text-right">
+                                <p>{paymentSummary.financialStatusLabel}</p>
+                                <p>Paid {formatCurrency(paymentSummary.finalAmountPaid)}</p>
+                                <p className="text-xs font-medium text-emerald-700">Refunded {formatCurrency(paymentSummary.refundAmount)}</p>
+                                <p className="text-xs font-normal text-slate-500">Original {formatCurrency(paymentSummary.originalTotal)}</p>
+                              </div>
                             ) : (
                               formatCurrency(Number(booking.total_amount ?? 0))
                             )}

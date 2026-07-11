@@ -9,6 +9,7 @@ import { BookingStatusBadge } from '@/components/booking-status-badge'
 import { BookingInstructions } from '@/components/booking-instructions'
 import { PriceBreakdownCard } from '@/components/price-breakdown-card'
 import { CancellationPaymentBreakdown } from '@/components/cancellation-payment-breakdown'
+import { ClientPaymentOutcome } from '@/components/client-payment-outcome'
 import { Chat } from '@/components/chat'
 import { DetailPageSkeleton } from '@/components/page-skeletons'
 import { Button } from '@/components/ui/button'
@@ -39,6 +40,7 @@ import { getClientBookingRequestDeadlineCopy } from '@/lib/booking-expiry-copy'
 import { computeConfirmedCancellationPolicy, moneyFromCents } from '@/lib/cancellation-policy'
 import { getCancellationOriginLabel } from '@/lib/cancellation-origin'
 import { getClientCancellationContext } from '@/lib/client-cancellation-context'
+import { getClientPaymentSummary } from '@/lib/client-payment-summary'
 import { AMENDMENT_EXPIRY_OUTCOME_COPY, isWithinAmendStartWindow } from '@/lib/booking-amendment'
 import type { BookingRead } from '@/types'
 import { toast } from 'sonner'
@@ -423,6 +425,7 @@ export default function ClientBookingDetailPage() {
   })()
   const cancellationOriginLabel = getCancellationOriginLabel(booking)
   const cancellationContext = getClientCancellationContext(booking)
+  const paymentSummary = getClientPaymentSummary(booking)
   const proposalContext =
     booking.proposal_context ??
     (booking.status === 'pending' ? 'pre_confirmation' : booking.status === 'accepted' || booking.status === 'confirmed' ? 'post_confirmation' : null)
@@ -443,6 +446,7 @@ export default function ClientBookingDetailPage() {
   const isCompletedReleased = isCompletedBookingReleased({
     status: booking.status,
     paymentStatus,
+    transferredAt: booking.payment?.transferred_at,
     scheduledEnd: booking.scheduled_end,
   })
   const isCompletedAwaitingRelease = booking.status === 'completed' && !isCompletedReleased
@@ -520,6 +524,7 @@ export default function ClientBookingDetailPage() {
                   <BookingStatusBadge
                     status={booking.status}
                     paymentStatus={booking.payment?.status}
+                    transferredAt={booking.payment?.transferred_at}
                     scheduledEnd={booking.scheduled_end}
                     proposalBy={booking.proposal_by}
                     audience="client"
@@ -529,9 +534,17 @@ export default function ClientBookingDetailPage() {
                       {cancellationOriginLabel}
                     </span>
                   )}
-                  <p className={`${displayFont.className} text-xl font-bold tracking-[-0.02em] text-white`}>
-                    {new Intl.NumberFormat('en-IE', { style: 'currency', currency: 'EUR' }).format(booking.total_amount)}
-                  </p>
+                  <div className="text-right">
+                    {paymentSummary.financialStatusLabel && (
+                      <p className="text-xs font-semibold text-emerald-200">
+                        Financial status: {paymentSummary.financialStatusLabel}
+                      </p>
+                    )}
+                    <p className={`${displayFont.className} text-xl font-bold tracking-[-0.02em] text-white`}>
+                      {paymentSummary.hasRefund ? 'Final amount paid ' : ''}
+                      {formatCurrency(paymentSummary.finalAmountPaid)}
+                    </p>
+                  </div>
                 </div>
               </div>
             </div>
@@ -586,6 +599,7 @@ export default function ClientBookingDetailPage() {
                 total_amount: booking.total_amount,
               }}
             />
+            <ClientPaymentOutcome booking={booking} />
             {booking.status === 'cancelled' && (
               <div className="space-y-2">
                 {cancellationContext && (

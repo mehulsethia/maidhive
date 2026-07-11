@@ -100,6 +100,7 @@ function BookingTable({ bookings }: { bookings: BookingRead[] }) {
                 <BookingStatusBadge
                   status={b.status}
                   paymentStatus={b.payment?.status}
+                  transferredAt={b.payment?.transferred_at}
                   scheduledEnd={b.scheduled_end}
                   proposalBy={b.proposal_by}
                 />

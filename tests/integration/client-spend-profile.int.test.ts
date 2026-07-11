@@ -25,6 +25,7 @@ vi.mock('@/server/db', () => ({
       findMany: vi.fn(async () => [
         { status: 'transferred', amount: 35.2, refundAmount: null },
         { status: 'captured', amount: 35.2, refundAmount: 30.2 },
+        { status: 'transferred', amount: 26.4, refundAmount: 8 },
         { status: 'partially_refunded', amount: 80, refundAmount: 20 },
       ]),
     },
@@ -41,6 +42,6 @@ describe('client profile spend integration', () => {
     const body = await response.json()
 
     expect(response.status).toBe(200)
-    expect(body.data.total_spent).toBe(100.2)
+    expect(body.data.total_spent).toBe(118.6)
   })
 })

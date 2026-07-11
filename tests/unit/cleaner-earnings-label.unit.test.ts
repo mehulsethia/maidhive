@@ -16,7 +16,7 @@ describe('Cleaner earnings label', () => {
   })
 
   it('shows earned label for released completed bookings', () => {
-    expect(labelFor('completed', -30, 'authorized')).toBe('You earned')
+    expect(labelFor('completed', -30, 'authorized')).toBe('You will earn')
     expect(labelFor('completed', 10, 'transferred')).toBe('You earned')
   })
 

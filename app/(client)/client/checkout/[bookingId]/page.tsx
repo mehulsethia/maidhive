@@ -249,6 +249,7 @@ export default function CheckoutPage() {
                   <BookingStatusBadge
                     status={booking.status}
                     paymentStatus={booking.payment?.status}
+                    transferredAt={booking.payment?.transferred_at}
                     scheduledEnd={booking.scheduled_end}
                     proposalBy={booking.proposal_by}
                     audience="client"

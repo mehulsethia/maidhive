@@ -4,12 +4,14 @@ import type { BookingStatus } from '@/types'
 export function getCleanerEarningsLabel(args: {
   status: BookingStatus
   paymentStatus?: string | null
+  transferredAt?: string | Date | null
   scheduledEnd?: string | Date | null
 }) {
-  const { status, paymentStatus, scheduledEnd } = args
+  const { status, paymentStatus, transferredAt, scheduledEnd } = args
   const payoutReleased = isCompletedBookingReleased({
     status,
     paymentStatus,
+    transferredAt,
     scheduledEnd,
   })
   const showProjectedEarnings =

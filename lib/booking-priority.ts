@@ -51,11 +51,13 @@ export function compareBookingsByOperationalPriority(a: BookingRead, b: BookingR
   const aCompletedReleased = isCompletedBookingReleased({
     status: a.status,
     paymentStatus: a.payment?.status,
+    transferredAt: a.payment?.transferred_at,
     scheduledEnd: a.scheduled_end,
   })
   const bCompletedReleased = isCompletedBookingReleased({
     status: b.status,
     paymentStatus: b.payment?.status,
+    transferredAt: b.payment?.transferred_at,
     scheduledEnd: b.scheduled_end,
   })
   const aEffectivePriority = a.status === 'completed' && aCompletedReleased ? aPriority + 1 : aPriority

@@ -23,6 +23,7 @@ import { setupVisiblePolling } from '@/lib/visible-polling'
 import { getCancellationOriginLabel } from '@/lib/cancellation-origin'
 import { UserAvatar } from '@/components/ui/user-avatar'
 import { formatCurrency, formatDate } from '@/lib/utils'
+import { getClientPaymentSummary } from '@/lib/client-payment-summary'
 import type { BookingRead, BookingStatus, FavoriteCleaner } from '@/types'
 
 const displayFont = Bricolage_Grotesque({ subsets: ['latin'], weight: ['400', '500', '700', '800'] })
@@ -344,6 +345,7 @@ export default function ClientDashboardPage() {
                   const proposalSummary = isAmendProposal
                     ? `${proposalActor} requested Amend Start Time: ${formatDate(booking.scheduled_start)} → ${formatDate(booking.proposed_start ?? booking.scheduled_start)}`
                     : `${proposalActor} proposed: ${formatDate(booking.scheduled_start)} → ${formatDate(booking.proposed_start ?? booking.scheduled_start)}`
+                  const paymentSummary = getClientPaymentSummary(booking)
                   return (
                   <Link
                     key={booking.id}
@@ -364,6 +366,7 @@ export default function ClientDashboardPage() {
                       <BookingStatusBadge
                         status={booking.status}
                         paymentStatus={booking.payment?.status}
+                        transferredAt={booking.payment?.transferred_at}
                         scheduledEnd={booking.scheduled_end}
                         proposalBy={booking.proposal_by}
                         audience="client"
@@ -376,6 +379,11 @@ export default function ClientDashboardPage() {
                       {isActiveProposal && (
                         <p className="text-xs font-semibold text-blue-700">
                           {proposalSummary}
+                        </p>
+                      )}
+                      {paymentSummary.isPartiallyRefunded && (
+                        <p className="text-xs font-semibold text-emerald-700">
+                          Completed · Partial refund {formatCurrency(paymentSummary.refundAmount)}
                         </p>
                       )}
                     </div>

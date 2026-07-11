@@ -9,6 +9,7 @@ import { resolveDisputeSchema } from '@/server/schemas/dispute.schema'
 import { pushInAppNotification } from '@/server/services/in-app-notification.service'
 import { db } from '@/server/db'
 import { getDisputeResolutionOutcome } from '@/lib/dispute-resolution'
+import { calculateDisputeAdjustedCleanerPayoutCents } from '@/lib/cleaner-payout'
 import { cleanerReliabilityService } from '@/server/services/cleaner-reliability.service'
 
 export const POST = requireAdmin(async (req: NextRequest, ctx, user) => {
@@ -44,6 +45,7 @@ export const POST = requireAdmin(async (req: NextRequest, ctx, user) => {
       const paymentAmount = Number(payment.amount)
       const paymentAmountCents = Math.round(paymentAmount * 100)
       const originalPlatformFeeCents = Math.round(Number(payment.platformFee) * 100)
+      const originalCleanerPayoutCents = Math.round(Number(payment.cleanerPayout) * 100)
       const chargePct = parsed.data.charge_percentage
 
       if (parsed.data.resolution_type === 'full_refund') {
@@ -89,14 +91,17 @@ export const POST = requireAdmin(async (req: NextRequest, ctx, user) => {
 
         if (pi.status === 'requires_capture') {
           const amountToCapture = paymentAmountCents - refundCents
-          const proportionalFeeCents = getProportionalFeeCents(
+          const adjustedCleanerPayoutCents = calculateDisputeAdjustedCleanerPayoutCents({
+            originalCleanerPayoutCents,
+            refundCents,
+          })
+          const adjustedPlatformFeeCents = getAdjustedPlatformFeeCents(
             amountToCapture,
-            paymentAmountCents,
-            originalPlatformFeeCents,
+            adjustedCleanerPayoutCents,
           )
           const captured = await stripe.paymentIntents.capture(payment.stripePaymentIntentId, {
             amount_to_capture: amountToCapture,
-            application_fee_amount: proportionalFeeCents,
+            application_fee_amount: adjustedPlatformFeeCents,
           })
           resolvedRefundAmount = Number(((paymentAmountCents - amountToCapture) / 100).toFixed(2))
           await paymentRepo.update(payment.id, {
@@ -104,18 +109,31 @@ export const POST = requireAdmin(async (req: NextRequest, ctx, user) => {
             stripeChargeId: typeof captured.latest_charge === 'string' ? captured.latest_charge : (captured.latest_charge as any)?.id,
             capturedAt: new Date(),
             payoutScheduledAt: new Date(),
+            platformFee: Number((adjustedPlatformFeeCents / 100).toFixed(2)),
+            cleanerPayout: Number((adjustedCleanerPayoutCents / 100).toFixed(2)),
             refundAmount: resolvedRefundAmount,
             refundReason: parsed.data.resolution_note,
           })
         } else if (pi.status === 'succeeded') {
+          const adjustedCleanerPayoutCents = calculateDisputeAdjustedCleanerPayoutCents({
+            originalCleanerPayoutCents,
+            refundCents,
+          })
+          const adjustedPlatformFeeCents = getAdjustedPlatformFeeCents(
+            paymentAmountCents - refundCents,
+            adjustedCleanerPayoutCents,
+          )
           const refund = await stripe.refunds.create({
             payment_intent: payment.stripePaymentIntentId,
             amount: refundCents,
+            reverse_transfer: true,
           })
           resolvedRefundAmount = Number((refundCents / 100).toFixed(2))
           await paymentRepo.update(payment.id, {
-            status: 'partially_refunded',
+            status: payment.status === 'transferred' ? 'transferred' : 'captured',
             stripeRefundId: refund.id,
+            platformFee: Number((adjustedPlatformFeeCents / 100).toFixed(2)),
+            cleanerPayout: Number((adjustedCleanerPayoutCents / 100).toFixed(2)),
             refundAmount: resolvedRefundAmount,
             refundReason: parsed.data.resolution_note,
             refundedAt: new Date(),
@@ -250,4 +268,15 @@ function getProportionalFeeCents(
 
   const proportional = Math.round((originalPlatformFeeCents * amountToCaptureCents) / originalAmountCents)
   return Math.min(amountToCaptureCents, Math.max(0, proportional))
+}
+
+function getAdjustedPlatformFeeCents(
+  amountToCaptureCents: number,
+  adjustedCleanerPayoutCents: number,
+) {
+  if (amountToCaptureCents <= 0) return 0
+  return Math.min(
+    amountToCaptureCents,
+    Math.max(0, amountToCaptureCents - Math.max(0, adjustedCleanerPayoutCents)),
+  )
 }

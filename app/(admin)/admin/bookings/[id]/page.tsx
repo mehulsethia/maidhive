@@ -35,6 +35,7 @@ import {
   isNormalCancellationPaymentRelease,
 } from '@/lib/cancellation-payment-state'
 import { getAdminClientCancellationCopy } from '@/lib/client-cancellation-context'
+import { getCleanerPayoutSummary } from '@/lib/cleaner-payout'
 import { formatCurrency, formatDate } from '@/lib/utils'
 import type { BookingRead } from '@/types'
 
@@ -84,6 +85,7 @@ function buildTimeline(booking: BookingRead): TimelineEvent[] {
   const events: TimelineEvent[] = []
   const payment = booking.payment
   const cancellationOutcome = getCancellationPaymentOutcome(booking)
+  const payoutSummary = getCleanerPayoutSummary(booking)
   const paymentReleaseDescription = getPaymentReleaseDescription(booking)
   const clientCancellationCopy = getAdminClientCancellationCopy(booking)
 
@@ -203,14 +205,14 @@ function buildTimeline(booking: BookingRead): TimelineEvent[] {
     id: 'payout-scheduled',
     at: payment.payout_scheduled_at,
     title: 'Payout scheduled',
-    description: `Cleaner payout scheduled for ${formatCurrency(cancellationOutcome?.cleanerPayoutDue ?? payment.cleaner_payout ?? booking.cleaner_payout)}.`,
+    description: `Cleaner payout scheduled for ${formatCurrency(cancellationOutcome?.cleanerPayoutDue ?? payoutSummary.finalCleanerPayout)}.`,
   } : null)
 
   addEvent(events, payment?.transferred_at && (!cancellationOutcome || cancellationOutcome.cleanerPayoutDue > 0) ? {
     id: 'payment-transferred',
     at: payment.transferred_at,
     title: 'Cleaner payout transferred',
-    description: `Transferred ${formatCurrency(cancellationOutcome?.cleanerPayoutDue ?? payment.cleaner_payout ?? booking.cleaner_payout)} to the cleaner.`,
+    description: `Transferred ${formatCurrency(cancellationOutcome?.cleanerPayoutDue ?? payoutSummary.finalCleanerPayout)} to the cleaner.`,
     tone: 'success',
   } : null)
 
@@ -341,6 +343,7 @@ export default function AdminBookingDetailPage() {
     ? getCancellationPaymentOutcome(booking)
     : null
   const useProjectedPaymentLabels = isNonPayableBookingState(booking)
+  const payoutSummary = getCleanerPayoutSummary(booking)
 
   return (
     <div className="min-w-0 space-y-5">
@@ -359,8 +362,10 @@ export default function AdminBookingDetailPage() {
           <BookingStatusBadge
             status={booking.status}
             paymentStatus={booking.payment?.status}
+            transferredAt={booking.payment?.transferred_at}
             scheduledEnd={booking.scheduled_end}
             proposalBy={booking.proposal_by}
+            audience="admin"
           />
         </div>
       </div>
@@ -477,9 +482,15 @@ export default function AdminBookingDetailPage() {
                 ) : (
                   <>
                     <DetailRow
-                      label={useProjectedPaymentLabels ? 'Projected cleaner payout' : 'Cleaner payout'}
-                      value={formatCurrency(booking.cleaner_payout)}
+                      label={useProjectedPaymentLabels ? 'Projected cleaner payout' : 'Original cleaner payout'}
+                      value={formatCurrency(payoutSummary.originalCleanerPayout)}
                     />
+                    {payoutSummary.hasDisputeAdjustment && (
+                      <>
+                        <DetailRow label="Dispute adjustment" value={formatCurrency(payoutSummary.disputeAdjustment)} />
+                        <DetailRow label="Final cleaner payout" value={formatCurrency(payoutSummary.finalCleanerPayout)} />
+                      </>
+                    )}
                     <DetailRow
                       label={useProjectedPaymentLabels ? 'Projected platform fee' : 'Platform fee'}
                       value={formatCurrency(booking.platform_fee)}

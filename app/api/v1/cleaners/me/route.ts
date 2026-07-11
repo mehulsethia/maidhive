@@ -8,6 +8,7 @@ import { ok, err } from '@/server/response'
 import { updateCleanerSchema } from '@/server/schemas/cleaner.schema'
 import { deriveCleanerLifecycleStatus } from '@/lib/cleaner-status'
 import { cleanerReliabilityService } from '@/server/services/cleaner-reliability.service'
+import { calculateDisputeAdjustedCleanerPayoutCents } from '@/lib/cleaner-payout'
 
 function withCleanerAliases(cleaner: any) {
   const rawSupplies = cleaner.cleaningSupplies
@@ -72,7 +73,7 @@ export const GET = requireCleaner(async (req, _ctx, user) => {
   const schedules = await availabilityRepo.getSchedule(cleaner.id)
   const hasAvailabilitySlots = schedules.some((s) => s.isActive)
   const onboarding = computeCleanerOnboardingProgress({ cleaner, hasAvailabilitySlots })
-  const [completedBookings, respondedBookings, reviewAgg, releasedEarningsAgg] = await Promise.all([
+  const [completedBookings, respondedBookings, reviewAgg, releasedPayments] = await Promise.all([
     db.booking.findMany({
       where: {
         cleanerId: cleaner.id,
@@ -98,7 +99,7 @@ export const GET = requireCleaner(async (req, _ctx, user) => {
       where: { cleanerId: cleaner.id },
       _avg: { rating: true },
     }),
-    db.payment.aggregate({
+    db.payment.findMany({
       where: {
         booking: { cleanerId: cleaner.id },
         OR: [
@@ -106,9 +107,41 @@ export const GET = requireCleaner(async (req, _ctx, user) => {
           { transferredAt: { not: null } },
         ],
       },
-      _sum: { cleanerPayout: true },
+      select: {
+        cleanerPayout: true,
+        refundAmount: true,
+        booking: {
+          select: {
+            cleanerPayout: true,
+            dispute: {
+              select: {
+                resolutionType: true,
+                refundAmount: true,
+              },
+            },
+          },
+        },
+      },
     }),
   ])
+  const releasedEarnings = releasedPayments.reduce((sum, payment) => {
+    const paymentCleanerPayoutCents = Math.round(Number(payment.cleanerPayout ?? 0) * 100)
+    const originalCleanerPayoutCents = Math.round(Number(payment.booking.cleanerPayout ?? 0) * 100)
+    const refundCents = Math.round(Number(payment.refundAmount ?? payment.booking.dispute?.refundAmount ?? 0) * 100)
+    const resolutionType = payment.booking.dispute?.resolutionType
+    const finalPayoutCents = resolutionType === 'full_refund'
+      ? 0
+      : resolutionType === 'partial_refund'
+        ? Math.min(
+            paymentCleanerPayoutCents,
+            calculateDisputeAdjustedCleanerPayoutCents({
+              originalCleanerPayoutCents,
+              refundCents,
+            }),
+          )
+        : paymentCleanerPayoutCents
+    return sum + Math.max(0, finalPayoutCents) / 100
+  }, 0)
   const onTimeThresholdMs = 15 * 60 * 1000
   const onTimeCount = completedBookings.filter((booking) => {
     if (!booking.startedAt) return false
@@ -146,7 +179,7 @@ export const GET = requireCleaner(async (req, _ctx, user) => {
         : undefined,
       totalJobs: completedBookings.length,
       averageRating: reviewAgg._avg.rating ?? null,
-      releasedEarnings: Number(releasedEarningsAgg._sum.cleanerPayout ?? 0),
+      releasedEarnings,
       on_time_percentage: onTimePercentage,
       avg_response_minutes: avgResponseMinutes,
       lifecycle_status: deriveCleanerLifecycleStatus({

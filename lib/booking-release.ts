@@ -20,11 +20,12 @@ export function isBookingReportWindowActive(scheduledEnd?: string | Date | null,
 export function isCompletedBookingReleased(args: {
   status?: string | null
   paymentStatus?: string | null
+  transferredAt?: string | Date | null
   scheduledEnd?: string | Date | null
   nowMs?: number
 }) {
-  const { status, paymentStatus, scheduledEnd, nowMs = Date.now() } = args
+  const { status, paymentStatus, transferredAt } = args
   if (status !== 'completed') return false
   if (String(paymentStatus ?? '') === 'transferred') return true
-  return !isBookingReportWindowActive(scheduledEnd, nowMs)
+  return Number.isFinite(toMs(transferredAt))
 }

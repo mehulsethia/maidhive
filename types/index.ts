@@ -272,6 +272,7 @@ export interface BookingRead {
     responded_at?: string | null
     resolution_type?: string | null
     resolution_note?: string | null
+    refund_amount?: number | null
     resolved_at?: string | null
     created_at: string
     updated_at?: string

@@ -44,6 +44,7 @@ import { formatCurrency, formatDate } from '@/lib/utils'
 import { AMENDMENT_EXPIRY_OUTCOME_COPY, isWithinAmendStartWindow } from '@/lib/booking-amendment'
 import { getCancellationOriginLabel } from '@/lib/cancellation-origin'
 import { getCleanerCancellationConfirmationCopy } from '@/lib/cleaner-cancellation-copy'
+import { getCleanerPayoutSummary } from '@/lib/cleaner-payout'
 import type { BookingRead } from '@/types'
 import { toast } from 'sonner'
 
@@ -406,8 +407,10 @@ export default function CleanerBookingDetailPage() {
   const earningsLabel = getCleanerEarningsLabel({
     status: booking.status,
     paymentStatus: booking.payment?.status,
+    transferredAt: booking.payment?.transferred_at,
     scheduledEnd: booking.scheduled_end,
   })
+  const payoutSummary = getCleanerPayoutSummary(booking)
   const cancellationOutcome = getCancellationPaymentOutcome(booking)
   const isClosedNonPayableStatus = ['cancelled', 'declined', 'expired'].includes(booking.status)
   const clientTrust = getClientTrustMetadata(booking.client)
@@ -505,6 +508,7 @@ export default function CleanerBookingDetailPage() {
           <BookingStatusBadge
             status={booking.status}
             paymentStatus={booking.payment?.status}
+            transferredAt={booking.payment?.transferred_at}
             scheduledEnd={booking.scheduled_end}
             proposalBy={booking.proposal_by}
             showPaymentRequiredForUnpaid={false}
@@ -589,9 +593,16 @@ export default function CleanerBookingDetailPage() {
                           ? cleanerCancelledPayoutMessage.amount
                           : cancellationOutcome
                             ? cancellationOutcome.cleanerPayoutDue
-                            : booking.cleaner_payout,
+                            : payoutSummary.finalCleanerPayout,
                       )}
                     </p>
+                    {payoutSummary.hasDisputeAdjustment && !cleanerCancelledPayoutMessage && !cancellationOutcome && (
+                      <div className="mt-2 space-y-0.5 text-xs text-muted-foreground">
+                        <p>Original cleaner payout: {formatCurrency(payoutSummary.originalCleanerPayout)}</p>
+                        <p>Dispute adjustment: {formatCurrency(payoutSummary.disputeAdjustment)}</p>
+                        <p>Final cleaner payout: {formatCurrency(payoutSummary.finalCleanerPayout)}</p>
+                      </div>
+                    )}
                     <p className="text-xs text-muted-foreground mt-0.5">
                       {cleanerCancelledPayoutMessage
                         ? cleanerCancelledPayoutMessage.description

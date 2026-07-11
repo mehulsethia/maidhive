@@ -102,11 +102,37 @@ test.describe('F19 dispute and compensation responsive regression @smoke', () =>
       await page.setViewportSize(VIEWPORTS[0])
       await page.goto('/client/profile')
       await expect(page.getByRole('button', {
-        name: 'Includes completed bookings and any cancellation or no-show charges paid through MaidHive.',
+        name: 'Includes completed bookings and any cancellation or no-show charges, minus successful refunds.',
       })).toBeVisible({ timeout: 20_000 })
 
       await page.goto('/client/bookings')
       await expect(page.getByText(/Completed - (Awaiting Release|Released)/)).toHaveCount(0)
+
+      const bookingsResponse = await page.request.get('/api/v1/bookings?page=1&page_size=50')
+      expect(bookingsResponse.status()).toBe(200)
+      const bookingsBody = await bookingsResponse.json()
+      const bookings = bookingsBody?.data?.bookings ?? bookingsBody?.data?.items ?? []
+      const partialRefundBooking = bookings.find((booking: any) =>
+        Number(booking?.payment?.refund_amount ?? 0) > 0 &&
+        ['captured', 'transferred', 'partially_refunded', 'refunded'].includes(String(booking?.payment?.status ?? '')),
+      )
+
+      if (partialRefundBooking?.id) {
+        await assertResponsiveRoute(page, '/client/dashboard')
+        await expect(page.getByText(/Completed · Partial refund €\d/)).toBeVisible({ timeout: 20_000 })
+
+        await assertResponsiveRoute(page, '/client/bookings')
+        await expect(page.getByText('Partially refunded').first()).toBeVisible({ timeout: 20_000 })
+        await expect(page.getByText(/Paid €\d/).first()).toBeVisible()
+        await expect(page.getByText(/Refunded €\d/).first()).toBeVisible()
+
+        await assertResponsiveRoute(page, `/client/bookings/${partialRefundBooking.id}`)
+        await expect(page.getByText('Financial status: Partially refunded')).toBeVisible({ timeout: 20_000 })
+        await expect(page.getByText('Final payment outcome')).toBeVisible()
+        await expect(page.getByText('Original total')).toBeVisible()
+        await expect(page.getByText('Partial refund')).toBeVisible()
+        await expect(page.getByText('Final amount paid')).toBeVisible()
+      }
 
       const cancelledResponse = await page.request.get('/api/v1/bookings?page=1&page_size=1&status=cancelled')
       expect(cancelledResponse.status()).toBe(200)

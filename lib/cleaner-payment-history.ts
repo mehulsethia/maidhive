@@ -1,4 +1,5 @@
 import { isCompletedBookingReleased } from '@/lib/booking-release'
+import { getCleanerPayoutSummary } from '@/lib/cleaner-payout'
 import { formatCurrency } from '@/lib/utils'
 import type { BookingRead, BookingStatus } from '@/types'
 
@@ -36,13 +37,16 @@ export function classifyCleanerPaymentHistoryBooking(
     const released = isCompletedBookingReleased({
       status: booking.status,
       paymentStatus: booking.payment?.status,
+      transferredAt: booking.payment?.transferred_at,
       scheduledEnd: booking.scheduled_end,
       nowMs,
     })
+    const payout = getCleanerPayoutSummary(booking).finalCleanerPayout
     return {
       paymentType: isClientNoShowCompensation ? 'No-show compensation' : 'Booking payout',
       label: released ? 'Released' : 'Awaiting release',
       tone: released ? 'ok' : 'warn',
+      amount: payout,
     }
   }
 
@@ -84,7 +88,7 @@ export function classifyCleanerPaymentHistoryBooking(
 
 export function getReleasedCleanerEarnings(bookings: BookingRead[], nowMs = Date.now()) {
   return bookings.reduce((sum, booking) => {
-    const payout = Number(booking.payment?.cleaner_payout ?? booking.cleaner_payout ?? 0)
+    const payout = getCleanerPayoutSummary(booking).finalCleanerPayout
     if (!Number.isFinite(payout) || payout <= 0) return sum
     return isCleanerEarningReleased(booking, nowMs) ? sum + payout : sum
   }, 0)
@@ -95,6 +99,7 @@ export function isCleanerEarningReleased(booking: BookingRead, nowMs = Date.now(
     return isCompletedBookingReleased({
       status: booking.status,
       paymentStatus: booking.payment?.status,
+      transferredAt: booking.payment?.transferred_at,
       scheduledEnd: booking.scheduled_end,
       nowMs,
     })

@@ -31,7 +31,7 @@ function booking(overrides: Partial<BookingRead>): BookingRead {
 }
 
 describe('Cleaner payment history mapping', () => {
-  it('maps completed booking to awaiting/released based on report window', () => {
+  it('maps completed booking to awaiting/released based on payment transfer', () => {
     const completed = booking({ status: 'completed', payment: { id: 'p1', status: 'authorized' } })
     const deadline = getBookingReportDeadlineMs(completed.scheduled_end)
 
@@ -41,8 +41,11 @@ describe('Cleaner payment history mapping', () => {
     expect(before?.label).toBe('Awaiting release')
     expect(before?.paymentType).toBe('Booking payout')
     expect(before?.tone).toBe('warn')
-    expect(after?.label).toBe('Released')
-    expect(after?.tone).toBe('ok')
+    expect(after?.label).toBe('Awaiting release')
+    expect(after?.tone).toBe('warn')
+
+    const transferred = booking({ status: 'completed', payment: { id: 'p1-released', status: 'transferred' } })
+    expect(classifyCleanerPaymentHistoryBooking(transferred)?.label).toBe('Released')
 
     const resolvedNoShow = booking({
       status: 'completed',
@@ -181,5 +184,35 @@ describe('Cleaner payment history mapping', () => {
       pendingCompensation,
       disputedCapturedPayout,
     ])).toBe(68)
+  })
+
+  it('uses final adjusted payout for released partial dispute refunds', () => {
+    const adjusted = booking({
+      id: 'partial_dispute_released',
+      status: 'completed',
+      cleaner_payout: 24,
+      payment: {
+        id: 'p16',
+        status: 'transferred',
+        cleaner_payout: 24,
+        refund_amount: 8,
+      },
+      dispute: {
+        id: 'd16',
+        status: 'resolved',
+        reason: 'Partial service issue',
+        issue_type: 'service_issue',
+        resolution_type: 'partial_refund',
+        refund_amount: 8,
+        created_at: new Date().toISOString(),
+      },
+    })
+
+    const history = classifyCleanerPaymentHistoryBooking(adjusted)
+    expect(history).toMatchObject({
+      label: 'Released',
+      amount: 16,
+    })
+    expect(getReleasedCleanerEarnings([adjusted])).toBe(16)
   })
 })

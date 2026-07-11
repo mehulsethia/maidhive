@@ -28,6 +28,7 @@ function pendingLabel(proposalBy?: 'client' | 'cleaner' | null) {
 export function BookingStatusBadge({
   status,
   paymentStatus,
+  transferredAt,
   scheduledEnd,
   proposalBy,
   showPaymentRequiredForUnpaid = true,
@@ -35,6 +36,7 @@ export function BookingStatusBadge({
 }: {
   status: BookingStatus
   paymentStatus?: string | null
+  transferredAt?: string | Date | null
   scheduledEnd?: string | Date | null
   proposalBy?: 'client' | 'cleaner' | null
   showPaymentRequiredForUnpaid?: boolean
@@ -42,7 +44,7 @@ export function BookingStatusBadge({
 }) {
   const completedLabel = audience === 'client'
     ? 'Completed'
-    : isCompletedBookingReleased({ status, paymentStatus, scheduledEnd })
+    : isCompletedBookingReleased({ status, paymentStatus, transferredAt, scheduledEnd })
     ? 'Completed - Released'
     : STATUS_CONFIG.completed.label
 

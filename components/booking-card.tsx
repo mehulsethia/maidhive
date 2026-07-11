@@ -5,6 +5,8 @@ import { Button } from '@/components/ui/button'
 import { BookingStatusBadge } from '@/components/booking-status-badge'
 import { CancellationPaymentBreakdown } from '@/components/cancellation-payment-breakdown'
 import { isCompletedBookingReleased } from '@/lib/booking-release'
+import { getCleanerPayoutSummary } from '@/lib/cleaner-payout'
+import { getClientPaymentSummary } from '@/lib/client-payment-summary'
 import { formatCurrency, formatDate } from '@/lib/utils'
 import type { BookingRead } from '@/types'
 import { getCancellationOriginLabel } from '@/lib/cancellation-origin'
@@ -26,8 +28,11 @@ export function BookingCard({ booking, viewAs = 'client' }: BookingCardProps) {
   const payoutReleased = isCompletedBookingReleased({
     status: booking.status,
     paymentStatus: booking.payment?.status,
+    transferredAt: booking.payment?.transferred_at,
     scheduledEnd: booking.scheduled_end,
   })
+  const payoutSummary = getCleanerPayoutSummary(booking)
+  const clientPaymentSummary = getClientPaymentSummary(booking)
   const showProjectedEarnings =
     booking.status === 'confirmed' ||
     booking.status === 'in_progress' ||
@@ -50,6 +55,7 @@ export function BookingCard({ booking, viewAs = 'client' }: BookingCardProps) {
               <BookingStatusBadge
                 status={booking.status}
                 paymentStatus={booking.payment?.status}
+                transferredAt={booking.payment?.transferred_at}
                 scheduledEnd={booking.scheduled_end}
                 proposalBy={booking.proposal_by}
                 showPaymentRequiredForUnpaid={viewAs !== 'cleaner'}
@@ -81,12 +87,17 @@ export function BookingCard({ booking, viewAs = 'client' }: BookingCardProps) {
           <div className="text-right shrink-0">
             {booking.status === 'cancelled' ? (
               <CancellationPaymentBreakdown booking={booking} compact />
+            ) : viewAs === 'client' && clientPaymentSummary.hasRefund ? (
+              <div className="space-y-0.5">
+                <p className="font-bold text-lg">{formatCurrency(clientPaymentSummary.finalAmountPaid)}</p>
+                <p className="text-xs font-medium text-emerald-700">Refunded {formatCurrency(clientPaymentSummary.refundAmount)}</p>
+              </div>
             ) : (
               <p className="font-bold text-lg">{formatCurrency(booking.total_amount)}</p>
             )}
             {viewAs === 'cleaner' && booking.status !== 'cancelled' && (
               <p className="text-xs text-muted-foreground">
-                {earningsLabel} {formatCurrency(booking.cleaner_payout)}
+                {earningsLabel} {formatCurrency(payoutSummary.finalCleanerPayout)}
               </p>
             )}
             {viewAs === 'cleaner' && booking.status === 'disputed' && (

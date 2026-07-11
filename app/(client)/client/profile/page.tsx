@@ -126,7 +126,7 @@ export default function ClientProfilePage() {
           setEmailVerified(Boolean(user?.email_confirmed_at))
           setPhoneVerified(Boolean(user?.phone_verified_at))
           setBookings(bookingItems)
-          setTotalSpent(Number(client?.total_spent ?? 0))
+          setTotalSpent(Number(client?.total_spent ?? (client as any)?.totalSpent ?? 0))
           setLoading(false)
         })
         if (clientRes.status === 'fulfilled') {
@@ -578,7 +578,7 @@ export default function ClientProfilePage() {
                     value={formatCurrency(totalSpent)}
                     monoFont={monoFont.className}
                     displayFont={displayFont.className}
-                    tooltip="Includes completed bookings and any cancellation or no-show charges paid through MaidHive."
+                    tooltip="Includes completed bookings and any cancellation or no-show charges, minus successful refunds."
                   />
                 </div>
               </div>

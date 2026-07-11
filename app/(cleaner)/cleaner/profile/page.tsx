@@ -22,6 +22,7 @@ import {
   CLEANER_PAYMENT_HISTORY_SOURCE_STATUSES,
   dedupeBookingsById,
 } from '@/lib/cleaner-payment-history'
+import { getCleanerPayoutSummary } from '@/lib/cleaner-payout'
 import { reportLoadError, resetLoadError } from '@/lib/load-error-policy'
 import { createClient } from '@/lib/supabase'
 import { formatCurrency } from '@/lib/utils'
@@ -1001,7 +1002,9 @@ function CleanerProfilePageContent() {
                     </p>
                   ) : (
                     <div className="mt-3 space-y-2">
-                      {paymentHistory.map(({ booking: b, paymentType, label, tone, amount }) => (
+                      {paymentHistory.map(({ booking: b, paymentType, label, tone, amount }) => {
+                        const payoutSummary = getCleanerPayoutSummary(b)
+                        return (
                         <div key={b.id} className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2">
                           <div className="min-w-0">
                             <p className="break-words text-sm font-semibold text-slate-900">
@@ -1021,7 +1024,7 @@ function CleanerProfilePageContent() {
                             </p>
                           </div>
                         <div className="w-full text-left sm:w-auto sm:text-right">
-                            <p className="text-sm font-semibold text-emerald-700">{formatCurrency(amount ?? b.cleaner_payout)}</p>
+                            <p className="text-sm font-semibold text-emerald-700">{formatCurrency(amount ?? payoutSummary.finalCleanerPayout)}</p>
                             <p className={`text-xs ${
                               tone === 'issue'
                                 ? 'text-red-700'
@@ -1033,7 +1036,8 @@ function CleanerProfilePageContent() {
                             </p>
                           </div>
                         </div>
-                      ))}
+                        )
+                      })}
                     </div>
                   )}
                 </div>

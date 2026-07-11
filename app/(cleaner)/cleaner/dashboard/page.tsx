@@ -23,6 +23,7 @@ import { showJobStartedToast } from '@/lib/job-start-toast'
 import { getReleasedCleanerEarnings } from '@/lib/cleaner-payment-history'
 import { setupVisiblePolling } from '@/lib/visible-polling'
 import { getCleanerEarningsLabel } from '@/lib/cleaner-earnings-label'
+import { getCleanerPayoutSummary } from '@/lib/cleaner-payout'
 import { toast } from 'sonner'
 
 const REQUEST_STATUSES: BookingStatus[] = ['pending']
@@ -412,6 +413,7 @@ export default function CleanerDashboardPage() {
                     <BookingStatusBadge
                       status={b.status}
                       paymentStatus={b.payment?.status}
+                      transferredAt={b.payment?.transferred_at}
                       scheduledEnd={b.scheduled_end}
                       proposalBy={b.proposal_by}
                       showPaymentRequiredForUnpaid={false}
@@ -522,6 +524,7 @@ export default function CleanerDashboardPage() {
                         <BookingStatusBadge
                           status={b.status}
                           paymentStatus={b.payment?.status}
+                          transferredAt={b.payment?.transferred_at}
                           scheduledEnd={b.scheduled_end}
                           proposalBy={b.proposal_by}
                           showPaymentRequiredForUnpaid={false}
@@ -566,8 +569,10 @@ export default function CleanerDashboardPage() {
                 const earningsLabel = getCleanerEarningsLabel({
                   status: b.status,
                   paymentStatus: b.payment?.status,
+                  transferredAt: b.payment?.transferred_at,
                   scheduledEnd: b.scheduled_end,
                 })
+                const payoutSummary = getCleanerPayoutSummary(b)
                 return (
                   <Link
                     key={b.id}
@@ -585,6 +590,7 @@ export default function CleanerDashboardPage() {
                       <BookingStatusBadge
                         status={b.status}
                         paymentStatus={b.payment?.status}
+                        transferredAt={b.payment?.transferred_at}
                         scheduledEnd={b.scheduled_end}
                         proposalBy={b.proposal_by}
                         showPaymentRequiredForUnpaid={false}
@@ -595,7 +601,7 @@ export default function CleanerDashboardPage() {
                           : 'text-sm text-slate-900'
                       }`}>
                         {b.status === 'disputed' ? `${earningsLabel} ` : ''}
-                        {formatCurrency(b.cleaner_payout)}
+                        {formatCurrency(payoutSummary.finalCleanerPayout)}
                       </p>
                     </div>
                   </Link>

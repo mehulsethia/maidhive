@@ -381,9 +381,11 @@ describe('F10 Payments capture/refund/dispute integration', () => {
     expect(body.success).toBe(true)
     expect(stripe.paymentIntents.capture).toHaveBeenCalledWith('pi_123', {
       amount_to_capture: 6000,
-      application_fee_amount: 600,
+      application_fee_amount: 800,
     })
     expect(state.payment.refundAmount).toBe(20)
+    expect(state.payment.cleanerPayout).toBe(52)
+    expect(state.payment.platformFee).toBe(8)
     expect(state.notifications).toEqual(expect.arrayContaining([
       expect.objectContaining({
         userId: seededUsers.admin.id,
