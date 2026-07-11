@@ -158,6 +158,10 @@ vi.mock('@/server/services/loops-email.service', () => ({
       state.emails.push({ kind: 'dispute_raised_against_notification', ...payload })
       return true
     }),
+    sendDisputeResolvedOutcome: vi.fn(async (payload: any) => {
+      state.emails.push({ kind: 'dispute_resolved_outcome', ...payload })
+      return true
+    }),
   },
 }))
 
@@ -391,6 +395,26 @@ describe('F10 Payments capture/refund/dispute integration', () => {
         userId: seededUsers.admin.id,
         type: 'dispute_resolved',
         body: 'Dispute resolved — Partial refund €20.00 issued to client.',
+      }),
+    ]))
+    expect(state.emails).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        kind: 'dispute_resolved_outcome',
+        email: 'client@test.local',
+        bookingReference: 'MH-NGPAY1',
+        resolutionOutcome: 'Partial refund €20.00 issued to client.',
+        refundAmount: 20,
+        cleanerPayoutOutcome: 'Cleaner payout adjusted to €52.00 after a €20.00 dispute adjustment.',
+        resolutionNote: 'Half of the requested work was not completed.',
+      }),
+      expect.objectContaining({
+        kind: 'dispute_resolved_outcome',
+        email: 'cleaner@test.local',
+        bookingReference: 'MH-NGPAY1',
+        resolutionOutcome: 'Partial refund €20.00 issued to client.',
+        refundAmount: 20,
+        cleanerPayoutOutcome: 'Cleaner payout adjusted to €52.00 after a €20.00 dispute adjustment.',
+        resolutionNote: 'Half of the requested work was not completed.',
       }),
     ]))
   })

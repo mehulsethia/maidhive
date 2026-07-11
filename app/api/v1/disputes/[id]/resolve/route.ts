@@ -7,9 +7,11 @@ import { stripe } from '@/server/stripe'
 import { ok, err } from '@/server/response'
 import { resolveDisputeSchema } from '@/server/schemas/dispute.schema'
 import { pushInAppNotification } from '@/server/services/in-app-notification.service'
+import { loopsEmailService } from '@/server/services/loops-email.service'
 import { db } from '@/server/db'
 import { getDisputeResolutionOutcome } from '@/lib/dispute-resolution'
 import { calculateDisputeAdjustedCleanerPayoutCents } from '@/lib/cleaner-payout'
+import { formatCurrency } from '@/lib/utils'
 import { cleanerReliabilityService } from '@/server/services/cleaner-reliability.service'
 
 export const POST = requireAdmin(async (req: NextRequest, ctx, user) => {
@@ -186,6 +188,7 @@ export const POST = requireAdmin(async (req: NextRequest, ctx, user) => {
     }
 
     const booking = await bookingRepo.findById(dispute.bookingId)
+    const resolvedPayment = await paymentRepo.findByBookingId(dispute.bookingId)
     if (booking) {
       if (
         dispute.issueType === 'cleaner_no_show' &&
@@ -211,6 +214,14 @@ export const POST = requireAdmin(async (req: NextRequest, ctx, user) => {
         parsed.data.resolution_type,
         resolvedRefundAmount,
       )
+      const reference = bookingReference(booking.id)
+      const cleanerPayoutOutcome = getCleanerPayoutOutcomeCopy({
+        resolutionType: parsed.data.resolution_type,
+        refundAmount: resolvedRefundAmount,
+        cleanerPayout: Number(resolvedPayment?.cleanerPayout ?? booking.cleanerPayout ?? 0),
+        paymentStatus: String(resolvedPayment?.status ?? ''),
+        transferredAt: resolvedPayment?.transferredAt ?? null,
+      })
 
       await pushInAppNotification({
         userId: booking.client.userId,
@@ -242,6 +253,31 @@ export const POST = requireAdmin(async (req: NextRequest, ctx, user) => {
           }),
         ),
       )
+
+      try {
+        await Promise.all([
+          loopsEmailService.sendDisputeResolvedOutcome({
+            email: booking.client.user.email,
+            fullName: booking.client.user.name ?? 'Client',
+            bookingReference: reference,
+            resolutionOutcome: resolutionCopy,
+            refundAmount: resolvedRefundAmount,
+            cleanerPayoutOutcome,
+            resolutionNote: parsed.data.resolution_note,
+          }),
+          loopsEmailService.sendDisputeResolvedOutcome({
+            email: booking.cleaner.user.email,
+            fullName: booking.cleaner.user.name ?? 'Cleaner',
+            bookingReference: reference,
+            resolutionOutcome: resolutionCopy,
+            refundAmount: resolvedRefundAmount,
+            cleanerPayoutOutcome,
+            resolutionNote: parsed.data.resolution_note,
+          }),
+        ])
+      } catch (emailError) {
+        console.error('Failed to send dispute resolved outcome emails via Loops:', emailError)
+      }
     }
 
     return ok(updated)
@@ -256,6 +292,33 @@ export const POST = requireAdmin(async (req: NextRequest, ctx, user) => {
   }
 })
 
+
+function bookingReference(bookingId: string) {
+  const raw = bookingId.replace(/[^a-z0-9]/gi, '')
+  return `MH-${raw.slice(-6).toUpperCase()}`
+}
+
+function getCleanerPayoutOutcomeCopy(args: {
+  resolutionType: string
+  refundAmount?: number | null
+  cleanerPayout: number
+  paymentStatus?: string | null
+  transferredAt?: Date | string | null
+}) {
+  const cleanerPayout = Number.isFinite(args.cleanerPayout) ? Math.max(0, args.cleanerPayout) : 0
+  if (args.resolutionType === 'full_refund') {
+    return 'Cleaner payout was not released.'
+  }
+  if (args.resolutionType === 'partial_refund') {
+    return args.refundAmount != null && args.refundAmount > 0
+      ? `Cleaner payout adjusted to ${formatCurrency(cleanerPayout)} after a ${formatCurrency(args.refundAmount)} dispute adjustment.`
+      : `Cleaner payout adjusted to ${formatCurrency(cleanerPayout)}.`
+  }
+  if (args.paymentStatus === 'transferred' || args.transferredAt) {
+    return `Cleaner payout released: ${formatCurrency(cleanerPayout)}.`
+  }
+  return `Cleaner payout approved for release: ${formatCurrency(cleanerPayout)}.`
+}
 
 function getProportionalFeeCents(
   amountToCaptureCents: number,

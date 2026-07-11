@@ -22,6 +22,7 @@ const CLIENT_BOOKING_CANCELLED_BY_CLEANER_TRANSACTIONAL_ID = 'cmo2ruvdu07yk0iw5g
 const CLIENT_SELF_CANCELLATION_CONFIRMATION_TRANSACTIONAL_ID = 'cmr27985005h00j2p70wb14a6'
 const DISPUTE_SUBMITTED_CONFIRMATION_TRANSACTIONAL_ID = 'cmqf1rb7r7z9q0jx99f8lq615'
 const DISPUTE_RAISED_AGAINST_NOTIFICATION_TRANSACTIONAL_ID = 'cmqf1u9ly4ujo0jyq9kfdcfbw'
+const DISPUTE_RESOLVED_OUTCOME_TRANSACTIONAL_ID = 'cmrgn2k8m29v60jzktfiu6iap'
 const CLEANER_SIGNUP_TRANSACTIONAL_ID = 'cmo5hbjfv0lbm0iya3k626pjl'
 const CLEANER_APPLICATION_APPROVED_TRANSACTIONAL_ID = 'cmo5hdvco009s0i06469pwe16'
 const CLEANER_NEW_BOOKING_REQUEST_TRANSACTIONAL_ID = 'cmo5hgm9p00hn0i0fzxhtjsv8'
@@ -432,6 +433,32 @@ export const loopsEmailService = {
         booking_reference: args.bookingReference,
         issue_type: args.issueType,
         dispute_link: absoluteAppLink(args.disputePath),
+      },
+    })
+  },
+
+  async sendDisputeResolvedOutcome(args: {
+    email: string
+    fullName: string
+    bookingReference: string
+    resolutionOutcome: string
+    refundAmount?: number | null
+    cleanerPayoutOutcome: string
+    resolutionNote: string
+  }) {
+    return sendTransactionalEmail({
+      transactionalId: DISPUTE_RESOLVED_OUTCOME_TRANSACTIONAL_ID,
+      email: args.email,
+      dataVariables: {
+        first_name: firstName(args.fullName),
+        booking_reference: args.bookingReference,
+        resolution_outcome: args.resolutionOutcome,
+        refund_amount:
+          args.refundAmount != null && args.refundAmount > 0
+            ? formatEuro(args.refundAmount)
+            : 'Not applicable',
+        cleaner_payout_outcome: args.cleanerPayoutOutcome,
+        resolution_note: args.resolutionNote.trim() || 'No additional note provided.',
       },
     })
   },

@@ -70,6 +70,7 @@ describe('Loops email contracts', () => {
       'sendClientProposalDeclinedClosed',
       'sendClientReviewRequest',
       'sendDisputeRaisedAgainstNotification',
+      'sendDisputeResolvedOutcome',
       'sendDisputeSubmittedConfirmation',
     ].sort())
   })

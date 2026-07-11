@@ -76,4 +76,31 @@ describe('Loops dispute emails', () => {
       },
     })
   })
+
+  it('sends dispute resolved outcome with booking, refund, payout and admin note variables', async () => {
+    const { loopsEmailService, fetchMock } = await loadLoopsEmailService()
+
+    await loopsEmailService.sendDisputeResolvedOutcome({
+      email: 'client@example.test',
+      fullName: 'Client User',
+      bookingReference: 'MH-1042',
+      resolutionOutcome: 'Partial refund €8.00 issued to client.',
+      refundAmount: 8,
+      cleanerPayoutOutcome: 'Cleaner payout adjusted to €16.00 after a €8.00 dispute adjustment.',
+      resolutionNote: 'Partial service issue confirmed.',
+    })
+
+    expect(lastRequestBody(fetchMock)).toEqual({
+      transactionalId: 'cmrgn2k8m29v60jzktfiu6iap',
+      email: 'client@example.test',
+      dataVariables: {
+        first_name: 'Client',
+        booking_reference: 'MH-1042',
+        resolution_outcome: 'Partial refund €8.00 issued to client.',
+        refund_amount: '€8.00',
+        cleaner_payout_outcome: 'Cleaner payout adjusted to €16.00 after a €8.00 dispute adjustment.',
+        resolution_note: 'Partial service issue confirmed.',
+      },
+    })
+  })
 })
