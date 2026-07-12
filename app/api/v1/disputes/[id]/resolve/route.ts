@@ -48,7 +48,6 @@ export const POST = requireAdmin(async (req: NextRequest, ctx, user) => {
       const paymentAmountCents = Math.round(paymentAmount * 100)
       const originalPlatformFeeCents = Math.round(Number(payment.platformFee) * 100)
       const originalCleanerPayoutCents = Math.round(Number(payment.cleanerPayout) * 100)
-      const chargePct = parsed.data.charge_percentage
 
       if (parsed.data.resolution_type === 'full_refund') {
         if (pi.status === 'requires_capture') {
@@ -143,27 +142,17 @@ export const POST = requireAdmin(async (req: NextRequest, ctx, user) => {
         }
       }
 
-      if (parsed.data.resolution_type === 'no_refund' || parsed.data.resolution_type === 'payment_released') {
+      if (parsed.data.resolution_type === 'no_refund') {
         if (pi.status === 'requires_capture') {
-          const pct = chargePct ?? 100
-          const amountToCapture = Math.max(1, Math.floor((paymentAmountCents * pct) / 100))
-          const proportionalFeeCents = getProportionalFeeCents(
-            amountToCapture,
-            paymentAmountCents,
-            originalPlatformFeeCents,
-          )
           const captured = await stripe.paymentIntents.capture(payment.stripePaymentIntentId, {
-            amount_to_capture: amountToCapture,
-            application_fee_amount: proportionalFeeCents,
+            amount_to_capture: paymentAmountCents,
+            application_fee_amount: Math.min(paymentAmountCents, Math.max(0, originalPlatformFeeCents)),
           })
-          resolvedRefundAmount = Number(((paymentAmountCents - amountToCapture) / 100).toFixed(2))
           await paymentRepo.update(payment.id, {
             status: 'captured',
             stripeChargeId: typeof captured.latest_charge === 'string' ? captured.latest_charge : (captured.latest_charge as any)?.id,
             capturedAt: new Date(),
             payoutScheduledAt: new Date(),
-            refundAmount: resolvedRefundAmount > 0 ? resolvedRefundAmount : undefined,
-            refundReason: resolvedRefundAmount && resolvedRefundAmount > 0 ? parsed.data.resolution_note : undefined,
           })
         }
       }
@@ -318,19 +307,6 @@ function getCleanerPayoutOutcomeCopy(args: {
     return `Cleaner payout released: ${formatCurrency(cleanerPayout)}.`
   }
   return `Cleaner payout approved for release: ${formatCurrency(cleanerPayout)}.`
-}
-
-function getProportionalFeeCents(
-  amountToCaptureCents: number,
-  originalAmountCents: number,
-  originalPlatformFeeCents: number,
-) {
-  if (amountToCaptureCents <= 0 || originalAmountCents <= 0 || originalPlatformFeeCents <= 0) {
-    return 0
-  }
-
-  const proportional = Math.round((originalPlatformFeeCents * amountToCaptureCents) / originalAmountCents)
-  return Math.min(amountToCaptureCents, Math.max(0, proportional))
 }
 
 function getAdjustedPlatformFeeCents(

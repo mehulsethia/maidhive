@@ -9,6 +9,7 @@ import { updateCleanerSchema } from '@/server/schemas/cleaner.schema'
 import { deriveCleanerLifecycleStatus } from '@/lib/cleaner-status'
 import { cleanerReliabilityService } from '@/server/services/cleaner-reliability.service'
 import { calculateDisputeAdjustedCleanerPayoutCents } from '@/lib/cleaner-payout'
+import { computeConfirmedCancellationPolicy } from '@/lib/cancellation-policy'
 
 function withCleanerAliases(cleaner: any) {
   const rawSupplies = cleaner.cleaningSupplies
@@ -62,6 +63,51 @@ function toLegacyIdType(value: string | null | undefined): string | null | undef
   return value
 }
 
+function moneyCents(value: unknown) {
+  const number = Number(value ?? 0)
+  if (!Number.isFinite(number)) return 0
+  return Math.round(number * 100)
+}
+
+function getClientCancellationPolicyPayoutCents(payment: {
+  status: string
+  refundReason: string | null
+  booking: {
+    status: string
+    cancellationReason: string | null
+    cancelledAt: Date | null
+    scheduledStart: Date
+    totalAmount: unknown
+    subtotal: unknown
+    platformFee: unknown
+  }
+}) {
+  const booking = payment.booking
+  if (booking.status !== 'cancelled' || !booking.cancelledAt) return null
+
+  const context = `${booking.cancellationReason ?? ''} ${payment.refundReason ?? ''}`
+    .toLowerCase()
+    .replace(/[_-]/g, ' ')
+  if (context.includes('no show') || context.includes('cancelled by cleaner')) return null
+  if (
+    !context.includes('client cancellation policy') &&
+    !context.includes('cancelled by client') &&
+    !context.includes('client cancelled')
+  ) {
+    return null
+  }
+
+  const policy = computeConfirmedCancellationPolicy({
+    scheduledStart: booking.scheduledStart,
+    cancelledAt: booking.cancelledAt,
+    totalAmount: booking.totalAmount,
+    subtotal: booking.subtotal,
+    platformFee: booking.platformFee,
+  })
+
+  return policy?.cleanerPayoutCents ?? null
+}
+
 export const GET = requireCleaner(async (req, _ctx, user) => {
   let cleaner = await cleanerRepo.findByUserId(user.id)
 
@@ -108,10 +154,19 @@ export const GET = requireCleaner(async (req, _ctx, user) => {
         ],
       },
       select: {
+        status: true,
         cleanerPayout: true,
         refundAmount: true,
+        refundReason: true,
         booking: {
           select: {
+            status: true,
+            scheduledStart: true,
+            cancelledAt: true,
+            cancellationReason: true,
+            totalAmount: true,
+            subtotal: true,
+            platformFee: true,
             cleanerPayout: true,
             dispute: {
               select: {
@@ -125,9 +180,14 @@ export const GET = requireCleaner(async (req, _ctx, user) => {
     }),
   ])
   const releasedEarnings = releasedPayments.reduce((sum, payment) => {
-    const paymentCleanerPayoutCents = Math.round(Number(payment.cleanerPayout ?? 0) * 100)
-    const originalCleanerPayoutCents = Math.round(Number(payment.booking.cleanerPayout ?? 0) * 100)
-    const refundCents = Math.round(Number(payment.refundAmount ?? payment.booking.dispute?.refundAmount ?? 0) * 100)
+    const clientCancellationPolicyPayoutCents = getClientCancellationPolicyPayoutCents(payment)
+    if (clientCancellationPolicyPayoutCents !== null) {
+      return sum + Math.max(0, clientCancellationPolicyPayoutCents) / 100
+    }
+
+    const paymentCleanerPayoutCents = moneyCents(payment.cleanerPayout)
+    const originalCleanerPayoutCents = moneyCents(payment.booking.cleanerPayout)
+    const refundCents = moneyCents(payment.refundAmount ?? payment.booking.dispute?.refundAmount)
     const resolutionType = payment.booking.dispute?.resolutionType
     const finalPayoutCents = resolutionType === 'full_refund'
       ? 0

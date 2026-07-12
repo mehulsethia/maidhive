@@ -46,6 +46,7 @@ test.describe('F19 dispute and compensation responsive regression @smoke', () =>
         await dialog.locator('select').selectOption('partial_refund')
         await expect(dialog.getByText('Refund amount (€)')).toBeVisible()
         await expect(dialog.getByText('Charge percentage (%)')).toHaveCount(0)
+        await expect(dialog.getByText('Dispute withdrawn')).toHaveCount(0)
       }
 
       const bookingsResponse = await page.request.get('/api/v1/admin/bookings?page=1&page_size=1')

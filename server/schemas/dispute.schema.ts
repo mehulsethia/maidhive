@@ -16,32 +16,25 @@ const optionalPositiveNumber = z.preprocess(
   z.number().positive().optional(),
 )
 
-const optionalPercentage = z.preprocess(
-  (value) => (value === null || value === '' ? undefined : value),
-  z.number().min(1).max(100).optional(),
-)
-
 export const resolveDisputeSchema = z.object({
-  resolution_type: z.enum(['full_refund', 'partial_refund', 'no_refund', 'payment_released']),
+  resolution_type: z.enum(['full_refund', 'partial_refund', 'no_refund']),
   resolution_note: z.string().trim().min(1, 'Resolution note is required'),
   refund_amount: optionalPositiveNumber,
-  charge_percentage: optionalPercentage,
   no_show_finding: z.enum(['confirmed', 'rejected']).optional(),
-}).superRefine((value, ctx) => {
-  if (value.resolution_type !== 'partial_refund') return
-
-  if (value.refund_amount === undefined) {
+}).strict().superRefine((value, ctx) => {
+  if (value.resolution_type === 'partial_refund' && value.refund_amount === undefined) {
     ctx.addIssue({
       code: z.ZodIssueCode.custom,
       path: ['refund_amount'],
       message: 'Refund amount is required for a partial refund',
     })
   }
-  if (value.charge_percentage !== undefined) {
+
+  if (value.resolution_type !== 'partial_refund' && value.refund_amount !== undefined) {
     ctx.addIssue({
       code: z.ZodIssueCode.custom,
-      path: ['charge_percentage'],
-      message: 'Charge percentage cannot be used for a partial refund',
+      path: ['refund_amount'],
+      message: 'Refund amount can only be used for a partial refund',
     })
   }
 })

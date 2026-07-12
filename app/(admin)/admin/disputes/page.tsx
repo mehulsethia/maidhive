@@ -26,7 +26,6 @@ const RESOLUTION_TYPES = [
   { value: 'full_refund',       label: 'Full refund to client' },
   { value: 'partial_refund',    label: 'Partial refund (enter amount below)' },
   { value: 'no_refund',         label: 'No refund — release payment to cleaner' },
-  { value: 'payment_released',  label: 'Dispute withdrawn — release payment' },
 ]
 
 const STATUS_CONFIG: Record<string, { variant: any; label: string; icon: React.ElementType }> = {
@@ -254,7 +253,6 @@ export default function AdminDisputesPage() {
   const [resolveType, setResolveType] = useState('no_refund')
   const [resolveNote, setResolveNote] = useState('')
   const [refundAmount, setRefundAmount] = useState('')
-  const [chargePercentage, setChargePercentage] = useState('')
   const [noShowFinding, setNoShowFinding] = useState('')
   const [resolving, setResolving] = useState(false)
 
@@ -323,14 +321,9 @@ export default function AdminDisputesPage() {
     if (!resolveNote.trim()) { toast.error('Please add a resolution note.'); return }
 
     const refund = refundAmount.trim() ? Number(refundAmount) : null
-    const chargePct = chargePercentage.trim() ? Number(chargePercentage) : null
 
     if (resolveType === 'partial_refund' && refund === null) {
       toast.error('Enter a refund amount for partial refund.'); return
-    }
-
-    if (chargePct !== null && (Number.isNaN(chargePct) || chargePct < 1 || chargePct > 100)) {
-      toast.error('Charge percentage must be between 1 and 100.'); return
     }
 
     if (refund !== null && (Number.isNaN(refund) || refund <= 0)) {
@@ -351,7 +344,6 @@ export default function AdminDisputesPage() {
         resolution_type: string
         resolution_note: string
         refund_amount?: number
-        charge_percentage?: number
         no_show_finding?: 'confirmed' | 'rejected'
       } = {
         resolution_type: resolveType,
@@ -359,9 +351,6 @@ export default function AdminDisputesPage() {
       }
       if (resolveType === 'partial_refund' && refund !== null) {
         payload.refund_amount = refund
-      }
-      if (['no_refund', 'payment_released'].includes(resolveType) && chargePct !== null) {
-        payload.charge_percentage = chargePct
       }
       if (resolveTarget.issue_type === 'cleaner_no_show') {
         payload.no_show_finding = noShowFinding as 'confirmed' | 'rejected'
@@ -374,7 +363,6 @@ export default function AdminDisputesPage() {
       setResolveTarget(null)
       setResolveNote('')
       setRefundAmount('')
-      setChargePercentage('')
       setResolveType('no_refund')
       setNoShowFinding('')
       load()
@@ -471,7 +459,6 @@ export default function AdminDisputesPage() {
           setResolveTarget(null)
           setResolveNote('')
           setRefundAmount('')
-          setChargePercentage('')
           setResolveType('no_refund')
           setNoShowFinding('')
         }}
@@ -532,25 +519,6 @@ export default function AdminDisputesPage() {
                 </div>
                 <p className="mt-1 text-xs text-muted-foreground">
                   Enter the amount to refund to the client. The remaining captured amount will be handled according to the selected dispute resolution outcome.
-                </p>
-              </div>
-            )}
-
-            {['no_refund', 'payment_released'].includes(resolveType) && (
-              <div>
-                <Label>Charge percentage (%)</Label>
-                <Input
-                  type="number"
-                  min="1"
-                  max="100"
-                  step="1"
-                  value={chargePercentage}
-                  onChange={e => setChargePercentage(e.target.value)}
-                  className="mt-1"
-                  placeholder="Optional, defaults to 100"
-                />
-                <p className="mt-1 text-xs text-muted-foreground">
-                  Use this to capture only part of the authorized amount.
                 </p>
               </div>
             )}

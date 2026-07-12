@@ -19,6 +19,12 @@ function roundMoney(value: number) {
   return Math.round(value * 100) / 100
 }
 
+function normalizedCancellationContext(booking: BookingRead) {
+  return `${booking.cancellation_reason ?? ''} ${booking.payment?.refund_reason ?? ''}`
+    .toLowerCase()
+    .replace(/[_-]/g, ' ')
+}
+
 export function isSuccessfulPaymentStatus(status?: string | null) {
   return ['authorized', 'captured', 'transferred'].includes(String(status ?? ''))
 }
@@ -32,6 +38,28 @@ export function isNonPayableBookingState(booking: BookingRead) {
   return false
 }
 
+export function getClientCancellationPolicyOutcome(booking: BookingRead) {
+  if (booking.status !== 'cancelled' || !booking.cancelled_at) return null
+  if (!isSuccessfulPaymentStatus(booking.payment?.status)) return null
+
+  const context = normalizedCancellationContext(booking)
+  if (context.includes('no show') || context.includes('cancelled by cleaner')) return null
+
+  const hasClientCancellationPolicyMetadata =
+    context.includes('client cancellation policy') ||
+    context.includes('cancelled by client') ||
+    context.includes('client cancelled')
+  if (!hasClientCancellationPolicyMetadata) return null
+
+  return computeConfirmedCancellationPolicy({
+    scheduledStart: booking.scheduled_start,
+    cancelledAt: booking.cancelled_at,
+    totalAmount: booking.total_amount,
+    subtotal: booking.subtotal ?? Math.max(money(booking.total_amount) - money(booking.platform_fee), 0),
+    platformFee: booking.platform_fee,
+  })
+}
+
 export function getCancellationPaymentOutcome(booking: BookingRead): CancellationPaymentOutcome | null {
   if (booking.status !== 'cancelled') return null
 
@@ -39,6 +67,7 @@ export function getCancellationPaymentOutcome(booking: BookingRead): Cancellatio
   const paymentStatus = booking.payment?.status ?? null
   const paymentRefundAmount = booking.payment?.refund_amount
   const hasSuccessfulPayment = isSuccessfulPaymentStatus(paymentStatus)
+  const clientCancellationPolicy = getClientCancellationPolicyOutcome(booking)
 
   if (!hasSuccessfulPayment) {
     return {
@@ -58,8 +87,11 @@ export function getCancellationPaymentOutcome(booking: BookingRead): Cancellatio
   if (paymentStatus === 'captured' || paymentStatus === 'transferred') {
     if (explicitRefund !== null) {
       capturedAmount = Math.max(0, originalAmount - explicitRefund)
+      if (clientCancellationPolicy) {
+        cleanerPayoutDue = moneyFromCents(clientCancellationPolicy.cleanerPayoutCents)
+      }
     } else if (booking.cancelled_at) {
-      const policy = computeConfirmedCancellationPolicy({
+      const policy = clientCancellationPolicy ?? computeConfirmedCancellationPolicy({
         scheduledStart: booking.scheduled_start,
         cancelledAt: booking.cancelled_at,
         totalAmount: booking.total_amount,

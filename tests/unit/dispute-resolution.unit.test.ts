@@ -6,6 +6,6 @@ describe('Dispute resolution outcome copy', () => {
     expect(getDisputeResolutionOutcome('full_refund')).toBe('Full refund issued to client.')
     expect(getDisputeResolutionOutcome('partial_refund', 10)).toBe('Partial refund €10.00 issued to client.')
     expect(getDisputeResolutionOutcome('no_refund')).toBe('No refund — payment released to cleaner.')
-    expect(getDisputeResolutionOutcome('payment_released')).toBe('Dispute withdrawn — payment released to cleaner.')
+    expect(getDisputeResolutionOutcome('payment_released')).toBe('No refund — payment released to cleaner.')
   })
 })

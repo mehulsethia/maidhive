@@ -17,7 +17,7 @@ describe('F10 payments/disputes unit coverage', () => {
     expect(invalid.success).toBe(false)
   })
 
-  it('UT-PAY-02 resolve schema accepts full/partial/no-refund/payment_released variants', () => {
+  it('UT-PAY-02 resolve schema accepts full/partial/no-refund variants', () => {
     const full = resolveDisputeSchema.safeParse({
       resolution_type: 'full_refund',
       resolution_note: 'Service not delivered',
@@ -29,18 +29,17 @@ describe('F10 payments/disputes unit coverage', () => {
       refund_amount: 20,
     })
 
-    const release = resolveDisputeSchema.safeParse({
-      resolution_type: 'payment_released',
+    const noRefund = resolveDisputeSchema.safeParse({
+      resolution_type: 'no_refund',
       resolution_note: 'No refund required',
-      charge_percentage: 100,
     })
 
     expect(full.success).toBe(true)
     expect(partial.success).toBe(true)
-    expect(release.success).toBe(true)
+    expect(noRefund.success).toBe(true)
   })
 
-  it('UT-PAY-03 resolve schema rejects invalid or conflicting partial-refund inputs', () => {
+  it('UT-PAY-03 resolve schema rejects invalid or conflicting reduced-payment inputs', () => {
     const invalidRefund = resolveDisputeSchema.safeParse({
       resolution_type: 'partial_refund',
       resolution_note: 'Invalid refund amount',
@@ -54,8 +53,21 @@ describe('F10 payments/disputes unit coverage', () => {
       charge_percentage: 75,
     })
 
+    const withdrawn = resolveDisputeSchema.safeParse({
+      resolution_type: 'payment_released',
+      resolution_note: 'Withdrawn dispute',
+    })
+
+    const noRefundWithPercentage = resolveDisputeSchema.safeParse({
+      resolution_type: 'no_refund',
+      resolution_note: 'No refund required',
+      charge_percentage: 75,
+    })
+
     expect(invalidRefund.success).toBe(false)
     expect(conflictingPct.success).toBe(false)
+    expect(withdrawn.success).toBe(false)
+    expect(noRefundWithPercentage.success).toBe(false)
   })
 
   it('requires a non-empty resolution note after trimming whitespace', () => {

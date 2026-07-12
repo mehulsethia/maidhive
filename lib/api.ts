@@ -779,7 +779,6 @@ export const adminApi = {
     resolution_type: string
     resolution_note: string
     refund_amount?: number
-    charge_percentage?: number
     no_show_finding?: 'confirmed' | 'rejected'
   }) =>
     request<APIResponse<AdminDispute>>(`/disputes/${id}/resolve`, {

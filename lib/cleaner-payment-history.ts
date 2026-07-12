@@ -1,4 +1,5 @@
 import { isCompletedBookingReleased } from '@/lib/booking-release'
+import { getCancellationPaymentOutcome } from '@/lib/booking-payment-outcome'
 import { getCleanerPayoutSummary } from '@/lib/cleaner-payout'
 import { formatCurrency } from '@/lib/utils'
 import type { BookingRead, BookingStatus } from '@/types'
@@ -51,14 +52,15 @@ export function classifyCleanerPaymentHistoryBooking(
   }
 
   if (booking.status === 'cancelled') {
-    const cancellationCompensation = Number(booking.payment?.cleaner_payout ?? booking.cleaner_payout ?? 0)
+    const cancellationOutcome = getCancellationPaymentOutcome(booking)
+    const cancellationCompensation = cancellationOutcome?.cleanerPayoutDue ?? Number(booking.payment?.cleaner_payout ?? booking.cleaner_payout ?? 0)
     const paymentType = isClientNoShowCompensation
       ? 'No-show compensation' as const
       : 'Cancellation compensation' as const
+    if (paymentStatus === 'failed') {
+      return { paymentType: 'Payment issue', label: 'Payment issue - admin review', tone: 'issue' }
+    }
     if (cancellationCompensation > 0) {
-      if (paymentStatus === 'failed') {
-        return { paymentType: 'Payment issue', label: 'Payment issue - admin review', tone: 'issue' }
-      }
       const released = paymentStatus === 'transferred' || Boolean(booking.payment?.transferred_at)
       return {
         paymentType,
@@ -88,7 +90,9 @@ export function classifyCleanerPaymentHistoryBooking(
 
 export function getReleasedCleanerEarnings(bookings: BookingRead[], nowMs = Date.now()) {
   return bookings.reduce((sum, booking) => {
-    const payout = getCleanerPayoutSummary(booking).finalCleanerPayout
+    const payout = booking.status === 'cancelled'
+      ? (getCancellationPaymentOutcome(booking)?.cleanerPayoutDue ?? Number(booking.payment?.cleaner_payout ?? 0))
+      : getCleanerPayoutSummary(booking).finalCleanerPayout
     if (!Number.isFinite(payout) || payout <= 0) return sum
     return isCleanerEarningReleased(booking, nowMs) ? sum + payout : sum
   }, 0)

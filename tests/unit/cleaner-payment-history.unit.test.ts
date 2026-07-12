@@ -186,6 +186,57 @@ describe('Cleaner payment history mapping', () => {
     ])).toBe(68)
   })
 
+  it('uses policy-corrected cancellation compensation in history and released earnings', () => {
+    const staleBetween12And24 = booking({
+      id: 'cancelled_stale_between_12_24',
+      status: 'cancelled',
+      scheduled_start: new Date('2026-05-10T08:00:00.000Z').toISOString(),
+      scheduled_end: new Date('2026-05-10T10:00:00.000Z').toISOString(),
+      cancelled_at: new Date('2026-05-09T18:30:00.000Z').toISOString(),
+      cancellation_reason: 'Cancelled by client between 12 and 24 hours before scheduled start',
+      subtotal: 32,
+      platform_fee: 3.2,
+      total_amount: 35.2,
+      payment: {
+        id: 'p-stale-between',
+        status: 'transferred',
+        refund_amount: 30.2,
+        refund_reason: 'client_cancellation_policy',
+        cleaner_payout: 5,
+        transferred_at: new Date().toISOString(),
+      },
+    })
+    const staleUnder12 = booking({
+      id: 'cancelled_stale_under_12',
+      status: 'cancelled',
+      scheduled_start: new Date('2026-05-10T08:00:00.000Z').toISOString(),
+      scheduled_end: new Date('2026-05-10T09:30:00.000Z').toISOString(),
+      cancelled_at: new Date('2026-05-10T01:00:00.000Z').toISOString(),
+      cancellation_reason: 'Client requested cancellation',
+      subtotal: 24,
+      platform_fee: 2.4,
+      total_amount: 26.4,
+      payment: {
+        id: 'p-stale-under',
+        status: 'transferred',
+        refund_amount: 13.2,
+        refund_reason: 'client_cancellation_policy',
+        cleaner_payout: 13.2,
+        transferred_at: new Date().toISOString(),
+      },
+    })
+
+    expect(classifyCleanerPaymentHistoryBooking(staleBetween12And24)).toMatchObject({
+      label: 'Cancelled - no payout due',
+      amount: 0,
+    })
+    expect(classifyCleanerPaymentHistoryBooking(staleUnder12)).toMatchObject({
+      label: 'Cancellation compensation released: €12.00',
+      amount: 12,
+    })
+    expect(getReleasedCleanerEarnings([staleBetween12And24, staleUnder12])).toBe(12)
+  })
+
   it('uses final adjusted payout for released partial dispute refunds', () => {
     const adjusted = booking({
       id: 'partial_dispute_released',

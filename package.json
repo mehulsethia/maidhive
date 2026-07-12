@@ -19,6 +19,7 @@
     "backfill:notifications": "node scripts/backfill-notifications.cjs",
     "reconcile:backfill": "node scripts/reconcile-backfill.cjs",
     "sync:dispute-refunds": "node scripts/sync-dispute-refund-adjustments.cjs",
+    "sync:client-cancellation-payouts": "node scripts/sync-client-cancellation-payouts.cjs",
     "reliability:backfill": "node scripts/backfill-cleaner-reliability.cjs"
   },
   "dependencies": {

@@ -10,7 +10,6 @@ export function getDisputeResolutionOutcome(
       ? `Partial refund ${formatCurrency(Number(refundAmount))} issued to client.`
       : 'Partial refund issued to client.'
   }
-  if (resolutionType === 'payment_released') return 'Dispute withdrawn — payment released to cleaner.'
-  if (resolutionType === 'no_refund') return 'No refund — payment released to cleaner.'
+  if (resolutionType === 'no_refund' || resolutionType === 'payment_released') return 'No refund — payment released to cleaner.'
   return 'Resolution recorded.'
 }
