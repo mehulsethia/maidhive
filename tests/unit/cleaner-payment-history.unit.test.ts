@@ -77,11 +77,24 @@ describe('Cleaner payment history mapping', () => {
       status: 'cancelled',
       payment: { id: 'p4', status: 'failed' },
     })
+    const completedUnderReview = booking({
+      id: 'booking_completed_under_review',
+      status: 'completed',
+      payment: { id: 'p5', status: 'captured' },
+      dispute: {
+        id: 'd-under-review',
+        status: 'under_review',
+        reason: 'Service issue',
+        created_at: new Date().toISOString(),
+      },
+    })
 
     expect(classifyCleanerPaymentHistoryBooking(confirmedAuthorized)?.label).toBe('Payment authorised')
     expect(classifyCleanerPaymentHistoryBooking(disputed)?.label).toBe('Payment issue - admin review')
     expect(classifyCleanerPaymentHistoryBooking(disputed)?.paymentType).toBe('Payment issue')
     expect(classifyCleanerPaymentHistoryBooking(failed)?.label).toBe('Payment issue - admin review')
+    expect(classifyCleanerPaymentHistoryBooking(completedUnderReview)?.label).toBe('Payout pending review')
+    expect(getReleasedCleanerEarnings([completedUnderReview])).toBe(0)
   })
 
   it('maps cancelled bookings to cancellation payout labels', () => {

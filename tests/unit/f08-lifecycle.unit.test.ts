@@ -81,7 +81,7 @@ describe('F08 lifecycle unit coverage', () => {
     expect(state.startCalls).toEqual(['b1', 'b2'])
   })
 
-  it('UT-LIFECYCLE-02 auto-complete handles unresolved dispute pause behavior', async () => {
+  it('UT-LIFECYCLE-02 auto-complete keeps booking lifecycle independent from unresolved disputes', async () => {
     state.autoCompleteDue = [
       {
         id: 'b1',
@@ -101,9 +101,8 @@ describe('F08 lifecycle unit coverage', () => {
     const summary = await paymentLifecycleService.processAutoCompletions()
 
     expect(summary.checked).toBe(2)
-    expect(summary.completed).toBe(1)
-    expect(summary.paused_by_dispute).toBe(1)
-    expect(state.completeCalls).toEqual(['b1'])
+    expect(summary.completed).toBe(2)
+    expect(state.completeCalls).toEqual(['b1', 'b2'])
   })
 
   it('UT-LIFECYCLE-03 auto-complete processes disputed booking when dispute is resolved', async () => {

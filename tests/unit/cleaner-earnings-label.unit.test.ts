@@ -2,10 +2,15 @@ import { describe, expect, it } from 'vitest'
 import { getCleanerEarningsLabel } from '@/lib/cleaner-earnings-label'
 import type { BookingStatus } from '@/types'
 
-function labelFor(status: BookingStatus, scheduledEndOffsetHours: number, paymentStatus?: string | null) {
+function labelFor(
+  status: BookingStatus,
+  scheduledEndOffsetHours: number,
+  paymentStatus?: string | null,
+  disputeStatus?: string | null,
+) {
   const now = Date.now()
   const scheduledEnd = new Date(now + scheduledEndOffsetHours * 60 * 60 * 1000).toISOString()
-  return getCleanerEarningsLabel({ status, paymentStatus, scheduledEnd })
+  return getCleanerEarningsLabel({ status, paymentStatus, scheduledEnd, disputeStatus })
 }
 
 describe('Cleaner earnings label', () => {
@@ -28,5 +33,6 @@ describe('Cleaner earnings label', () => {
 
   it('shows paused payout wording for under-review bookings', () => {
     expect(labelFor('disputed', 10, 'authorized')).toBe('Payout pending review')
+    expect(labelFor('completed', 10, 'authorized', 'under_review')).toBe('Payout pending review')
   })
 })

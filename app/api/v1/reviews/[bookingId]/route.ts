@@ -8,6 +8,10 @@ import { ok, err } from '@/server/response'
 import { createReviewSchema } from '@/server/schemas/review.schema'
 import { cleanerReliabilityService } from '@/server/services/cleaner-reliability.service'
 
+function isActiveDispute(dispute?: { status?: string | null } | null) {
+  return dispute?.status === 'open' || dispute?.status === 'under_review'
+}
+
 export const POST = requireClient(async (req: NextRequest, ctx, user) => {
   const { bookingId } = await ctx.params
   const booking = await bookingRepo.findById(bookingId)
@@ -16,6 +20,9 @@ export const POST = requireClient(async (req: NextRequest, ctx, user) => {
   const completionWindowOpened = Number.isFinite(scheduledEndMs) && Date.now() >= scheduledEndMs
   if (!booking.completedAt || !['completed', 'disputed'].includes(booking.status) || !completionWindowOpened) {
     return err('Can only review completed bookings', 400)
+  }
+  if (isActiveDispute(booking.dispute)) {
+    return err('Reviews are locked while this booking is Under Review.', 409)
   }
 
   const client = await clientRepo.findByUserId(user.id)

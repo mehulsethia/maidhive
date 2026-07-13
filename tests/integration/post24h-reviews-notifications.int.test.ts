@@ -21,6 +21,7 @@ const state = vi.hoisted(() => ({
     cleanerId: 'cleaner_profile_1',
     clientId: 'client_profile_1',
     cleaner: { userId: 'cleaner_user_1' },
+    dispute: null,
   } as any,
 }))
 
@@ -73,6 +74,13 @@ vi.mock('@/server/services/in-app-notification.service', () => ({
   }),
 }))
 
+vi.mock('@/server/services/cleaner-reliability.service', () => ({
+  cleanerReliabilityService: {
+    recalculate: vi.fn(async () => true),
+    markDirty: vi.fn(async () => true),
+  },
+}))
+
 describe('Post-24h reviews + notifications integration', () => {
   afterEach(() => {
     vi.restoreAllMocks()
@@ -93,6 +101,7 @@ describe('Post-24h reviews + notifications integration', () => {
       cleanerId: 'cleaner_profile_1',
       clientId: 'client_profile_1',
       cleaner: { userId: 'cleaner_user_1' },
+      dispute: null,
     } as any
     vi.spyOn(Date, 'now').mockReturnValue(state.nowMs)
   })
@@ -134,6 +143,29 @@ describe('Post-24h reviews + notifications integration', () => {
     expect(res.status).toBe(409)
     expect(body.success).toBe(false)
     expect(body.message).toContain('Review already submitted')
+  })
+
+  it('locks new review submissions while a dispute is under review', async () => {
+    state.booking = {
+      ...state.booking,
+      dispute: { id: 'dispute_1', status: 'under_review' },
+    }
+
+    const route = await import('@/app/api/v1/reviews/[bookingId]/route')
+    const res = await route.POST(
+      new NextRequest('http://localhost/api/v1/reviews/booking_review_1', {
+        method: 'POST',
+        body: JSON.stringify({ rating: 5, comment: 'Great service', is_public: true }),
+        headers: { 'content-type': 'application/json' },
+      }),
+      { params: Promise.resolve({ bookingId: 'booking_review_1' }) } as any,
+    )
+    const body = await res.json()
+
+    expect(res.status).toBe(409)
+    expect(body.success).toBe(false)
+    expect(body.message).toContain('Reviews are locked')
+    expect(state.createdReview).toBeNull()
   })
 
   it('blocks review submission before booking completion window starts', async () => {

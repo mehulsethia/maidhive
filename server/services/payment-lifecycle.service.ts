@@ -71,12 +71,6 @@ export const paymentLifecycleService = {
         id: true,
         status: true,
         scheduledEnd: true,
-        dispute: {
-          select: {
-            status: true,
-            reason: true,
-          },
-        },
       },
       orderBy: { scheduledEnd: 'asc' },
       take: limit,
@@ -85,18 +79,12 @@ export const paymentLifecycleService = {
     const summary = {
       checked: overdue.length,
       completed: 0,
-      paused_by_dispute: 0,
       failed: 0,
       errors: [] as string[],
     }
 
     for (const booking of overdue) {
       try {
-        if (booking.status !== 'disputed' && booking.dispute && !['resolved', 'closed'].includes(String(booking.dispute.status ?? ''))) {
-          summary.paused_by_dispute += 1
-          continue
-        }
-
         await bookingService.completeBySystem(booking.id, booking.scheduledEnd)
         summary.completed += 1
       } catch (e: any) {

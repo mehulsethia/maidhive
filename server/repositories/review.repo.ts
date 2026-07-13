@@ -10,6 +10,7 @@ const reviewSelect = {
   cleanerReply: true,
   cleanerReplyAt: true,
   isPublic: true,
+  hiddenByDispute: true,
   createdAt: true,
   updatedAt: true,
 } as any

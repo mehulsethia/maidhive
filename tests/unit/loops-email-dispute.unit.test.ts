@@ -40,6 +40,7 @@ describe('Loops dispute emails', () => {
       bookingReference: 'MH-1042',
       issueType: 'Service issue',
       disputePath: '/client/report?booking=booking_1042',
+      statusMessage: 'This booking is now Under Review, and the cleaner payout has been paused until the case is resolved.',
     })
 
     expect(lastRequestBody(fetchMock)).toEqual({
@@ -50,6 +51,7 @@ describe('Loops dispute emails', () => {
         booking_reference: 'MH-1042',
         issue_type: 'Service issue',
         dispute_link: 'https://app.maidhive.test/client/report?booking=booking_1042',
+        status_message: 'This booking is now Under Review, and the cleaner payout has been paused until the case is resolved.',
       },
     })
   })

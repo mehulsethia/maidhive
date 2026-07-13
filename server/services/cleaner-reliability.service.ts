@@ -83,7 +83,7 @@ export const cleanerReliabilityService = {
         },
       }),
       db.review.aggregate({
-        where: { cleanerId },
+        where: { cleanerId, isPublic: true },
         _avg: { rating: true },
       }),
       db.booking.count({

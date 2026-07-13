@@ -429,6 +429,7 @@ CREATE TABLE public.reviews (
     rating      INTEGER NOT NULL CHECK (rating BETWEEN 1 AND 5),
     comment     TEXT,
     is_public   BOOLEAN NOT NULL DEFAULT TRUE,
+    hidden_by_dispute BOOLEAN NOT NULL DEFAULT FALSE,
     created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     updated_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );

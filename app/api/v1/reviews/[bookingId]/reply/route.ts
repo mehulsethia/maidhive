@@ -4,6 +4,7 @@ import { reviewRepo } from '@/server/repositories/review.repo'
 import { cleanerRepo } from '@/server/repositories/cleaner.repo'
 import { cleanerReviewResponseSchema } from '@/server/schemas/review.schema'
 import { ok, err } from '@/server/response'
+import { db } from '@/server/db'
 
 export const POST = requireCleaner(async (req: NextRequest, ctx, user) => {
   const { bookingId: reviewId } = await ctx.params
@@ -14,6 +15,14 @@ export const POST = requireCleaner(async (req: NextRequest, ctx, user) => {
   if (!review) return err('Review not found', 404)
   if (review.cleanerId !== cleaner.id) return err('Forbidden', 403)
   if (review.cleanerReply) return err('Reply already submitted and cannot be edited', 409)
+  const activeDispute = await db.dispute.findFirst({
+    where: {
+      bookingId: review.bookingId,
+      status: { in: ['open', 'under_review'] },
+    },
+    select: { id: true },
+  })
+  if (activeDispute) return err('Reviews are locked while this booking is Under Review.', 409)
 
   const body = await req.json()
   const parsed = cleanerReviewResponseSchema.safeParse(body)

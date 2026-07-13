@@ -18,6 +18,10 @@ const SERVICE_LABELS: Record<string, string> = {
   move_in: 'Move-in Clean',
 }
 
+function isActiveDispute(booking: BookingRead) {
+  return booking.dispute?.status === 'open' || booking.dispute?.status === 'under_review'
+}
+
 interface BookingCardProps {
   booking: BookingRead
   viewAs?: 'client' | 'cleaner'
@@ -30,7 +34,9 @@ export function BookingCard({ booking, viewAs = 'client' }: BookingCardProps) {
     paymentStatus: booking.payment?.status,
     transferredAt: booking.payment?.transferred_at,
     scheduledEnd: booking.scheduled_end,
+    disputeStatus: booking.dispute?.status,
   })
+  const activeDispute = isActiveDispute(booking)
   const payoutSummary = getCleanerPayoutSummary(booking)
   const clientPaymentSummary = getClientPaymentSummary(booking)
   const showProjectedEarnings =
@@ -39,7 +45,7 @@ export function BookingCard({ booking, viewAs = 'client' }: BookingCardProps) {
     (booking.status === 'completed' && !payoutReleased)
   const earningsLabel = payoutReleased
     ? 'You earned'
-    : booking.status === 'disputed'
+    : booking.status === 'disputed' || activeDispute
       ? 'Payout pending review'
       : showProjectedEarnings
       ? 'You will earn'
@@ -64,6 +70,11 @@ export function BookingCard({ booking, viewAs = 'client' }: BookingCardProps) {
               {viewAs === 'client' && getCancellationOriginLabel(booking) && (
                 <span className="inline-flex rounded-full border border-rose-200 bg-rose-50 px-2 py-0.5 text-[11px] font-semibold text-rose-700">
                   {getCancellationOriginLabel(booking)}
+                </span>
+              )}
+              {activeDispute && booking.status !== 'disputed' && (
+                <span className="inline-flex rounded-full border border-amber-200 bg-amber-50 px-2 py-0.5 text-[11px] font-semibold text-amber-700">
+                  Under Review
                 </span>
               )}
             </div>
@@ -100,7 +111,7 @@ export function BookingCard({ booking, viewAs = 'client' }: BookingCardProps) {
                 {earningsLabel} {formatCurrency(payoutSummary.finalCleanerPayout)}
               </p>
             )}
-            {viewAs === 'cleaner' && booking.status === 'disputed' && (
+            {viewAs === 'cleaner' && (booking.status === 'disputed' || activeDispute) && (
               <p className="text-xs text-amber-700">Payout paused pending dispute resolution.</p>
             )}
           </div>

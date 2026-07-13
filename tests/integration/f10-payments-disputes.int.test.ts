@@ -37,6 +37,13 @@ const state = vi.hoisted(() => ({
     bookingId: 'booking_pay_1',
     status: 'open',
   } as any | null,
+  review: {
+    id: 'review_1',
+    bookingId: 'booking_pay_1',
+    cleanerId: 'cleaner_profile_1',
+    isPublic: true,
+    hiddenByDispute: false,
+  } as any | null,
   notifications: [] as any[],
   emails: [] as any[],
   webhookEventType: 'charge.captured',
@@ -194,6 +201,42 @@ vi.mock('@/server/db', () => ({
     user: {
       findMany: vi.fn(async () => [{ id: seededUsers.admin.id }]),
     },
+    payment: {
+      findUnique: vi.fn(async ({ where }: any) => (
+        where?.bookingId === state.payment.bookingId || where?.id === state.payment.id
+          ? state.payment
+          : null
+      )),
+      update: vi.fn(async ({ data }: any) => {
+        state.payment = { ...state.payment, ...data }
+        return state.payment
+      }),
+    },
+    review: {
+      updateMany: vi.fn(async ({ where, data }: any) => {
+        if (!state.review || (where?.bookingId && where.bookingId !== state.review.bookingId)) {
+          return { count: 0 }
+        }
+        if (where?.isPublic !== undefined && where.isPublic !== state.review.isPublic) {
+          return { count: 0 }
+        }
+        if (where?.hiddenByDispute !== undefined && where.hiddenByDispute !== state.review.hiddenByDispute) {
+          return { count: 0 }
+        }
+        state.review = { ...state.review, ...data }
+        return { count: 1 }
+      }),
+      findUnique: vi.fn(async ({ where }: any) => (
+        where?.bookingId === state.review?.bookingId ? state.review : null
+      )),
+    },
+  },
+}))
+
+vi.mock('@/server/services/cleaner-reliability.service', () => ({
+  cleanerReliabilityService: {
+    recalculate: vi.fn(async () => true),
+    markDirty: vi.fn(async () => true),
   },
 }))
 
@@ -264,11 +307,21 @@ describe('F10 Payments capture/refund/dispute integration', () => {
       cleanerPayout: 72,
       stripePaymentIntentId: 'pi_123',
       stripeChargeId: null,
+      transferredAt: null,
+      stripeTransferId: null,
+      payoutScheduledAt: new Date('2099-01-02T12:00:00.000Z'),
     } as any
     state.dispute = {
       id: 'dispute_1',
       bookingId: 'booking_pay_1',
       status: 'open',
+    } as any
+    state.review = {
+      id: 'review_1',
+      bookingId: 'booking_pay_1',
+      cleanerId: 'cleaner_profile_1',
+      isPublic: true,
+      hiddenByDispute: false,
     } as any
     state.notifications = []
     state.emails = []
@@ -438,7 +491,10 @@ describe('F10 Payments capture/refund/dispute integration', () => {
 
     expect(res.status).toBe(201)
     expect(body.success).toBe(true)
-    expect(state.booking.status).toBe('disputed')
+    expect(state.booking.status).toBe('completed')
+    expect(state.dispute?.status).toBe('under_review')
+    expect(state.payment.payoutScheduledAt).toBeNull()
+    expect(state.review).toMatchObject({ isPublic: false, hiddenByDispute: true })
     expect(state.emails).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
@@ -447,6 +503,7 @@ describe('F10 Payments capture/refund/dispute integration', () => {
           bookingReference: 'MH-NGPAY1',
           issueType: 'Service issue',
           disputePath: '/client/report?booking=booking_pay_1',
+          statusMessage: 'This booking is now Under Review, and the cleaner payout has been paused until the case is resolved.',
         }),
         expect.objectContaining({
           kind: 'dispute_raised_against_notification',
@@ -478,7 +535,10 @@ describe('F10 Payments capture/refund/dispute integration', () => {
 
     expect(res.status).toBe(201)
     expect(body.success).toBe(true)
-    expect(state.booking.status).toBe('disputed')
+    expect(state.booking.status).toBe('completed')
+    expect(state.dispute?.status).toBe('under_review')
+    expect(state.payment.payoutScheduledAt).toBeNull()
+    expect(state.review).toMatchObject({ isPublic: false, hiddenByDispute: true })
     expect(state.emails).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
@@ -487,6 +547,7 @@ describe('F10 Payments capture/refund/dispute integration', () => {
           bookingReference: 'MH-NGPAY1',
           issueType: 'Access issue',
           disputePath: '/cleaner/report?booking=booking_pay_1',
+          statusMessage: 'This booking is now Under Review, and the cleaner payout has been paused until the case is resolved.',
         }),
         expect.objectContaining({
           kind: 'dispute_raised_against_notification',

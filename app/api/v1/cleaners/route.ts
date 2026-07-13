@@ -59,7 +59,7 @@ export async function GET(req: NextRequest) {
   const reviewsAgg = cleanerIds.length
     ? await db.review.groupBy({
       by: ['cleanerId'],
-      where: { cleanerId: { in: cleanerIds } },
+      where: { cleanerId: { in: cleanerIds }, isPublic: true },
       _avg: { rating: true },
     })
     : []

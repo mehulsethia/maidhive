@@ -5,6 +5,8 @@ import { bookingRepo } from '@/server/repositories/booking.repo'
 import { ok, err } from '@/server/response'
 import { updateDisputeStatusSchema } from '@/server/schemas/dispute.schema'
 import { pushInAppNotification } from '@/server/services/in-app-notification.service'
+import { db } from '@/server/db'
+import { cleanerReliabilityService } from '@/server/services/cleaner-reliability.service'
 
 export const PATCH = requireAdmin(async (req: NextRequest, ctx) => {
   const { id } = await ctx.params
@@ -20,6 +22,25 @@ export const PATCH = requireAdmin(async (req: NextRequest, ctx) => {
   if (parsed.data.status === 'under_review') {
     const booking = await bookingRepo.findById(dispute.bookingId)
     if (booking) {
+      const hiddenReviews = await db.review.updateMany({
+        where: {
+          bookingId: booking.id,
+          isPublic: true,
+        },
+        data: {
+          isPublic: false,
+          hiddenByDispute: true,
+        } as any,
+      })
+      if (hiddenReviews.count > 0) {
+        try {
+          await cleanerReliabilityService.recalculate(booking.cleanerId)
+        } catch (reliabilityError) {
+          await cleanerReliabilityService.markDirty(booking.cleanerId)
+          console.error('dispute.status.review_lock.reliability_failed', reliabilityError)
+        }
+      }
+
       await pushInAppNotification({
         userId: booking.client.userId,
         type: 'dispute_under_review',

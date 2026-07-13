@@ -633,7 +633,7 @@ function ClientReportPageContent() {
           <p className="text-sm text-muted-foreground">
             {isRespondingToDispute
               ? 'Your response will be attached to the existing dispute case. No additional back-and-forth messages will be opened.'
-              : 'This booking will be marked Under Review while the report is investigated. Any payout or release process related to this booking may be paused pending review.'}
+              : 'This booking will be marked Under Review, and any cleaner payout or payment release related to the booking will be paused until the case is resolved.'}
           </p>
           <p className="text-sm text-muted-foreground">
             Please confirm that the information you are submitting is accurate.

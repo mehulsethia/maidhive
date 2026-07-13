@@ -405,6 +405,7 @@ export const loopsEmailService = {
     bookingReference: string
     issueType: string
     disputePath: string
+    statusMessage?: string
   }) {
     return sendTransactionalEmail({
       transactionalId: DISPUTE_SUBMITTED_CONFIRMATION_TRANSACTIONAL_ID,
@@ -414,6 +415,7 @@ export const loopsEmailService = {
         booking_reference: args.bookingReference,
         issue_type: args.issueType,
         dispute_link: absoluteAppLink(args.disputePath),
+        ...(args.statusMessage ? { status_message: args.statusMessage } : {}),
       },
     })
   },

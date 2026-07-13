@@ -40,7 +40,7 @@ export async function GET(_req: Request, ctx: { params: Promise<{ id: string }> 
     }),
   ])
   const reviewAgg = await db.review.aggregate({
-    where: { cleanerId: cleaner.id },
+    where: { cleanerId: cleaner.id, isPublic: true },
     _avg: { rating: true },
   })
 

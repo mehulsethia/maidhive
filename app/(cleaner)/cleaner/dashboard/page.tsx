@@ -562,6 +562,7 @@ export default function CleanerDashboardPage() {
                 const hasProposal = Boolean(b.proposed_start && b.proposal_by)
                 const isActiveProposal = hasProposal && ['pending', 'accepted', 'confirmed'].includes(b.status)
                 const isAmendProposal = b.proposal_context === 'amend_start'
+                const activeDispute = b.dispute?.status === 'open' || b.dispute?.status === 'under_review'
                 const proposalActor = b.proposal_by === 'client' ? 'Client' : 'You'
                 const proposalSummary = isAmendProposal
                   ? `${proposalActor} requested Amend Start Time: ${formatDate(b.scheduled_start)} → ${formatDate(b.proposed_start ?? b.scheduled_start)}`
@@ -571,6 +572,7 @@ export default function CleanerDashboardPage() {
                   paymentStatus: b.payment?.status,
                   transferredAt: b.payment?.transferred_at,
                   scheduledEnd: b.scheduled_end,
+                  disputeStatus: b.dispute?.status,
                 })
                 const payoutSummary = getCleanerPayoutSummary(b)
                 return (
@@ -596,11 +598,11 @@ export default function CleanerDashboardPage() {
                         showPaymentRequiredForUnpaid={false}
                       />
                       <p className={`max-w-[11rem] text-right font-semibold leading-tight ${
-                        b.status === 'disputed'
+                        activeDispute || b.status === 'disputed'
                           ? 'text-xs text-amber-700 sm:text-sm'
                           : 'text-sm text-slate-900'
                       }`}>
-                        {b.status === 'disputed' ? `${earningsLabel} ` : ''}
+                        {activeDispute || b.status === 'disputed' ? `${earningsLabel} ` : ''}
                         {formatCurrency(payoutSummary.finalCleanerPayout)}
                       </p>
                     </div>

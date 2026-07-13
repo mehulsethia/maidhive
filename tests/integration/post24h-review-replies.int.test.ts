@@ -12,10 +12,12 @@ const state = vi.hoisted(() => ({
   currentUser: seededUsers.cleaner as User | null,
   review: {
     id: 'review_1',
+    bookingId: 'booking_review_1',
     cleanerId: 'cleaner_profile_1',
     cleanerReply: null as string | null,
     cleanerReplyAt: null as Date | null,
   },
+  activeDispute: null as null | { id: string },
 }))
 
 vi.mock('@/server/auth', () => {
@@ -56,16 +58,26 @@ vi.mock('@/server/repositories/review.repo', () => ({
   },
 }))
 
+vi.mock('@/server/db', () => ({
+  db: {
+    dispute: {
+      findFirst: vi.fn(async () => state.activeDispute),
+    },
+  },
+}))
+
 describe('Post-24h review replies + moderation integration', () => {
   beforeEach(() => {
     vi.resetModules()
     state.currentUser = seededUsers.cleaner as User
     state.review = {
       id: 'review_1',
+      bookingId: 'booking_review_1',
       cleanerId: 'cleaner_profile_1',
       cleanerReply: null,
       cleanerReplyAt: null,
     }
+    state.activeDispute = null
   })
 
   it('allows a one-time cleaner reply and blocks edits', async () => {
@@ -134,5 +146,25 @@ describe('Post-24h review replies + moderation integration', () => {
     expect(body.success).toBe(true)
     expect(state.review.cleanerReply).toBeNull()
     expect(state.review.cleanerReplyAt).toBeNull()
+  })
+
+  it('locks cleaner replies while the booking is under review', async () => {
+    state.activeDispute = { id: 'dispute_1' }
+    const route = await import('@/app/api/v1/reviews/[bookingId]/reply/route')
+
+    const res = await route.POST(
+      new NextRequest('http://localhost/api/v1/reviews/review_1/reply', {
+        method: 'POST',
+        body: JSON.stringify({ response: 'Thanks for your feedback.' }),
+        headers: { 'content-type': 'application/json' },
+      }),
+      { params: Promise.resolve({ bookingId: 'review_1' }) } as any,
+    )
+    const body = await res.json()
+
+    expect(res.status).toBe(409)
+    expect(body.success).toBe(false)
+    expect(body.message).toContain('Reviews are locked')
+    expect(state.review.cleanerReply).toBeNull()
   })
 })

@@ -10,6 +10,9 @@ export const POST = requireAdmin(async (_req, ctx) => {
   const booking = await bookingRepo.findById(bookingId)
   if (!booking) return err('Booking not found', 404)
   if (booking.status !== 'completed') return err('Booking must be completed before capture', 400)
+  if (booking.dispute?.status === 'open' || booking.dispute?.status === 'under_review') {
+    return err('Payment capture is paused while this booking is Under Review.', 409)
+  }
 
   const payment = await paymentRepo.findByBookingId(booking.id)
   if (!payment) return err('Payment not found', 404)

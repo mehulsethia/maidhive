@@ -35,7 +35,7 @@ import { createClient } from '@/lib/supabase'
 import { formatCurrency, formatDate } from '@/lib/utils'
 import { canViewChatHistoryForBooking, getChatReadOnlyMessage, isChatReadOnly } from '@/lib/chat-window'
 import { isCompletedBookingReleased } from '@/lib/booking-release'
-import { getDisputeParticipantAction } from '@/lib/dispute-actions'
+import { getDisputeParticipantAction, isActiveDisputeStatus } from '@/lib/dispute-actions'
 import { getClientBookingRequestDeadlineCopy } from '@/lib/booking-expiry-copy'
 import { computeConfirmedCancellationPolicy, moneyFromCents } from '@/lib/cancellation-policy'
 import { getCancellationOriginLabel } from '@/lib/cancellation-origin'
@@ -358,13 +358,15 @@ export default function ClientBookingDetailPage() {
 
   const paymentStatus = booking.payment?.status ?? null
   const isAuthorized = ['authorized', 'captured', 'transferred'].includes(String(paymentStatus ?? ''))
+  const payoutPauseConfirmed = String(paymentStatus ?? '') !== 'transferred' && !booking.payment?.transferred_at
   const overdueUnpaidDraftLike = isOverdueUnpaidDraftLike(booking)
   const canAuthorize = booking.status === 'accepted' && !isAuthorized
   const canContinuePayment = !overdueUnpaidDraftLike && (booking.status === 'draft' || (booking.status === 'pending' && !isPaymentAuthorized(booking.payment?.status)))
   const canCancelDraft = !overdueUnpaidDraftLike && (booking.status === 'draft' || (booking.status === 'pending' && !isPaymentAuthorized(booking.payment?.status)))
   const canCancelBookingRequest = booking.status === 'pending' && isPaymentAuthorized(booking.payment?.status)
   const reviewWindowOpened = Number.isFinite(new Date(booking.scheduled_end).getTime()) && Date.now() >= new Date(booking.scheduled_end).getTime()
-  const canReview = Boolean(booking.completed_at) && ['completed', 'disputed'].includes(booking.status) && !booking.review && reviewWindowOpened
+  const activeDispute = isActiveDisputeStatus(booking.dispute?.status)
+  const canReview = Boolean(booking.completed_at) && ['completed', 'disputed'].includes(booking.status) && !booking.review && reviewWindowOpened && !activeDispute
   const isPending = booking.status === 'pending'
   const hasProposal = Boolean(booking.proposed_start && booking.proposal_by)
   const cleanerProposed = booking.proposal_by === 'cleaner'
@@ -448,6 +450,7 @@ export default function ClientBookingDetailPage() {
     paymentStatus,
     transferredAt: booking.payment?.transferred_at,
     scheduledEnd: booking.scheduled_end,
+    disputeStatus: booking.dispute?.status,
   })
   const isCompletedAwaitingRelease = booking.status === 'completed' && !isCompletedReleased
   const reviewSubmitted = Boolean(booking.review)
@@ -835,7 +838,14 @@ export default function ClientBookingDetailPage() {
                       Report a problem
                     </Button>
                   )}
-                  {reportWindowActive && booking.status === 'disputed' && disputeAction.kind !== 'none' && (
+                  {activeDispute && (
+                    <p className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-700">
+                      {payoutPauseConfirmed
+                        ? 'This booking is now Under Review, and the cleaner payout has been paused until the case is resolved.'
+                        : 'This booking is now Under Review. MaidHive admin has been alerted to review the payment state for this case.'}
+                    </p>
+                  )}
+                  {reportWindowActive && activeDispute && disputeAction.kind !== 'none' && (
                     <Button variant="outline" className="w-full sm:w-auto" onClick={() => router.push(`/client/report?booking=${id}`)}>
                       {disputeAction.label}
                     </Button>

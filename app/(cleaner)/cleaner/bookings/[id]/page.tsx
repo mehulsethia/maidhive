@@ -31,7 +31,7 @@ import {
 } from '@/lib/booking-proposal'
 import { canViewChatHistoryForBooking, getChatReadOnlyMessage, isChatReadOnly } from '@/lib/chat-window'
 import { isBookingReportWindowActive } from '@/lib/booking-release'
-import { getDisputeParticipantAction } from '@/lib/dispute-actions'
+import { getDisputeParticipantAction, isActiveDisputeStatus } from '@/lib/dispute-actions'
 import { getCleanerEarningsLabel } from '@/lib/cleaner-earnings-label'
 import { getClientTrustMetadata } from '@/lib/client-trust'
 import { getCleanerBookingRequestDeadlineCopy } from '@/lib/booking-expiry-copy'
@@ -402,13 +402,15 @@ export default function CleanerBookingDetailPage() {
   const canStartJobNow = Number.isFinite(bookingStartsAtMs) && Date.now() >= bookingStartsAtMs - START_JOB_EARLY_WINDOW_MS && !startWindowExpired
   const canReportProblem = ['in_progress', 'completed'].includes(booking.status) &&
     isBookingReportWindowActive(booking.scheduled_end)
-  const canOpenDisputeCase = booking.status === 'disputed' && isBookingReportWindowActive(booking.scheduled_end)
+  const activeDispute = isActiveDisputeStatus(booking.dispute?.status)
+  const canOpenDisputeCase = activeDispute && isBookingReportWindowActive(booking.scheduled_end)
   const disputeAction = getDisputeParticipantAction('cleaner', booking.dispute, currentUserId)
   const earningsLabel = getCleanerEarningsLabel({
     status: booking.status,
     paymentStatus: booking.payment?.status,
     transferredAt: booking.payment?.transferred_at,
     scheduledEnd: booking.scheduled_end,
+    disputeStatus: booking.dispute?.status,
   })
   const payoutSummary = getCleanerPayoutSummary(booking)
   const cancellationOutcome = getCancellationPaymentOutcome(booking)
@@ -608,7 +610,7 @@ export default function CleanerBookingDetailPage() {
                         ? cleanerCancelledPayoutMessage.description
                         : isClosedNonPayableStatus
                           ? 'Payout is not applicable for this booking status.'
-                          : booking.status === 'disputed'
+                          : booking.status === 'disputed' || activeDispute
                             ? 'Payout is paused until MaidHive resolves this dispute.'
                           : `Released after the ${disputeWindowLabel()} report window from scheduled completion`}
                     </p>
@@ -891,12 +893,12 @@ export default function CleanerBookingDetailPage() {
             {disputeAction.label}
           </Button>
         )}
-        {!isCancelledPreConfirmation && booking.status === 'disputed' && (
+        {!isCancelledPreConfirmation && activeDispute && (
           <p className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-700">
             This booking is currently under review.
           </p>
         )}
-        {!isCancelledPreConfirmation && booking.status !== 'disputed' && !canReportProblem && (
+        {!isCancelledPreConfirmation && !activeDispute && !canReportProblem && (
           <p className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-600">
             {`Report issues during the booking and up to ${disputeWindowLabel()} after scheduled completion.`}
           </p>

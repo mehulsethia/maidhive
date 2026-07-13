@@ -361,12 +361,12 @@ export default function ClientBookingsPage() {
                     Number.isFinite(scheduledEndMs) && Date.now() <= scheduledEndMs + DISPUTE_WINDOW_MS
                   const canDispute = booking.status === 'completed' && isWithinDisputeWindow && !disputeStatusForBooking
                   const canOpenDisputeCase =
-                    booking.status === 'disputed' &&
-                    isWithinDisputeWindow &&
-                    isActiveDisputeStatus(disputeStatusForBooking)
+                    isActiveDisputeStatus(disputeStatusForBooking) &&
+                    isWithinDisputeWindow
                   const disputeAction = getDisputeParticipantAction('client', disputeForBooking)
+                  const activeDispute = isActiveDisputeStatus(disputeStatusForBooking)
                   const reviewWindowOpened = Number.isFinite(scheduledEndMs) && Date.now() >= scheduledEndMs
-                  const canLeaveReview = Boolean(booking.completed_at) && booking.status === 'completed' && !booking.review && reviewWindowOpened
+                  const canLeaveReview = Boolean(booking.completed_at) && booking.status === 'completed' && !booking.review && reviewWindowOpened && !activeDispute
                   const reviewSubmitted = Boolean(booking.review)
                   const canOpenMessageCta = canShowActiveMessageCta(booking)
                   const isOverdueDraftState = isOverdueUnpaid(booking)
@@ -508,7 +508,7 @@ export default function ClientBookingsPage() {
                             Review submitted
                           </span>
                         )}
-                        {isActiveDisputeStatus(disputeStatusForBooking) && (
+                        {activeDispute && (
                           <span className="inline-flex h-8 items-center rounded-full border border-amber-200 bg-amber-50 px-3 text-xs font-semibold text-amber-700">
                             This booking is currently under review.
                           </span>

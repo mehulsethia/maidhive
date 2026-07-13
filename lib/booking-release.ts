@@ -22,10 +22,12 @@ export function isCompletedBookingReleased(args: {
   paymentStatus?: string | null
   transferredAt?: string | Date | null
   scheduledEnd?: string | Date | null
+  disputeStatus?: string | null
   nowMs?: number
 }) {
-  const { status, paymentStatus, transferredAt } = args
+  const { status, paymentStatus, transferredAt, disputeStatus } = args
   if (status !== 'completed') return false
+  if (disputeStatus === 'open' || disputeStatus === 'under_review') return false
   if (String(paymentStatus ?? '') === 'transferred') return true
   return Number.isFinite(toMs(transferredAt))
 }

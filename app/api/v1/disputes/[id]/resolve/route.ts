@@ -170,10 +170,42 @@ export const POST = requireAdmin(async (req: NextRequest, ctx, user) => {
     })
 
     try {
-      await bookingRepo.update(dispute.bookingId, { status: 'completed' })
+      const existingBooking = await bookingRepo.findById(dispute.bookingId)
+      if (existingBooking?.status === 'disputed' && existingBooking.completedAt) {
+        await bookingRepo.update(dispute.bookingId, { status: 'completed' })
+      }
     } catch (bookingUpdateError) {
-      // Do not roll back a successfully resolved dispute due to a booking update side-effect.
-      console.error('Resolved dispute but failed to update booking status:', bookingUpdateError)
+      // Legacy disputed bookings are normalized back to completed when possible.
+      console.error('Resolved dispute but failed to normalize legacy booking status:', bookingUpdateError)
+    }
+
+    try {
+      const restoredReviews = await db.review.updateMany({
+        where: {
+          bookingId: dispute.bookingId,
+          hiddenByDispute: true,
+        } as any,
+        data: {
+          isPublic: true,
+          hiddenByDispute: false,
+        } as any,
+      })
+      if (restoredReviews.count > 0) {
+        const review = await db.review.findUnique({
+          where: { bookingId: dispute.bookingId },
+          select: { cleanerId: true },
+        })
+        if (review) {
+          try {
+            await cleanerReliabilityService.recalculate(review.cleanerId)
+          } catch (reliabilityError) {
+            await cleanerReliabilityService.markDirty(review.cleanerId)
+            console.error('dispute.review_unlock.reliability_failed', reliabilityError)
+          }
+        }
+      }
+    } catch (reviewUnlockError) {
+      console.error('Resolved dispute but failed to restore dispute-hidden reviews:', reviewUnlockError)
     }
 
     const booking = await bookingRepo.findById(dispute.bookingId)

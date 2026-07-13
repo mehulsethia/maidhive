@@ -390,6 +390,7 @@ model Review {
   cleanerReply   String?   @map("cleaner_reply")
   cleanerReplyAt DateTime? @map("cleaner_reply_at") @db.Timestamptz(6)
   isPublic       Boolean   @default(true) @map("is_public")
+  hiddenByDispute Boolean  @default(false) @map("hidden_by_dispute")
   createdAt      DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt      DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
 

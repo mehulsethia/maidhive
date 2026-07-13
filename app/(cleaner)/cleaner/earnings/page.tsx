@@ -146,7 +146,7 @@ export default function EarningsPage() {
 
 function settlementLabel(booking: BookingRead) {
   if (booking.status === 'confirmed' || booking.status === 'in_progress') return 'Awaiting completion'
-  if (booking.status === 'disputed') return 'Paused due to dispute'
+  if (booking.status === 'disputed' || booking.dispute?.status === 'open' || booking.dispute?.status === 'under_review') return 'Paused due to dispute'
   if (booking.status === 'completed') return 'In 24h hold window'
   return 'Pending settlement'
 }

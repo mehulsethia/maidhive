@@ -37,6 +37,7 @@ export const GET = requireClient(async (_req: NextRequest, _ctx, user) => {
           by: ['cleanerId'],
           where: {
             cleanerId: { in: cleanerIds },
+            isPublic: true,
           },
           _count: { _all: true },
           _avg: { rating: true },

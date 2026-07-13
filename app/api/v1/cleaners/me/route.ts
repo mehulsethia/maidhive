@@ -142,7 +142,7 @@ export const GET = requireCleaner(async (req, _ctx, user) => {
       },
     }),
     db.review.aggregate({
-      where: { cleanerId: cleaner.id },
+      where: { cleanerId: cleaner.id, isPublic: true },
       _avg: { rating: true },
     }),
     db.payment.findMany({

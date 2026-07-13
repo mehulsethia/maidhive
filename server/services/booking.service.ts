@@ -1856,7 +1856,6 @@ async function completeBookingFlow(
 
   const scheduledEndMs = booking.scheduledEnd ? booking.scheduledEnd.getTime() : Number.NaN
   const completionAnchorAt = Number.isFinite(scheduledEndMs) ? new Date(scheduledEndMs) : args.completedAt
-  const nextStatus = unresolvedDispute ? 'disputed' : 'completed'
   const completed = await db.booking.updateMany({
     where: {
       id: bookingId,
@@ -1864,7 +1863,7 @@ async function completeBookingFlow(
       completedAt: null,
     },
     data: {
-      status: nextStatus,
+      status: 'completed',
       completedAt: completionAnchorAt,
     },
   })
@@ -1910,15 +1909,17 @@ async function completeBookingFlow(
     console.error('Failed to send client completion email via Loops:', completionEmailError)
   }
 
-  try {
-    await loopsEmailService.sendClientReviewRequest({
-      email: booking.client.user.email,
-      fullName: booking.client.user.name ?? 'Client',
-      cleanerName: booking.cleaner.user.name ?? 'Cleaner',
-      bookingId: booking.id,
-    })
-  } catch (reviewEmailError) {
-    console.error('Failed to send client review request email via Loops:', reviewEmailError)
+  if (!unresolvedDispute) {
+    try {
+      await loopsEmailService.sendClientReviewRequest({
+        email: booking.client.user.email,
+        fullName: booking.client.user.name ?? 'Client',
+        cleanerName: booking.cleaner.user.name ?? 'Cleaner',
+        bookingId: booking.id,
+      })
+    } catch (reviewEmailError) {
+      console.error('Failed to send client review request email via Loops:', reviewEmailError)
+    }
   }
 
   return updated

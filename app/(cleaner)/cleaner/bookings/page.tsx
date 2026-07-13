@@ -373,13 +373,15 @@ export default function CleanerBookingsPage() {
                 const createdAtMs = new Date(b.created_at).getTime()
                 const reportWindowActive = isBookingReportWindowActive(b.scheduled_end)
                 const canReportProblem = ['in_progress', 'completed'].includes(b.status) && reportWindowActive
-                const canOpenDisputeCase = b.status === 'disputed' && reportWindowActive
+                const activeDispute = b.dispute?.status === 'open' || b.dispute?.status === 'under_review'
+                const canOpenDisputeCase = activeDispute && reportWindowActive
                 const disputeAction = getDisputeParticipantAction('cleaner', b.dispute)
                 const earningsLabel = getCleanerEarningsLabel({
                   status: b.status,
                   paymentStatus: b.payment?.status,
                   transferredAt: b.payment?.transferred_at,
                   scheduledEnd: b.scheduled_end,
+                  disputeStatus: b.dispute?.status,
                 })
                 const payoutSummary = getCleanerPayoutSummary(b)
                 const unlockAtMs = scheduledStartMs - PHONE_REVEAL_PRE_START_MS
@@ -599,7 +601,7 @@ export default function CleanerBookingsPage() {
                           : 'Client number becomes available 6 hours before the booking.'}
                       </span>
                     )}
-                    {b.status === 'disputed' && (
+                    {activeDispute && (
                       <span className="inline-flex h-8 items-center rounded-xl border border-amber-200 bg-amber-50 px-3 text-xs font-semibold text-amber-700">
                         This booking is currently under review.
                       </span>

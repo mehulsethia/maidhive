@@ -23,6 +23,10 @@ export const CLEANER_PAYMENT_HISTORY_SOURCE_STATUSES: BookingStatus[] = [
   'cancelled',
 ]
 
+function isActiveDispute(booking: BookingRead) {
+  return booking.dispute?.status === 'open' || booking.dispute?.status === 'under_review'
+}
+
 export function classifyCleanerPaymentHistoryBooking(
   booking: BookingRead,
   nowMs = Date.now(),
@@ -35,11 +39,15 @@ export function classifyCleanerPaymentHistoryBooking(
     cancellationContext.includes('client no show')
 
   if (booking.status === 'completed') {
+    if (isActiveDispute(booking)) {
+      return { paymentType: 'Payment issue', label: 'Payout pending review', tone: 'issue' }
+    }
     const released = isCompletedBookingReleased({
       status: booking.status,
       paymentStatus: booking.payment?.status,
       transferredAt: booking.payment?.transferred_at,
       scheduledEnd: booking.scheduled_end,
+      disputeStatus: booking.dispute?.status,
       nowMs,
     })
     const payout = getCleanerPayoutSummary(booking).finalCleanerPayout
@@ -74,7 +82,7 @@ export function classifyCleanerPaymentHistoryBooking(
     return { paymentType, label: 'Cancelled - no payout due', tone: 'warn', amount: 0 }
   }
 
-  if (paymentStatus === 'failed' || booking.status === 'disputed') {
+  if (paymentStatus === 'failed' || booking.status === 'disputed' || isActiveDispute(booking)) {
     return { paymentType: 'Payment issue', label: 'Payment issue - admin review', tone: 'issue' }
   }
 
@@ -105,6 +113,7 @@ export function isCleanerEarningReleased(booking: BookingRead, nowMs = Date.now(
       paymentStatus: booking.payment?.status,
       transferredAt: booking.payment?.transferred_at,
       scheduledEnd: booking.scheduled_end,
+      disputeStatus: booking.dispute?.status,
       nowMs,
     })
   }
