@@ -3,6 +3,7 @@ import {
   AMENDMENT_EXPIRED_BODY,
   AMENDMENT_EXPIRED_TITLE,
   AMENDMENT_EXPIRY_OUTCOME_COPY,
+  getEffectiveProposalExpiryMs,
   hasPendingAmendmentRequest,
   isWithinAmendStartWindow,
 } from '@/lib/booking-amendment'
@@ -46,6 +47,24 @@ describe('booking amendment helpers', () => {
     expect(AMENDMENT_EXPIRED_TITLE).toBe('Amend Start Time Request Expired')
     expect(AMENDMENT_EXPIRED_BODY).toContain('The original booking time remains in effect')
     expect(AMENDMENT_EXPIRY_OUTCOME_COPY).toContain('the amendment request will expire')
+    expect(AMENDMENT_EXPIRY_OUTCOME_COPY).toContain('the proposed start time is reached')
     expect(AMENDMENT_EXPIRY_OUTCOME_COPY).toContain('the original booking time will remain in effect')
+  })
+
+  it('caps amend-start countdown expiry at the proposed start time', () => {
+    const expiresAt = '2026-06-15T19:50:00.000Z'
+    const proposedStart = '2026-06-15T19:00:00.000Z'
+
+    expect(getEffectiveProposalExpiryMs({
+      proposal_context: 'amend_start',
+      proposal_expires_at: expiresAt,
+      proposed_start: proposedStart,
+    })).toBe(new Date(proposedStart).getTime())
+
+    expect(getEffectiveProposalExpiryMs({
+      proposal_context: 'post_confirmation',
+      proposal_expires_at: expiresAt,
+      proposed_start: proposedStart,
+    })).toBe(new Date(expiresAt).getTime())
   })
 })

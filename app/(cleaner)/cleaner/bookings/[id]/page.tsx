@@ -41,7 +41,7 @@ import { subscribeBookingsRefresh, triggerBookingsRefresh } from '@/lib/booking-
 import { showJobStartedToast } from '@/lib/job-start-toast'
 import { reportLoadError, resetLoadError } from '@/lib/load-error-policy'
 import { formatCurrency, formatDate } from '@/lib/utils'
-import { AMENDMENT_EXPIRY_OUTCOME_COPY, isWithinAmendStartWindow } from '@/lib/booking-amendment'
+import { AMENDMENT_EXPIRY_OUTCOME_COPY, getEffectiveProposalExpiryMs, isWithinAmendStartWindow } from '@/lib/booking-amendment'
 import { getCancellationOriginLabel } from '@/lib/cancellation-origin'
 import { getCleanerCancellationConfirmationCopy } from '@/lib/cleaner-cancellation-copy'
 import { getCleanerPayoutSummary } from '@/lib/cleaner-payout'
@@ -492,7 +492,7 @@ export default function CleanerBookingDetailPage() {
       : isAmendProposal
         ? false
         : false
-  const proposalExpiresMs = booking.proposal_expires_at ? new Date(booking.proposal_expires_at).getTime() : null
+  const proposalExpiresMs = getEffectiveProposalExpiryMs(booking)
   const proposalCountdownLabel = proposalExpiresMs && proposalExpiresMs > nowTick
     ? `${Math.ceil((proposalExpiresMs - nowTick) / 60_000)} min`
     : null

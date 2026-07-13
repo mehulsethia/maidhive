@@ -568,7 +568,13 @@ export const paymentLifecycleService = {
       where: {
         status: { in: ['accepted', 'confirmed'] },
         proposalContext: { in: ['post_confirmation', 'amend_start'] },
-        proposalExpiresAt: { lt: now },
+        OR: [
+          { proposalExpiresAt: { lte: now } },
+          {
+            proposalContext: 'amend_start',
+            proposedStart: { lte: now },
+          },
+        ],
       },
       include: {
         client: { include: { user: true } },

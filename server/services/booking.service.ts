@@ -78,12 +78,21 @@ export const bookingService = {
     }
 
     const proposalContext = booking.proposalContext ?? null
+    const amendProposalStartExpired =
+      proposalContext === 'amend_start' &&
+      Boolean(booking.proposedStart) &&
+      booking.proposedStart!.getTime() <= nowMs
     const postConfirmationProposalExpired = (
       booking.status === 'accepted' || booking.status === 'confirmed'
     ) &&
       (proposalContext === 'post_confirmation' || proposalContext === 'amend_start') &&
-      Boolean(booking.proposalExpiresAt) &&
-      booking.proposalExpiresAt!.getTime() < nowMs
+      (
+        (
+          Boolean(booking.proposalExpiresAt) &&
+          booking.proposalExpiresAt!.getTime() <= nowMs
+        ) ||
+        amendProposalStartExpired
+      )
 
     if (postConfirmationProposalExpired) {
       const shouldPreserveRescheduleUsage = proposalContext === 'amend_start'
@@ -93,7 +102,13 @@ export const bookingService = {
           id: bookingId,
           status: { in: ['accepted', 'confirmed'] },
           proposalContext: { in: ['post_confirmation', 'amend_start'] },
-          proposalExpiresAt: { lt: new Date(nowMs) },
+          OR: [
+            { proposalExpiresAt: { lte: new Date(nowMs) } },
+            {
+              proposalContext: 'amend_start',
+              proposedStart: { lte: new Date(nowMs) },
+            },
+          ],
         },
         data: clearedProposalState({
           preserveRescheduleUsage: shouldPreserveRescheduleUsage,
@@ -1022,7 +1037,8 @@ export const bookingService = {
 
       const hoursUntilBooking = (booking.scheduledStart.getTime() - Date.now()) / (60 * 60 * 1000)
       const ttlMinutes = hoursUntilBooking < 2 ? AMEND_FAST_RESPONSE_MINUTES : AMEND_STANDARD_RESPONSE_MINUTES
-      const proposalExpiresAt = new Date(Date.now() + ttlMinutes * 60 * 1000)
+      const standardResponseExpiresAt = new Date(Date.now() + ttlMinutes * 60 * 1000)
+      const proposalExpiresAt = minDate(standardResponseExpiresAt, proposedStart)
       const updated = await bookingRepo.updateWithActionEvent(
         bookingId,
         {
@@ -1048,7 +1064,7 @@ export const bookingService = {
         userId: actor === 'cleaner' ? booking.client.userId : booking.cleaner.userId,
         type: 'booking_proposed_new_time',
         title: 'Start time amendment requested',
-        body: `${actor === 'cleaner' ? 'Cleaner' : 'Client'} proposed ${formatBookingTimeForMessage(proposedStart)} (original ${formatBookingTimeForMessage(booking.scheduledStart)}). Respond within ${ttlMinutes} minutes. ${AMENDMENT_EXPIRY_OUTCOME_COPY}`,
+        body: `${actor === 'cleaner' ? 'Cleaner' : 'Client'} proposed ${formatBookingTimeForMessage(proposedStart)} (original ${formatBookingTimeForMessage(booking.scheduledStart)}). Respond before ${formatBookingTimeForMessage(proposalExpiresAt)}. ${AMENDMENT_EXPIRY_OUTCOME_COPY}`,
         data: { booking_id: bookingId },
       })
       try {
@@ -1542,6 +1558,10 @@ function assertPostConfirmationDateLimit(originalScheduledStart: Date, proposedS
 
 function assertAmendWindow(currentStart: Date, proposedStart: Date) {
   const now = Date.now()
+  if (proposedStart.getTime() <= now) {
+    throw new ServiceError('Proposed amended start time must be in the future.', 400)
+  }
+
   const hoursUntilCurrentStart = (currentStart.getTime() - now) / (60 * 60 * 1000)
   if (hoursUntilCurrentStart > AMEND_WITHIN_HOURS) {
     throw new ServiceError(`Amend Start Time is only allowed within ${AMEND_WITHIN_HOURS} hours of booking start`, 400)
@@ -1560,10 +1580,18 @@ function assertAmendWindow(currentStart: Date, proposedStart: Date) {
 }
 
 function assertAmendRequestStillValid(booking: Awaited<ReturnType<typeof bookingRepo.findById>>) {
-  if (!booking?.proposalExpiresAt) return
-  if (booking.proposalExpiresAt.getTime() < Date.now()) {
+  if (!booking) return
+  const now = Date.now()
+  if (booking.proposalExpiresAt && booking.proposalExpiresAt.getTime() <= now) {
     throw new ServiceError('Amend Start Time request expired. The original booking time remains in effect.', 400)
   }
+  if (booking.proposedStart && booking.proposedStart.getTime() <= now) {
+    throw new ServiceError('Amend Start Time request expired. The original booking time remains in effect.', 400)
+  }
+}
+
+function minDate(a: Date, b: Date) {
+  return a.getTime() <= b.getTime() ? a : b
 }
 
 function clearedProposalState(options?: { preserveRescheduleUsage?: boolean; preserveAmendUsage?: boolean }) {

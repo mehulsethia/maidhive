@@ -41,7 +41,7 @@ import { computeConfirmedCancellationPolicy, moneyFromCents } from '@/lib/cancel
 import { getCancellationOriginLabel } from '@/lib/cancellation-origin'
 import { getClientCancellationContext } from '@/lib/client-cancellation-context'
 import { getClientPaymentSummary } from '@/lib/client-payment-summary'
-import { AMENDMENT_EXPIRY_OUTCOME_COPY, isWithinAmendStartWindow } from '@/lib/booking-amendment'
+import { AMENDMENT_EXPIRY_OUTCOME_COPY, getEffectiveProposalExpiryMs, isWithinAmendStartWindow } from '@/lib/booking-amendment'
 import type { BookingRead } from '@/types'
 import { toast } from 'sonner'
 
@@ -490,7 +490,7 @@ export default function ClientBookingDetailPage() {
   const reportWindowActive = Boolean(reportableStatus && reportAnchorMs && Date.now() <= reportDeadlineMs)
   const reportWindowExpired = Boolean(reportableStatus && reportAnchorMs && Date.now() > reportDeadlineMs)
   const disputeAction = getDisputeParticipantAction('client', booking.dispute, currentUserId)
-  const proposalExpiresMs = booking.proposal_expires_at ? new Date(booking.proposal_expires_at).getTime() : null
+  const proposalExpiresMs = getEffectiveProposalExpiryMs(booking)
   const proposalCountdownLabel = proposalExpiresMs && proposalExpiresMs > nowTick
     ? `${Math.ceil((proposalExpiresMs - nowTick) / 60_000)} min`
     : null

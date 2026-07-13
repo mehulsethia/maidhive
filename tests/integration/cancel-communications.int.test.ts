@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const seeded = vi.hoisted(() => ({
   clientUser: {
@@ -48,6 +48,7 @@ vi.mock('@/server/repositories/booking.repo', () => ({
       return { ...state.booking, ...patch }
     }),
     findRemainingTodayForCleaner: vi.fn(async () => state.remainingToday),
+    findActiveForCleaner: vi.fn(async () => []),
   },
 }))
 
@@ -67,6 +68,10 @@ vi.mock('@/server/repositories/cleaner.repo', () => ({
 
 vi.mock('@/server/repositories/availability.repo', () => ({
   availabilityRepo: {
+    getSchedule: vi.fn(async () => [
+      { dayOfWeek: 6, isActive: true, startTime: '00:00', endTime: '23:59' },
+    ]),
+    getBlockedTimesInRange: vi.fn(async () => []),
     addBlockedTime: vi.fn(async (_cleanerId: string, data: any) => {
       state.blockedTimes.push(data)
       return { id: `blocked_${state.blockedTimes.length}`, ...data }
@@ -130,6 +135,9 @@ vi.mock('@/server/services/loops-email.service', () => ({
       state.amendmentDeclinedPayloads.push(payload)
       return true
     }),
+    sendClientAlternateTimeProposed: vi.fn(async () => true),
+    sendCleanerClientAlternateTimeProposed: vi.fn(async () => true),
+    sendAmendmentRequestAccepted: vi.fn(async () => true),
   },
 }))
 
@@ -142,6 +150,7 @@ vi.mock('@/server/services/in-app-notification.service', () => ({
 
 vi.mock('@/server/services/google-calendar.service', () => ({
   googleCalendarService: {
+    upsertCleanerBookingEvent: vi.fn(async () => true),
     removeCleanerBookingEvent: vi.fn(async () => {
       state.removeCalendarCalls += 1
       return true
@@ -159,6 +168,10 @@ vi.mock('@/server/stripe', () => ({
 }))
 
 describe('Booking cancellation communications', () => {
+  afterEach(() => {
+    vi.useRealTimers()
+  })
+
   beforeEach(() => {
     vi.resetModules()
     state.notifications = []
@@ -574,6 +587,77 @@ describe('Booking cancellation communications', () => {
         original_time_unchanged: true,
         proposed_by: 'cleaner',
       }),
+    }))
+  })
+
+  it('caps Amend Start Time expiry at the proposed amended start time', async () => {
+    vi.useFakeTimers()
+    vi.setSystemTime(new Date('2026-06-20T15:20:00.000Z'))
+    state.booking = {
+      id: 'booking_amend_short_window',
+      status: 'confirmed',
+      clientId: 'client_profile_1',
+      cleanerId: 'cleaner_profile_1',
+      scheduledStart: new Date('2026-06-20T17:30:00.000Z'),
+      scheduledEnd: new Date('2026-06-20T18:30:00.000Z'),
+      durationHours: 1,
+      cleanerProposals: 0,
+      clientProposals: 0,
+      postCleanerProposals: 0,
+      postClientProposals: 0,
+      proposalBy: null,
+      proposalContext: null,
+      payment: null,
+      client: { userId: seeded.clientUser.id, user: { email: seeded.clientUser.email, name: seeded.clientUser.name } },
+      cleaner: { userId: seeded.cleanerUser.id, user: { email: seeded.cleanerUser.email, name: seeded.cleanerUser.name } },
+    }
+
+    const { bookingService } = await import('@/server/services/booking.service')
+    const updated = await bookingService.applyAction(state.booking.id, seeded.cleanerUser as any, {
+      action: 'amend_start_time',
+      proposed_start: '2026-06-20T15:30:00.000Z',
+    })
+
+    expect(updated.proposalContext).toBe('amend_start')
+    expect(updated.proposalExpiresAt?.toISOString()).toBe('2026-06-20T15:30:00.000Z')
+    expect(state.notifications.at(-1)).toMatchObject({
+      title: 'Start time amendment requested',
+    })
+    expect(String(state.notifications.at(-1)?.body)).toContain('Respond before')
+  })
+
+  it('rejects accepting an Amend Start Time request after proposed start has passed', async () => {
+    vi.useFakeTimers()
+    vi.setSystemTime(new Date('2026-06-20T15:31:00.000Z'))
+    state.booking = {
+      id: 'booking_amend_expired_at_start',
+      status: 'confirmed',
+      clientId: 'client_profile_1',
+      cleanerId: 'cleaner_profile_1',
+      scheduledStart: new Date('2026-06-20T17:30:00.000Z'),
+      scheduledEnd: new Date('2026-06-20T18:30:00.000Z'),
+      proposedStart: new Date('2026-06-20T15:30:00.000Z'),
+      proposedEnd: new Date('2026-06-20T16:30:00.000Z'),
+      proposalBy: 'cleaner',
+      proposalContext: 'amend_start',
+      proposalExpiresAt: new Date('2026-06-20T16:20:00.000Z'),
+      cleanerProposals: 1,
+      clientProposals: 0,
+      payment: null,
+      client: { userId: seeded.clientUser.id, user: { email: seeded.clientUser.email, name: seeded.clientUser.name } },
+      cleaner: { userId: seeded.cleanerUser.id, user: { email: seeded.cleanerUser.email, name: seeded.cleanerUser.name } },
+    }
+
+    const { bookingService } = await import('@/server/services/booking.service')
+
+    await expect(bookingService.applyAction(state.booking.id, seeded.clientUser as any, {
+      action: 'accept_proposal',
+    })).rejects.toMatchObject({
+      message: 'Amend Start Time request expired. The original booking time remains in effect.',
+      status: 400,
+    })
+    expect(state.actionEvents).not.toContainEqual(expect.objectContaining({
+      type: 'amend_start_accepted',
     }))
   })
 })
