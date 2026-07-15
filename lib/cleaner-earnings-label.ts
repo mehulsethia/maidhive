@@ -7,8 +7,9 @@ export function getCleanerEarningsLabel(args: {
   transferredAt?: string | Date | null
   scheduledEnd?: string | Date | null
   disputeStatus?: string | null
+  noPayoutFinalized?: boolean
 }) {
-  const { status, paymentStatus, transferredAt, scheduledEnd, disputeStatus } = args
+  const { status, paymentStatus, transferredAt, scheduledEnd, disputeStatus, noPayoutFinalized } = args
   const payoutReleased = isCompletedBookingReleased({
     status,
     paymentStatus,
@@ -22,6 +23,7 @@ export function getCleanerEarningsLabel(args: {
     (status === 'completed' && !payoutReleased)
 
   if (status === 'disputed' || disputeStatus === 'open' || disputeStatus === 'under_review') return 'Payout pending review'
+  if (status === 'completed' && noPayoutFinalized) return 'No payout'
   if (payoutReleased) return 'You earned'
   if (showProjectedEarnings) return 'You will earn'
   return 'Booking value'

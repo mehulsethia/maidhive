@@ -13,6 +13,7 @@ import { EmptyState } from '@/components/empty-state'
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
 import { reportLoadError, resetLoadError } from '@/lib/load-error-policy'
 import { formatCurrency, formatDate } from '@/lib/utils'
+import { getBookingFinancialOutcome } from '@/lib/payment-financial-outcome'
 import type { BookingRead, BookingStatus } from '@/types'
 
 // ── Status groupings ──────────────────────────────────────────────────────────
@@ -78,7 +79,9 @@ function BookingTable({ bookings }: { bookings: BookingRead[] }) {
           </tr>
         </thead>
         <tbody className="divide-y">
-          {bookings.map(b => (
+          {bookings.map(b => {
+            const financialOutcome = getBookingFinancialOutcome(b)
+            return (
             <tr key={b.id} className="group hover:bg-muted/20 transition-colors">
               <td className="px-4 py-3 min-w-[140px]">
                 <Link
@@ -103,7 +106,18 @@ function BookingTable({ bookings }: { bookings: BookingRead[] }) {
                   transferredAt={b.payment?.transferred_at}
                   scheduledEnd={b.scheduled_end}
                   proposalBy={b.proposal_by}
+                  audience="admin"
                 />
+                {b.status === 'completed' && (
+                  <p className="mt-1 text-[11px] text-muted-foreground">
+                    Financial status: {financialOutcome.financialStatus}
+                  </p>
+                )}
+                {b.status === 'completed' && financialOutcome.isFullyRefunded && (
+                  <p className="mt-1 text-[11px] text-muted-foreground">
+                    Final cleaner payout: {formatCurrency(financialOutcome.finalCleanerPayout)}
+                  </p>
+                )}
                 {(b.start_initiated_by === 'cleaner' || b.start_initiated_by === 'system') && (
                   <p className="mt-1 text-[11px] text-muted-foreground">
                     Start: {b.start_initiated_by === 'system' ? 'Auto-started by system' : 'Started manually by cleaner'}
@@ -127,7 +141,8 @@ function BookingTable({ bookings }: { bookings: BookingRead[] }) {
                 </Link>
               </td>
             </tr>
-          ))}
+            )
+          })}
         </tbody>
       </table>
     </div>

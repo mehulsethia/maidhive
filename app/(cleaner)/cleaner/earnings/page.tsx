@@ -92,6 +92,7 @@ export default function EarningsPage() {
                     scheduledEnd={b.scheduled_end}
                     proposalBy={b.proposal_by}
                     showPaymentRequiredForUnpaid={false}
+                    audience="cleaner"
                   />
                   <span className="text-xs text-muted-foreground">{settlementLabel(b)}</span>
                 </div>
@@ -113,19 +114,21 @@ export default function EarningsPage() {
             <div className="space-y-0">
               {settled.map((b, i) => {
                 const payoutSummary = getCleanerPayoutSummary(b)
+                const paymentHistory = classifyCleanerPaymentHistoryBooking(b)
+                const noPayout = paymentHistory?.label === 'No payout'
                 return (
                 <div key={b.id}>
                   <div className="flex min-w-0 flex-col gap-2 py-3 sm:flex-row sm:items-center sm:justify-between">
                     <div className="min-w-0">
                       <p className="font-medium text-sm capitalize">{b.service_type.replace('_', ' ')}</p>
                       <p className="mt-0.5 text-[11px] font-semibold text-slate-600">
-                        {classifyCleanerPaymentHistoryBooking(b)?.paymentType ?? 'Booking payout'}
+                        {paymentHistory?.paymentType ?? 'Booking payout'}
                       </p>
                       <p className="break-words text-xs text-muted-foreground">{formatDate(b.scheduled_start)} · {b.duration_hours}h · {b.city}</p>
                     </div>
                     <div className="shrink-0 text-left sm:text-right">
-                      <p className="font-semibold text-green-700">+{formatCurrency(payoutSummary.finalCleanerPayout)}</p>
-                      <p className="text-xs text-muted-foreground">{formatCurrency(b.hourly_rate)}/hr</p>
+                      <p className="font-semibold text-green-700">{noPayout ? '' : '+'}{formatCurrency(payoutSummary.finalCleanerPayout)}</p>
+                      <p className="text-xs text-muted-foreground">{paymentHistory?.label ?? `${formatCurrency(b.hourly_rate)}/hr`}</p>
                     </div>
                   </div>
                   {i < settled.length - 1 && <Separator />}

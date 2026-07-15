@@ -33,6 +33,7 @@ export function BookingStatusBadge({
   proposalBy,
   showPaymentRequiredForUnpaid = true,
   audience,
+  cleanerNoPayout = false,
 }: {
   status: BookingStatus
   paymentStatus?: string | null
@@ -41,8 +42,12 @@ export function BookingStatusBadge({
   proposalBy?: 'client' | 'cleaner' | null
   showPaymentRequiredForUnpaid?: boolean
   audience?: 'client' | 'cleaner' | 'admin'
+  cleanerNoPayout?: boolean
 }) {
-  const completedLabel = audience === 'client'
+  const paymentWasFullyRefunded = String(paymentStatus ?? '') === 'refunded'
+  const completedLabel = audience === 'cleaner' && (cleanerNoPayout || paymentWasFullyRefunded)
+    ? 'Completed · No payout'
+    : audience === 'client' || paymentWasFullyRefunded
     ? 'Completed'
     : isCompletedBookingReleased({ status, paymentStatus, transferredAt, scheduledEnd })
     ? 'Completed - Released'

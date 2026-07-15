@@ -21,7 +21,7 @@ export function ClientPaymentOutcome({ booking }: { booking: BookingRead }) {
         <span className="shrink-0 text-right tabular-nums">{formatCurrency(summary.originalTotal)}</span>
       </div>
       <div className="flex min-w-0 items-start justify-between gap-3 font-semibold text-emerald-800">
-        <span className="min-w-0">Partial refund</span>
+        <span className="min-w-0">{summary.refundLabel}</span>
         <span className="shrink-0 text-right tabular-nums">-{formatCurrency(summary.refundAmount)}</span>
       </div>
       <Separator className="bg-emerald-200" />

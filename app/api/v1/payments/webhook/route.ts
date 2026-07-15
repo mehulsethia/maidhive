@@ -6,6 +6,7 @@ import { cleanerRepo } from '@/server/repositories/cleaner.repo'
 import { paymentAuthorizationService } from '@/server/services/payment-authorization.service'
 import { loopsEmailService } from '@/server/services/loops-email.service'
 import { pushInAppNotification } from '@/server/services/in-app-notification.service'
+import { recordBookingActionEvent } from '@/server/services/booking-action-event.service'
 import type Stripe from 'stripe'
 
 export async function POST(req: NextRequest) {
@@ -70,15 +71,23 @@ export async function POST(req: NextRequest) {
           const payment = await paymentRepo.findByStripeIntentId(piId)
           if (payment) {
             const wasCaptured = payment.status === 'captured'
+            const capturedAt = new Date()
             await paymentRepo.update(payment.id, {
               status: 'captured',
               stripeChargeId: charge.id,
-              capturedAt: new Date(),
+              capturedAt,
             })
 
             if (!wasCaptured) {
               const booking = await bookingRepo.findById(payment.bookingId)
               if (booking) {
+                await recordBookingActionEvent({
+                  bookingId: booking.id,
+                  type: 'payment_captured',
+                  actorRole: 'system',
+                  metadata: { amount: Number(payment.amount), status: 'captured' },
+                  createdAt: capturedAt,
+                })
                 await pushInAppNotification({
                   userId: booking.client.userId,
                   type: 'payment_captured',
@@ -132,15 +141,23 @@ export async function POST(req: NextRequest) {
           const payment = await paymentRepo.findByStripeChargeId(chargeId)
           if (payment) {
             const wasTransferred = payment.status === 'transferred'
+            const transferredAt = new Date()
             await paymentRepo.update(payment.id, {
               status: 'transferred',
               stripeTransferId: transfer.id,
-              transferredAt: new Date(),
+              transferredAt,
             })
 
             if (!wasTransferred) {
               const booking = await bookingRepo.findById(payment.bookingId)
               if (booking) {
+                await recordBookingActionEvent({
+                  bookingId: booking.id,
+                  type: 'payout_transferred',
+                  actorRole: 'system',
+                  metadata: { amount: Number(payment.cleanerPayout), status: 'transferred' },
+                  createdAt: transferredAt,
+                })
                 await pushInAppNotification({
                   userId: booking.cleaner.userId,
                   type: 'payout_released',

@@ -381,9 +381,9 @@ export default function ClientDashboardPage() {
                           {proposalSummary}
                         </p>
                       )}
-                      {paymentSummary.isPartiallyRefunded && (
+                      {paymentSummary.hasRefund && paymentSummary.dashboardRefundLabel && (
                         <p className="text-xs font-semibold text-emerald-700">
-                          Completed · Partial refund {formatCurrency(paymentSummary.refundAmount)}
+                          Completed · {paymentSummary.dashboardRefundLabel} {formatCurrency(paymentSummary.refundAmount)}
                         </p>
                       )}
                     </div>

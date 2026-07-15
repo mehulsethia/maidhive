@@ -279,4 +279,40 @@ describe('Cleaner payment history mapping', () => {
     })
     expect(getReleasedCleanerEarnings([adjusted])).toBe(16)
   })
+
+  it('maps resolved full refunds with zero cleaner payout to no payout', () => {
+    const fullyRefunded = booking({
+      id: 'full_refund_no_payout',
+      status: 'completed',
+      total_amount: 22,
+      cleaner_payout: 20,
+      platform_fee: 2,
+      payment: {
+        id: 'p17',
+        status: 'refunded',
+        amount: 22,
+        cleaner_payout: 0,
+        platform_fee: 0,
+        refund_amount: 22,
+      },
+      dispute: {
+        id: 'd17',
+        status: 'resolved',
+        reason: 'Service issue',
+        issue_type: 'service_issue',
+        resolution_type: 'full_refund',
+        refund_amount: 22,
+        created_at: new Date().toISOString(),
+      },
+    })
+
+    const history = classifyCleanerPaymentHistoryBooking(fullyRefunded)
+    expect(history).toMatchObject({
+      paymentType: 'Booking payout',
+      label: 'No payout',
+      amount: 0,
+      tone: 'ok',
+    })
+    expect(getReleasedCleanerEarnings([fullyRefunded])).toBe(0)
+  })
 })

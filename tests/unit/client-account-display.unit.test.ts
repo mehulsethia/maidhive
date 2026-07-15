@@ -39,6 +39,21 @@ describe('client account display rules', () => {
     expect(cleanerBadge).toContain('Completed - Released')
   })
 
+  it('does not show awaiting release for fully refunded completed bookings', () => {
+    const adminBadge = renderToStaticMarkup(createElement(BookingStatusBadge, {
+      status: 'completed', paymentStatus: 'refunded', audience: 'admin',
+    }))
+    const cleanerBadge = renderToStaticMarkup(createElement(BookingStatusBadge, {
+      status: 'completed', paymentStatus: 'refunded', audience: 'cleaner', cleanerNoPayout: true,
+    }))
+
+    expect(adminBadge).toContain('Completed')
+    expect(adminBadge).not.toContain('Awaiting Release')
+    expect(adminBadge).not.toContain('Released')
+    expect(cleanerBadge).toContain('Completed · No payout')
+    expect(cleanerBadge).not.toContain('Awaiting Release')
+  })
+
   it('explains each client cancellation window in plain language', () => {
     expect(getClientCancellationContext(cancelledBooking())).toContain('less than 12 hours')
     expect(getClientCancellationContext(cancelledBooking({ cancelled_at: '2026-06-19T18:00:00.000Z' })))
@@ -90,7 +105,33 @@ describe('client account display rules', () => {
       refundAmount: 8,
       finalAmountPaid: 18.4,
       isPartiallyRefunded: true,
+      refundLabel: 'Partial refund',
+      dashboardRefundLabel: 'Partial refund',
       financialStatusLabel: 'Partially refunded',
+    })
+  })
+
+  it('summarises full refunds with full-refund wording', () => {
+    const summary = getClientPaymentSummary({
+      ...cancelledBooking({ status: 'completed' }),
+      total_amount: 22,
+      payment: {
+        id: 'payment_full_refund',
+        status: 'refunded',
+        amount: 22,
+        refund_amount: 22,
+      },
+    })
+
+    expect(summary).toMatchObject({
+      originalTotal: 22,
+      refundAmount: 22,
+      finalAmountPaid: 0,
+      isFullyRefunded: true,
+      isPartiallyRefunded: false,
+      refundLabel: 'Full refund',
+      dashboardRefundLabel: 'Refunded',
+      financialStatusLabel: 'Refunded',
     })
   })
 })

@@ -13,6 +13,7 @@ import { config } from '@/server/config'
 import { DISPUTE_REASON_LABELS } from '@/lib/dispute-issues'
 import { Prisma } from '@prisma/client'
 import { cleanerReliabilityService } from '@/server/services/cleaner-reliability.service'
+import { recordBookingActionEvent } from '@/server/services/booking-action-event.service'
 
 const NO_SHOW_DELAY_MINUTES = 30
 const DISPUTE_WINDOW_MS = config.DISPUTE_WINDOW_HOURS * 60 * 60 * 1000
@@ -44,24 +45,24 @@ async function pauseCleanerPayoutForDispute(bookingId: string) {
       stripeTransferId: true,
     },
   })
-  if (!payment) return { paused: true, reason: 'no_payment' }
+  if (!payment) return { paused: true, reason: 'no_payment', cleanerPayout: 0 }
 
+  const cleanerPayout = Number(payment.cleanerPayout ?? 0)
   const hasReleasedPayout =
     payment.status === 'transferred' ||
     Boolean(payment.transferredAt) ||
     Boolean(payment.stripeTransferId)
   if (hasReleasedPayout) {
-    return { paused: false, reason: 'payout_already_released' }
+    return { paused: false, reason: 'payout_already_released', cleanerPayout: cleanerPayout }
   }
 
-  const cleanerPayout = Number(payment.cleanerPayout ?? 0)
-  if (cleanerPayout <= 0) return { paused: true, reason: 'no_cleaner_payout' }
+  if (cleanerPayout <= 0) return { paused: true, reason: 'no_cleaner_payout', cleanerPayout }
 
   await db.payment.update({
     where: { id: payment.id },
     data: { payoutScheduledAt: null },
   })
-  return { paused: true, reason: 'payout_schedule_cleared' }
+  return { paused: true, reason: 'payout_schedule_cleared', cleanerPayout }
 }
 
 async function hideReviewsForActiveDispute(bookingId: string) {
@@ -217,6 +218,18 @@ export const POST = requireAuth(async (req: NextRequest, ctx, user) => {
   }
   const dispute = await disputeRepo.update(created.id, { status: 'under_review' })
   const payoutPause = await pauseCleanerPayoutForDispute(bookingRecord.id)
+  if (payoutPause.paused && payoutPause.cleanerPayout > 0) {
+    await recordBookingActionEvent({
+      bookingId: bookingRecord.id,
+      type: 'cleaner_payout_paused',
+      actorRole: 'system',
+      metadata: {
+        amount: payoutPause.cleanerPayout,
+        reason: 'dispute_under_review',
+        transfer_status: 'not_transferred',
+      },
+    })
+  }
   const hiddenReviews = await hideReviewsForActiveDispute(bookingRecord.id)
 
   if (hiddenReviews.count > 0) {

@@ -27,6 +27,8 @@ export function getClientPaymentSummary(booking: BookingRead) {
     hasRefund,
     isPartiallyRefunded,
     isFullyRefunded,
+    refundLabel: isFullyRefunded ? 'Full refund' : isPartiallyRefunded ? 'Partial refund' : null,
+    dashboardRefundLabel: isFullyRefunded ? 'Refunded' : isPartiallyRefunded ? 'Partial refund' : null,
     financialStatusLabel: isFullyRefunded
       ? 'Refunded'
       : isPartiallyRefunded

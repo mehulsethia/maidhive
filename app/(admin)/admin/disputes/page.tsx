@@ -1,6 +1,6 @@
 'use client'
 
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
 import { useSearchParams } from 'next/navigation'
 import { AlertTriangle, CheckCircle2, Clock } from 'lucide-react'
@@ -17,8 +17,9 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { LoadingSpinner } from '@/components/loading-spinner'
 import { EmptyState } from '@/components/empty-state'
 import { reportLoadError, resetLoadError } from '@/lib/load-error-policy'
-import { cn, formatDate } from '@/lib/utils'
+import { cn, formatCurrency, formatDate } from '@/lib/utils'
 import { getDisputeResolutionOutcome } from '@/lib/dispute-resolution'
+import { getResolutionFinancialPreview } from '@/lib/payment-financial-outcome'
 import type { AdminDispute } from '@/types'
 import { toast } from 'sonner'
 
@@ -254,6 +255,16 @@ export default function AdminDisputesPage() {
   const [resolveNote, setResolveNote] = useState('')
   const [refundAmount, setRefundAmount] = useState('')
   const [noShowFinding, setNoShowFinding] = useState('')
+
+  const resolutionPreview = useMemo(() => {
+    if (!resolveTarget?.booking) return null
+    const refund = refundAmount.trim() ? Number(refundAmount) : null
+    return getResolutionFinancialPreview(
+      resolveTarget.booking,
+      resolveType,
+      Number.isFinite(refund) ? refund : null,
+    )
+  }, [resolveTarget, resolveType, refundAmount])
   const [resolving, setResolving] = useState(false)
 
   const load = useCallback(async () => {
@@ -523,6 +534,41 @@ export default function AdminDisputesPage() {
               </div>
             )}
 
+            <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-3 text-sm">
+              <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Final financial outcome</p>
+              {resolutionPreview ? (
+                <div className="mt-2 grid gap-2">
+                  <div className="flex items-center justify-between gap-3">
+                    <span className="text-slate-600">Original client payment</span>
+                    <span className="font-medium text-slate-900">{formatCurrency(resolutionPreview.originalClientPayment)}</span>
+                  </div>
+                  <div className="flex items-center justify-between gap-3">
+                    <span className="text-slate-600">Refund to client</span>
+                    <span className="font-medium text-slate-900">{formatCurrency(resolutionPreview.refundToClient)}</span>
+                  </div>
+                  <div className="flex items-center justify-between gap-3">
+                    <span className="text-slate-600">Client final amount paid</span>
+                    <span className="font-medium text-slate-900">{formatCurrency(resolutionPreview.finalClientAmountPaid)}</span>
+                  </div>
+                  <div className="flex items-center justify-between gap-3">
+                    <span className="text-slate-600">Cleaner final payout</span>
+                    <span className="font-medium text-slate-900">{formatCurrency(resolutionPreview.finalCleanerPayout)}</span>
+                  </div>
+                  <div className="flex items-center justify-between gap-3">
+                    <span className="text-slate-600">MaidHive retained</span>
+                    <span className="font-medium text-slate-900">{formatCurrency(resolutionPreview.finalMaidHiveRetainedFee)}</span>
+                  </div>
+                  {resolutionPreview.safetyMessage && (
+                    <p className="rounded-md border border-amber-200 bg-amber-50 px-2.5 py-2 text-xs font-medium text-amber-800">
+                      {resolutionPreview.safetyMessage}
+                    </p>
+                  )}
+                </div>
+              ) : (
+                <p className="mt-2 text-xs text-muted-foreground">Payment details are unavailable for this dispute.</p>
+              )}
+            </div>
+
             <div>
               <Label>Resolution note required</Label>
               <Textarea
@@ -542,6 +588,7 @@ export default function AdminDisputesPage() {
             <Button
               onClick={submitResolve}
               loading={resolving}
+              disabled={resolving || !resolutionPreview?.canSafelyApply}
               className="w-full"
             >
               <CheckCircle2 className="h-4 w-4 mr-1" />

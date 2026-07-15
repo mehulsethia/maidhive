@@ -35,4 +35,13 @@ describe('Cleaner earnings label', () => {
     expect(labelFor('disputed', 10, 'authorized')).toBe('Payout pending review')
     expect(labelFor('completed', 10, 'authorized', 'under_review')).toBe('Payout pending review')
   })
+
+  it('shows no payout after a completed dispute is finalized with zero payout', () => {
+    expect(getCleanerEarningsLabel({
+      status: 'completed',
+      paymentStatus: 'refunded',
+      disputeStatus: 'resolved',
+      noPayoutFinalized: true,
+    })).toBe('No payout')
+  })
 })

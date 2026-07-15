@@ -251,6 +251,7 @@ export interface BookingRead {
     payout_scheduled_at?: string | null
     refunded_at?: string | null
     failed_at?: string | null
+    stripe_transfer_id?: string | null
     created_at?: string
     updated_at?: string
   } | null
@@ -664,6 +665,10 @@ export interface AdminDispute {
   resolved_at?: string
   created_at: string
   booking?: {
+    total_amount?: number
+    platform_fee?: number
+    cleaner_payout?: number
+    payment?: BookingRead['payment']
     client?: { user?: Pick<UserRead, 'name'> | null } | null
     cleaner?: { user?: Pick<UserRead, 'name'> | null } | null
   } | null

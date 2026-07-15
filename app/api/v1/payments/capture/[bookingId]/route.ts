@@ -4,6 +4,7 @@ import { paymentRepo } from '@/server/repositories/payment.repo'
 import { stripe } from '@/server/stripe'
 import { ok, err } from '@/server/response'
 import { config } from '@/server/config'
+import { recordBookingActionEvent } from '@/server/services/booking-action-event.service'
 
 export const POST = requireAdmin(async (_req, ctx) => {
   const { bookingId } = await ctx.params
@@ -19,12 +20,28 @@ export const POST = requireAdmin(async (_req, ctx) => {
   if (payment.status !== 'authorized') return err('Payment must be authorized', 400)
 
   const captured = await stripe.paymentIntents.capture(payment.stripePaymentIntentId)
+  const capturedAt = new Date()
+  const payoutScheduledAt = new Date(Date.now() + config.PAYOUT_DELAY_HOURS * 60 * 60 * 1000)
 
   const updated = await paymentRepo.update(payment.id, {
     status: 'captured',
     stripeChargeId: typeof captured.latest_charge === 'string' ? captured.latest_charge : undefined,
-    capturedAt: new Date(),
-    payoutScheduledAt: new Date(Date.now() + config.PAYOUT_DELAY_HOURS * 60 * 60 * 1000),
+    capturedAt,
+    payoutScheduledAt,
+  })
+  await recordBookingActionEvent({
+    bookingId: booking.id,
+    type: 'payment_captured',
+    actorRole: 'admin',
+    metadata: { amount: Number(payment.amount), status: 'captured' },
+    createdAt: capturedAt,
+  })
+  await recordBookingActionEvent({
+    bookingId: booking.id,
+    type: 'payout_scheduled',
+    actorRole: 'system',
+    metadata: { amount: Number(payment.cleanerPayout), status: 'scheduled' },
+    createdAt: payoutScheduledAt,
   })
 
   return ok(updated)

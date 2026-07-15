@@ -42,6 +42,7 @@ import { formatCurrency, formatDate } from '@/lib/utils'
 import { hasPendingAmendmentRequest } from '@/lib/booking-amendment'
 import { getCleanerCancellationOriginLabel } from '@/lib/cancellation-origin'
 import { getCleanerPayoutSummary } from '@/lib/cleaner-payout'
+import { isFinalNoCleanerPayoutOutcome } from '@/lib/payment-financial-outcome'
 import type { BookingRead, BookingStatus } from '@/types'
 import { toast } from 'sonner'
 
@@ -376,14 +377,16 @@ export default function CleanerBookingsPage() {
                 const activeDispute = b.dispute?.status === 'open' || b.dispute?.status === 'under_review'
                 const canOpenDisputeCase = activeDispute && reportWindowActive
                 const disputeAction = getDisputeParticipantAction('cleaner', b.dispute)
+                const payoutSummary = getCleanerPayoutSummary(b)
+                const noPayoutFinalized = isFinalNoCleanerPayoutOutcome(b)
                 const earningsLabel = getCleanerEarningsLabel({
                   status: b.status,
                   paymentStatus: b.payment?.status,
                   transferredAt: b.payment?.transferred_at,
                   scheduledEnd: b.scheduled_end,
                   disputeStatus: b.dispute?.status,
+                  noPayoutFinalized,
                 })
-                const payoutSummary = getCleanerPayoutSummary(b)
                 const unlockAtMs = scheduledStartMs - PHONE_REVEAL_PRE_START_MS
                 const sameDayCreated =
                   Number.isFinite(createdAtMs) &&
@@ -454,6 +457,8 @@ export default function CleanerBookingsPage() {
                         scheduledEnd={b.scheduled_end}
                         proposalBy={b.proposal_by}
                         showPaymentRequiredForUnpaid={false}
+                        audience="cleaner"
+                        cleanerNoPayout={noPayoutFinalized}
                       />
                       {amendmentPending && (
                         <div className="mt-2">
@@ -473,7 +478,7 @@ export default function CleanerBookingsPage() {
                         </div>
                       ) : (
                         <p className="mt-2 text-sm font-semibold text-emerald-700">
-                          {earningsLabel} {formatCurrency(payoutSummary.finalCleanerPayout)}
+                          {noPayoutFinalized ? 'Final payout:' : earningsLabel} {formatCurrency(payoutSummary.finalCleanerPayout)}
                         </p>
                       )}
                     </div>

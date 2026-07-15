@@ -4,9 +4,10 @@ import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { BookingStatusBadge } from '@/components/booking-status-badge'
 import { CancellationPaymentBreakdown } from '@/components/cancellation-payment-breakdown'
-import { isCompletedBookingReleased } from '@/lib/booking-release'
 import { getCleanerPayoutSummary } from '@/lib/cleaner-payout'
+import { getCleanerEarningsLabel } from '@/lib/cleaner-earnings-label'
 import { getClientPaymentSummary } from '@/lib/client-payment-summary'
+import { isFinalNoCleanerPayoutOutcome } from '@/lib/payment-financial-outcome'
 import { formatCurrency, formatDate } from '@/lib/utils'
 import type { BookingRead } from '@/types'
 import { getCancellationOriginLabel } from '@/lib/cancellation-origin'
@@ -29,27 +30,18 @@ interface BookingCardProps {
 
 export function BookingCard({ booking, viewAs = 'client' }: BookingCardProps) {
   const basePath = viewAs === 'client' ? '/client' : '/cleaner'
-  const payoutReleased = isCompletedBookingReleased({
+  const activeDispute = isActiveDispute(booking)
+  const payoutSummary = getCleanerPayoutSummary(booking)
+  const noPayoutFinalized = isFinalNoCleanerPayoutOutcome(booking)
+  const clientPaymentSummary = getClientPaymentSummary(booking)
+  const earningsLabel = getCleanerEarningsLabel({
     status: booking.status,
     paymentStatus: booking.payment?.status,
     transferredAt: booking.payment?.transferred_at,
     scheduledEnd: booking.scheduled_end,
     disputeStatus: booking.dispute?.status,
+    noPayoutFinalized,
   })
-  const activeDispute = isActiveDispute(booking)
-  const payoutSummary = getCleanerPayoutSummary(booking)
-  const clientPaymentSummary = getClientPaymentSummary(booking)
-  const showProjectedEarnings =
-    booking.status === 'confirmed' ||
-    booking.status === 'in_progress' ||
-    (booking.status === 'completed' && !payoutReleased)
-  const earningsLabel = payoutReleased
-    ? 'You earned'
-    : booking.status === 'disputed' || activeDispute
-      ? 'Payout pending review'
-      : showProjectedEarnings
-      ? 'You will earn'
-      : 'Booking value'
 
   return (
     <Card>
@@ -66,6 +58,7 @@ export function BookingCard({ booking, viewAs = 'client' }: BookingCardProps) {
                 proposalBy={booking.proposal_by}
                 showPaymentRequiredForUnpaid={viewAs !== 'cleaner'}
                 audience={viewAs}
+                cleanerNoPayout={viewAs === 'cleaner' && noPayoutFinalized}
               />
               {viewAs === 'client' && getCancellationOriginLabel(booking) && (
                 <span className="inline-flex rounded-full border border-rose-200 bg-rose-50 px-2 py-0.5 text-[11px] font-semibold text-rose-700">
@@ -108,7 +101,7 @@ export function BookingCard({ booking, viewAs = 'client' }: BookingCardProps) {
             )}
             {viewAs === 'cleaner' && booking.status !== 'cancelled' && (
               <p className="text-xs text-muted-foreground">
-                {earningsLabel} {formatCurrency(payoutSummary.finalCleanerPayout)}
+                {noPayoutFinalized ? 'Final payout:' : earningsLabel} {formatCurrency(payoutSummary.finalCleanerPayout)}
               </p>
             )}
             {viewAs === 'cleaner' && (booking.status === 'disputed' || activeDispute) && (

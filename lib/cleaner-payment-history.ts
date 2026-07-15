@@ -1,6 +1,7 @@
 import { isCompletedBookingReleased } from '@/lib/booking-release'
 import { getCancellationPaymentOutcome } from '@/lib/booking-payment-outcome'
 import { getCleanerPayoutSummary } from '@/lib/cleaner-payout'
+import { isFinalNoCleanerPayoutOutcome } from '@/lib/payment-financial-outcome'
 import { formatCurrency } from '@/lib/utils'
 import type { BookingRead, BookingStatus } from '@/types'
 
@@ -41,6 +42,14 @@ export function classifyCleanerPaymentHistoryBooking(
   if (booking.status === 'completed') {
     if (isActiveDispute(booking)) {
       return { paymentType: 'Payment issue', label: 'Payout pending review', tone: 'issue' }
+    }
+    if (isFinalNoCleanerPayoutOutcome(booking)) {
+      return {
+        paymentType: 'Booking payout',
+        label: 'No payout',
+        tone: 'ok',
+        amount: 0,
+      }
     }
     const released = isCompletedBookingReleased({
       status: booking.status,
@@ -108,6 +117,7 @@ export function getReleasedCleanerEarnings(bookings: BookingRead[], nowMs = Date
 
 export function isCleanerEarningReleased(booking: BookingRead, nowMs = Date.now()) {
   if (booking.status === 'completed') {
+    if (isFinalNoCleanerPayoutOutcome(booking)) return true
     return isCompletedBookingReleased({
       status: booking.status,
       paymentStatus: booking.payment?.status,

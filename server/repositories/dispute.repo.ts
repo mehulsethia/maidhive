@@ -135,6 +135,7 @@ export const disputeRepo = {
             include: {
               client: { include: { user: true } },
               cleaner: { include: { user: true } },
+              payment: true,
             },
           },
           raisedByUser: true,

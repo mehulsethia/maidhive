@@ -36,6 +36,7 @@ import {
 } from '@/lib/cancellation-payment-state'
 import { getAdminClientCancellationCopy } from '@/lib/client-cancellation-context'
 import { getCleanerPayoutSummary } from '@/lib/cleaner-payout'
+import { getBookingFinancialOutcome, hasCleanerPayoutTransferred } from '@/lib/payment-financial-outcome'
 import { formatCurrency, formatDate } from '@/lib/utils'
 import type { BookingRead } from '@/types'
 
@@ -81,6 +82,32 @@ function actionEventDate(metadata: Record<string, unknown> | null | undefined, k
   return typeof value === 'string' && isValidDate(value) ? value : null
 }
 
+function actionEventMoney(metadata: Record<string, unknown> | null | undefined, key: string) {
+  const value = Number(metadata?.[key])
+  return Number.isFinite(value) ? value : null
+}
+
+function hasActionEvent(booking: BookingRead, ...types: string[]) {
+  return (booking.action_events ?? []).some((event) => types.includes(event.type))
+}
+
+function describeCleanerPayoutState(booking: BookingRead, finalCleanerPayout: number) {
+  const paymentStatus = String(booking.payment?.status ?? '')
+  if (hasCleanerPayoutTransferred(booking.payment)) return 'Released — transferred to cleaner'
+  if (booking.dispute?.status === 'open' || booking.dispute?.status === 'under_review') {
+    return 'Paused — dispute under review'
+  }
+  if (paymentStatus === 'refunded' || finalCleanerPayout <= 0) return 'Not due'
+  if (booking.payment?.payout_scheduled_at) return 'Scheduled'
+  if (paymentStatus === 'captured' || paymentStatus === 'authorized') return 'Awaiting release'
+  return 'Not scheduled'
+}
+
+function describeTransferState(booking: BookingRead) {
+  if (hasCleanerPayoutTransferred(booking.payment)) return 'Transferred'
+  return 'Not transferred'
+}
+
 function buildTimeline(booking: BookingRead): TimelineEvent[] {
   const events: TimelineEvent[] = []
   const payment = booking.payment
@@ -99,14 +126,14 @@ function buildTimeline(booking: BookingRead): TimelineEvent[] {
   addEvent(events, payment?.created_at ? {
     id: 'payment-created',
     at: payment.created_at,
-    title: `Payment status updated to ${getAdminPaymentStateLabel(booking)}`,
-    description: 'The existing payment record reflects the latest payment state.',
+    title: 'Payment record created',
+    description: `Payment record opened for ${formatCurrency(payment.amount ?? booking.total_amount)}.`,
   } : null)
 
-  addEvent(events, payment?.authorized_at ? {
+  addEvent(events, payment?.authorized_at && !hasActionEvent(booking, 'payment_authorized') ? {
     id: 'payment-authorized',
     at: payment.authorized_at,
-    title: 'Payment authorized',
+    title: 'Payment authorised',
     description: `Card authorization recorded for ${formatCurrency(payment.amount ?? booking.total_amount)}.`,
     tone: 'success',
   } : null)
@@ -141,6 +168,98 @@ function buildTimeline(booking: BookingRead): TimelineEvent[] {
     const originalStart = actionEventDate(metadata, 'original_start')
     const proposedStart = actionEventDate(metadata, 'proposed_start')
     const proposedBy = metadata?.proposed_by === 'client' ? 'Client' : 'Cleaner'
+
+    if (event.type === 'payment_authorized') {
+      const amount = actionEventMoney(metadata, 'amount')
+      addEvent(events, {
+        id: event.id,
+        at: event.created_at,
+        title: 'Payment authorised',
+        description: amount == null
+          ? 'Card authorization was recorded.'
+          : `Card authorization recorded for ${formatCurrency(amount)}.`,
+        tone: 'success',
+      })
+    }
+
+    if (event.type === 'payment_captured') {
+      const amount = actionEventMoney(metadata, 'amount')
+      addEvent(events, {
+        id: event.id,
+        at: event.created_at,
+        title: 'Payment captured',
+        description: amount == null
+          ? 'Payment was captured for this booking.'
+          : `Captured ${formatCurrency(amount)} for this booking.`,
+        tone: 'success',
+      })
+    }
+
+    if (event.type === 'payout_scheduled') {
+      const amount = actionEventMoney(metadata, 'amount')
+      addEvent(events, {
+        id: event.id,
+        at: event.created_at,
+        title: 'Payout scheduled',
+        description: amount == null
+          ? 'Cleaner payout was scheduled.'
+          : `Cleaner payout scheduled for ${formatCurrency(amount)}.`,
+      })
+    }
+
+    if (event.type === 'cleaner_payout_paused') {
+      const amount = actionEventMoney(metadata, 'amount')
+      const transferStatus = metadata?.transfer_status === 'not_transferred' ? 'Not transferred' : 'Not recorded'
+      addEvent(events, {
+        id: event.id,
+        at: event.created_at,
+        title: 'Cleaner payout paused due to dispute',
+        description: amount == null
+          ? `Transfer status: ${transferStatus}.`
+          : `Original payout: ${formatCurrency(amount)}. Transfer status: ${transferStatus}.`,
+        tone: 'warning',
+      })
+    }
+
+    if (event.type === 'cleaner_payout_adjusted') {
+      const fromAmount = actionEventMoney(metadata, 'from_amount')
+      const toAmount = actionEventMoney(metadata, 'to_amount')
+      addEvent(events, {
+        id: event.id,
+        at: event.created_at,
+        title: 'Cleaner payout adjusted',
+        description: fromAmount == null || toAmount == null
+          ? 'Cleaner payout was adjusted during dispute resolution.'
+          : `Cleaner payout adjusted from ${formatCurrency(fromAmount)} to ${formatCurrency(toAmount)}.`,
+        tone: 'warning',
+      })
+    }
+
+    if (event.type === 'payment_refunded' || event.type === 'payment_partially_refunded') {
+      const amount = actionEventMoney(metadata, 'amount')
+      addEvent(events, {
+        id: event.id,
+        at: event.created_at,
+        title: event.type === 'payment_refunded' ? 'Full refund completed' : 'Refund completed',
+        description: amount == null
+          ? 'Refund completed for this booking.'
+          : `${event.type === 'payment_refunded' ? 'Full refund' : 'Refund'} of ${formatCurrency(amount)} completed.`,
+        tone: 'warning',
+      })
+    }
+
+    if (event.type === 'payout_transferred') {
+      const amount = actionEventMoney(metadata, 'amount')
+      addEvent(events, {
+        id: event.id,
+        at: event.created_at,
+        title: 'Payout transferred',
+        description: amount == null
+          ? 'Cleaner payout was transferred.'
+          : `Transferred ${formatCurrency(amount)} to the cleaner.`,
+        tone: 'success',
+      })
+    }
 
     if (event.type === 'amend_start_proposed') {
       addEvent(events, {
@@ -193,7 +312,7 @@ function buildTimeline(booking: BookingRead): TimelineEvent[] {
     tone: 'success',
   } : null)
 
-  addEvent(events, payment?.captured_at ? {
+  addEvent(events, payment?.captured_at && !hasActionEvent(booking, 'payment_captured') ? {
     id: 'payment-captured',
     at: payment.captured_at,
     title: 'Payment captured',
@@ -201,18 +320,18 @@ function buildTimeline(booking: BookingRead): TimelineEvent[] {
     tone: 'success',
   } : null)
 
-  addEvent(events, payment?.payout_scheduled_at && (!cancellationOutcome || cancellationOutcome.cleanerPayoutDue > 0) ? {
+  addEvent(events, payment?.payout_scheduled_at && !hasActionEvent(booking, 'payout_scheduled') && (!cancellationOutcome || cancellationOutcome.cleanerPayoutDue > 0) ? {
     id: 'payout-scheduled',
     at: payment.payout_scheduled_at,
     title: 'Payout scheduled',
-    description: `Cleaner payout scheduled for ${formatCurrency(cancellationOutcome?.cleanerPayoutDue ?? payoutSummary.finalCleanerPayout)}.`,
+    description: `Cleaner payout scheduled for ${formatCurrency(cancellationOutcome?.cleanerPayoutDue ?? payoutSummary.originalCleanerPayout)}.`,
   } : null)
 
-  addEvent(events, payment?.transferred_at && (!cancellationOutcome || cancellationOutcome.cleanerPayoutDue > 0) ? {
+  addEvent(events, payment?.transferred_at && !hasActionEvent(booking, 'payout_transferred') && (!cancellationOutcome || cancellationOutcome.cleanerPayoutDue > 0) ? {
     id: 'payment-transferred',
     at: payment.transferred_at,
     title: 'Cleaner payout transferred',
-    description: `Transferred ${formatCurrency(cancellationOutcome?.cleanerPayoutDue ?? payoutSummary.finalCleanerPayout)} to the cleaner.`,
+    description: `Transferred ${formatCurrency(cancellationOutcome?.cleanerPayoutDue ?? payment.cleaner_payout ?? payoutSummary.finalCleanerPayout)} to the cleaner.`,
     tone: 'success',
   } : null)
 
@@ -232,11 +351,11 @@ function buildTimeline(booking: BookingRead): TimelineEvent[] {
     tone: 'success',
   } : null)
 
-  addEvent(events, payment?.refunded_at ? {
+  addEvent(events, payment?.refunded_at && !hasActionEvent(booking, 'payment_refunded', 'payment_partially_refunded') ? {
     id: 'payment-refunded',
     at: payment.refunded_at,
-    title: 'Refund recorded',
-    description: `${formatCurrency(payment.refund_amount ?? 0)} refunded${payment.refund_reason ? `: ${payment.refund_reason}` : ''}.`,
+    title: payment.status === 'refunded' ? 'Full refund completed' : 'Refund completed',
+    description: `${payment.status === 'refunded' ? 'Full refund' : 'Refund'} of ${formatCurrency(payment.refund_amount ?? 0)} completed${payment.refund_reason ? `: ${payment.refund_reason}` : ''}.`,
     tone: 'warning',
   } : null)
 
@@ -344,6 +463,9 @@ export default function AdminBookingDetailPage() {
     : null
   const useProjectedPaymentLabels = isNonPayableBookingState(booking)
   const payoutSummary = getCleanerPayoutSummary(booking)
+  const financialOutcome = getBookingFinancialOutcome(booking)
+  const cleanerPayoutState = describeCleanerPayoutState(booking, financialOutcome.finalCleanerPayout)
+  const transferState = describeTransferState(booking)
 
   return (
     <div className="min-w-0 space-y-5">
@@ -470,6 +592,8 @@ export default function AdminBookingDetailPage() {
             <CardContent className="space-y-3">
               <div className="grid min-w-0 gap-3 sm:grid-cols-2 xl:grid-cols-1" data-testid="admin-payment-state">
                 <DetailRow label="Stripe Payment Status" value={paymentStateLabel} />
+                <DetailRow label="Cleaner payout" value={cleanerPayoutState} />
+                <DetailRow label="Transfer status" value={transferState} />
                 <DetailRow label="Original booking amount" value={formatCurrency(booking.total_amount)} />
                 {cancellationOutcome ? (
                   <>
@@ -483,21 +607,19 @@ export default function AdminBookingDetailPage() {
                   <>
                     <DetailRow
                       label={useProjectedPaymentLabels ? 'Projected cleaner payout' : 'Original cleaner payout'}
-                      value={formatCurrency(payoutSummary.originalCleanerPayout)}
+                      value={formatCurrency(financialOutcome.originalCleanerPayout)}
                     />
-                    {payoutSummary.hasDisputeAdjustment && (
-                      <>
-                        <DetailRow label="Dispute adjustment" value={formatCurrency(payoutSummary.disputeAdjustment)} />
-                        <DetailRow label="Final cleaner payout" value={formatCurrency(payoutSummary.finalCleanerPayout)} />
-                      </>
-                    )}
                     <DetailRow
-                      label={useProjectedPaymentLabels ? 'Projected platform fee' : 'Platform fee'}
-                      value={formatCurrency(booking.platform_fee)}
+                      label={useProjectedPaymentLabels ? 'Projected platform fee' : 'Original platform fee'}
+                      value={formatCurrency(financialOutcome.originalPlatformFee)}
                     />
-                    {booking.payment?.refund_amount != null && (
-                      <DetailRow label="Refund amount" value={formatCurrency(booking.payment.refund_amount)} />
+                    <DetailRow label="Refund amount" value={formatCurrency(financialOutcome.refundToClient)} />
+                    {payoutSummary.hasDisputeAdjustment && (
+                      <DetailRow label="Dispute adjustment" value={formatCurrency(payoutSummary.disputeAdjustment)} />
                     )}
+                    <DetailRow label="Final cleaner payout" value={formatCurrency(financialOutcome.finalCleanerPayout)} />
+                    <DetailRow label="Final MaidHive retained fee" value={formatCurrency(financialOutcome.finalMaidHiveRetainedFee)} />
+                    <DetailRow label="Final client amount paid" value={formatCurrency(financialOutcome.finalClientAmountPaid)} />
                   </>
                 )}
               </div>
@@ -514,6 +636,9 @@ export default function AdminBookingDetailPage() {
             <CardContent className="space-y-3">
               <div className="grid min-w-0 gap-3 sm:grid-cols-2 xl:grid-cols-1" data-testid="admin-booking-state">
                 <DetailRow label="Created" value={formatDate(booking.created_at)} />
+                <DetailRow label="Booking status" value={booking.status === 'completed' ? 'Completed' : booking.status.replace(/_/g, ' ')} />
+                <DetailRow label="Financial status" value={financialOutcome.financialStatus} />
+                <DetailRow label="Final cleaner payout" value={formatCurrency(financialOutcome.finalCleanerPayout)} />
                 <DetailRow label="Accept by" value={booking.accept_by ? formatDate(booking.accept_by) : null} />
                 <DetailRow label="Pay by" value={booking.pay_by ? formatDate(booking.pay_by) : null} />
                 <DetailRow label="Accepted" value={booking.accepted_at ? formatDate(booking.accepted_at) : null} />

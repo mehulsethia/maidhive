@@ -45,6 +45,7 @@ import { AMENDMENT_EXPIRY_OUTCOME_COPY, getEffectiveProposalExpiryMs, isWithinAm
 import { getCancellationOriginLabel } from '@/lib/cancellation-origin'
 import { getCleanerCancellationConfirmationCopy } from '@/lib/cleaner-cancellation-copy'
 import { getCleanerPayoutSummary } from '@/lib/cleaner-payout'
+import { isFinalNoCleanerPayoutOutcome } from '@/lib/payment-financial-outcome'
 import type { BookingRead } from '@/types'
 import { toast } from 'sonner'
 
@@ -405,14 +406,16 @@ export default function CleanerBookingDetailPage() {
   const activeDispute = isActiveDisputeStatus(booking.dispute?.status)
   const canOpenDisputeCase = activeDispute && isBookingReportWindowActive(booking.scheduled_end)
   const disputeAction = getDisputeParticipantAction('cleaner', booking.dispute, currentUserId)
+  const payoutSummary = getCleanerPayoutSummary(booking)
+  const noPayoutFinalized = isFinalNoCleanerPayoutOutcome(booking)
   const earningsLabel = getCleanerEarningsLabel({
     status: booking.status,
     paymentStatus: booking.payment?.status,
     transferredAt: booking.payment?.transferred_at,
     scheduledEnd: booking.scheduled_end,
     disputeStatus: booking.dispute?.status,
+    noPayoutFinalized,
   })
-  const payoutSummary = getCleanerPayoutSummary(booking)
   const cancellationOutcome = getCancellationPaymentOutcome(booking)
   const isClosedNonPayableStatus = ['cancelled', 'declined', 'expired'].includes(booking.status)
   const clientTrust = getClientTrustMetadata(booking.client)
@@ -514,6 +517,8 @@ export default function CleanerBookingDetailPage() {
             scheduledEnd={booking.scheduled_end}
             proposalBy={booking.proposal_by}
             showPaymentRequiredForUnpaid={false}
+            audience="cleaner"
+            cleanerNoPayout={noPayoutFinalized}
           />
           {cancellationOriginLabel && (
             <span className="rounded-full border border-rose-200 bg-rose-50 px-2.5 py-1 text-xs font-semibold text-rose-700">
@@ -587,7 +592,7 @@ export default function CleanerBookingDetailPage() {
                 <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
                   <div>
                     <p className="text-sm text-muted-foreground">
-                      {cleanerCancelledPayoutMessage?.label ?? (cancellationOutcome ? 'Cleaner payout due' : earningsLabel)}
+                      {cleanerCancelledPayoutMessage?.label ?? (cancellationOutcome ? 'Cleaner payout due' : noPayoutFinalized ? 'Final payout' : earningsLabel)}
                     </p>
                     <p className="text-2xl font-bold text-green-700">
                       {formatCurrency(
@@ -608,6 +613,8 @@ export default function CleanerBookingDetailPage() {
                     <p className="text-xs text-muted-foreground mt-0.5">
                       {cleanerCancelledPayoutMessage
                         ? cleanerCancelledPayoutMessage.description
+                        : noPayoutFinalized
+                          ? 'No payout is due for this booking after the resolved dispute.'
                         : isClosedNonPayableStatus
                           ? 'Payout is not applicable for this booking status.'
                           : booking.status === 'disputed' || activeDispute

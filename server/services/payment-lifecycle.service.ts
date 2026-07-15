@@ -7,6 +7,7 @@ import { pushInAppNotification } from './in-app-notification.service'
 import { AMENDMENT_EXPIRED_BODY, AMENDMENT_EXPIRED_TITLE } from '@/lib/booking-amendment'
 import type Stripe from 'stripe'
 import { cleanerReliabilityService } from './cleaner-reliability.service'
+import { recordBookingActionEvent } from './booking-action-event.service'
 
 const AUTO_COMPLETION_GRACE_MINUTES = 5
 
@@ -140,15 +141,31 @@ export const paymentLifecycleService = {
         }
 
         const captured = await stripe.paymentIntents.capture(payment.stripePaymentIntentId)
+        const capturedAt = new Date()
+        const payoutScheduledAt = new Date(Date.now() + config.PAYOUT_DELAY_HOURS * 60 * 60 * 1000)
         await db.payment.update({
           where: { id: payment.id },
           data: {
             status: 'captured',
             stripeChargeId:
               typeof captured.latest_charge === 'string' ? captured.latest_charge : undefined,
-            capturedAt: new Date(),
-            payoutScheduledAt: new Date(Date.now() + config.PAYOUT_DELAY_HOURS * 60 * 60 * 1000),
+            capturedAt,
+            payoutScheduledAt,
           },
+        })
+        await recordBookingActionEvent({
+          bookingId: payment.bookingId,
+          type: 'payment_captured',
+          actorRole: 'system',
+          metadata: { amount: Number(payment.amount), status: 'captured' },
+          createdAt: capturedAt,
+        })
+        await recordBookingActionEvent({
+          bookingId: payment.bookingId,
+          type: 'payout_scheduled',
+          actorRole: 'system',
+          metadata: { amount: Number(payment.cleanerPayout), status: 'scheduled' },
+          createdAt: payoutScheduledAt,
         })
         summary.captured += 1
       } catch (e: any) {
@@ -210,6 +227,14 @@ export const paymentLifecycleService = {
         if (updated.count === 0) {
           continue
         }
+
+        await recordBookingActionEvent({
+          bookingId: payment.booking.id,
+          type: 'payout_transferred',
+          actorRole: 'system',
+          metadata: { amount: Number(payment.cleanerPayout), status: 'transferred' },
+          createdAt: releasedAt,
+        })
 
         summary.released += 1
         try {

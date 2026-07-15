@@ -17,6 +17,7 @@ import { AMENDMENT_EXPIRED_BODY, AMENDMENT_EXPIRED_TITLE, AMENDMENT_EXPIRY_OUTCO
 import { DEFAULT_PLATFORM_FEE_PCT } from '@/lib/platform-fee'
 import { cleanerReliabilityService } from './cleaner-reliability.service'
 import { geocodingService } from './geocoding.service'
+import { recordBookingActionEvent } from './booking-action-event.service'
 import type { User } from '@prisma/client'
 
 const BOOKING_ACCEPT_TTL_MINUTES = Number(process.env.BOOKING_ACCEPT_TTL_MINUTES ?? 1440)
@@ -2153,6 +2154,14 @@ async function maybeAutoReleaseCompletedBooking(booking: BookingWithRelations) {
   })
 
   if (releaseUpdate.count === 0) return null
+
+  await recordBookingActionEvent({
+    bookingId: booking.id,
+    type: 'payout_transferred',
+    actorRole: 'system',
+    metadata: { amount: Number(booking.payment.cleanerPayout), status: 'transferred' },
+    createdAt: releasedAt,
+  })
 
   await refreshReliabilitySafely(booking.cleanerId, 'completed_released')
 

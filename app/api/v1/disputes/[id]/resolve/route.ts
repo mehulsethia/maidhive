@@ -13,6 +13,7 @@ import { getDisputeResolutionOutcome } from '@/lib/dispute-resolution'
 import { calculateDisputeAdjustedCleanerPayoutCents } from '@/lib/cleaner-payout'
 import { formatCurrency } from '@/lib/utils'
 import { cleanerReliabilityService } from '@/server/services/cleaner-reliability.service'
+import { recordBookingActionEvent } from '@/server/services/booking-action-event.service'
 
 export const POST = requireAdmin(async (req: NextRequest, ctx, user) => {
   try {
@@ -48,16 +49,30 @@ export const POST = requireAdmin(async (req: NextRequest, ctx, user) => {
       const paymentAmountCents = Math.round(paymentAmount * 100)
       const originalPlatformFeeCents = Math.round(Number(payment.platformFee) * 100)
       const originalCleanerPayoutCents = Math.round(Number(payment.cleanerPayout) * 100)
+      const cleanerPayoutAlreadyTransferred =
+        payment.status === 'transferred' ||
+        Boolean(payment.transferredAt) ||
+        Boolean(payment.stripeTransferId)
+      if (
+        cleanerPayoutAlreadyTransferred &&
+        (parsed.data.resolution_type === 'full_refund' || parsed.data.resolution_type === 'partial_refund')
+      ) {
+        return err('Cleaner payout has already been transferred. This refund outcome cannot be applied automatically.', 409)
+      }
 
       if (parsed.data.resolution_type === 'full_refund') {
+        const refundedAt = new Date()
         if (pi.status === 'requires_capture') {
           await stripe.paymentIntents.cancel(payment.stripePaymentIntentId)
           resolvedRefundAmount = paymentAmount
           await paymentRepo.update(payment.id, {
             status: 'refunded',
+            platformFee: 0,
+            cleanerPayout: 0,
+            payoutScheduledAt: null,
             refundAmount: resolvedRefundAmount,
             refundReason: parsed.data.resolution_note,
-            refundedAt: new Date(),
+            refundedAt,
           })
         } else if (pi.status === 'succeeded') {
           const refund = await stripe.refunds.create({
@@ -67,18 +82,53 @@ export const POST = requireAdmin(async (req: NextRequest, ctx, user) => {
           await paymentRepo.update(payment.id, {
             status: 'refunded',
             stripeRefundId: refund.id,
+            platformFee: 0,
+            cleanerPayout: 0,
+            payoutScheduledAt: null,
             refundAmount: resolvedRefundAmount,
             refundReason: parsed.data.resolution_note,
-            refundedAt: new Date(),
+            refundedAt,
           })
         } else if (pi.status === 'canceled') {
           // Already canceled, just update local DB
           resolvedRefundAmount = paymentAmount
           await paymentRepo.update(payment.id, {
             status: 'refunded',
+            platformFee: 0,
+            cleanerPayout: 0,
+            payoutScheduledAt: null,
             refundAmount: resolvedRefundAmount,
             refundReason: parsed.data.resolution_note,
-            refundedAt: new Date(),
+            refundedAt,
+          })
+        }
+        if (resolvedRefundAmount != null) {
+          if (originalCleanerPayoutCents > 0) {
+            await recordBookingActionEvent({
+              bookingId: dispute.bookingId,
+              type: 'cleaner_payout_adjusted',
+              actorRole: 'admin',
+              metadata: {
+                from_amount: Number((originalCleanerPayoutCents / 100).toFixed(2)),
+                to_amount: 0,
+                reason: 'full_refund_dispute_resolution',
+              },
+              createdAt: refundedAt,
+            })
+          }
+          await recordBookingActionEvent({
+            bookingId: dispute.bookingId,
+            type: 'payment_refunded',
+            actorRole: 'admin',
+            metadata: {
+              amount: resolvedRefundAmount,
+              status: 'refunded',
+              final_client_amount_paid: 0,
+              final_cleaner_payout: 0,
+              final_maidhive_retained_fee: 0,
+              reason: parsed.data.resolution_note,
+            },
+            createdAt: refundedAt,
           })
         }
       }
@@ -100,6 +150,8 @@ export const POST = requireAdmin(async (req: NextRequest, ctx, user) => {
             amountToCapture,
             adjustedCleanerPayoutCents,
           )
+          const capturedAt = new Date()
+          const payoutScheduledAt = new Date()
           const captured = await stripe.paymentIntents.capture(payment.stripePaymentIntentId, {
             amount_to_capture: amountToCapture,
             application_fee_amount: adjustedPlatformFeeCents,
@@ -108,12 +160,51 @@ export const POST = requireAdmin(async (req: NextRequest, ctx, user) => {
           await paymentRepo.update(payment.id, {
             status: 'captured',
             stripeChargeId: typeof captured.latest_charge === 'string' ? captured.latest_charge : (captured.latest_charge as any)?.id,
-            capturedAt: new Date(),
-            payoutScheduledAt: new Date(),
+            capturedAt,
+            payoutScheduledAt,
             platformFee: Number((adjustedPlatformFeeCents / 100).toFixed(2)),
             cleanerPayout: Number((adjustedCleanerPayoutCents / 100).toFixed(2)),
             refundAmount: resolvedRefundAmount,
             refundReason: parsed.data.resolution_note,
+          })
+          await recordBookingActionEvent({
+            bookingId: dispute.bookingId,
+            type: 'payment_captured',
+            actorRole: 'admin',
+            metadata: { amount: Number((amountToCapture / 100).toFixed(2)), status: 'captured' },
+            createdAt: capturedAt,
+          })
+          await recordBookingActionEvent({
+            bookingId: dispute.bookingId,
+            type: 'cleaner_payout_adjusted',
+            actorRole: 'admin',
+            metadata: {
+              from_amount: Number((originalCleanerPayoutCents / 100).toFixed(2)),
+              to_amount: Number((adjustedCleanerPayoutCents / 100).toFixed(2)),
+              reason: 'partial_refund_dispute_resolution',
+            },
+            createdAt: capturedAt,
+          })
+          await recordBookingActionEvent({
+            bookingId: dispute.bookingId,
+            type: 'payout_scheduled',
+            actorRole: 'system',
+            metadata: { amount: Number((adjustedCleanerPayoutCents / 100).toFixed(2)), status: 'scheduled' },
+            createdAt: payoutScheduledAt,
+          })
+          await recordBookingActionEvent({
+            bookingId: dispute.bookingId,
+            type: 'payment_partially_refunded',
+            actorRole: 'admin',
+            metadata: {
+              amount: resolvedRefundAmount,
+              status: 'captured',
+              final_client_amount_paid: Number(((paymentAmountCents - refundCents) / 100).toFixed(2)),
+              final_cleaner_payout: Number((adjustedCleanerPayoutCents / 100).toFixed(2)),
+              final_maidhive_retained_fee: Number((adjustedPlatformFeeCents / 100).toFixed(2)),
+              reason: parsed.data.resolution_note,
+            },
+            createdAt: capturedAt,
           })
         } else if (pi.status === 'succeeded') {
           const adjustedCleanerPayoutCents = calculateDisputeAdjustedCleanerPayoutCents({
@@ -129,6 +220,7 @@ export const POST = requireAdmin(async (req: NextRequest, ctx, user) => {
             amount: refundCents,
             reverse_transfer: true,
           })
+          const refundedAt = new Date()
           resolvedRefundAmount = Number((refundCents / 100).toFixed(2))
           await paymentRepo.update(payment.id, {
             status: payment.status === 'transferred' ? 'transferred' : 'captured',
@@ -137,13 +229,40 @@ export const POST = requireAdmin(async (req: NextRequest, ctx, user) => {
             cleanerPayout: Number((adjustedCleanerPayoutCents / 100).toFixed(2)),
             refundAmount: resolvedRefundAmount,
             refundReason: parsed.data.resolution_note,
-            refundedAt: new Date(),
+            refundedAt,
+          })
+          await recordBookingActionEvent({
+            bookingId: dispute.bookingId,
+            type: 'cleaner_payout_adjusted',
+            actorRole: 'admin',
+            metadata: {
+              from_amount: Number((originalCleanerPayoutCents / 100).toFixed(2)),
+              to_amount: Number((adjustedCleanerPayoutCents / 100).toFixed(2)),
+              reason: 'partial_refund_dispute_resolution',
+            },
+            createdAt: refundedAt,
+          })
+          await recordBookingActionEvent({
+            bookingId: dispute.bookingId,
+            type: 'payment_partially_refunded',
+            actorRole: 'admin',
+            metadata: {
+              amount: resolvedRefundAmount,
+              status: payment.status === 'transferred' ? 'transferred' : 'captured',
+              final_client_amount_paid: Number(((paymentAmountCents - refundCents) / 100).toFixed(2)),
+              final_cleaner_payout: Number((adjustedCleanerPayoutCents / 100).toFixed(2)),
+              final_maidhive_retained_fee: Number((adjustedPlatformFeeCents / 100).toFixed(2)),
+              reason: parsed.data.resolution_note,
+            },
+            createdAt: refundedAt,
           })
         }
       }
 
       if (parsed.data.resolution_type === 'no_refund') {
         if (pi.status === 'requires_capture') {
+          const capturedAt = new Date()
+          const payoutScheduledAt = new Date()
           const captured = await stripe.paymentIntents.capture(payment.stripePaymentIntentId, {
             amount_to_capture: paymentAmountCents,
             application_fee_amount: Math.min(paymentAmountCents, Math.max(0, originalPlatformFeeCents)),
@@ -151,8 +270,25 @@ export const POST = requireAdmin(async (req: NextRequest, ctx, user) => {
           await paymentRepo.update(payment.id, {
             status: 'captured',
             stripeChargeId: typeof captured.latest_charge === 'string' ? captured.latest_charge : (captured.latest_charge as any)?.id,
-            capturedAt: new Date(),
-            payoutScheduledAt: new Date(),
+            capturedAt,
+            payoutScheduledAt,
+          })
+          await recordBookingActionEvent({
+            bookingId: dispute.bookingId,
+            type: 'payment_captured',
+            actorRole: 'admin',
+            metadata: { amount: paymentAmount, status: 'captured' },
+            createdAt: capturedAt,
+          })
+          await recordBookingActionEvent({
+            bookingId: dispute.bookingId,
+            type: 'payout_scheduled',
+            actorRole: 'system',
+            metadata: {
+              amount: Number((originalCleanerPayoutCents / 100).toFixed(2)),
+              status: 'scheduled',
+            },
+            createdAt: payoutScheduledAt,
           })
         }
       }

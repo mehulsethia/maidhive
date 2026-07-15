@@ -46,6 +46,7 @@ const state = vi.hoisted(() => ({
   } as any | null,
   notifications: [] as any[],
   emails: [] as any[],
+  actionEvents: [] as any[],
   webhookEventType: 'charge.captured',
   webhookEventId: 'evt_1',
   transfersSeen: new Set<string>(),
@@ -212,6 +213,13 @@ vi.mock('@/server/db', () => ({
         return state.payment
       }),
     },
+    bookingActionEvent: {
+      create: vi.fn(async ({ data }: any) => {
+        const event = { id: `event_${state.actionEvents.length + 1}`, ...data }
+        state.actionEvents.push(event)
+        return event
+      }),
+    },
     review: {
       updateMany: vi.fn(async ({ where, data }: any) => {
         if (!state.review || (where?.bookingId && where.bookingId !== state.review.bookingId)) {
@@ -325,6 +333,7 @@ describe('F10 Payments capture/refund/dispute integration', () => {
     } as any
     state.notifications = []
     state.emails = []
+    state.actionEvents = []
     state.webhookEventType = 'charge.captured'
     state.webhookEventId = 'evt_1'
     state.transfersSeen.clear()
@@ -359,6 +368,18 @@ describe('F10 Payments capture/refund/dispute integration', () => {
     expect(body.success).toBe(true)
     expect(body.data.status).toBe('captured')
     expect(body.data.stripeChargeId ?? body.data.stripe_charge_id).toBe('ch_captured')
+    expect(state.actionEvents).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        bookingId: state.booking.id,
+        type: 'payment_captured',
+        metadata: expect.objectContaining({ amount: 80, status: 'captured' }),
+      }),
+      expect.objectContaining({
+        bookingId: state.booking.id,
+        type: 'payout_scheduled',
+        metadata: expect.objectContaining({ amount: 72, status: 'scheduled' }),
+      }),
+    ]))
   })
 
   it('IT-PAY-02 capture endpoint rejects non-authorized payment safely', async () => {
@@ -443,6 +464,21 @@ describe('F10 Payments capture/refund/dispute integration', () => {
     expect(state.payment.refundAmount).toBe(20)
     expect(state.payment.cleanerPayout).toBe(52)
     expect(state.payment.platformFee).toBe(8)
+    expect(state.actionEvents).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        type: 'cleaner_payout_adjusted',
+        metadata: expect.objectContaining({ from_amount: 72, to_amount: 52 }),
+      }),
+      expect.objectContaining({
+        type: 'payment_partially_refunded',
+        metadata: expect.objectContaining({
+          amount: 20,
+          final_client_amount_paid: 60,
+          final_cleaner_payout: 52,
+          final_maidhive_retained_fee: 8,
+        }),
+      }),
+    ]))
     expect(state.notifications).toEqual(expect.arrayContaining([
       expect.objectContaining({
         userId: seededUsers.admin.id,
@@ -472,6 +508,72 @@ describe('F10 Payments capture/refund/dispute integration', () => {
     ]))
   })
 
+  it('IT-PAY-10 full refund clears final cleaner payout and retained fee', async () => {
+    const route = await import('@/app/api/v1/disputes/[id]/resolve/route')
+    const res = await route.POST(
+      new NextRequest('http://localhost/api/v1/disputes/dispute_1/resolve', {
+        method: 'POST',
+        body: JSON.stringify({
+          resolution_type: 'full_refund',
+          resolution_note: 'Service was not delivered.',
+        }),
+        headers: { 'content-type': 'application/json' },
+      }),
+      { params: Promise.resolve({ id: 'dispute_1' }) } as any,
+    )
+    const body = await res.json()
+
+    expect(res.status).toBe(200)
+    expect(body.success).toBe(true)
+    expect(state.payment.status).toBe('refunded')
+    expect(state.payment.refundAmount).toBe(80)
+    expect(state.payment.cleanerPayout).toBe(0)
+    expect(state.payment.platformFee).toBe(0)
+    expect(state.payment.payoutScheduledAt).toBeNull()
+    expect(state.actionEvents).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        type: 'cleaner_payout_adjusted',
+        metadata: expect.objectContaining({ from_amount: 72, to_amount: 0 }),
+      }),
+      expect.objectContaining({
+        type: 'payment_refunded',
+        metadata: expect.objectContaining({
+          amount: 80,
+          final_client_amount_paid: 0,
+          final_cleaner_payout: 0,
+          final_maidhive_retained_fee: 0,
+        }),
+      }),
+    ]))
+  })
+
+  it('IT-PAY-11 rejects refund resolution after cleaner payout transferred', async () => {
+    state.payment = {
+      ...state.payment,
+      status: 'transferred',
+      transferredAt: new Date('2099-01-03T12:00:00.000Z'),
+      stripeTransferId: 'tr_existing',
+    }
+    const route = await import('@/app/api/v1/disputes/[id]/resolve/route')
+    const res = await route.POST(
+      new NextRequest('http://localhost/api/v1/disputes/dispute_1/resolve', {
+        method: 'POST',
+        body: JSON.stringify({
+          resolution_type: 'full_refund',
+          resolution_note: 'Too late to reverse automatically.',
+        }),
+        headers: { 'content-type': 'application/json' },
+      }),
+      { params: Promise.resolve({ id: 'dispute_1' }) } as any,
+    )
+    const body = await res.json()
+
+    expect(res.status).toBe(409)
+    expect(body.success).toBe(false)
+    expect(body.message).toContain('already been transferred')
+    expect(state.actionEvents).toHaveLength(0)
+  })
+
   it('IT-PAY-06 client report emails confirmation to client and against-notification to cleaner', async () => {
     state.currentUser = seededUsers.client
     state.dispute = null
@@ -495,6 +597,16 @@ describe('F10 Payments capture/refund/dispute integration', () => {
     expect(state.dispute?.status).toBe('under_review')
     expect(state.payment.payoutScheduledAt).toBeNull()
     expect(state.review).toMatchObject({ isPublic: false, hiddenByDispute: true })
+    expect(state.actionEvents).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        type: 'cleaner_payout_paused',
+        metadata: expect.objectContaining({
+          amount: 72,
+          reason: 'dispute_under_review',
+          transfer_status: 'not_transferred',
+        }),
+      }),
+    ]))
     expect(state.emails).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
@@ -539,6 +651,16 @@ describe('F10 Payments capture/refund/dispute integration', () => {
     expect(state.dispute?.status).toBe('under_review')
     expect(state.payment.payoutScheduledAt).toBeNull()
     expect(state.review).toMatchObject({ isPublic: false, hiddenByDispute: true })
+    expect(state.actionEvents).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        type: 'cleaner_payout_paused',
+        metadata: expect.objectContaining({
+          amount: 72,
+          reason: 'dispute_under_review',
+          transfer_status: 'not_transferred',
+        }),
+      }),
+    ]))
     expect(state.emails).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
@@ -642,5 +764,11 @@ describe('F10 Payments capture/refund/dispute integration', () => {
     const payoutNotifs = state.notifications.filter((item) => item.type === 'payout_released')
     expect(payoutNotifs).toHaveLength(1)
     expect(state.payment.status).toBe('transferred')
+    expect(state.actionEvents).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        type: 'payout_transferred',
+        metadata: expect.objectContaining({ amount: 72, status: 'transferred' }),
+      }),
+    ]))
   })
 })

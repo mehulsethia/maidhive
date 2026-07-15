@@ -9,6 +9,7 @@ import {
   DEFAULT_BOOKING_ACCEPT_CUTOFF_BEFORE_START_MINUTES,
   DEFAULT_BOOKING_ACCEPT_TTL_MINUTES,
 } from '../lib/booking-request-window'
+import { recordBookingActionEvent } from './booking-action-event.service'
 
 const BOOKING_ACCEPT_TTL_MINUTES = DEFAULT_BOOKING_ACCEPT_TTL_MINUTES
 const BOOKING_ACCEPT_CUTOFF_BEFORE_START_MINUTES = DEFAULT_BOOKING_ACCEPT_CUTOFF_BEFORE_START_MINUTES
@@ -41,6 +42,16 @@ export const paymentAuthorizationService = {
     const booking = await bookingRepo.findById(bookingId)
     if (!booking) {
       return { updated: true, reason: 'authorized_booking_not_found' as const }
+    }
+
+    if (!wasAuthorized) {
+      await recordBookingActionEvent({
+        bookingId: booking.id,
+        type: 'payment_authorized',
+        actorRole: 'system',
+        metadata: { amount: Number(payment.amount), status: 'authorized' },
+        createdAt: authorizedAt,
+      })
     }
 
     if (booking.status === 'draft' || booking.status === 'pending') {

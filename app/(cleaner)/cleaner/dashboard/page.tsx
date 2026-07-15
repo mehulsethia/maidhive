@@ -24,6 +24,7 @@ import { getReleasedCleanerEarnings } from '@/lib/cleaner-payment-history'
 import { setupVisiblePolling } from '@/lib/visible-polling'
 import { getCleanerEarningsLabel } from '@/lib/cleaner-earnings-label'
 import { getCleanerPayoutSummary } from '@/lib/cleaner-payout'
+import { isFinalNoCleanerPayoutOutcome } from '@/lib/payment-financial-outcome'
 import { toast } from 'sonner'
 
 const REQUEST_STATUSES: BookingStatus[] = ['pending']
@@ -417,6 +418,7 @@ export default function CleanerDashboardPage() {
                       scheduledEnd={b.scheduled_end}
                       proposalBy={b.proposal_by}
                       showPaymentRequiredForUnpaid={false}
+                      audience="cleaner"
                     />
                   </div>
                   <p className="mt-2 text-sm text-slate-600">{b.city}, {b.postcode} · {b.duration_hours}h</p>
@@ -528,6 +530,7 @@ export default function CleanerDashboardPage() {
                           scheduledEnd={b.scheduled_end}
                           proposalBy={b.proposal_by}
                           showPaymentRequiredForUnpaid={false}
+                          audience="cleaner"
                         />
                       </div>
                       <p className="text-xs text-slate-500">{formatDate(b.scheduled_start)}</p>
@@ -567,14 +570,16 @@ export default function CleanerDashboardPage() {
                 const proposalSummary = isAmendProposal
                   ? `${proposalActor} requested Amend Start Time: ${formatDate(b.scheduled_start)} → ${formatDate(b.proposed_start ?? b.scheduled_start)}`
                   : `${proposalActor} proposed: ${formatDate(b.scheduled_start)} → ${formatDate(b.proposed_start ?? b.scheduled_start)}`
+                const payoutSummary = getCleanerPayoutSummary(b)
+                const noPayoutFinalized = isFinalNoCleanerPayoutOutcome(b)
                 const earningsLabel = getCleanerEarningsLabel({
                   status: b.status,
                   paymentStatus: b.payment?.status,
                   transferredAt: b.payment?.transferred_at,
                   scheduledEnd: b.scheduled_end,
                   disputeStatus: b.dispute?.status,
+                  noPayoutFinalized,
                 })
-                const payoutSummary = getCleanerPayoutSummary(b)
                 return (
                   <Link
                     key={b.id}
@@ -596,13 +601,15 @@ export default function CleanerDashboardPage() {
                         scheduledEnd={b.scheduled_end}
                         proposalBy={b.proposal_by}
                         showPaymentRequiredForUnpaid={false}
+                        audience="cleaner"
+                        cleanerNoPayout={noPayoutFinalized}
                       />
                       <p className={`max-w-[11rem] text-right font-semibold leading-tight ${
                         activeDispute || b.status === 'disputed'
                           ? 'text-xs text-amber-700 sm:text-sm'
                           : 'text-sm text-slate-900'
                       }`}>
-                        {activeDispute || b.status === 'disputed' ? `${earningsLabel} ` : ''}
+                        {noPayoutFinalized ? 'Final payout: ' : activeDispute || b.status === 'disputed' ? `${earningsLabel} ` : ''}
                         {formatCurrency(payoutSummary.finalCleanerPayout)}
                       </p>
                     </div>
