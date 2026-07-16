@@ -53,11 +53,15 @@ export const POST = requireAdmin(async (req: NextRequest, ctx, user) => {
         payment.status === 'transferred' ||
         Boolean(payment.transferredAt) ||
         Boolean(payment.stripeTransferId)
+      const refundResolution =
+        parsed.data.resolution_type === 'full_refund' ||
+        parsed.data.resolution_type === 'partial_refund'
       if (
         cleanerPayoutAlreadyTransferred &&
-        (parsed.data.resolution_type === 'full_refund' || parsed.data.resolution_type === 'partial_refund')
+        refundResolution &&
+        !payment.stripeTransferId
       ) {
-        return err('Cleaner payout has already been transferred. This refund outcome cannot be applied automatically.', 409)
+        return err('Cleaner payout has already been transferred, but no Stripe Connect transfer id is recorded. Resolve the transfer recovery manually before completing this dispute.', 409)
       }
 
       if (parsed.data.resolution_type === 'full_refund') {
@@ -75,8 +79,25 @@ export const POST = requireAdmin(async (req: NextRequest, ctx, user) => {
             refundedAt,
           })
         } else if (pi.status === 'succeeded') {
+          let transferReversalPatch = {}
+          if (cleanerPayoutAlreadyTransferred) {
+            try {
+              transferReversalPatch = await reverseStripeTransferForDispute({
+                bookingId: dispute.bookingId,
+                payment,
+                reverseAmountCents: originalCleanerPayoutCents,
+                reason: 'full_refund_dispute_resolution',
+              })
+            } catch (error) {
+              if (error instanceof TransferReversalError) {
+                return err(error.message, 409)
+              }
+              throw error
+            }
+          }
           const refund = await stripe.refunds.create({
             payment_intent: payment.stripePaymentIntentId,
+            refund_application_fee: true,
           })
           resolvedRefundAmount = paymentAmount
           await paymentRepo.update(payment.id, {
@@ -88,7 +109,8 @@ export const POST = requireAdmin(async (req: NextRequest, ctx, user) => {
             refundAmount: resolvedRefundAmount,
             refundReason: parsed.data.resolution_note,
             refundedAt,
-          })
+            ...transferReversalPatch,
+          } as any)
         } else if (pi.status === 'canceled') {
           // Already canceled, just update local DB
           resolvedRefundAmount = paymentAmount
@@ -100,7 +122,7 @@ export const POST = requireAdmin(async (req: NextRequest, ctx, user) => {
             refundAmount: resolvedRefundAmount,
             refundReason: parsed.data.resolution_note,
             refundedAt,
-          })
+          } as any)
         }
         if (resolvedRefundAmount != null) {
           if (originalCleanerPayoutCents > 0) {
@@ -215,10 +237,26 @@ export const POST = requireAdmin(async (req: NextRequest, ctx, user) => {
             paymentAmountCents - refundCents,
             adjustedCleanerPayoutCents,
           )
+          let transferReversalPatch = {}
+          if (cleanerPayoutAlreadyTransferred) {
+            try {
+              transferReversalPatch = await reverseStripeTransferForDispute({
+                bookingId: dispute.bookingId,
+                payment,
+                reverseAmountCents: Math.max(0, originalCleanerPayoutCents - adjustedCleanerPayoutCents),
+                reason: 'partial_refund_dispute_resolution',
+              })
+            } catch (error) {
+              if (error instanceof TransferReversalError) {
+                return err(error.message, 409)
+              }
+              throw error
+            }
+          }
           const refund = await stripe.refunds.create({
             payment_intent: payment.stripePaymentIntentId,
             amount: refundCents,
-            reverse_transfer: true,
+            ...(cleanerPayoutAlreadyTransferred ? {} : { reverse_transfer: true }),
           })
           const refundedAt = new Date()
           resolvedRefundAmount = Number((refundCents / 100).toFixed(2))
@@ -230,7 +268,8 @@ export const POST = requireAdmin(async (req: NextRequest, ctx, user) => {
             refundAmount: resolvedRefundAmount,
             refundReason: parsed.data.resolution_note,
             refundedAt,
-          })
+            ...transferReversalPatch,
+          } as any)
           await recordBookingActionEvent({
             bookingId: dispute.bookingId,
             type: 'cleaner_payout_adjusted',
@@ -449,6 +488,86 @@ export const POST = requireAdmin(async (req: NextRequest, ctx, user) => {
   }
 })
 
+
+class TransferReversalError extends Error {}
+
+async function reverseStripeTransferForDispute(args: {
+  bookingId: string
+  payment: {
+    id: string
+    stripeTransferId?: string | null
+    cleanerPayout?: unknown
+    transferAmount?: unknown
+    transferReversedAmount?: unknown
+  }
+  reverseAmountCents: number
+  reason: string
+}) {
+  const existingReversedCents = Math.round(Number(args.payment.transferReversedAmount ?? 0) * 100)
+  const remainingReversalCents = Math.max(0, args.reverseAmountCents - existingReversedCents)
+  if (remainingReversalCents <= 0) {
+    return {
+      transferReversalStatus: 'succeeded',
+    }
+  }
+
+  if (!args.payment.stripeTransferId) {
+    throw new TransferReversalError('Stripe Connect transfer reversal cannot be completed automatically because no transfer id is recorded.')
+  }
+
+  const reversedAt = new Date()
+  const reversalAmount = Number((remainingReversalCents / 100).toFixed(2))
+  let reversal: Awaited<ReturnType<typeof stripe.transfers.createReversal>>
+  try {
+    reversal = await stripe.transfers.createReversal(args.payment.stripeTransferId, {
+      amount: remainingReversalCents,
+    })
+  } catch (error) {
+    await recordBookingActionEvent({
+      bookingId: args.bookingId,
+      type: 'stripe_transfer_reversed',
+      actorRole: 'admin',
+      metadata: {
+        amount: reversalAmount,
+        status: 'failed',
+        stripe_transfer_id: args.payment.stripeTransferId,
+        failed_at: reversedAt.toISOString(),
+        reason: args.reason,
+        error_message: error instanceof Error ? error.message : String(error),
+      },
+      createdAt: reversedAt,
+    })
+    throw new TransferReversalError('Stripe Connect transfer reversal failed. The dispute remains unresolved until MaidHive confirms financial recovery.')
+  }
+
+  const totalReversedAmount = Number(((existingReversedCents + remainingReversalCents) / 100).toFixed(2))
+  const patch = {
+    stripeTransferReversalId: reversal.id,
+    transferAmount: Number(args.payment.transferAmount ?? args.payment.cleanerPayout ?? 0),
+    transferReversedAmount: totalReversedAmount,
+    transferReversedAt: reversedAt,
+    transferReversalStatus: 'succeeded',
+  }
+
+  await paymentRepo.update(args.payment.id, patch as any)
+  await recordBookingActionEvent({
+    bookingId: args.bookingId,
+    type: 'stripe_transfer_reversed',
+    actorRole: 'admin',
+    metadata: {
+      amount: reversalAmount,
+      total_reversed_amount: totalReversedAmount,
+      status: 'succeeded',
+      stripe_transfer_id: args.payment.stripeTransferId,
+      stripe_transfer_reversal_id: reversal.id,
+      reversed_at: reversedAt.toISOString(),
+      reason: args.reason,
+    },
+    createdAt: reversedAt,
+  })
+
+  return patch
+}
 
 function bookingReference(bookingId: string) {
   const raw = bookingId.replace(/[^a-z0-9]/gi, '')

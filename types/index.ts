@@ -252,6 +252,11 @@ export interface BookingRead {
     refunded_at?: string | null
     failed_at?: string | null
     stripe_transfer_id?: string | null
+    stripe_transfer_reversal_id?: string | null
+    transfer_amount?: number | null
+    transfer_reversed_amount?: number | null
+    transfer_reversed_at?: string | null
+    transfer_reversal_status?: string | null
     created_at?: string
     updated_at?: string
   } | null

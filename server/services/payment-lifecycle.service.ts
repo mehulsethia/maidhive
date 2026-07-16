@@ -219,6 +219,7 @@ export const paymentLifecycleService = {
           },
           data: {
             status: 'transferred',
+            transferAmount: Number(payment.cleanerPayout),
             transferredAt: releasedAt,
             payoutScheduledAt: payment.payoutScheduledAt ?? releasedAt,
           },
@@ -341,6 +342,7 @@ export const paymentLifecycleService = {
             stripeChargeId: charge.id,
             stripeTransferId: transfer.id,
             cleanerPayout: netTransferCents / 100,
+            transferAmount: netTransferCents / 100,
             transferredAt,
             payoutScheduledAt: payment.payoutScheduledAt ?? transferredAt,
           },

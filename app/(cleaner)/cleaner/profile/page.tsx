@@ -623,7 +623,7 @@ function CleanerProfilePageContent() {
           <Card className="border-slate-200">
             <CardContent className="space-y-2 p-5 !pt-6 text-sm">
               <p className="font-semibold text-slate-900">Performance Stats</p>
-              <div className="flex min-w-0 items-start justify-between gap-3 text-slate-600"><span className="min-w-0">Completed Jobs</span><strong className="shrink-0">{completedJobsCount}</strong></div>
+              <div className="flex min-w-0 items-start justify-between gap-3 text-slate-600"><span className="min-w-0">Successfully Completed Jobs</span><strong className="shrink-0">{completedJobsCount}</strong></div>
               <div className="flex min-w-0 items-start justify-between gap-3 text-slate-600"><span className="min-w-0">Average Rating</span><strong className="shrink-0">{displayAverageRating ? displayAverageRating.toFixed(1) : '0.0'}</strong></div>
               <div className="flex min-w-0 items-start justify-between gap-3 text-slate-600"><span className="min-w-0">On-time Rate</span><strong className="shrink-0">{onTimePercentage}%</strong></div>
               <div className="flex min-w-0 items-start justify-between gap-3 text-slate-600"><span className="min-w-0">Average Response Time</span><strong className="shrink-0">{avgResponseMinutes} min</strong></div>

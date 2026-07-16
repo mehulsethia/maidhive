@@ -8,6 +8,10 @@ type PaymentLike = {
   refund_amount?: number | null
   transferred_at?: string | Date | null
   stripe_transfer_id?: string | null
+  transfer_amount?: number | null
+  transfer_reversed_amount?: number | null
+  transfer_reversed_at?: string | Date | null
+  transfer_reversal_status?: string | null
 }
 
 type DisputeLike = {
@@ -33,12 +37,41 @@ function roundMoney(value: number) {
   return Number(value.toFixed(2))
 }
 
+function moneyCents(value: unknown) {
+  return Math.round(money(value) * 100)
+}
+
 export function hasCleanerPayoutTransferred(payment?: PaymentLike | null) {
   return (
     String(payment?.status ?? '') === 'transferred' ||
     Boolean(payment?.transferred_at) ||
     Boolean(payment?.stripe_transfer_id)
   )
+}
+
+export function getCleanerTransferLifecycle(payment?: PaymentLike | null) {
+  if (!hasCleanerPayoutTransferred(payment)) return 'not_transferred'
+
+  const reversedCents = moneyCents(payment?.transfer_reversed_amount)
+  if (reversedCents <= 0) return 'transferred'
+
+  const currentCleanerPayoutCents = moneyCents(payment?.cleaner_payout)
+  const transferAmountCents = moneyCents(payment?.transfer_amount)
+  const effectiveTransferAmountCents = transferAmountCents > 0
+    ? transferAmountCents
+    : currentCleanerPayoutCents + reversedCents
+  if (effectiveTransferAmountCents > 0 && reversedCents >= effectiveTransferAmountCents) return 'reversed'
+  if (currentCleanerPayoutCents <= 0) return 'reversed'
+
+  return 'partially_reversed'
+}
+
+export function getCleanerTransferLifecycleLabel(payment?: PaymentLike | null) {
+  const lifecycle = getCleanerTransferLifecycle(payment)
+  if (lifecycle === 'transferred') return 'Transferred'
+  if (lifecycle === 'reversed') return 'Reversed'
+  if (lifecycle === 'partially_reversed') return 'Partially reversed'
+  return 'Not transferred'
 }
 
 export function getBookingFinancialOutcome(booking: BookingFinancialInput | BookingRead | null | undefined) {
@@ -60,7 +93,8 @@ export function getBookingFinancialOutcome(booking: BookingFinancialInput | Book
     ? 0
     : Math.max(0, money(booking?.payment?.cleaner_payout ?? booking?.cleaner_payout))
   const finalMaidHiveRetainedFee = roundMoney(Math.max(0, finalClientAmountPaid - finalCleanerPayout))
-  const transferred = hasCleanerPayoutTransferred(booking?.payment)
+  const transferLifecycle = getCleanerTransferLifecycle(booking?.payment)
+  const transferred = transferLifecycle === 'transferred'
 
   let financialStatus = 'Payment pending'
   if (fullRefund) financialStatus = 'Fully refunded'
@@ -79,7 +113,8 @@ export function getBookingFinancialOutcome(booking: BookingFinancialInput | Book
     finalMaidHiveRetainedFee,
     financialStatus,
     isFullyRefunded: fullRefund,
-    cleanerPayoutTransferred: transferred,
+    cleanerPayoutTransferred: hasCleanerPayoutTransferred(booking?.payment),
+    cleanerTransferLifecycle: transferLifecycle,
   }
 }
 
@@ -105,6 +140,7 @@ export function getResolutionFinancialPreview(
       : originalCleanerPayout
   const finalMaidHiveRetainedFee = roundMoney(Math.max(0, finalClientAmountPaid - finalCleanerPayout))
   const cleanerPayoutTransferred = hasCleanerPayoutTransferred(booking?.payment)
+  const transferCanBeReversed = Boolean(booking?.payment?.stripe_transfer_id)
   const refundResolution = resolutionType === 'full_refund' || resolutionType === 'partial_refund'
   const partialRefundInvalid =
     resolutionType === 'partial_refund' &&
@@ -119,9 +155,12 @@ export function getResolutionFinancialPreview(
     finalCleanerPayout,
     finalMaidHiveRetainedFee,
     cleanerPayoutTransferred,
-    canSafelyApply: !partialRefundInvalid && !(refundResolution && cleanerPayoutTransferred),
-    safetyMessage: refundResolution && cleanerPayoutTransferred
-      ? 'Cleaner payout has already been transferred. MaidHive cannot safely apply this refund outcome automatically.'
+    transferCanBeReversed,
+    canSafelyApply: !partialRefundInvalid && !(refundResolution && cleanerPayoutTransferred && !transferCanBeReversed),
+    safetyMessage: refundResolution && cleanerPayoutTransferred && !transferCanBeReversed
+      ? 'Cleaner payout has already been transferred, but no Stripe Connect transfer id is recorded. Resolve the transfer recovery manually before completing this dispute.'
+      : refundResolution && cleanerPayoutTransferred && transferCanBeReversed
+        ? 'Cleaner payout has already been transferred. MaidHive will attempt to reverse the Stripe Connect transfer before completing this dispute.'
       : partialRefundInvalid
         ? 'Enter a partial refund greater than €0.00 and less than the original client payment.'
         : null,

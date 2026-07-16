@@ -348,27 +348,32 @@ model BookingFlowDraft {
 }
 
 model Payment {
-  id                    String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  bookingId             String    @unique @map("booking_id") @db.Uuid
-  stripePaymentIntentId String    @unique @map("stripe_payment_intent_id")
-  stripeChargeId        String?   @unique @map("stripe_charge_id")
-  stripeTransferId      String?   @unique @map("stripe_transfer_id")
-  stripeRefundId        String?   @map("stripe_refund_id")
-  amount                Decimal   @db.Decimal(10, 2)
-  platformFee           Decimal   @map("platform_fee") @db.Decimal(10, 2)
-  cleanerPayout         Decimal   @map("cleaner_payout") @db.Decimal(10, 2)
-  currency              String    @default("eur")
-  status                String    @default("pending")
-  refundAmount          Decimal?  @map("refund_amount") @db.Decimal(10, 2)
-  refundReason          String?   @map("refund_reason")
-  authorizedAt          DateTime? @map("authorized_at") @db.Timestamptz(6)
-  capturedAt            DateTime? @map("captured_at") @db.Timestamptz(6)
-  transferredAt         DateTime? @map("transferred_at") @db.Timestamptz(6)
-  payoutScheduledAt     DateTime? @map("payout_scheduled_at") @db.Timestamptz(6)
-  refundedAt            DateTime? @map("refunded_at") @db.Timestamptz(6)
-  failedAt              DateTime? @map("failed_at") @db.Timestamptz(6)
-  createdAt             DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
-  updatedAt             DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
+  id                       String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  bookingId                String    @unique @map("booking_id") @db.Uuid
+  stripePaymentIntentId    String    @unique @map("stripe_payment_intent_id")
+  stripeChargeId           String?   @unique @map("stripe_charge_id")
+  stripeTransferId         String?   @unique @map("stripe_transfer_id")
+  stripeTransferReversalId String?   @map("stripe_transfer_reversal_id")
+  stripeRefundId           String?   @map("stripe_refund_id")
+  amount                   Decimal   @db.Decimal(10, 2)
+  platformFee              Decimal   @map("platform_fee") @db.Decimal(10, 2)
+  cleanerPayout            Decimal   @map("cleaner_payout") @db.Decimal(10, 2)
+  transferAmount           Decimal?  @map("transfer_amount") @db.Decimal(10, 2)
+  currency                 String    @default("eur")
+  status                   String    @default("pending")
+  refundAmount             Decimal?  @map("refund_amount") @db.Decimal(10, 2)
+  refundReason             String?   @map("refund_reason")
+  authorizedAt             DateTime? @map("authorized_at") @db.Timestamptz(6)
+  capturedAt               DateTime? @map("captured_at") @db.Timestamptz(6)
+  transferredAt            DateTime? @map("transferred_at") @db.Timestamptz(6)
+  transferReversedAmount   Decimal   @default(0.00) @map("transfer_reversed_amount") @db.Decimal(10, 2)
+  transferReversedAt       DateTime? @map("transfer_reversed_at") @db.Timestamptz(6)
+  transferReversalStatus   String?   @map("transfer_reversal_status")
+  payoutScheduledAt        DateTime? @map("payout_scheduled_at") @db.Timestamptz(6)
+  refundedAt               DateTime? @map("refunded_at") @db.Timestamptz(6)
+  failedAt                 DateTime? @map("failed_at") @db.Timestamptz(6)
+  createdAt                DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt                DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
 
   booking Booking @relation(fields: [bookingId], references: [id])
 
@@ -381,18 +386,18 @@ model Payment {
 }
 
 model Review {
-  id             String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  bookingId      String    @unique @map("booking_id") @db.Uuid
-  cleanerId      String    @map("cleaner_id") @db.Uuid
-  clientId       String    @map("client_id") @db.Uuid
-  rating         Int
-  comment        String?
-  cleanerReply   String?   @map("cleaner_reply")
-  cleanerReplyAt DateTime? @map("cleaner_reply_at") @db.Timestamptz(6)
-  isPublic       Boolean   @default(true) @map("is_public")
-  hiddenByDispute Boolean  @default(false) @map("hidden_by_dispute")
-  createdAt      DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
-  updatedAt      DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
+  id              String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  bookingId       String    @unique @map("booking_id") @db.Uuid
+  cleanerId       String    @map("cleaner_id") @db.Uuid
+  clientId        String    @map("client_id") @db.Uuid
+  rating          Int
+  comment         String?
+  cleanerReply    String?   @map("cleaner_reply")
+  cleanerReplyAt  DateTime? @map("cleaner_reply_at") @db.Timestamptz(6)
+  isPublic        Boolean   @default(true) @map("is_public")
+  hiddenByDispute Boolean   @default(false) @map("hidden_by_dispute")
+  createdAt       DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt       DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
 
   booking Booking @relation(fields: [bookingId], references: [id])
   cleaner Cleaner @relation(fields: [cleanerId], references: [id])
@@ -506,9 +511,9 @@ model CleanerReliabilityIncident {
   createdAt    DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt    DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
 
-  cleaner Cleaner        @relation(fields: [cleanerId], references: [id], onDelete: Cascade)
-  booking Booking?       @relation(fields: [bookingId], references: [id], onDelete: SetNull)
-  strike  CleanerStrike?
+  cleaner            Cleaner                    @relation(fields: [cleanerId], references: [id], onDelete: Cascade)
+  booking            Booking?                   @relation(fields: [bookingId], references: [id], onDelete: SetNull)
+  strike             CleanerStrike?
   cancellationEvents CleanerCancellationEvent[]
 
   @@unique([cleanerId, incidentType, sourceKey])

@@ -2148,6 +2148,7 @@ async function maybeAutoReleaseCompletedBooking(booking: BookingWithRelations) {
     },
     data: {
       status: 'transferred',
+      transferAmount: Number(booking.payment.cleanerPayout),
       transferredAt: releasedAt,
       payoutScheduledAt: booking.payment.payoutScheduledAt ?? releasedAt,
     },

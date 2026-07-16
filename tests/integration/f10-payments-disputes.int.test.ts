@@ -254,12 +254,15 @@ vi.mock('@/server/stripe', () => ({
       capture: vi.fn(async () => ({ latest_charge: 'ch_captured' })),
       retrieve: vi.fn(async () => ({
         id: state.payment.stripePaymentIntentId,
-        status: 'requires_capture',
+        status: ['captured', 'transferred'].includes(state.payment.status) ? 'succeeded' : 'requires_capture',
       })),
       cancel: vi.fn(async () => ({ id: 'pi_cancelled' })),
     },
     refunds: {
       create: vi.fn(async () => ({ id: 're_1' })),
+    },
+    transfers: {
+      createReversal: vi.fn(async () => ({ id: 'trr_1' })),
     },
     webhooks: {
       constructEvent: vi.fn(() => {
@@ -294,6 +297,7 @@ vi.mock('@/server/stripe', () => ({
 describe('F10 Payments capture/refund/dispute integration', () => {
   beforeEach(() => {
     vi.resetModules()
+    vi.clearAllMocks()
     state.currentUser = seededUsers.admin as User
     state.booking = {
       id: 'booking_pay_1',
@@ -317,6 +321,11 @@ describe('F10 Payments capture/refund/dispute integration', () => {
       stripeChargeId: null,
       transferredAt: null,
       stripeTransferId: null,
+      transferAmount: null,
+      transferReversedAmount: 0,
+      transferReversedAt: null,
+      stripeTransferReversalId: null,
+      transferReversalStatus: null,
       payoutScheduledAt: new Date('2099-01-02T12:00:00.000Z'),
     } as any
     state.dispute = {
@@ -547,7 +556,7 @@ describe('F10 Payments capture/refund/dispute integration', () => {
     ]))
   })
 
-  it('IT-PAY-11 rejects refund resolution after cleaner payout transferred', async () => {
+  it('IT-PAY-11 reverses an existing Stripe Connect transfer before completing a full refund', async () => {
     state.payment = {
       ...state.payment,
       status: 'transferred',
@@ -555,12 +564,79 @@ describe('F10 Payments capture/refund/dispute integration', () => {
       stripeTransferId: 'tr_existing',
     }
     const route = await import('@/app/api/v1/disputes/[id]/resolve/route')
+    const { stripe } = await import('@/server/stripe')
     const res = await route.POST(
       new NextRequest('http://localhost/api/v1/disputes/dispute_1/resolve', {
         method: 'POST',
         body: JSON.stringify({
           resolution_type: 'full_refund',
-          resolution_note: 'Too late to reverse automatically.',
+          resolution_note: 'Service was not delivered.',
+        }),
+        headers: { 'content-type': 'application/json' },
+      }),
+      { params: Promise.resolve({ id: 'dispute_1' }) } as any,
+    )
+    const body = await res.json()
+
+    expect(res.status).toBe(200)
+    expect(body.success).toBe(true)
+    expect(stripe.transfers.createReversal).toHaveBeenCalledWith('tr_existing', { amount: 7200 })
+    expect(stripe.refunds.create).toHaveBeenCalledWith({
+      payment_intent: 'pi_123',
+      refund_application_fee: true,
+    })
+    expect(state.payment.status).toBe('refunded')
+    expect(state.payment.refundAmount).toBe(80)
+    expect(state.payment.cleanerPayout).toBe(0)
+    expect(state.payment.platformFee).toBe(0)
+    expect(state.payment.transferAmount).toBe(72)
+    expect(state.payment.transferReversedAmount).toBe(72)
+    expect(state.payment.transferReversalStatus).toBe('succeeded')
+    expect(state.payment.stripeTransferReversalId).toBe('trr_1')
+    expect(state.dispute?.status).toBe('resolved')
+    expect(state.actionEvents).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        type: 'stripe_transfer_reversed',
+        metadata: expect.objectContaining({
+          amount: 72,
+          status: 'succeeded',
+          stripe_transfer_id: 'tr_existing',
+          stripe_transfer_reversal_id: 'trr_1',
+        }),
+      }),
+      expect.objectContaining({
+        type: 'cleaner_payout_adjusted',
+        metadata: expect.objectContaining({ from_amount: 72, to_amount: 0 }),
+      }),
+      expect.objectContaining({
+        type: 'payment_refunded',
+        metadata: expect.objectContaining({
+          amount: 80,
+          final_client_amount_paid: 0,
+          final_cleaner_payout: 0,
+          final_maidhive_retained_fee: 0,
+        }),
+      }),
+    ]))
+  })
+
+  it('IT-PAY-12 leaves the dispute unresolved and logs a failed transfer reversal', async () => {
+    state.payment = {
+      ...state.payment,
+      status: 'transferred',
+      transferredAt: new Date('2099-01-03T12:00:00.000Z'),
+      stripeTransferId: 'tr_existing',
+    }
+    const route = await import('@/app/api/v1/disputes/[id]/resolve/route')
+    const { stripe } = await import('@/server/stripe')
+    ;(stripe.transfers.createReversal as any).mockRejectedValueOnce(new Error('Insufficient connected account balance'))
+
+    const res = await route.POST(
+      new NextRequest('http://localhost/api/v1/disputes/dispute_1/resolve', {
+        method: 'POST',
+        body: JSON.stringify({
+          resolution_type: 'full_refund',
+          resolution_note: 'Service was not delivered.',
         }),
         headers: { 'content-type': 'application/json' },
       }),
@@ -570,8 +646,21 @@ describe('F10 Payments capture/refund/dispute integration', () => {
 
     expect(res.status).toBe(409)
     expect(body.success).toBe(false)
-    expect(body.message).toContain('already been transferred')
-    expect(state.actionEvents).toHaveLength(0)
+    expect(body.message).toContain('transfer reversal failed')
+    expect(stripe.refunds.create).not.toHaveBeenCalled()
+    expect(state.payment.status).toBe('transferred')
+    expect(state.dispute?.status).toBe('open')
+    expect(state.actionEvents).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        type: 'stripe_transfer_reversed',
+        metadata: expect.objectContaining({
+          amount: 72,
+          status: 'failed',
+          stripe_transfer_id: 'tr_existing',
+          error_message: 'Insufficient connected account balance',
+        }),
+      }),
+    ]))
   })
 
   it('IT-PAY-06 client report emails confirmation to client and against-notification to cleaner', async () => {

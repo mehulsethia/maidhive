@@ -36,7 +36,12 @@ import {
 } from '@/lib/cancellation-payment-state'
 import { getAdminClientCancellationCopy } from '@/lib/client-cancellation-context'
 import { getCleanerPayoutSummary } from '@/lib/cleaner-payout'
-import { getBookingFinancialOutcome, hasCleanerPayoutTransferred } from '@/lib/payment-financial-outcome'
+import {
+  getBookingFinancialOutcome,
+  getCleanerTransferLifecycle,
+  getCleanerTransferLifecycleLabel,
+  hasCleanerPayoutTransferred,
+} from '@/lib/payment-financial-outcome'
 import { formatCurrency, formatDate } from '@/lib/utils'
 import type { BookingRead } from '@/types'
 
@@ -93,7 +98,10 @@ function hasActionEvent(booking: BookingRead, ...types: string[]) {
 
 function describeCleanerPayoutState(booking: BookingRead, finalCleanerPayout: number) {
   const paymentStatus = String(booking.payment?.status ?? '')
-  if (hasCleanerPayoutTransferred(booking.payment)) return 'Released — transferred to cleaner'
+  const transferLifecycle = getCleanerTransferLifecycle(booking.payment)
+  if (transferLifecycle === 'reversed') return 'Not due — transfer reversed'
+  if (transferLifecycle === 'partially_reversed') return 'Adjusted — transfer partially reversed'
+  if (transferLifecycle === 'transferred') return 'Released — transferred to cleaner'
   if (booking.dispute?.status === 'open' || booking.dispute?.status === 'under_review') {
     return 'Paused — dispute under review'
   }
@@ -104,8 +112,7 @@ function describeCleanerPayoutState(booking: BookingRead, finalCleanerPayout: nu
 }
 
 function describeTransferState(booking: BookingRead) {
-  if (hasCleanerPayoutTransferred(booking.payment)) return 'Transferred'
-  return 'Not transferred'
+  return getCleanerTransferLifecycleLabel(booking.payment)
 }
 
 function buildTimeline(booking: BookingRead): TimelineEvent[] {
@@ -232,6 +239,20 @@ function buildTimeline(booking: BookingRead): TimelineEvent[] {
           ? 'Cleaner payout was adjusted during dispute resolution.'
           : `Cleaner payout adjusted from ${formatCurrency(fromAmount)} to ${formatCurrency(toAmount)}.`,
         tone: 'warning',
+      })
+    }
+
+    if (event.type === 'stripe_transfer_reversed') {
+      const amount = actionEventMoney(metadata, 'amount')
+      const status = metadata?.status === 'failed' ? 'failed' : 'succeeded'
+      addEvent(events, {
+        id: event.id,
+        at: event.created_at,
+        title: status === 'failed' ? 'Stripe Connect transfer reversal failed' : 'Stripe Connect transfer reversed',
+        description: amount == null
+          ? `Transfer reversal ${status}.`
+          : `Transfer reversal of ${formatCurrency(amount)} ${status}.`,
+        tone: status === 'failed' ? 'danger' : 'warning',
       })
     }
 

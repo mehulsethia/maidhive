@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest'
-import { getBookingFinancialOutcome, getResolutionFinancialPreview } from '@/lib/payment-financial-outcome'
+import {
+  getBookingFinancialOutcome,
+  getCleanerTransferLifecycleLabel,
+  getResolutionFinancialPreview,
+} from '@/lib/payment-financial-outcome'
 
 describe('payment financial outcome', () => {
   it('summarizes a fully refunded completed booking with zero final retained fee', () => {
@@ -34,7 +38,34 @@ describe('payment financial outcome', () => {
     })
   })
 
-  it('previews the mandatory full-refund outcome and blocks transferred payouts', () => {
+  it('previews the mandatory full-refund outcome and allows reversible transferred payouts', () => {
+    const preview = getResolutionFinancialPreview({
+      total_amount: 22,
+      platform_fee: 2,
+      cleaner_payout: 20,
+      payment: {
+        status: 'transferred',
+        amount: 22,
+        cleaner_payout: 20,
+        transferred_at: '2026-07-14T16:38:00.000Z',
+        stripe_transfer_id: 'tr_123',
+      },
+    }, 'full_refund')
+
+    expect(preview).toMatchObject({
+      originalClientPayment: 22,
+      refundToClient: 22,
+      finalClientAmountPaid: 0,
+      finalCleanerPayout: 0,
+      finalMaidHiveRetainedFee: 0,
+      cleanerPayoutTransferred: true,
+      transferCanBeReversed: true,
+      canSafelyApply: true,
+    })
+    expect(preview.safetyMessage).toContain('will attempt to reverse')
+  })
+
+  it('blocks a transferred refund preview when no Stripe transfer id is recorded', () => {
     const preview = getResolutionFinancialPreview({
       total_amount: 22,
       platform_fee: 2,
@@ -48,14 +79,36 @@ describe('payment financial outcome', () => {
     }, 'full_refund')
 
     expect(preview).toMatchObject({
-      originalClientPayment: 22,
-      refundToClient: 22,
-      finalClientAmountPaid: 0,
-      finalCleanerPayout: 0,
-      finalMaidHiveRetainedFee: 0,
       cleanerPayoutTransferred: true,
+      transferCanBeReversed: false,
       canSafelyApply: false,
     })
-    expect(preview.safetyMessage).toContain('already been transferred')
+    expect(preview.safetyMessage).toContain('no Stripe Connect transfer id')
+  })
+
+  it('labels transfer lifecycle states from payment reversal fields', () => {
+    expect(getCleanerTransferLifecycleLabel(null)).toBe('Not transferred')
+    expect(getCleanerTransferLifecycleLabel({
+      status: 'transferred',
+      cleaner_payout: 20,
+      stripe_transfer_id: 'tr_123',
+    })).toBe('Transferred')
+    expect(getCleanerTransferLifecycleLabel({
+      status: 'refunded',
+      cleaner_payout: 0,
+      stripe_transfer_id: 'tr_123',
+      transfer_amount: 20,
+      transfer_reversed_amount: 20,
+      transfer_reversed_at: '2026-07-14T16:40:00.000Z',
+      transfer_reversal_status: 'succeeded',
+    })).toBe('Reversed')
+    expect(getCleanerTransferLifecycleLabel({
+      status: 'transferred',
+      cleaner_payout: 5,
+      stripe_transfer_id: 'tr_123',
+      transfer_amount: 20,
+      transfer_reversed_amount: 15,
+      transfer_reversal_status: 'succeeded',
+    })).toBe('Partially reversed')
   })
 })

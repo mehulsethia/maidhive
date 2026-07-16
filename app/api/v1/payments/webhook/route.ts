@@ -145,6 +145,7 @@ export async function POST(req: NextRequest) {
             await paymentRepo.update(payment.id, {
               status: 'transferred',
               stripeTransferId: transfer.id,
+              transferAmount: Number(payment.cleanerPayout),
               transferredAt,
             })
 
