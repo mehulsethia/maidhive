@@ -14,6 +14,9 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
 import { reportLoadError, resetLoadError } from '@/lib/load-error-policy'
 import { formatCurrency, formatDate } from '@/lib/utils'
 import { getBookingFinancialOutcome } from '@/lib/payment-financial-outcome'
+import { getBookingCleaningTypeLabel } from '@/lib/booking-service-labels'
+import { getCancellationOriginLabel } from '@/lib/cancellation-origin'
+import { getCancellationPaymentOutcome } from '@/lib/booking-payment-outcome'
 import type { BookingRead, BookingStatus } from '@/types'
 
 // ── Status groupings ──────────────────────────────────────────────────────────
@@ -56,6 +59,20 @@ const GROUPS: { key: string; label: string; statuses: string[] }[] = [
   },
 ]
 
+function platformFeeListLabel(booking: BookingRead) {
+  if (booking.status === 'cancelled') {
+    const retained = getCancellationPaymentOutcome(booking)?.platformRetainedAmount ?? 0
+    return `${formatCurrency(retained)} retained`
+  }
+  if (booking.status === 'expired' || booking.status === 'declined') {
+    return `${formatCurrency(0)} retained`
+  }
+  if (booking.status === 'completed' || booking.status === 'disputed') {
+    return `${formatCurrency(getBookingFinancialOutcome(booking).finalMaidHiveRetainedFee)} retained`
+  }
+  return `${formatCurrency(booking.platform_fee)} expected`
+}
+
 const PAGE_SIZE = 20
 
 // ── Booking table ─────────────────────────────────────────────────────────────
@@ -69,7 +86,7 @@ function BookingTable({ bookings }: { bookings: BookingRead[] }) {
         <thead className="bg-muted/40">
           <tr className="text-left text-muted-foreground text-xs uppercase tracking-wide">
             <th className="px-4 py-3 font-medium">Booking</th>
-            <th className="px-4 py-3 font-medium">Service</th>
+            <th className="px-4 py-3 font-medium">Cleaning type</th>
             <th className="px-4 py-3 font-medium">Location</th>
             <th className="px-4 py-3 font-medium">Scheduled</th>
             <th className="px-4 py-3 font-medium">Status</th>
@@ -81,6 +98,7 @@ function BookingTable({ bookings }: { bookings: BookingRead[] }) {
         <tbody className="divide-y">
           {bookings.map(b => {
             const financialOutcome = getBookingFinancialOutcome(b)
+            const cancellationOrigin = getCancellationOriginLabel(b)
             return (
             <tr key={b.id} className="group hover:bg-muted/20 transition-colors">
               <td className="px-4 py-3 min-w-[140px]">
@@ -92,7 +110,7 @@ function BookingTable({ bookings }: { bookings: BookingRead[] }) {
                 </Link>
                 <p className="text-[10px] text-muted-foreground">{formatDate(b.created_at)}</p>
               </td>
-              <td className="px-4 py-3 min-w-[120px] capitalize">{b.service_type.replace(/_/g, ' ')}</td>
+              <td className="px-4 py-3 min-w-[120px]">{getBookingCleaningTypeLabel(b)}</td>
               <td className="px-4 py-3 min-w-[110px] text-muted-foreground">
                 {b.city}, {b.postcode}
               </td>
@@ -113,6 +131,11 @@ function BookingTable({ bookings }: { bookings: BookingRead[] }) {
                     Financial status: {financialOutcome.financialStatus}
                   </p>
                 )}
+                {cancellationOrigin && (
+                  <p className="mt-1 text-[11px] font-medium text-rose-700">
+                    {cancellationOrigin}
+                  </p>
+                )}
                 {b.status === 'completed' && financialOutcome.isFullyRefunded && (
                   <p className="mt-1 text-[11px] text-muted-foreground">
                     Final cleaner payout: {formatCurrency(financialOutcome.finalCleanerPayout)}
@@ -128,7 +151,7 @@ function BookingTable({ bookings }: { bookings: BookingRead[] }) {
                 {b.status === 'cancelled' ? <CancellationPaymentBreakdown booking={b} compact /> : formatCurrency(b.total_amount)}
               </td>
               <td className="px-4 py-3 text-right text-muted-foreground text-xs">
-                {formatCurrency(b.platform_fee)}
+                {platformFeeListLabel(b)}
               </td>
               <td className="px-4 py-3 text-right">
                 <Link

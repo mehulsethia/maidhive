@@ -194,6 +194,7 @@ describe('Loops email contracts', () => {
       fullName: 'Client User',
       date: scheduledStart,
       bookingId: 'booking_5',
+      paymentOutcomeMessage: 'You have not been charged. Temporary payment hold released: €35.20.',
     })
     await loopsEmailService.sendClientSelfCancellationConfirmation({
       email: 'client@example.test',
@@ -202,7 +203,7 @@ describe('Loops email contracts', () => {
       bookingDate: scheduledStart,
       cancellationWindowMessage: 'You cancelled between 12 and 24 hours before the scheduled start.',
       cancellationChargeMessage: 'Cancellation charge: €5.00.',
-      refundOrReleaseMessage: '€30.20 will be refunded or released.',
+      refundOrReleaseMessage: 'Refund issued: €30.20.',
     })
 
     expect(requestBody(fetchMock, 0)).toEqual({
@@ -274,6 +275,7 @@ describe('Loops email contracts', () => {
       dataVariables: {
         client_name: 'Client User',
         booking_date: '12 Jun 2026',
+        payment_outcome_message: 'You have not been charged. Temporary payment hold released: €35.20.',
         booking_link: 'https://app.maidhive.test/client/bookings/booking_5',
       },
     })
@@ -287,7 +289,7 @@ describe('Loops email contracts', () => {
         booking_time: '13:30',
         cancellation_window_message: 'You cancelled between 12 and 24 hours before the scheduled start.',
         cancellation_charge_message: 'Cancellation charge: €5.00.',
-        refund_or_release_message: '€30.20 will be refunded or released.',
+        refund_or_release_message: 'Refund issued: €30.20.',
       },
     })
   })

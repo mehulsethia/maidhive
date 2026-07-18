@@ -40,6 +40,50 @@ const COMPLETE_JOB_AUTO_GRACE_MINUTES = 5
 const START_JOB_EARLY_MINUTES = 15
 const START_JOB_LATE_BUFFER_HOURS = 24
 
+function formatEuroAmount(amount: unknown) {
+  const numeric = Number(amount ?? 0)
+  return new Intl.NumberFormat('en-IE', {
+    style: 'currency',
+    currency: 'EUR',
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  }).format(Number.isFinite(numeric) ? Math.max(0, numeric) : 0)
+}
+
+type PaymentAuthorizationReleaseEventArgs = {
+  bookingId: string
+  amount: unknown
+  previousStatus?: string | null
+  reason: string
+  actorRole?: 'client' | 'cleaner' | 'admin' | 'system'
+  occurredAt?: Date
+}
+
+async function recordPaymentAuthorizationReleasedEvent(args: PaymentAuthorizationReleaseEventArgs) {
+  const occurredAt = args.occurredAt ?? new Date()
+  const amount = Number(args.amount ?? 0)
+  try {
+    await recordBookingActionEvent({
+      bookingId: args.bookingId,
+      type: 'payment_authorisation_released',
+      actorRole: args.actorRole ?? 'system',
+      createdAt: occurredAt,
+      metadata: {
+        amount: Number.isFinite(amount) ? amount : 0,
+        event_timestamp: occurredAt.toISOString(),
+        payment_state_before: args.previousStatus ?? null,
+        payment_state_after: 'released',
+        reason: args.reason,
+      },
+    })
+  } catch (error) {
+    console.error('booking.payment_authorisation_released_event_failed', {
+      booking_id: args.bookingId,
+      message: error instanceof Error ? error.message : String(error),
+    })
+  }
+}
+
 export const bookingService = {
   previewPrice(hourlyRate: number, durationHours: number, platformFeePct = DEFAULT_PLATFORM_FEE_PCT) {
     return calculatePriceSnapshot(hourlyRate, durationHours, platformFeePct)
@@ -72,6 +116,14 @@ export const bookingService = {
           booking.payment?.id,
           booking.payment?.stripePaymentIntentId,
           booking.payment?.status,
+          {
+            bookingId,
+            amount: booking.payment?.amount ?? booking.totalAmount,
+            previousStatus: booking.payment?.status,
+            reason: 'booking_request_expired_before_capture',
+            actorRole: 'system',
+            occurredAt: new Date(),
+          },
         )
         await notifyPendingRequestExpired(booking)
         return bookingRepo.findById(bookingId)
@@ -1221,6 +1273,18 @@ export const bookingService = {
           booking.payment?.id,
           booking.payment?.stripePaymentIntentId,
           booking.payment?.status,
+          {
+            bookingId,
+            amount: booking.payment?.amount ?? booking.totalAmount,
+            previousStatus: booking.payment?.status,
+            reason: isCleanerCancelling
+              ? 'cleaner_cancelled_before_capture'
+              : isClientCancelling
+                ? 'client_cancelled_before_capture'
+                : 'booking_cancelled_before_capture',
+            actorRole: isCleanerCancelling ? 'cleaner' : isClientCancelling ? 'client' : 'system',
+            occurredAt: cancellationTime,
+          },
         )
       } catch (releaseError) {
         console.error('booking.cancel.release_authorization_fallback failed; proceeding with cancellation anyway', {
@@ -1238,6 +1302,8 @@ export const bookingService = {
       cancelledByUser: { connect: { id: user.id } },
       cancelledAt: cancellationTime,
     })
+    const scheduledStartLabel = formatBookingTimeForMessage(booking.scheduledStart)
+    const scheduledStartAtLabel = formatBookingDateAtTimeForMessage(booking.scheduledStart)
 
     if (isCleanerCancelling && cleaner) {
       try {
@@ -1260,8 +1326,8 @@ export const bookingService = {
       await pushInAppNotification({
         userId: booking.cleaner.userId,
         type: 'booking_cancelled',
-        title: 'Booking cancelled',
-        body: 'You cancelled this booking. No payout applies for this booking. This cancellation has been recorded on your account.',
+        title: 'You cancelled your booking',
+        body: `You cancelled the booking for ${scheduledStartAtLabel}. Your final payout is ${formatEuroAmount(0)} and the cancellation has been recorded in your reliability history.`,
         data: { booking_id: bookingId },
       })
     }
@@ -1275,8 +1341,6 @@ export const bookingService = {
     const isPendingRequestCancellation = booking.status === 'pending'
     const isConfirmedBookingCancellation = booking.status === 'confirmed'
     const isAcceptedOrConfirmedCancellation = booking.status === 'accepted' || booking.status === 'confirmed'
-    const scheduledStartLabel = formatBookingTimeForMessage(booking.scheduledStart)
-    const scheduledStartAtLabel = formatBookingDateAtTimeForMessage(booking.scheduledStart)
     const isDraftLikePreAuthorisation =
       isClientCancelling &&
       (booking.status === 'draft' || (booking.status === 'pending' && !isPaymentAuthorizedStatus(booking.payment?.status)))
@@ -1295,14 +1359,18 @@ export const bookingService = {
             ? isPendingRequestCancellation
               ? 'Client cancelled booking request'
               : 'Client cancelled booking'
-            : 'Booking cancelled',
+            : isCleanerCancelling
+              ? 'Cleaner cancelled your booking'
+              : 'Booking cancelled',
           body: isClientCancelling
             ? isPendingRequestCancellation
               ? 'The client cancelled this booking request before confirmation.'
               : isConfirmedBookingCancellation
                 ? `The client cancelled a confirmed booking scheduled for ${scheduledStartLabel}.`
                 : `The client cancelled a booking scheduled for ${scheduledStartLabel}.`
-            : 'A booking has been cancelled',
+            : isCleanerCancelling
+              ? `Your cleaner cancelled the booking for ${scheduledStartAtLabel}. No cancellation charge applies. Your ${formatEuroAmount(booking.payment?.amount ?? booking.totalAmount)} payment authorisation has been released.`
+              : 'A booking has been cancelled',
           data: { booking_id: bookingId },
         })
       }
@@ -1312,13 +1380,20 @@ export const bookingService = {
     }
 
     if (isClientCancelling && isAcceptedOrConfirmedCancellation && clientUserId) {
+      const clientNotificationPolicy = clientCancellationPolicy
+      const clientPaymentOutcome = clientNotificationPolicy
+        ? getClientSelfCancellationEmailOutcome(
+            clientNotificationPolicy,
+            clientNotificationPolicy.window === 'more_than_24h' ? booking.payment?.status : 'captured',
+          ).refundOrReleaseMessage
+        : null
       await pushInAppNotification({
         userId: clientUserId,
         type: 'booking_cancelled',
         title: 'Booking cancelled',
         body: isMoreThan24HoursBeforeStart
-          ? `You cancelled your booking for ${scheduledStartAtLabel}. No cancellation charge applies.`
-          : `Your booking scheduled for ${scheduledStartLabel} has been cancelled.`,
+          ? `You cancelled your booking for ${scheduledStartAtLabel}. No cancellation charge applies. ${clientPaymentOutcome ?? ''}`.trim()
+          : `Your booking scheduled for ${scheduledStartLabel} has been cancelled. ${clientPaymentOutcome ?? ''}`.trim(),
         data: { booking_id: bookingId },
       })
     }
@@ -1328,7 +1403,10 @@ export const bookingService = {
         if (!clientEmail) throw new Error('Missing client email for cancellation confirmation')
         const policy = clientCancellationPolicy
         if (!policy) throw new Error('Unable to calculate client cancellation email outcome')
-        const emailOutcome = getClientSelfCancellationEmailOutcome(policy)
+        const emailOutcome = getClientSelfCancellationEmailOutcome(
+          policy,
+          policy.window === 'more_than_24h' ? booking.payment?.status : 'captured',
+        )
         await loopsEmailService.sendClientSelfCancellationConfirmation({
           email: clientEmail,
           clientName,
@@ -1349,6 +1427,7 @@ export const bookingService = {
           fullName: clientName,
           date: booking.scheduledStart,
           bookingId: booking.id,
+          paymentOutcomeMessage: `You have not been charged. Temporary payment hold released: ${formatEuroAmount(booking.payment?.amount ?? booking.totalAmount)}.`,
         })
       } catch (emailError) {
         console.error('Failed to send client cleaner-cancellation email via Loops:', emailError)
@@ -1710,6 +1789,7 @@ async function releasePaymentAuthorization(
   paymentId?: string,
   paymentIntentId?: string,
   paymentStatus?: string | null,
+  releaseEvent?: PaymentAuthorizationReleaseEventArgs,
 ) {
   if (!paymentId || !paymentIntentId) return
   if (!['pending', 'authorized'].includes(String(paymentStatus ?? ''))) return
@@ -1726,6 +1806,12 @@ async function releasePaymentAuthorization(
       failedAt: null,
       refundReason: 'payment_authorisation_released',
     })
+    if (releaseEvent) {
+      await recordPaymentAuthorizationReleasedEvent({
+        ...releaseEvent,
+        previousStatus: releaseEvent.previousStatus ?? paymentStatus,
+      })
+    }
   } catch (error) {
     // Cancellation flow must remain non-blocking even if legacy payment rows are inconsistent.
     console.error('releasePaymentAuthorization.payment_update failed', {
@@ -2037,11 +2123,20 @@ async function applyCancellationPaymentPolicy(
   if (!payment.stripePaymentIntentId) return
 
   if (payment.status === 'pending') {
+    const releasedAt = new Date()
     await stripe.paymentIntents.cancel(payment.stripePaymentIntentId)
     await paymentRepo.update(payment.id, {
       status: 'released',
       failedAt: null,
       refundReason: 'payment_authorisation_released',
+    })
+    await recordPaymentAuthorizationReleasedEvent({
+      bookingId: booking.id,
+      amount: payment.amount ?? booking.totalAmount,
+      previousStatus: payment.status,
+      reason: 'pending_payment_authorisation_released',
+      actorRole: 'system',
+      occurredAt: releasedAt,
     })
     return
   }
@@ -2049,6 +2144,7 @@ async function applyCancellationPaymentPolicy(
   if (payment.status !== 'authorized') return
 
   if (options.cancelledByCleaner) {
+    const releasedAt = new Date()
     await stripe.paymentIntents.cancel(payment.stripePaymentIntentId)
     await paymentRepo.update(payment.id, {
       status: 'released',
@@ -2058,16 +2154,33 @@ async function applyCancellationPaymentPolicy(
       platformFee: 0,
       payoutScheduledAt: null,
     })
+    await recordPaymentAuthorizationReleasedEvent({
+      bookingId: booking.id,
+      amount: payment.amount ?? booking.totalAmount,
+      previousStatus: payment.status,
+      reason: 'cleaner_cancelled_before_capture',
+      actorRole: 'cleaner',
+      occurredAt: releasedAt,
+    })
     return
   }
 
   // Pending cleaner acceptance cancellations should always release auth in full.
   if (bookingStatus === 'pending') {
+    const releasedAt = new Date()
     await stripe.paymentIntents.cancel(payment.stripePaymentIntentId)
     await paymentRepo.update(payment.id, {
       status: 'released',
       failedAt: null,
       refundReason: 'payment_authorisation_released',
+    })
+    await recordPaymentAuthorizationReleasedEvent({
+      bookingId: booking.id,
+      amount: payment.amount ?? booking.totalAmount,
+      previousStatus: payment.status,
+      reason: 'pending_booking_cancelled_before_capture',
+      actorRole: 'client',
+      occurredAt: releasedAt,
     })
     return
   }
@@ -2081,11 +2194,20 @@ async function applyCancellationPaymentPolicy(
   if (!policy) return
 
   if (policy.window === 'more_than_24h') {
+    const releasedAt = new Date()
     await stripe.paymentIntents.cancel(payment.stripePaymentIntentId)
     await paymentRepo.update(payment.id, {
       status: 'released',
       failedAt: null,
       refundReason: 'payment_authorisation_released',
+    })
+    await recordPaymentAuthorizationReleasedEvent({
+      bookingId: booking.id,
+      amount: payment.amount ?? booking.totalAmount,
+      previousStatus: payment.status,
+      reason: 'client_cancelled_more_than_24h_before_capture',
+      actorRole: 'client',
+      occurredAt: releasedAt,
     })
     return
   }

@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   cancellationEvaluationWindowStart,
+  buildSuperCleanerEligibilityChecklist,
   classifyCleanerCancellationWindow,
   cyprusCalendarDate,
   evaluateSuperCleaner,
@@ -33,6 +34,44 @@ describe('Super Cleaner reliability rules', () => {
     expect(evaluateSuperCleaner(eligibleInput({ cancellationRate: 0.1 })).eligible).toBe(false)
     expect(evaluateSuperCleaner(eligibleInput({ verifiedJobCount: 9 })).eligible).toBe(false)
     expect(evaluateSuperCleaner(eligibleInput({ onTimeRate: 0.899 })).eligible).toBe(false)
+    expect(evaluateSuperCleaner(eligibleInput({ activeStrikeCount: 1 })).eligible).toBe(false)
+  })
+
+  it('builds the admin eligibility checklist from the locked thresholds', () => {
+    const checklist = buildSuperCleanerEligibilityChecklist(
+      eligibleInput({
+        completedReleasedCount: 6,
+        cancellationRate: 0.111,
+        verifiedJobCount: 0,
+        onTimeRate: null,
+      }),
+    )
+
+    expect(checklist).toContainEqual(expect.objectContaining({
+      key: 'completed_bookings',
+      value: '6 / 20',
+      met: false,
+    }))
+    expect(checklist).toContainEqual(expect.objectContaining({
+      key: 'average_rating',
+      value: '4.6 / 4.6 required',
+      met: true,
+    }))
+    expect(checklist).toContainEqual(expect.objectContaining({
+      key: 'cancellation_rate',
+      value: '11.1% (must be below 10%)',
+      met: false,
+    }))
+    expect(checklist).toContainEqual(expect.objectContaining({
+      key: 'on_time_rate',
+      value: 'Not enough verified jobs',
+      met: false,
+    }))
+    expect(checklist).toContainEqual(expect.objectContaining({
+      key: 'active_strikes',
+      value: '0',
+      met: true,
+    }))
   })
 
   it('requires both recovery obligations when they apply', () => {

@@ -26,7 +26,7 @@ describe('payment financial outcome', () => {
     })
 
     expect(outcome).toMatchObject({
-      financialStatus: 'Fully refunded',
+      financialStatus: 'Refund issued',
       originalClientPayment: 22,
       originalCleanerPayout: 20,
       originalPlatformFee: 2,
@@ -35,6 +35,27 @@ describe('payment financial outcome', () => {
       finalCleanerPayout: 0,
       finalMaidHiveRetainedFee: 0,
       isFullyRefunded: true,
+    })
+  })
+
+  it('summarizes released authorisations as no captured client payment', () => {
+    const outcome = getBookingFinancialOutcome({
+      total_amount: 33,
+      platform_fee: 3,
+      cleaner_payout: 30,
+      payment: {
+        status: 'released',
+        amount: 33,
+        platform_fee: 0,
+        cleaner_payout: 0,
+      },
+    })
+
+    expect(outcome).toMatchObject({
+      financialStatus: 'Payment authorisation released',
+      finalClientAmountPaid: 0,
+      finalCleanerPayout: 0,
+      finalMaidHiveRetainedFee: 0,
     })
   })
 

@@ -107,6 +107,12 @@ vi.mock('@/server/db', () => ({
     payment: {
       updateMany: vi.fn(async () => ({ count: 0 })),
     },
+    bookingActionEvent: {
+      create: vi.fn(async ({ data }: any) => {
+        state.actionEvents.push(data)
+        return { id: `event_${state.actionEvents.length}`, ...data }
+      }),
+    },
   },
 }))
 
@@ -285,7 +291,10 @@ describe('Booking cancellation communications', () => {
       confirmedAt: new Date('2099-06-18T09:05:00.000Z'),
       scheduledStart: new Date('2099-06-20T10:00:00.000Z'),
       durationHours: 2,
-      payment: { id: 'payment_1', status: 'authorized', stripePaymentIntentId: 'pi_1' },
+      totalAmount: 33,
+      cleanerPayout: 30,
+      platformFee: 3,
+      payment: { id: 'payment_1', status: 'authorized', amount: 33, stripePaymentIntentId: 'pi_1' },
       client: { userId: seeded.clientUser.id, user: { email: seeded.clientUser.email, name: seeded.clientUser.name } },
       cleaner: { userId: seeded.cleanerUser.id, user: { email: seeded.cleanerUser.email, name: seeded.cleanerUser.name } },
     }
@@ -307,9 +316,26 @@ describe('Booking cancellation communications', () => {
     }))
     expect(state.notifications).toContainEqual(expect.objectContaining({
       userId: seeded.cleanerUser.id,
-      title: 'Booking cancelled',
-      body: 'You cancelled this booking. No payout applies for this booking. This cancellation has been recorded on your account.',
+      title: 'You cancelled your booking',
+      body: 'You cancelled the booking for 20 Jun 2099 at 13:00. Your final payout is €0.00 and the cancellation has been recorded in your reliability history.',
       data: { booking_id: state.booking.id },
+    }))
+    expect(state.notifications).toContainEqual(expect.objectContaining({
+      userId: seeded.clientUser.id,
+      title: 'Cleaner cancelled your booking',
+      body: 'Your cleaner cancelled the booking for 20 Jun 2099 at 13:00. No cancellation charge applies. Your €33.00 payment authorisation has been released.',
+      data: { booking_id: state.booking.id },
+    }))
+    expect(state.actionEvents).toContainEqual(expect.objectContaining({
+      bookingId: state.booking.id,
+      type: 'payment_authorisation_released',
+      actorRole: 'cleaner',
+      metadata: expect.objectContaining({
+        amount: 33,
+        payment_state_before: 'authorized',
+        payment_state_after: 'released',
+        reason: 'cleaner_cancelled_before_capture',
+      }),
     }))
     expect(state.clientCancelledByCleanerEmails).toBe(1)
   })
@@ -347,7 +373,7 @@ describe('Booking cancellation communications', () => {
     const updated = await bookingService.cancel(
       primary.id,
       seeded.cleanerUser as any,
-      'Cancelled by cleaner within 24 hours of scheduled start',
+      'Cancelled by cleaner under 12 hours before scheduled start',
       { cancelRestOfToday: true },
     )
 
@@ -391,12 +417,12 @@ describe('Booking cancellation communications', () => {
     expect(state.notifications).toContainEqual(expect.objectContaining({
       userId: seeded.clientUser.id,
       title: 'Booking cancelled',
-      body: 'You cancelled your booking for 3 Jul 2099 at 10:00. No cancellation charge applies.',
+      body: 'You cancelled your booking for 3 Jul 2099 at 10:00. No cancellation charge applies. You have not been charged. Temporary payment hold released: €35.20.',
     }))
     expect(state.clientCancellationPayloads).toContainEqual(expect.objectContaining({
       cancellationWindowMessage: 'You cancelled more than 24 hours before the scheduled start.',
       cancellationChargeMessage: 'No cancellation charge applies.',
-      refundOrReleaseMessage: 'Your full payment of €35.20 will be refunded or released.',
+      refundOrReleaseMessage: 'You have not been charged. Temporary payment hold released: €35.20.',
     }))
   })
 
@@ -405,13 +431,13 @@ describe('Booking cancellation communications', () => {
       hoursUntilStart: 18,
       cancellationWindowMessage: 'You cancelled between 12 and 24 hours before the scheduled start.',
       cancellationChargeMessage: 'Cancellation charge: €5.00.',
-      refundOrReleaseMessage: '€30.20 will be refunded or released.',
+      refundOrReleaseMessage: 'Refund issued: €30.20.',
     },
     {
       hoursUntilStart: 6,
       cancellationWindowMessage: 'You cancelled less than 12 hours before the scheduled start.',
       cancellationChargeMessage: 'Cancellation charge: €17.60.',
-      refundOrReleaseMessage: 'You will receive a 50% refund of €17.60.',
+      refundOrReleaseMessage: 'Refund issued: €17.60.',
     },
   ])(
     'sends the client self-cancellation email $hoursUntilStart hours before start',

@@ -1,5 +1,6 @@
 import { isCompletedBookingReleased } from '@/lib/booking-release'
 import { getCancellationPaymentOutcome } from '@/lib/booking-payment-outcome'
+import { getCancellationOriginLabel } from '@/lib/cancellation-origin'
 import { getCleanerPayoutSummary } from '@/lib/cleaner-payout'
 import { isFinalNoCleanerPayoutOutcome } from '@/lib/payment-financial-outcome'
 import { formatCurrency } from '@/lib/utils'
@@ -9,7 +10,7 @@ export type CleanerPaymentHistoryTone = 'ok' | 'warn' | 'issue'
 
 export type CleanerPaymentHistoryEntry = {
   booking: BookingRead
-  paymentType: 'Booking payout' | 'Cancellation compensation' | 'No-show compensation' | 'Payment issue'
+  paymentType: 'Booking payout' | 'Booking cancellation' | 'Cancellation compensation' | 'No-show compensation' | 'Payment issue'
   label: string
   tone: CleanerPaymentHistoryTone
   amount?: number
@@ -69,6 +70,16 @@ export function classifyCleanerPaymentHistoryBooking(
   }
 
   if (booking.status === 'cancelled') {
+    const cancellationOrigin = getCancellationOriginLabel(booking)
+    if (cancellationOrigin === 'Cancelled by cleaner') {
+      return {
+        paymentType: 'Booking cancellation',
+        label: 'No payout — cancelled by cleaner',
+        tone: 'warn',
+        amount: 0,
+      }
+    }
+
     const cancellationOutcome = getCancellationPaymentOutcome(booking)
     const cancellationCompensation = cancellationOutcome?.cleanerPayoutDue ?? Number(booking.payment?.cleaner_payout ?? booking.cleaner_payout ?? 0)
     const paymentType = isClientNoShowCompensation
@@ -88,7 +99,7 @@ export function classifyCleanerPaymentHistoryBooking(
         amount: cancellationCompensation,
       }
     }
-    return { paymentType, label: 'Cancelled - no payout due', tone: 'warn', amount: 0 }
+    return { paymentType: 'Booking cancellation', label: 'Cancelled - no payout due', tone: 'warn', amount: 0 }
   }
 
   if (paymentStatus === 'failed' || booking.status === 'disputed' || isActiveDispute(booking)) {
@@ -128,9 +139,9 @@ export function isCleanerEarningReleased(booking: BookingRead, nowMs = Date.now(
     })
   }
 
-  return booking.status === 'cancelled' && (
-    booking.payment?.status === 'transferred' || Boolean(booking.payment?.transferred_at)
-  )
+  if (booking.status !== 'cancelled') return false
+  if (getCancellationOriginLabel(booking) === 'Cancelled by cleaner') return true
+  return booking.payment?.status === 'transferred' || Boolean(booking.payment?.transferred_at)
 }
 
 export function buildCleanerPaymentHistory(

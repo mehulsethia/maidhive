@@ -28,7 +28,12 @@ import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Separator } from '@/components/ui/separator'
 import { reportLoadError, resetLoadError } from '@/lib/load-error-policy'
-import { getCancellationPaymentOutcome, isNonPayableBookingState, isSuccessfulPaymentStatus } from '@/lib/booking-payment-outcome'
+import {
+  getCancellationPaymentOutcome,
+  getClientCancellationPaymentOutcome,
+  isNonPayableBookingState,
+  isSuccessfulPaymentStatus,
+} from '@/lib/booking-payment-outcome'
 import {
   getAdminPaymentStateLabel,
   getPaymentReleaseDescription,
@@ -42,15 +47,18 @@ import {
   getCleanerTransferLifecycleLabel,
   hasCleanerPayoutTransferred,
 } from '@/lib/payment-financial-outcome'
+import {
+  getBookingCleaningTypeLabel,
+  getBookingServiceClassificationLabel,
+} from '@/lib/booking-service-labels'
+import {
+  getAdminCancellationRecordSummary,
+  getCancellationLeadTimeLabel,
+  getCancellationPolicyBandLabel,
+} from '@/lib/cancellation-record'
+import { getCancellationOriginLabel } from '@/lib/cancellation-origin'
 import { formatCurrency, formatDate } from '@/lib/utils'
 import type { BookingRead } from '@/types'
-
-const SERVICE_LABELS: Record<string, string> = {
-  standard: 'Standard Clean',
-  deep_clean: 'Deep Clean',
-  end_of_tenancy: 'End of Tenancy',
-  move_in: 'Move-in Clean',
-}
 
 type TimelineEvent = {
   id: string
@@ -92,6 +100,11 @@ function actionEventMoney(metadata: Record<string, unknown> | null | undefined, 
   return Number.isFinite(value) ? value : null
 }
 
+function actionEventString(metadata: Record<string, unknown> | null | undefined, key: string) {
+  const value = metadata?.[key]
+  return typeof value === 'string' ? value : null
+}
+
 function hasActionEvent(booking: BookingRead, ...types: string[]) {
   return (booking.action_events ?? []).some((event) => types.includes(event.type))
 }
@@ -127,7 +140,7 @@ function buildTimeline(booking: BookingRead): TimelineEvent[] {
     id: 'created',
     at: booking.created_at,
     title: 'Booking created',
-    description: `${SERVICE_LABELS[booking.service_type] ?? booking.service_type} requested for ${formatDate(booking.scheduled_start)}.`,
+    description: `${getBookingCleaningTypeLabel(booking)} requested for ${formatDate(booking.scheduled_start)}.`,
   })
 
   addEvent(events, payment?.created_at ? {
@@ -198,6 +211,33 @@ function buildTimeline(booking: BookingRead): TimelineEvent[] {
         description: amount == null
           ? 'Payment was captured for this booking.'
           : `Captured ${formatCurrency(amount)} for this booking.`,
+        tone: 'success',
+      })
+    }
+
+    if (event.type === 'payment_authorisation_released') {
+      const amount = actionEventMoney(metadata, 'amount')
+      const reason = actionEventString(metadata, 'reason')
+      const previousState = actionEventString(metadata, 'payment_state_before')
+      const resultingState = actionEventString(metadata, 'payment_state_after')
+      const actorReason = reason?.includes('cleaner_cancelled')
+        ? 'the cleaner cancelled the booking before capture'
+        : reason?.includes('client_cancelled')
+          ? 'the client cancelled the booking before capture'
+          : 'the booking was cancelled before capture'
+      addEvent(events, {
+        id: event.id,
+        at: event.created_at,
+        title: amount == null
+          ? 'Payment authorisation released'
+          : `Payment authorisation released — ${formatCurrency(amount)}`,
+        description: [
+          `The client was not charged because ${actorReason}.`,
+          previousState || resultingState
+            ? `Payment state: ${previousState ?? 'not recorded'} → ${resultingState ?? 'released'}.`
+            : null,
+          reason ? `Reason: ${reason.replace(/_/g, ' ')}.` : null,
+        ].filter(Boolean).join(' '),
         tone: 'success',
       })
     }
@@ -364,7 +404,7 @@ function buildTimeline(booking: BookingRead): TimelineEvent[] {
     tone: 'danger',
   } : null)
 
-  addEvent(events, paymentReleaseDescription && booking.cancelled_at ? {
+  addEvent(events, paymentReleaseDescription && booking.cancelled_at && !hasActionEvent(booking, 'payment_authorisation_released') ? {
     id: 'payment-released',
     at: booking.cancelled_at,
     title: 'Payment released',
@@ -383,8 +423,9 @@ function buildTimeline(booking: BookingRead): TimelineEvent[] {
   addEvent(events, booking.cancelled_at ? {
     id: 'cancelled',
     at: booking.cancelled_at,
-    title: 'Booking cancelled',
+    title: getCancellationOriginLabel(booking) ?? 'Booking cancelled',
     description: clientCancellationCopy?.actionLogDescription
+      || getAdminCancellationRecordSummary(booking)
       || booking.cancellation_reason
       || 'No cancellation reason was recorded.',
     tone: 'danger',
@@ -475,6 +516,11 @@ export default function AdminBookingDetailPage() {
   const clientName = booking.client?.user?.name?.trim() || 'Client'
   const cleanerName = booking.cleaner?.user?.name?.trim() || 'Cleaner'
   const subtotal = booking.subtotal ?? booking.total_amount - booking.platform_fee
+  const cleaningTypeLabel = getBookingCleaningTypeLabel(booking)
+  const serviceClassificationLabel = getBookingServiceClassificationLabel(booking)
+  const cancellationLeadTimeLabel = getCancellationLeadTimeLabel(booking)
+  const cancellationPolicyBandLabel = getCancellationPolicyBandLabel(booking)
+  const adminCancellationRecordSummary = getAdminCancellationRecordSummary(booking)
   const paymentStateLabel = getAdminPaymentStateLabel(booking)
   const cancellationOutcome = (
     isSuccessfulPaymentStatus(booking.payment?.status) ||
@@ -482,6 +528,7 @@ export default function AdminBookingDetailPage() {
   )
     ? getCancellationPaymentOutcome(booking)
     : null
+  const clientCancellationPaymentOutcome = getClientCancellationPaymentOutcome(booking)
   const useProjectedPaymentLabels = isNonPayableBookingState(booking)
   const payoutSummary = getCleanerPayoutSummary(booking)
   const financialOutcome = getBookingFinancialOutcome(booking)
@@ -524,7 +571,10 @@ export default function AdminBookingDetailPage() {
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="grid min-w-0 gap-3 md:grid-cols-2">
-                <DetailRow label="Service" value={SERVICE_LABELS[booking.service_type] ?? booking.service_type} />
+                <DetailRow label="Cleaning type" value={cleaningTypeLabel} />
+                {serviceClassificationLabel !== cleaningTypeLabel && (
+                  <DetailRow label="Internal service classification" value={serviceClassificationLabel} />
+                )}
                 <DetailRow label="Duration" value={`${booking.duration_hours} hours`} />
                 <DetailRow label="Scheduled start" value={formatDate(booking.scheduled_start)} />
                 <DetailRow label="Scheduled end" value={formatDate(booking.scheduled_end)} />
@@ -619,7 +669,12 @@ export default function AdminBookingDetailPage() {
                 {cancellationOutcome ? (
                   <>
                     <DetailRow label="Amount captured" value={formatCurrency(cancellationOutcome.capturedAmount)} />
-                    <DetailRow label="Refund/released amount" value={formatCurrency(cancellationOutcome.releasedAmount)} />
+                    {clientCancellationPaymentOutcome.amountLabel && clientCancellationPaymentOutcome.amount !== null && (
+                      <DetailRow
+                        label={clientCancellationPaymentOutcome.amountLabel}
+                        value={formatCurrency(clientCancellationPaymentOutcome.amount)}
+                      />
+                    )}
                     <DetailRow label="Cancellation charge" value={formatCurrency(cancellationOutcome.cancellationFee)} />
                     <DetailRow label="Cleaner payout due" value={formatCurrency(cancellationOutcome.cleanerPayoutDue)} />
                     <DetailRow label="Final platform amount retained" value={`${formatCurrency(cancellationOutcome.platformRetainedAmount)} before Stripe fees`} />
@@ -676,10 +731,12 @@ export default function AdminBookingDetailPage() {
                   <DetailRow label="Completed – Released" value={formatDate(booking.payment.transferred_at)} />
                 )}
                 <DetailRow label="Cancelled" value={booking.cancelled_at ? formatDate(booking.cancelled_at) : null} />
+                <DetailRow label="Cancellation lead time" value={cancellationLeadTimeLabel} />
+                <DetailRow label="Cancellation policy band" value={cancellationPolicyBandLabel} />
               </div>
-              {(getAdminClientCancellationCopy(booking)?.stateLabel || booking.cancellation_reason) && (
+              {(getAdminClientCancellationCopy(booking)?.stateLabel || adminCancellationRecordSummary || booking.cancellation_reason) && (
                 <p className="break-words rounded-lg border border-rose-100 bg-rose-50 px-3 py-2 text-sm text-rose-800">
-                  {getAdminClientCancellationCopy(booking)?.stateLabel || booking.cancellation_reason}
+                  {getAdminClientCancellationCopy(booking)?.stateLabel || adminCancellationRecordSummary || booking.cancellation_reason}
                 </p>
               )}
             </CardContent>

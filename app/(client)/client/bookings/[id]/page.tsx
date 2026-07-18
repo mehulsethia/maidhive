@@ -428,6 +428,16 @@ export default function ClientBookingDetailPage() {
   const cancellationOriginLabel = getCancellationOriginLabel(booking)
   const cancellationContext = getClientCancellationContext(booking)
   const paymentSummary = getClientPaymentSummary(booking)
+  const cancelledHeaderTitle = booking.status === 'cancelled'
+    ? cancellationOriginLabel === 'Cancelled by cleaner'
+      ? 'Cleaner cancelled your booking'
+      : cancellationOriginLabel === 'Cancelled by client'
+        ? 'You cancelled this booking'
+        : 'Booking cancelled'
+    : SERVICE_LABELS[booking.service_type]
+  const prominentPaymentResult = booking.status === 'cancelled' && paymentSummary.financialStatusLabel
+    ? paymentSummary.financialStatusLabel
+    : null
   const proposalContext =
     booking.proposal_context ??
     (booking.status === 'pending' ? 'pre_confirmation' : booking.status === 'accepted' || booking.status === 'confirmed' ? 'post_confirmation' : null)
@@ -511,7 +521,7 @@ export default function ClientBookingDetailPage() {
                 MaidHive Booking Detail
               </p>
               <h1 className={`${displayFont.className} text-2xl font-extrabold tracking-[-0.03em] text-white sm:text-3xl lg:text-4xl`}>
-                {SERVICE_LABELS[booking.service_type]}
+                {cancelledHeaderTitle}
               </h1>
               <p className="max-w-xl text-sm text-slate-100/90 sm:text-base">
                 Manage actions, review booking details, and continue chat for this booking.
@@ -544,8 +554,7 @@ export default function ClientBookingDetailPage() {
                       </p>
                     )}
                     <p className={`${displayFont.className} text-xl font-bold tracking-[-0.02em] text-white`}>
-                      {paymentSummary.hasRefund ? 'Final amount paid ' : ''}
-                      {formatCurrency(paymentSummary.finalAmountPaid)}
+                      {prominentPaymentResult ?? `${paymentSummary.hasRefund ? 'Final amount paid ' : ''}${formatCurrency(paymentSummary.finalAmountPaid)}`}
                     </p>
                   </div>
                 </div>

@@ -11,14 +11,19 @@ function formatEuroFromCents(cents: number) {
 
 export function getClientSelfCancellationEmailOutcome(
   policy: ConfirmedCancellationPolicy,
+  paymentStatus?: string | null,
 ) {
+  const isCapturedPayment = ['captured', 'transferred', 'partially_refunded', 'refunded'].includes(String(paymentStatus ?? ''))
+  const refundOrReleaseMessage = isCapturedPayment
+    ? `Refund issued: ${formatEuroFromCents(policy.clientRefundCents)}.`
+    : `You have not been charged. Temporary payment hold released: ${formatEuroFromCents(policy.clientRefundCents)}.`
+
   if (policy.window === 'more_than_24h') {
     return {
       cancellationWindowMessage:
         'You cancelled more than 24 hours before the scheduled start.',
       cancellationChargeMessage: 'No cancellation charge applies.',
-      refundOrReleaseMessage:
-        `Your full payment of ${formatEuroFromCents(policy.clientRefundCents)} will be refunded or released.`,
+      refundOrReleaseMessage,
     }
   }
 
@@ -28,8 +33,7 @@ export function getClientSelfCancellationEmailOutcome(
         'You cancelled between 12 and 24 hours before the scheduled start.',
       cancellationChargeMessage:
         `Cancellation charge: ${formatEuroFromCents(policy.captureCents)}.`,
-      refundOrReleaseMessage:
-        `${formatEuroFromCents(policy.clientRefundCents)} will be refunded or released.`,
+      refundOrReleaseMessage,
     }
   }
 
@@ -38,7 +42,6 @@ export function getClientSelfCancellationEmailOutcome(
       'You cancelled less than 12 hours before the scheduled start.',
     cancellationChargeMessage:
       `Cancellation charge: ${formatEuroFromCents(policy.captureCents)}.`,
-    refundOrReleaseMessage:
-      `You will receive a 50% refund of ${formatEuroFromCents(policy.clientRefundCents)}.`,
+    refundOrReleaseMessage,
   }
 }

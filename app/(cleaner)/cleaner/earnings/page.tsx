@@ -115,7 +115,8 @@ export default function EarningsPage() {
               {settled.map((b, i) => {
                 const payoutSummary = getCleanerPayoutSummary(b)
                 const paymentHistory = classifyCleanerPaymentHistoryBooking(b)
-                const noPayout = paymentHistory?.label === 'No payout'
+                const displayAmount = paymentHistory?.amount ?? payoutSummary.finalCleanerPayout
+                const noPayout = displayAmount <= 0
                 return (
                 <div key={b.id}>
                   <div className="flex min-w-0 flex-col gap-2 py-3 sm:flex-row sm:items-center sm:justify-between">
@@ -127,7 +128,7 @@ export default function EarningsPage() {
                       <p className="break-words text-xs text-muted-foreground">{formatDate(b.scheduled_start)} · {b.duration_hours}h · {b.city}</p>
                     </div>
                     <div className="shrink-0 text-left sm:text-right">
-                      <p className="font-semibold text-green-700">{noPayout ? '' : '+'}{formatCurrency(payoutSummary.finalCleanerPayout)}</p>
+                      <p className="font-semibold text-green-700">{noPayout ? '' : '+'}{formatCurrency(displayAmount)}</p>
                       <p className="text-xs text-muted-foreground">{paymentHistory?.label ?? `${formatCurrency(b.hourly_rate)}/hr`}</p>
                     </div>
                   </div>

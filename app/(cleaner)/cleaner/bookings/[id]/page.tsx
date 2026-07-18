@@ -313,9 +313,11 @@ export default function CleanerBookingDetailPage() {
     if (!booking) return
     setActionLoading('cancel')
     try {
-      const reason = moreThan24HoursAway
+      const reason = cleanerCancellationPolicy?.window === 'more_than_24h'
         ? 'Cancelled by cleaner more than 24 hours before scheduled start'
-        : 'Cancelled by cleaner within 24 hours of scheduled start'
+        : cleanerCancellationPolicy?.window === 'between_12h_and_24h'
+          ? 'Cancelled by cleaner between 12 and 24 hours before scheduled start'
+          : 'Cancelled by cleaner under 12 hours before scheduled start'
       const res = await bookingsApi.cancel(booking.id, reason, { cancelRestOfToday })
       const restOfTodayCancelledCount = Number((res.data as any)?.rest_of_today_cancelled_count ?? 0)
       toast.success(
@@ -398,7 +400,13 @@ export default function CleanerBookingDetailPage() {
   const bookingEndsAtMs = new Date(booking.scheduled_end).getTime()
   const millisUntilStart = bookingStartsAtMs - Date.now()
   const moreThan24HoursAway = Number.isFinite(bookingStartsAtMs) && millisUntilStart > RESCHEDULE_CUTOFF_MS
-  const cancellationConfirmation = getCleanerCancellationConfirmationCopy(moreThan24HoursAway)
+  const cleanerCancellationPolicy = computeConfirmedCancellationPolicy({
+    scheduledStart: booking.scheduled_start,
+    totalAmount: booking.total_amount,
+    subtotal: booking.subtotal ?? Math.max(Number(booking.total_amount ?? 0) - Number(booking.platform_fee ?? 0), 0),
+    platformFee: booking.platform_fee,
+  })
+  const cancellationConfirmation = getCleanerCancellationConfirmationCopy(cleanerCancellationPolicy?.window)
   const startWindowExpired = Number.isFinite(bookingEndsAtMs) && Date.now() > bookingEndsAtMs + 24 * 60 * 60 * 1000
   const canStartJobNow = Number.isFinite(bookingStartsAtMs) && Date.now() >= bookingStartsAtMs - START_JOB_EARLY_WINDOW_MS && !startWindowExpired
   const canReportProblem = ['in_progress', 'completed'].includes(booking.status) &&

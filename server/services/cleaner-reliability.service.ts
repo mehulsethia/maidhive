@@ -163,6 +163,7 @@ export const cleanerReliabilityService = {
       cancellationRate,
       verifiedJobCount,
       onTimeRate,
+      activeStrikeCount: activeStrikes.length,
       cancellationRecoveryComplete,
       noShowRecoveryComplete,
     })

@@ -8,6 +8,14 @@ import {
 } from '@/lib/client-cancellation-context'
 import { getClientPaymentSummary } from '@/lib/client-payment-summary'
 import { getClientTotalSpent } from '@/lib/client-spend'
+import {
+  getBookingCleaningTypeLabel,
+  getBookingServiceClassificationLabel,
+} from '@/lib/booking-service-labels'
+import {
+  getAdminCancellationRecordSummary,
+  getCancellationPolicyBandLabel,
+} from '@/lib/cancellation-record'
 import type { BookingRead } from '@/types'
 
 function cancelledBooking(overrides: Partial<BookingRead> = {}): BookingRead {
@@ -133,5 +141,54 @@ describe('client account display rules', () => {
       dashboardRefundLabel: 'Refunded',
       financialStatusLabel: 'Refunded',
     })
+  })
+
+  it('summarises released authorisations as not charged for cancelled bookings', () => {
+    const summary = getClientPaymentSummary({
+      ...cancelledBooking({ cancelled_by: 'cleaner_user' }),
+      total_amount: 33,
+      payment: {
+        id: 'payment_released_hold',
+        status: 'released',
+        amount: 33,
+        refund_reason: 'payment_authorisation_released',
+      },
+    })
+
+    expect(summary).toMatchObject({
+      originalTotal: 33,
+      refundAmount: 0,
+      finalAmountPaid: 0,
+      dashboardRefundLabel: 'You have not been charged',
+      financialStatusLabel: 'You have not been charged',
+    })
+    expect(summary.cancellationPaymentOutcome).toMatchObject({
+      primaryMessage: 'You have not been charged.',
+      amountLabel: 'Temporary payment hold released',
+      amount: 33,
+    })
+  })
+
+  it('shows the client selected cleaning type before internal service classification', () => {
+    const booking = cancelledBooking({
+      service_type: 'standard',
+      special_instructions: 'Job type: One-off clean\nCleaning supplies: cleaner_brings',
+    })
+
+    expect(getBookingCleaningTypeLabel(booking)).toBe('One-off clean')
+    expect(getBookingServiceClassificationLabel(booking)).toBe('Standard Clean')
+  })
+
+  it('summarises cleaner cancellation actor and precise 12-24 hour policy band for admin records', () => {
+    const booking = cancelledBooking({
+      cancelled_by: 'cleaner_user',
+      scheduled_start: '2026-07-17T11:30:00.000Z',
+      cancelled_at: '2026-07-16T20:00:00.000Z',
+    })
+
+    expect(getCancellationPolicyBandLabel(booking)).toBe('Cleaner cancellation 12–24 hours before start')
+    expect(getAdminCancellationRecordSummary(booking)).toContain('Cancelled by cleaner')
+    expect(getAdminCancellationRecordSummary(booking)).toContain('15 hours 30 minutes before scheduled start')
+    expect(getAdminCancellationRecordSummary(booking)).toContain('Policy band: Cleaner cancellation 12–24 hours before start')
   })
 })

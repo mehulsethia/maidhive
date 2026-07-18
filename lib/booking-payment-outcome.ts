@@ -10,6 +10,14 @@ export type CancellationPaymentOutcome = {
   platformRetainedAmount: number
 }
 
+export type ClientCancellationPaymentOutcome = {
+  kind: 'hold_released' | 'refund_issued' | 'no_payment_taken' | 'none'
+  primaryMessage: string
+  amountLabel: string | null
+  amount: number | null
+  compactMessage: string
+}
+
 function money(value: unknown) {
   const numeric = Number(value ?? 0)
   return Number.isFinite(numeric) ? numeric : 0
@@ -17,6 +25,15 @@ function money(value: unknown) {
 
 function roundMoney(value: number) {
   return Math.round(value * 100) / 100
+}
+
+function formatEuro(value: number) {
+  return money(value).toLocaleString('en-IE', {
+    style: 'currency',
+    currency: 'EUR',
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  })
 }
 
 function normalizedCancellationContext(booking: BookingRead) {
@@ -121,5 +138,61 @@ export function getCancellationPaymentOutcome(booking: BookingRead): Cancellatio
     cancellationFee,
     cleanerPayoutDue: roundMoney(cleanerPayoutDue),
     platformRetainedAmount: roundMoney(Math.max(0, roundedCaptured - cleanerPayoutDue)),
+  }
+}
+
+export function getClientCancellationPaymentOutcome(booking: BookingRead): ClientCancellationPaymentOutcome {
+  if (booking.status !== 'cancelled') {
+    return {
+      kind: 'none',
+      primaryMessage: '',
+      amountLabel: null,
+      amount: null,
+      compactMessage: '',
+    }
+  }
+
+  const originalAmount = money(booking.payment?.amount ?? booking.total_amount)
+  const status = String(booking.payment?.status ?? '')
+
+  if (status === 'released') {
+    return {
+      kind: 'hold_released',
+      primaryMessage: 'You have not been charged.',
+      amountLabel: 'Temporary payment hold released',
+      amount: originalAmount,
+      compactMessage: 'You have not been charged',
+    }
+  }
+
+  if (['captured', 'transferred', 'partially_refunded', 'refunded'].includes(status)) {
+    const refundAmount = Math.min(originalAmount, Math.max(0, money(booking.payment?.refund_amount)))
+    if (refundAmount > 0) {
+      return {
+        kind: 'refund_issued',
+        primaryMessage: `Refund issued: ${formatEuro(refundAmount)}`,
+        amountLabel: 'Refund issued',
+        amount: refundAmount,
+        compactMessage: `Refund issued: ${formatEuro(refundAmount)}`,
+      }
+    }
+  }
+
+  if (!isSuccessfulPaymentStatus(status)) {
+    return {
+      kind: 'no_payment_taken',
+      primaryMessage: 'No payment was taken.',
+      amountLabel: null,
+      amount: null,
+      compactMessage: 'No payment was taken',
+    }
+  }
+
+  return {
+    kind: 'none',
+    primaryMessage: '',
+    amountLabel: null,
+    amount: null,
+    compactMessage: '',
   }
 }

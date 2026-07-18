@@ -120,6 +120,13 @@ describe('Cleaner payment history mapping', () => {
       cancellation_reason: 'Client no-show confirmed',
       payment: { id: 'p10', status: 'transferred', cleaner_payout: 20, transferred_at: new Date().toISOString() },
     })
+    const cleanerCancelled = booking({
+      id: 'booking_cleaner_cancelled',
+      status: 'cancelled',
+      cancelled_by: 'cleaner_user',
+      cleaner: { id: 'cleaner_1', user: { id: 'cleaner_user' } as any },
+      payment: { id: 'p-cleaner-cancelled', status: 'released', cleaner_payout: 0 },
+    })
 
     expect(classifyCleanerPaymentHistoryBooking(noPayout)).toMatchObject({
       label: 'Cancelled - no payout due',
@@ -138,6 +145,13 @@ describe('Cleaner payment history mapping', () => {
       tone: 'ok',
     })
     expect(classifyCleanerPaymentHistoryBooking(noShowReleased)?.paymentType).toBe('No-show compensation')
+    expect(classifyCleanerPaymentHistoryBooking(cleanerCancelled)).toMatchObject({
+      paymentType: 'Booking cancellation',
+      label: 'No payout — cancelled by cleaner',
+      amount: 0,
+      tone: 'warn',
+    })
+    expect(getReleasedCleanerEarnings([cleanerCancelled])).toBe(0)
   })
 
   it('dedupes bookings and returns history sorted by scheduled start desc', () => {

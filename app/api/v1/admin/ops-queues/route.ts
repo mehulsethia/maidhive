@@ -3,6 +3,7 @@ import { db } from '@/server/db'
 import { ok } from '@/server/response'
 import { addUtcDays, endOfUtcDate, startOfUtcDate, todayUtcDateOnly } from '@/lib/datetime'
 import { getAdminDisputeQueueStage } from '@/lib/admin-dispute-queue'
+import { classifyAdminCancellationQueueItem } from '@/lib/admin-cancellation-severity'
 
 function bestEffortName(name?: string | null, email?: string | null): string {
   const trimmed = name?.trim()
@@ -111,8 +112,11 @@ export const GET = requireAdmin(async () => {
           status: 'cancelled',
           cancelledAt: { gte: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000) },
         },
+        include: {
+          cancelledByUser: { select: { role: true } },
+        },
         orderBy: { cancelledAt: 'desc' },
-        take: 10,
+        take: 20,
       }),
       db.dispute.findMany({
         where: {
@@ -149,24 +153,55 @@ export const GET = requireAdmin(async () => {
     ])
 
   const cancellationNoShowItems = [
-    ...cancelledBookings.map((booking) => ({
-      id: `cancel-${booking.id}`,
-      category: 'cancellation' as const,
-      booking_id: booking.id,
-      status: booking.status,
-      reason: booking.cancellationReason ?? 'Cancelled',
-      occurred_at: (booking.cancelledAt ?? booking.updatedAt).toISOString(),
-    })),
-    ...noShowDisputes.map((dispute) => ({
-      id: `noshow-${dispute.id}`,
-      category: 'no_show' as const,
-      booking_id: dispute.bookingId,
-      status: dispute.status,
-      reason: dispute.reason,
-      occurred_at: dispute.createdAt.toISOString(),
-    })),
+    ...cancelledBookings.map((booking) => {
+      const occurredAt = booking.cancelledAt ?? booking.updatedAt
+      const classification = classifyAdminCancellationQueueItem({
+        category: 'cancellation',
+        reason: booking.cancellationReason,
+        cancelledByRole: booking.cancelledByUser?.role,
+        scheduledStart: booking.scheduledStart,
+        occurredAt,
+      })
+      return {
+        id: `cancel-${booking.id}`,
+        category: 'cancellation' as const,
+        booking_id: booking.id,
+        status: booking.status,
+        reason: booking.cancellationReason ?? 'Cancelled',
+        occurred_at: occurredAt.toISOString(),
+        label: classification.label,
+        severity: classification.severity,
+        sort_priority: classification.sortPriority,
+        lead_time_hours: classification.leadTimeHours,
+      }
+    }),
+    ...noShowDisputes.map((dispute) => {
+      const classification = classifyAdminCancellationQueueItem({
+        category: 'no_show',
+        reason: dispute.reason,
+        issueType: dispute.issueType,
+        reporterRole: dispute.reporterRole,
+        occurredAt: dispute.createdAt,
+      })
+      return {
+        id: `noshow-${dispute.id}`,
+        category: 'no_show' as const,
+        booking_id: dispute.bookingId,
+        status: dispute.status,
+        reason: dispute.reason,
+        occurred_at: dispute.createdAt.toISOString(),
+        label: classification.label,
+        severity: classification.severity,
+        sort_priority: classification.sortPriority,
+        lead_time_hours: classification.leadTimeHours,
+      }
+    }),
   ]
-    .sort((a, b) => new Date(b.occurred_at).getTime() - new Date(a.occurred_at).getTime())
+    .sort(
+      (a, b) =>
+        b.sort_priority - a.sort_priority ||
+        new Date(b.occurred_at).getTime() - new Date(a.occurred_at).getTime(),
+    )
     .slice(0, 12)
 
   const pendingCleanerIds = pendingCleaners.map((cleaner) => cleaner.id)

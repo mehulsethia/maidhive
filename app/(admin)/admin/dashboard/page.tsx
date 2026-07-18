@@ -24,6 +24,26 @@ import { formatDate } from '@/lib/utils'
 import { setupVisiblePolling } from '@/lib/visible-polling'
 import type { AdminOpsQueues, AdminStats } from '@/types'
 
+const CANCELLATION_SEVERITY_BADGE: Record<
+  AdminOpsQueues['cancellations_no_shows']['items'][number]['severity'],
+  'outline' | 'secondary' | 'warning' | 'destructive'
+> = {
+  low: 'outline',
+  medium: 'secondary',
+  high: 'warning',
+  critical: 'destructive',
+}
+
+const CANCELLATION_SEVERITY_CARD_CLASS: Record<
+  AdminOpsQueues['cancellations_no_shows']['items'][number]['severity'],
+  string
+> = {
+  low: 'border-slate-200 bg-slate-50/60',
+  medium: 'border-sky-200 bg-sky-50/70',
+  high: 'border-amber-300 bg-amber-50/80',
+  critical: 'border-red-300 bg-red-50/80',
+}
+
 function KpiCard({
   label,
   value,
@@ -370,15 +390,23 @@ export default function AdminDashboard() {
         >
           {queues?.cancellations_no_shows.items.length ? (
             queues.cancellations_no_shows.items.map((incident) => (
-              <div key={incident.id} className="rounded-xl border border-slate-200 bg-slate-50/60 p-3">
+              <div
+                key={incident.id}
+                className={`rounded-xl border p-3 ${CANCELLATION_SEVERITY_CARD_CLASS[incident.severity]}`}
+              >
                 <div className="flex items-center justify-between gap-2">
-                  <Badge variant={incident.category === 'no_show' ? 'warning' : 'secondary'}>
-                    {incident.category === 'no_show' ? 'No-show' : 'Cancellation'}
+                  <Badge variant={CANCELLATION_SEVERITY_BADGE[incident.severity]}>
+                    {incident.label}
                   </Badge>
                   <p className="text-xs font-mono text-muted-foreground">#{incident.booking_id.slice(0, 8)}</p>
                 </div>
                 <p className="mt-1 line-clamp-1 text-sm text-slate-800">{incident.reason}</p>
-                <p className="text-xs text-muted-foreground">{formatDate(incident.occurred_at)}</p>
+                <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted-foreground">
+                  <span>{formatDate(incident.occurred_at)}</span>
+                  {incident.lead_time_hours !== null && incident.lead_time_hours !== undefined && (
+                    <span>{Math.max(incident.lead_time_hours, 0).toFixed(1)}h before start</span>
+                  )}
+                </div>
               </div>
             ))
           ) : (

@@ -75,6 +75,7 @@ export function getCleanerTransferLifecycleLabel(payment?: PaymentLike | null) {
 }
 
 export function getBookingFinancialOutcome(booking: BookingFinancialInput | BookingRead | null | undefined) {
+  const paymentStatus = String(booking?.payment?.status ?? '')
   const originalClientPayment = money(booking?.payment?.amount ?? booking?.total_amount)
   const originalCleanerPayout = money(booking?.cleaner_payout)
   const originalPlatformFee = money(booking?.platform_fee)
@@ -83,13 +84,14 @@ export function getBookingFinancialOutcome(booking: BookingFinancialInput | Book
     Math.max(0, money(booking?.payment?.refund_amount ?? booking?.dispute?.refund_amount)),
   )
   const fullRefund =
-    String(booking?.payment?.status ?? '') === 'refunded' ||
+    paymentStatus === 'refunded' ||
     booking?.dispute?.resolution_type === 'full_refund' ||
     (originalClientPayment > 0 && refundToClient >= originalClientPayment)
-  const finalClientAmountPaid = fullRefund
+  const noClientPaymentTaken = paymentStatus === 'released' || paymentStatus === 'failed'
+  const finalClientAmountPaid = fullRefund || noClientPaymentTaken
     ? 0
     : roundMoney(Math.max(0, originalClientPayment - refundToClient))
-  const finalCleanerPayout = fullRefund
+  const finalCleanerPayout = fullRefund || noClientPaymentTaken
     ? 0
     : Math.max(0, money(booking?.payment?.cleaner_payout ?? booking?.cleaner_payout))
   const finalMaidHiveRetainedFee = roundMoney(Math.max(0, finalClientAmountPaid - finalCleanerPayout))
@@ -97,11 +99,13 @@ export function getBookingFinancialOutcome(booking: BookingFinancialInput | Book
   const transferred = transferLifecycle === 'transferred'
 
   let financialStatus = 'Payment pending'
-  if (fullRefund) financialStatus = 'Fully refunded'
-  else if (refundToClient > 0) financialStatus = 'Partially refunded'
-  else if (transferred) financialStatus = 'Payout transferred'
-  else if (finalCleanerPayout > 0) financialStatus = 'Awaiting release'
-  else if (originalClientPayment > 0) financialStatus = 'No payout due'
+  if (booking?.dispute?.status === 'open' || booking?.dispute?.status === 'under_review') financialStatus = 'Dispute in progress'
+  else if (paymentStatus === 'released') financialStatus = 'Payment authorisation released'
+  else if (paymentStatus === 'failed') financialStatus = 'Payment failed'
+  else if (fullRefund) financialStatus = 'Refund issued'
+  else if (refundToClient > 0) financialStatus = 'Partial refund issued'
+  else if (paymentStatus === 'captured' || transferred) financialStatus = 'Payment completed'
+  else if (paymentStatus === 'authorized') financialStatus = 'Payment authorised'
 
   return {
     originalClientPayment: roundMoney(originalClientPayment),

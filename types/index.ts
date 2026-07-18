@@ -512,15 +512,24 @@ export interface AdminCleaner {
   reliability?: {
     is_super_cleaner: boolean
     completed_released_count: number
+    average_rating: number | null
     cancellation_rate: number | null
     cancellation_numerator: number
     cancellation_denominator: number
     last_minute_incidents_30d: number
     no_shows_60d: number
     verified_job_count: number
+    on_time_rate: number | null
     on_time_percentage: number | null
     active_strike_count: number
     criteria: Record<string, boolean>
+    eligibility_checklist: Array<{
+      key: string
+      label: string
+      value: string
+      requirement: string
+      met: boolean
+    }>
     recovery_cancellation_started_at?: string | null
     recovery_no_show_started_at?: string | null
     last_calculated_at: string
@@ -602,6 +611,10 @@ export interface AdminOpsQueueItemCancellationNoShow {
   status: string
   reason: string
   occurred_at: string
+  label: string
+  severity: 'low' | 'medium' | 'high' | 'critical'
+  sort_priority: number
+  lead_time_hours?: number | null
 }
 
 export interface AdminOpsQueues {

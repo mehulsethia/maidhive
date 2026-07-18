@@ -247,6 +247,18 @@ test.describe('F20 commercial and lifecycle responsive regression @smoke', () =>
           authorized_at: isoHoursFromNow(-72),
           created_at: isoHoursFromNow(-74),
         },
+        action_events: [{
+          id: 'release-event-responsive',
+          type: 'payment_authorisation_released',
+          actor_role: 'client',
+          metadata: {
+            amount: 8,
+            payment_state_before: 'authorized',
+            payment_state_after: 'released',
+            reason: 'client_cancelled_more_than_24h_before_capture',
+          },
+          created_at: cancelledAt,
+        }],
       })
 
       await page.route(`**/api/v1/admin/bookings/${RESPONSIVE_BOOKING_ID}`, (route) => fulfill(route, adminBooking))
@@ -257,12 +269,9 @@ test.describe('F20 commercial and lifecycle responsive regression @smoke', () =>
 
         await expect(page.getByTestId('admin-payment-state').getByText('payment released', { exact: true })).toBeVisible()
         const actionLog = page.getByTestId('admin-booking-action-log')
-        await expect(actionLog.getByText('Payment released', { exact: true })).toBeVisible()
-        await expect(actionLog.getByText(
-          'Client payment authorisation was released because the client cancelled more than 24 hours before the scheduled start.',
-          { exact: true },
-        )).toBeVisible()
-        await expect(page.getByText('No cancellation charge', { exact: true })).toBeVisible()
+        await expect(actionLog.getByText('Payment authorisation released — €8.00', { exact: true })).toBeVisible()
+        await expect(actionLog.getByText(/The client was not charged because the client cancelled the booking before capture/)).toBeVisible()
+        await expect(page.getByText('You have not been charged.', { exact: true })).toBeVisible()
         await expectClientProvidedSupplies(page)
         await expectNoHorizontalOverflow(page, `admin payment release at ${viewport.name}`)
       }
@@ -323,7 +332,7 @@ test.describe('F20 commercial and lifecycle responsive regression @smoke', () =>
         await page.setViewportSize(viewport)
         await page.goto('/client/bookings', { waitUntil: 'domcontentloaded' })
         await expect(page.getByText('Cancelled by cleaner', { exact: true })).toBeVisible()
-        await expect(page.getByText('No cancellation charge', { exact: true })).toBeVisible()
+        await expect(page.getByText('You have not been charged', { exact: true })).toBeVisible()
         await expectNoHorizontalOverflow(page, `client cancelled card at ${viewport.name}`)
       }
     })
@@ -405,7 +414,7 @@ test.describe('F20 commercial and lifecycle responsive regression @smoke', () =>
         await page.getByRole('button', { name: 'Cancel booking', exact: true }).click()
 
         const dialog = page.getByTestId('cleaner-cancellation-confirmation')
-        await expect(dialog.getByText('The client will receive a full refund.')).toBeVisible()
+        await expect(dialog.getByText('The client will receive a full refund for this booking.')).toBeVisible()
         await expect(dialog.getByText('You will not receive any payout for this booking.')).toBeVisible()
         await expect(dialog.getByRole('button', { name: 'Keep booking' })).toBeVisible()
         await expectClientProvidedSupplies(page)
@@ -421,7 +430,9 @@ test.describe('F20 commercial and lifecycle responsive regression @smoke', () =>
       await page.goto(`/cleaner/bookings/${RESPONSIVE_BOOKING_ID}`, { waitUntil: 'domcontentloaded' })
       await page.getByRole('button', { name: 'Cancel booking', exact: true }).click()
       const lateDialog = page.getByTestId('cleaner-cancellation-confirmation')
-      await expect(lateDialog.getByText(/compensation in accordance with MaidHive’s cancellation policy/)).toBeVisible()
+      await expect(lateDialog.getByText(/12–24-hour cancellation history/)).toBeVisible()
+      await expect(lateDialog.getByText(/It will not create a strike/)).toBeVisible()
+      await expect(lateDialog.getByText('The client will receive a full refund for this booking.')).toBeVisible()
       await expect(lateDialog.getByText(/Super Cleaner eligibility/)).toBeVisible()
       await expectNoHorizontalOverflow(page, 'late cleaner cancellation modal at mobile')
     })
@@ -460,8 +471,8 @@ test.describe('F20 commercial and lifecycle responsive regression @smoke', () =>
         await page.setViewportSize(viewport)
         await page.goto('/cleaner/bookings', { waitUntil: 'domcontentloaded' })
         await expect(page.getByTestId('cleaner-cancellation-source').getByText('Cancelled by you')).toBeVisible()
-        await expect(page.getByText('No cancellation charge', { exact: true })).toBeVisible()
-        await expect(page.getByText('No cleaner compensation')).toBeVisible()
+        await expect(page.getByText('Final payout: €0.00', { exact: true })).toBeVisible()
+        await expect(page.getByText('No cancellation charge', { exact: true })).toHaveCount(0)
         await expectClientProvidedSupplies(page)
         await expectNoHorizontalOverflow(page, `cleaner cancelled card at ${viewport.name}`)
       }

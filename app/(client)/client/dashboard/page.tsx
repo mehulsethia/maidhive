@@ -381,7 +381,11 @@ export default function ClientDashboardPage() {
                           {proposalSummary}
                         </p>
                       )}
-                      {paymentSummary.hasRefund && paymentSummary.dashboardRefundLabel && (
+                      {booking.status === 'cancelled' && paymentSummary.dashboardRefundLabel ? (
+                        <p className="text-xs font-semibold text-emerald-700">
+                          {paymentSummary.dashboardRefundLabel}
+                        </p>
+                      ) : paymentSummary.hasRefund && paymentSummary.dashboardRefundLabel && (
                         <p className="text-xs font-semibold text-emerald-700">
                           Completed · {paymentSummary.dashboardRefundLabel} {formatCurrency(paymentSummary.refundAmount)}
                         </p>

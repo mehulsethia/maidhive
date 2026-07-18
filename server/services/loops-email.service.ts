@@ -363,6 +363,7 @@ export const loopsEmailService = {
     fullName: string
     date: Date
     bookingId: string
+    paymentOutcomeMessage?: string
   }) {
     return sendTransactionalEmail({
       transactionalId: CLIENT_BOOKING_CANCELLED_BY_CLEANER_TRANSACTIONAL_ID,
@@ -370,6 +371,7 @@ export const loopsEmailService = {
       dataVariables: {
         client_name: args.fullName,
         booking_date: formatBookingDate(args.date),
+        payment_outcome_message: args.paymentOutcomeMessage ?? '',
         booking_link: `${appUrl()}/client/bookings/${args.bookingId}`,
       },
     })

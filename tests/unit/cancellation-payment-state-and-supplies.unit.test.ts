@@ -69,7 +69,7 @@ describe('normal cancellation payment releases', () => {
       createElement(CancellationPaymentBreakdown, { booking, compact: true, audience: 'cleaner' }),
     )
 
-    expect(clientMarkup).toContain('No cancellation charge')
+    expect(clientMarkup).toContain('You have not been charged')
     expect(clientMarkup).not.toContain('€0.00')
     expect(cleanerMarkup).not.toContain('cancellation charge')
     expect(cleanerMarkup).toContain('No cleaner compensation')
@@ -105,8 +105,9 @@ describe('normal cancellation payment releases', () => {
       createElement(CancellationPaymentBreakdown, { booking, compact: true, audience: 'cleaner' }),
     )
 
-    expect(cleanerMarkup).toContain('No cancellation charge')
-    expect(cleanerMarkup).toContain('No cleaner compensation')
+    expect(cleanerMarkup).toContain('Cancelled by you')
+    expect(cleanerMarkup).toContain('Final payout: €0.00')
+    expect(cleanerMarkup).not.toContain('No cancellation charge')
   })
 })
 

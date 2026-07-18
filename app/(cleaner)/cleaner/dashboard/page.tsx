@@ -25,6 +25,8 @@ import { setupVisiblePolling } from '@/lib/visible-polling'
 import { getCleanerEarningsLabel } from '@/lib/cleaner-earnings-label'
 import { getCleanerPayoutSummary } from '@/lib/cleaner-payout'
 import { isFinalNoCleanerPayoutOutcome } from '@/lib/payment-financial-outcome'
+import { getCleanerCancellationOriginLabel } from '@/lib/cancellation-origin'
+import { getCancellationPaymentOutcome } from '@/lib/booking-payment-outcome'
 import { toast } from 'sonner'
 
 const REQUEST_STATUSES: BookingStatus[] = ['pending']
@@ -44,6 +46,28 @@ function resolveJobTypeTitle(booking: BookingRead) {
   const snapshotJobType = snapshotMatch?.[1]?.trim()
   if (snapshotJobType) return snapshotJobType
   return SERVICE_LABELS[booking.service_type] ?? booking.service_type
+}
+
+function eventMs(value?: string | null) {
+  const ms = value ? new Date(value).getTime() : Number.NaN
+  return Number.isFinite(ms) ? ms : 0
+}
+
+function latestCleanerActivityMs(booking: BookingRead) {
+  const actionEventMs = Math.max(
+    0,
+    ...(booking.action_events ?? []).map((event) => eventMs(event.created_at)),
+  )
+  return Math.max(
+    actionEventMs,
+    eventMs(booking.dispute?.resolved_at),
+    eventMs(booking.payment?.transferred_at),
+    eventMs(booking.completed_at),
+    eventMs(booking.cancelled_at),
+    eventMs(booking.confirmed_at),
+    eventMs(booking.accepted_at),
+    eventMs(booking.created_at),
+  )
 }
 
 export default function CleanerDashboardPage() {
@@ -177,7 +201,7 @@ export default function CleanerDashboardPage() {
       .sort(compareBookingsByOperationalPriority)
     const activeJobs = bookings.filter((b) => ACTIVE_STATUSES.includes(b.status) || UPCOMING_STATUSES.includes(b.status))
     const completed = bookings.filter((b) => COMPLETED_STATUSES.includes(b.status))
-    const prioritizedRecent = [...bookings].sort(compareBookingsByOperationalPriority)
+    const prioritizedRecent = [...bookings].sort((a, b) => latestCleanerActivityMs(b) - latestCleanerActivityMs(a))
 
     return {
       requests,
@@ -571,7 +595,12 @@ export default function CleanerDashboardPage() {
                   ? `${proposalActor} requested Amend Start Time: ${formatDate(b.scheduled_start)} → ${formatDate(b.proposed_start ?? b.scheduled_start)}`
                   : `${proposalActor} proposed: ${formatDate(b.scheduled_start)} → ${formatDate(b.proposed_start ?? b.scheduled_start)}`
                 const payoutSummary = getCleanerPayoutSummary(b)
+                const cancellationOutcome = getCancellationPaymentOutcome(b)
+                const displayFinalPayout = b.status === 'cancelled'
+                  ? (cancellationOutcome?.cleanerPayoutDue ?? Number(b.payment?.cleaner_payout ?? 0))
+                  : payoutSummary.finalCleanerPayout
                 const noPayoutFinalized = isFinalNoCleanerPayoutOutcome(b)
+                const cancellationLabel = getCleanerCancellationOriginLabel(b)
                 const earningsLabel = getCleanerEarningsLabel({
                   status: b.status,
                   paymentStatus: b.payment?.status,
@@ -594,23 +623,29 @@ export default function CleanerDashboardPage() {
                       <p className="mt-2 text-xs font-semibold text-blue-700">{proposalSummary}</p>
                     )}
                     <div className="mt-2 flex items-center justify-between">
-                      <BookingStatusBadge
-                        status={b.status}
-                        paymentStatus={b.payment?.status}
-                        transferredAt={b.payment?.transferred_at}
-                        scheduledEnd={b.scheduled_end}
-                        proposalBy={b.proposal_by}
-                        showPaymentRequiredForUnpaid={false}
-                        audience="cleaner"
-                        cleanerNoPayout={noPayoutFinalized}
-                      />
+                      {cancellationLabel ? (
+                        <span className="inline-flex rounded-full border border-rose-200 bg-rose-50 px-2 py-0.5 text-[11px] font-semibold text-rose-700">
+                          {cancellationLabel}
+                        </span>
+                      ) : (
+                        <BookingStatusBadge
+                          status={b.status}
+                          paymentStatus={b.payment?.status}
+                          transferredAt={b.payment?.transferred_at}
+                          scheduledEnd={b.scheduled_end}
+                          proposalBy={b.proposal_by}
+                          showPaymentRequiredForUnpaid={false}
+                          audience="cleaner"
+                          cleanerNoPayout={noPayoutFinalized}
+                        />
+                      )}
                       <p className={`max-w-[11rem] text-right font-semibold leading-tight ${
                         activeDispute || b.status === 'disputed'
                           ? 'text-xs text-amber-700 sm:text-sm'
                           : 'text-sm text-slate-900'
                       }`}>
-                        {noPayoutFinalized ? 'Final payout: ' : activeDispute || b.status === 'disputed' ? `${earningsLabel} ` : ''}
-                        {formatCurrency(payoutSummary.finalCleanerPayout)}
+                        {b.status === 'cancelled' || noPayoutFinalized ? 'Final payout: ' : activeDispute || b.status === 'disputed' ? `${earningsLabel} ` : ''}
+                        {formatCurrency(displayFinalPayout)}
                       </p>
                     </div>
                   </Link>

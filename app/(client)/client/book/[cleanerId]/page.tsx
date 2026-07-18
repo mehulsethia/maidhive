@@ -443,7 +443,7 @@ function BookingSummary({
           {showBreakdown && (
             <>
               <div className="flex justify-between items-center">
-                <span className="text-slate-500">Service ({duration}h)</span>
+                <span className="text-slate-500">Cleaning time ({duration}h)</span>
                 <span className="font-semibold text-slate-900">{formatCurrency(serviceCost)}</span>
               </div>
               <div className="flex justify-between items-center">
@@ -1789,6 +1789,8 @@ export default function BookingFlowPage() {
   const cleanerNeedsClientSupplies = cleaner.cleaning_supplies === 'client_supplies'
   const effectiveSuppliesProvider = cleanerNeedsClientSupplies ? 'client_provides' : suppliesProvider
   const bookingSnapshot = booking ? parseBookingSnapshotDetails(booking.special_instructions) : null
+  const bookingCleaningTypeLabel = bookingSnapshot?.jobType || (booking ? SERVICE_LABELS[booking.service_type] ?? booking.service_type : 'Not provided')
+  const bookingServiceClassificationLabel = booking ? SERVICE_LABELS[booking.service_type] ?? booking.service_type : null
 
   return (
     <>
@@ -2522,10 +2524,16 @@ export default function BookingFlowPage() {
                 <div className="mx-auto max-w-sm text-left rounded-xl border border-slate-200 p-4 space-y-3">
                   <h3 className="font-semibold text-slate-900">Booking Details</h3>
                   <Separator />
-                  <div className="flex justify-between text-sm">
-                    <span className="text-slate-500">Service:</span>
-                    <span className="font-medium text-slate-900">{SERVICE_LABELS[booking.service_type] ?? booking.service_type}</span>
+                  <div className="flex justify-between gap-3 text-sm">
+                    <span className="text-slate-500">Cleaning type:</span>
+                    <span className="text-right font-medium text-slate-900">{bookingCleaningTypeLabel}</span>
                   </div>
+                  {bookingServiceClassificationLabel && bookingServiceClassificationLabel !== bookingCleaningTypeLabel && (
+                    <div className="flex justify-between gap-3 text-sm">
+                      <span className="text-slate-500">Internal service classification:</span>
+                      <span className="text-right font-medium text-slate-900">{bookingServiceClassificationLabel}</span>
+                    </div>
+                  )}
                   <div className="flex justify-between text-sm">
                     <span className="text-slate-500">Status:</span>
                     <span className="font-medium text-slate-900 capitalize">

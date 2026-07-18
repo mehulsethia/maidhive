@@ -4,6 +4,16 @@ import { cleanerRepo } from '@/server/repositories/cleaner.repo'
 import { db } from '@/server/db'
 import { ok } from '@/server/response'
 import { deriveCleanerLifecycleStatus } from '@/lib/cleaner-status'
+import { buildSuperCleanerEligibilityChecklist } from '@/lib/super-cleaner'
+
+function reliabilityCriterionMet(criteria: unknown, key: string) {
+  return Boolean(
+    criteria &&
+      typeof criteria === 'object' &&
+      !Array.isArray(criteria) &&
+      (criteria as Record<string, unknown>)[key],
+  )
+}
 
 export const GET = requireAdmin(async (req: NextRequest) => {
   const status = req.nextUrl.searchParams.get('status') ?? undefined
@@ -67,6 +77,42 @@ export const GET = requireAdmin(async (req: NextRequest) => {
       profileComplete: cleaner.profileComplete,
     })
     const completedJobs = completedJobsByCleanerId.get(cleaner.id) ?? 0
+    const reliabilitySnapshot = cleaner.reliabilitySnapshot
+    const cancellationRate =
+      reliabilitySnapshot?.cancellationRate === null || !reliabilitySnapshot
+        ? null
+        : Number(reliabilitySnapshot.cancellationRate)
+    const averageRating =
+      reliabilitySnapshot?.averageRating === null || !reliabilitySnapshot
+        ? null
+        : Number(reliabilitySnapshot.averageRating)
+    const onTimeRate =
+      reliabilitySnapshot?.onTimeRate === null || !reliabilitySnapshot
+        ? null
+        : Number(reliabilitySnapshot.onTimeRate)
+    const cancellationRecoveryComplete =
+      !reliabilitySnapshot?.recoveryCancellationStartedAt ||
+      reliabilityCriterionMet(reliabilitySnapshot.criteria, 'cancellation_recovery')
+    const noShowRecoveryComplete =
+      !reliabilitySnapshot?.recoveryNoShowStartedAt ||
+      reliabilityCriterionMet(reliabilitySnapshot.criteria, 'no_show_recovery')
+    const eligibilityChecklist = reliabilitySnapshot
+      ? buildSuperCleanerEligibilityChecklist({
+          completedReleasedCount: reliabilitySnapshot.completedReleasedCount,
+          averageRating,
+          noShowCount60d: reliabilitySnapshot.noShowCount60d,
+          lastMinuteIncidentCount30d: reliabilitySnapshot.lastMinuteIncidentCount30d,
+          cancellationRate: cancellationRate ?? 0,
+          verifiedJobCount: reliabilitySnapshot.verifiedJobCount,
+          onTimeRate,
+          activeStrikeCount: reliabilitySnapshot.activeStrikeCount,
+          cancellationRecoveryComplete,
+          noShowRecoveryComplete,
+        })
+      : []
+    const isSuperCleanerByCurrentRules =
+      reliabilitySnapshot ? eligibilityChecklist.every((item) => item.met) : false
+
     return {
       id: cleaner.id,
       user_id: cleaner.userId,
@@ -96,31 +142,31 @@ export const GET = requireAdmin(async (req: NextRequest) => {
       trial_period_flag: completedJobs < 10,
       total_jobs: completedJobs,
       average_rating: avgRatingByCleanerId.get(cleaner.id) ?? null,
-      reliability: cleaner.reliabilitySnapshot
+      reliability: reliabilitySnapshot
         ? {
-            is_super_cleaner: cleaner.reliabilitySnapshot.isSuperCleaner,
-            completed_released_count: cleaner.reliabilitySnapshot.completedReleasedCount,
-            cancellation_rate:
-              cleaner.reliabilitySnapshot.cancellationRate === null
-                ? null
-                : Number(cleaner.reliabilitySnapshot.cancellationRate),
-            cancellation_numerator: cleaner.reliabilitySnapshot.cancellationNumerator,
-            cancellation_denominator: cleaner.reliabilitySnapshot.cancellationDenominator,
+            is_super_cleaner: isSuperCleanerByCurrentRules,
+            completed_released_count: reliabilitySnapshot.completedReleasedCount,
+            average_rating: averageRating,
+            cancellation_rate: cancellationRate,
+            cancellation_numerator: reliabilitySnapshot.cancellationNumerator,
+            cancellation_denominator: reliabilitySnapshot.cancellationDenominator,
             last_minute_incidents_30d:
-              cleaner.reliabilitySnapshot.lastMinuteIncidentCount30d,
-            no_shows_60d: cleaner.reliabilitySnapshot.noShowCount60d,
-            verified_job_count: cleaner.reliabilitySnapshot.verifiedJobCount,
+              reliabilitySnapshot.lastMinuteIncidentCount30d,
+            no_shows_60d: reliabilitySnapshot.noShowCount60d,
+            verified_job_count: reliabilitySnapshot.verifiedJobCount,
+            on_time_rate: onTimeRate,
             on_time_percentage:
-              cleaner.reliabilitySnapshot.onTimeRate === null
+              reliabilitySnapshot.onTimeRate === null
                 ? null
-                : Math.round(Number(cleaner.reliabilitySnapshot.onTimeRate) * 100),
-            active_strike_count: cleaner.reliabilitySnapshot.activeStrikeCount,
-            criteria: cleaner.reliabilitySnapshot.criteria,
+                : Math.round(Number(reliabilitySnapshot.onTimeRate) * 100),
+            active_strike_count: reliabilitySnapshot.activeStrikeCount,
+            criteria: reliabilitySnapshot.criteria,
+            eligibility_checklist: eligibilityChecklist,
             recovery_cancellation_started_at:
-              cleaner.reliabilitySnapshot.recoveryCancellationStartedAt,
+              reliabilitySnapshot.recoveryCancellationStartedAt,
             recovery_no_show_started_at:
-              cleaner.reliabilitySnapshot.recoveryNoShowStartedAt,
-            last_calculated_at: cleaner.reliabilitySnapshot.lastCalculatedAt,
+              reliabilitySnapshot.recoveryNoShowStartedAt,
+            last_calculated_at: reliabilitySnapshot.lastCalculatedAt,
           }
         : null,
       reliability_incidents: (cleaner.reliabilityIncidents ?? []).map((incident) => ({

@@ -199,7 +199,7 @@ function CleanerCard({
             <div className="flex min-w-0 flex-wrap items-center justify-between gap-2">
               <p className="text-sm font-semibold text-slate-900">Reliability</p>
               <Badge variant={cleaner.reliability.is_super_cleaner ? 'success' : 'outline'}>
-                {cleaner.reliability.is_super_cleaner ? 'Super Cleaner' : 'Not qualified'}
+                {cleaner.reliability.is_super_cleaner ? 'Qualified' : 'Not qualified'}
               </Badge>
             </div>
             <div className="mt-2 grid min-w-0 grid-cols-2 gap-2 text-xs sm:grid-cols-3 lg:grid-cols-6">
@@ -219,6 +219,47 @@ function CleanerCard({
                 <p className="min-w-0 break-words">Cleaner cancellations 12–24h: {cleaner.cancellation_windows.between_12h_24h}</p>
                 <p className="min-w-0 break-words">Cleaner cancellations under 12h: {cleaner.cancellation_windows.less_than_12h}</p>
               </div>
+            )}
+            {Boolean(cleaner.reliability.eligibility_checklist?.length) && (
+              <details className="mt-2 min-w-0 border-t border-slate-200 pt-2">
+                <summary className="cursor-pointer text-xs font-medium text-slate-700">
+                  View eligibility details
+                </summary>
+                <div className="mt-2 min-w-0 space-y-2">
+                  <p className="text-xs font-semibold text-slate-800">Super Cleaner eligibility</p>
+                  <div className="min-w-0 space-y-1">
+                    {cleaner.reliability.eligibility_checklist.map((item) => (
+                      <div
+                        key={item.key}
+                        className="grid min-w-0 grid-cols-1 gap-1 rounded-lg border border-slate-200 bg-white px-2 py-2 text-xs sm:grid-cols-[minmax(0,1fr)_auto]"
+                      >
+                        <div className="min-w-0">
+                          <p className="min-w-0 break-words font-medium text-slate-800">
+                            {item.label}: <span className="font-normal text-slate-700">{item.value}</span>
+                          </p>
+                          <p className="min-w-0 break-words text-[11px] text-muted-foreground">
+                            {item.requirement}
+                          </p>
+                        </div>
+                        <span
+                          className={`inline-flex w-fit items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-semibold ${
+                            item.met
+                              ? 'bg-emerald-100 text-emerald-800'
+                              : 'bg-rose-100 text-rose-800'
+                          }`}
+                        >
+                          {item.met ? (
+                            <CheckCircle2 className="h-3 w-3" />
+                          ) : (
+                            <XCircle className="h-3 w-3" />
+                          )}
+                          {item.met ? 'Met' : 'Not met'}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </details>
             )}
             {Boolean(cleaner.cancellation_events?.length || cleaner.reliability_incidents?.length || cleaner.reliability_strikes?.length) && (
               <details className="mt-2 min-w-0 border-t border-slate-200 pt-2">
