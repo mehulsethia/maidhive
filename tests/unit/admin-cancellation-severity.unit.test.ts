@@ -11,7 +11,7 @@ describe('admin cancellation queue severity', () => {
         occurredAt: new Date('2026-07-16T22:56:00.000Z'),
       }),
     ).toMatchObject({
-      label: 'Cleaner cancellation (12-24 hours)',
+      label: 'Cleaner cancellation (12–24 hours)',
       severity: 'medium',
       sortPriority: 20,
     })

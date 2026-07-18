@@ -93,7 +93,7 @@ export function classifyAdminCancellationQueueItem(input: {
     }
     if (leadTimeHours !== null && leadTimeHours <= 24) {
       return {
-        label: 'Cleaner cancellation (12-24 hours)',
+        label: 'Cleaner cancellation (12–24 hours)',
         severity: 'medium',
         sortPriority: 20,
         leadTimeHours,

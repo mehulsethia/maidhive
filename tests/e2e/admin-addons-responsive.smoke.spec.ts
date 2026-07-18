@@ -186,7 +186,7 @@ async function mockAdminApis(page: Page) {
                 status: 'cancelled',
                 reason: 'Cancelled by cleaner within the 12-24 hour policy band',
                 occurred_at: '2026-07-16T22:56:00.000Z',
-                label: 'Cleaner cancellation (12-24 hours)',
+                label: 'Cleaner cancellation (12–24 hours)',
                 severity: 'medium',
                 sort_priority: 20,
                 lead_time_hours: 15.57,
@@ -421,7 +421,7 @@ test.describe('Admin add-on responsive UI @smoke', () => {
       await expect(page.getByText('Cancellations / No-shows')).toBeVisible()
       await expect(page.getByText('Cleaner no-show')).toBeVisible()
       await expect(page.getByText('Cleaner cancellation (<12 hours)')).toBeVisible()
-      await expect(page.getByText('Cleaner cancellation (12-24 hours)')).toBeVisible()
+      await expect(page.getByText('Cleaner cancellation (12–24 hours)')).toBeVisible()
 
       await expectNoResponsiveOverflow(page)
     })

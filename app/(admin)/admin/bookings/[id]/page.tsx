@@ -676,7 +676,7 @@ export default function AdminBookingDetailPage() {
                       />
                     )}
                     <DetailRow label="Cancellation charge" value={formatCurrency(cancellationOutcome.cancellationFee)} />
-                    <DetailRow label="Cleaner payout due" value={formatCurrency(cancellationOutcome.cleanerPayoutDue)} />
+                    <DetailRow label="Final cleaner payout" value={formatCurrency(cancellationOutcome.cleanerPayoutDue)} />
                     <DetailRow label="Final platform amount retained" value={`${formatCurrency(cancellationOutcome.platformRetainedAmount)} before Stripe fees`} />
                   </>
                 ) : (
