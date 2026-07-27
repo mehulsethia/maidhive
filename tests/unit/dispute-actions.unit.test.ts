@@ -1,5 +1,5 @@
-import { describe, expect, it } from 'vitest'
-import { getDisputeParticipantAction } from '@/lib/dispute-actions'
+import { describe, expect, it, vi } from 'vitest'
+import { getDisputeParticipantAction, isDisputeResponseWindowOpen } from '@/lib/dispute-actions'
 
 describe('dispute participant actions', () => {
   it('shows report details to the original reporting party', () => {
@@ -29,5 +29,21 @@ describe('dispute participant actions', () => {
     })
 
     expect(action).toEqual({ kind: 'view_response', label: 'View your response' })
+  })
+
+  it('closes counterparty responses 24 hours after the report notification window starts', () => {
+    const createdAt = '2026-07-09T12:00:00.000Z'
+
+    expect(isDisputeResponseWindowOpen({ status: 'under_review', created_at: createdAt }, new Date('2026-07-10T11:59:59.000Z').getTime())).toBe(true)
+    expect(isDisputeResponseWindowOpen({ status: 'under_review', created_at: createdAt }, new Date('2026-07-10T12:00:01.000Z').getTime())).toBe(false)
+
+    vi.useFakeTimers()
+    vi.setSystemTime(new Date('2026-07-10T12:00:01.000Z'))
+    expect(getDisputeParticipantAction('cleaner', {
+      status: 'under_review',
+      reporter_role: 'client',
+      created_at: createdAt,
+    })).toEqual({ kind: 'none', label: '' })
+    vi.useRealTimers()
   })
 })

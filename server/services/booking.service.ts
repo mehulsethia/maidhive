@@ -16,6 +16,7 @@ import { getClientSelfCancellationEmailOutcome } from '@/lib/client-self-cancell
 import { AMENDMENT_EXPIRED_BODY, AMENDMENT_EXPIRED_TITLE, AMENDMENT_EXPIRY_OUTCOME_COPY } from '@/lib/booking-amendment'
 import { DEFAULT_PLATFORM_FEE_PCT } from '@/lib/platform-fee'
 import { cleanerReliabilityService } from './cleaner-reliability.service'
+import { isLastMinuteCancellation } from '@/lib/super-cleaner'
 import { geocodingService } from './geocoding.service'
 import { recordBookingActionEvent } from './booking-action-event.service'
 import type { User } from '@prisma/client'
@@ -1323,11 +1324,14 @@ export const bookingService = {
           message: error instanceof Error ? error.message : String(error),
         })
       }
+      const cleanerCancellationNotificationBody = isLastMinuteCancellation(booking.scheduledStart, cancellationTime)
+        ? `You cancelled the booking for ${scheduledStartAtLabel}. Your final payout is ${formatEuroAmount(0)}. This cancellation has been recorded as a last-minute cancellation incident on your account.`
+        : `You cancelled the booking for ${scheduledStartAtLabel}. Your final payout is ${formatEuroAmount(0)} and the cancellation has been recorded in your reliability history.`
       await pushInAppNotification({
         userId: booking.cleaner.userId,
         type: 'booking_cancelled',
         title: 'You cancelled your booking',
-        body: `You cancelled the booking for ${scheduledStartAtLabel}. Your final payout is ${formatEuroAmount(0)} and the cancellation has been recorded in your reliability history.`,
+        body: cleanerCancellationNotificationBody,
         data: { booking_id: bookingId },
       })
     }

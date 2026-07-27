@@ -32,8 +32,8 @@ describe('Cleaner earnings label', () => {
   })
 
   it('shows paused payout wording for under-review bookings', () => {
-    expect(labelFor('disputed', 10, 'authorized')).toBe('Payout pending review')
-    expect(labelFor('completed', 10, 'authorized', 'under_review')).toBe('Payout pending review')
+    expect(labelFor('disputed', 10, 'authorized')).toBe('Payout paused pending case resolution')
+    expect(labelFor('completed', 10, 'authorized', 'under_review')).toBe('Payout paused pending case resolution')
   })
 
   it('shows no payout after a completed dispute is finalized with zero payout', () => {

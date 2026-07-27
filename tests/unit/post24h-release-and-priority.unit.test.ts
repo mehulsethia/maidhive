@@ -4,6 +4,7 @@ import {
   isBookingReportWindowActive,
   isCompletedBookingReleased,
 } from '@/lib/booking-release'
+import { compareBookingsByRecentActivity } from '@/lib/booking-activity'
 import { compareBookingsByOperationalPriority } from '@/lib/booking-priority'
 
 describe('Post-24h release and booking priority', () => {
@@ -71,6 +72,39 @@ describe('Post-24h release and booking priority', () => {
       'completed-awaiting',
       'completed-released',
       'cancelled',
+    ])
+  })
+
+  it('sorts dashboard recent activity by latest lifecycle event regardless of outcome', () => {
+    const bookings: any[] = [
+      {
+        id: 'confirmed-older',
+        status: 'confirmed',
+        confirmed_at: '2026-05-10T09:00:00.000Z',
+        created_at: '2026-05-10T08:00:00.000Z',
+        scheduled_start: '2026-05-20T08:00:00.000Z',
+      },
+      {
+        id: 'completed',
+        status: 'completed',
+        completed_at: '2026-05-11T09:00:00.000Z',
+        created_at: '2026-05-09T08:00:00.000Z',
+        scheduled_start: '2026-05-11T07:00:00.000Z',
+      },
+      {
+        id: 'cancelled-latest',
+        status: 'cancelled',
+        cancelled_at: '2026-05-12T09:00:00.000Z',
+        created_at: '2026-05-08T08:00:00.000Z',
+        scheduled_start: '2026-05-20T10:00:00.000Z',
+      },
+    ]
+
+    const sorted = [...bookings].sort(compareBookingsByRecentActivity)
+    expect(sorted.map((booking) => booking.id)).toEqual([
+      'cancelled-latest',
+      'completed',
+      'confirmed-older',
     ])
   })
 })

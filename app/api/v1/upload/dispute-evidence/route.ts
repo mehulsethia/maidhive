@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { requireAuth } from '@/server/auth'
 import { createClient } from '@supabase/supabase-js'
 import { randomUUID } from 'crypto'
-import { matchesFileSignature } from '@/lib/file-signature'
+import { IMAGE_MIME_TYPES, matchesFileSignature } from '@/lib/file-signature'
 
 const supabaseAdmin = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -10,10 +10,11 @@ const supabaseAdmin = createClient(
 )
 
 const DISPUTE_EVIDENCE_BUCKET = (process.env.SUPABASE_DISPUTE_EVIDENCE_BUCKET ?? 'dispute-evidence').trim()
-const ALLOWED_MIME = new Set(['image/jpeg', 'image/png', 'image/heic', 'image/heif'])
+const ALLOWED_MIME = new Set(IMAGE_MIME_TYPES)
 const EXT_BY_MIME: Record<string, string> = {
   'image/jpeg': 'jpg',
   'image/png': 'png',
+  'image/webp': 'webp',
   'image/heic': 'heic',
   'image/heif': 'heif',
 }
@@ -50,15 +51,15 @@ export const POST = requireAuth(async (req: NextRequest, _ctx, user) => {
   }
 
   if (!ALLOWED_MIME.has(file.type)) {
-    return NextResponse.json({ success: false, message: 'Only JPG, PNG, and HEIC images are allowed' }, { status: 400 })
+    return NextResponse.json({ success: false, message: `${file.name} is not supported. Only JPG, PNG, WebP, and HEIC images are allowed.` }, { status: 400 })
   }
   if (file.size > 10 * 1024 * 1024) {
-    return NextResponse.json({ success: false, message: 'Image must be under 10MB' }, { status: 400 })
+    return NextResponse.json({ success: false, message: `${file.name} must be under 10MB.` }, { status: 400 })
   }
 
   const arrayBuffer = await file.arrayBuffer()
   if (!matchesFileSignature(new Uint8Array(arrayBuffer), file.type)) {
-    return NextResponse.json({ success: false, message: 'Invalid image payload' }, { status: 400 })
+    return NextResponse.json({ success: false, message: `${file.name} is not a valid ${file.type || 'image'} file.` }, { status: 400 })
   }
   const ext = EXT_BY_MIME[file.type]
   const path = `disputes/${user.id}/${Date.now()}-${randomUUID()}.${ext}`

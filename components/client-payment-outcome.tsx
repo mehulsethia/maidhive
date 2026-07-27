@@ -3,7 +3,13 @@ import { getClientPaymentSummary } from '@/lib/client-payment-summary'
 import { formatCurrency } from '@/lib/utils'
 import type { BookingRead } from '@/types'
 
-export function ClientPaymentOutcome({ booking }: { booking: BookingRead }) {
+export function ClientPaymentOutcome({
+  booking,
+  cancellationContext,
+}: {
+  booking: BookingRead
+  cancellationContext?: string | null
+}) {
   const summary = getClientPaymentSummary(booking)
   const cancellationOutcome = summary.cancellationPaymentOutcome
   if (!summary.hasRefund && cancellationOutcome.kind === 'none') return null
@@ -19,8 +25,17 @@ export function ClientPaymentOutcome({ booking }: { booking: BookingRead }) {
         </p>
       </div>
       <Separator className="bg-emerald-200" />
+      {cancellationContext && (
+        <>
+          <div className="space-y-1 text-emerald-950">
+            <p className="text-xs font-semibold uppercase tracking-wide text-emerald-800">Cancellation reason</p>
+            <p>{cancellationContext}</p>
+          </div>
+          <Separator className="bg-emerald-200" />
+        </>
+      )}
       <div className="flex min-w-0 items-start justify-between gap-3 text-emerald-950">
-        <span className="min-w-0">Original total</span>
+        <span className="min-w-0">Original booking total</span>
         <span className="shrink-0 text-right tabular-nums">{formatCurrency(summary.originalTotal)}</span>
       </div>
       {cancellationOutcome.kind !== 'none' && cancellationOutcome.amountLabel && cancellationOutcome.amount !== null ? (

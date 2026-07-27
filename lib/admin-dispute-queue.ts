@@ -1,7 +1,11 @@
+import { isDisputeResponseWindowOpen } from '@/lib/dispute-actions'
+
 export type AdminDisputeQueueStage = 'open' | 'awaiting_response' | 'under_review'
 
 type DisputeQueueState = {
   status?: string | null
+  createdAt?: Date | string | null
+  created_at?: Date | string | null
   respondedAt?: Date | string | null
   respondedBy?: string | null
   responseExplanation?: string | null
@@ -13,5 +17,7 @@ export function getAdminDisputeQueueStage(dispute: DisputeQueueState): AdminDisp
 
   const hasResponse = Boolean(dispute.respondedAt || dispute.respondedBy || dispute.responseExplanation)
 
-  return hasResponse ? 'under_review' : 'awaiting_response'
+  if (hasResponse) return 'under_review'
+
+  return isDisputeResponseWindowOpen(dispute) ? 'awaiting_response' : 'under_review'
 }

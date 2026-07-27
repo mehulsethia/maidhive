@@ -10,6 +10,15 @@ describe('admin dispute queue categorisation', () => {
     expect(getAdminDisputeQueueStage({ status: 'under_review' })).toBe('awaiting_response')
   })
 
+  it('moves under-review disputes to admin review when the response window expires', () => {
+    expect(
+      getAdminDisputeQueueStage({
+        status: 'under_review',
+        createdAt: new Date(Date.now() - 25 * 60 * 60 * 1000),
+      }),
+    ).toBe('under_review')
+  })
+
   it('marks a responded dispute as ready for admin review', () => {
     expect(
       getAdminDisputeQueueStage({

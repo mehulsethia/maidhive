@@ -74,7 +74,7 @@ test.describe('F19 dispute and compensation responsive regression @smoke', () =>
       })).toBeVisible({ timeout: 20_000 })
       const disputedRecentCard = page.locator('[data-testid^="recent-activity-"]:has-text("Under Review")').first()
       if (await disputedRecentCard.count()) {
-        await expect(disputedRecentCard.getByText(/Payout pending review €\d/)).toBeVisible()
+        await expect(disputedRecentCard.getByText(/Payout paused pending case resolution €\d/)).toBeVisible()
       }
 
       const cancelledResponse = await page.request.get('/api/v1/bookings?page=1&page_size=1&status=cancelled')
@@ -130,7 +130,7 @@ test.describe('F19 dispute and compensation responsive regression @smoke', () =>
         await assertResponsiveRoute(page, `/client/bookings/${partialRefundBooking.id}`)
         await expect(page.getByText('Financial status: Partially refunded')).toBeVisible({ timeout: 20_000 })
         await expect(page.getByText('Final payment outcome')).toBeVisible()
-        await expect(page.getByText('Original total')).toBeVisible()
+        await expect(page.getByText('Original booking total')).toBeVisible()
         await expect(page.getByText('Partial refund')).toBeVisible()
         await expect(page.getByText('Final amount paid')).toBeVisible()
       }

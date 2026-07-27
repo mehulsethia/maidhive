@@ -213,7 +213,7 @@ describe('Loops email contracts', () => {
         first_name: 'Client',
         cleaner_name: 'Cleaner User',
         booking_date: '12 Jun 2026',
-        booking_time: '13:30',
+        booking_time: '13:30 Cyprus local time',
         booking_duration: '2 hours',
         transport_note: 'Cleaner User requires a pickup and drop-off. Please arrange transport to: Finikoudes bus stop',
         supplies_note: 'Cleaner User will bring their own supplies.',

@@ -14,7 +14,7 @@ import { Label } from '@/components/ui/label'
 import { Select } from '@/components/ui/select'
 import { Textarea } from '@/components/ui/textarea'
 import { CLEANER_DISPUTE_ISSUES } from '@/lib/dispute-issues'
-import { getDisputeParticipantAction } from '@/lib/dispute-actions'
+import { getDisputeParticipantAction, isDisputeResponseWindowOpen } from '@/lib/dispute-actions'
 import { reportLoadError, resetLoadError } from '@/lib/load-error-policy'
 import { formatDate } from '@/lib/utils'
 import { getDisputeResolutionOutcome } from '@/lib/dispute-resolution'
@@ -88,6 +88,8 @@ function CleanerReportPageContent() {
   const [explanation, setExplanation] = useState('')
   const [evidenceInput, setEvidenceInput] = useState('')
   const [evidenceFiles, setEvidenceFiles] = useState<File[]>([])
+  const [uploadedEvidenceUrls, setUploadedEvidenceUrls] = useState<string[]>([])
+  const [uploadError, setUploadError] = useState<{ fileName: string; message: string } | null>(null)
   const [confirmOpen, setConfirmOpen] = useState(false)
   const [uploadingEvidence, setUploadingEvidence] = useState(false)
   const [search, setSearch] = useState('')
@@ -105,17 +107,18 @@ function CleanerReportPageContent() {
 
   function canSubmitResponseToDispute(booking: BookingRead, dispute?: ClientDispute) {
     if (!dispute || !isActiveDisputeStatus(dispute.status)) return false
-    if (!isWithinReportWindow(booking)) return false
+    if (!isDisputeResponseWindowOpen(dispute)) return false
     if (dispute.reporter_role === 'cleaner' || dispute.responder_role === 'cleaner') return false
     return !dispute.responded_by && !dispute.responded_at
   }
 
   function addEvidenceFiles(filesToAdd: File[]) {
-    const allowed = new Set(['image/jpeg', 'image/png', 'image/heic', 'image/heif'])
+    const allowed = new Set(['image/jpeg', 'image/png', 'image/webp', 'image/heic', 'image/heif'])
     const next = [...evidenceFiles]
+    setUploadError(null)
     for (const file of filesToAdd) {
       if (!allowed.has(file.type)) {
-        toast.error('Only JPG, PNG, and HEIC images are supported.')
+        toast.error(`Only JPG, PNG, WebP, and HEIC images are supported. ${file.name} was not added.`)
         continue
       }
       if (file.size > MAX_EVIDENCE_SIZE_BYTES) {
@@ -184,6 +187,7 @@ function CleanerReportPageContent() {
     if (dispute && isActiveDisputeStatus(dispute.status)) {
       return canSubmitResponseToDispute(booking, dispute)
     }
+    if (dispute) return false
     if (!['confirmed', 'in_progress', 'completed', 'disputed'].includes(booking.status)) return false
     return isWithinReportWindow(booking)
   })
@@ -221,7 +225,7 @@ function CleanerReportPageContent() {
     canSubmitResponseToDispute(selectedBooking, selectedActiveDispute),
   )
   const isViewingActiveDispute = Boolean(selectedActiveDispute && !isRespondingToDispute)
-  const disputePanelTitle = selectedActiveDispute ? selectedDisputeAction.label : 'Report a problem'
+  const disputePanelTitle = selectedActiveDispute ? selectedDisputeAction.label || 'View report details' : 'Report a problem'
   const activeDisputeStatus = selectedActiveDispute?.status ?? queryBookingDisputeStatus
   const canUseClientNoShowOption = selectedBooking
     ? Date.now() >= new Date(selectedBooking.scheduled_start).getTime() + NO_SHOW_DELAY_MS
@@ -260,22 +264,35 @@ function CleanerReportPageContent() {
       .split('\n')
       .map((value) => value.trim())
       .filter(Boolean)
-    const uploadedUrls: string[] = []
+    const uploadedUrls = [...uploadedEvidenceUrls]
     if (evidenceFiles.length > 0) {
       setUploadingEvidence(true)
+      setUploadError(null)
       try {
-        for (const file of evidenceFiles) {
+        for (let index = 0; index < evidenceFiles.length; index += 1) {
+          const file = evidenceFiles[index]
           const form = new FormData()
           form.append('file', file)
-          const res = await fetch('/api/v1/upload/dispute-evidence', {
-            method: 'POST',
-            body: form,
-          })
-          const json = await res.json().catch(() => null)
-          if (!res.ok || !json?.success || !json?.data?.url) {
-            throw new Error(json?.message ?? `Failed to upload ${file.name}`)
+          try {
+            const res = await fetch('/api/v1/upload/dispute-evidence', {
+              method: 'POST',
+              body: form,
+            })
+            const json = await res.json().catch(() => null)
+            if (!res.ok || !json?.success || !json?.data?.url) {
+              throw new Error(json?.message ?? 'Upload failed')
+            }
+            uploadedUrls.push(json.data.url)
+            setUploadedEvidenceUrls([...uploadedUrls])
+            setEvidenceFiles(evidenceFiles.slice(index + 1))
+          } catch (uploadFailure: any) {
+            const reason = uploadFailure?.message ?? 'Upload failed'
+            const message = `Failed to upload ${file.name}: ${reason}`
+            setUploadedEvidenceUrls(uploadedUrls)
+            setEvidenceFiles(evidenceFiles.slice(index))
+            setUploadError({ fileName: file.name, message })
+            throw new Error(`${message}. Your report text and successfully uploaded files have been kept.`)
           }
-          uploadedUrls.push(json.data.url)
         }
       } catch (err: any) {
         setUploadingEvidence(false)
@@ -302,6 +319,8 @@ function CleanerReportPageContent() {
       setExplanation('')
       setEvidenceInput('')
       setEvidenceFiles([])
+      setUploadedEvidenceUrls([])
+      setUploadError(null)
       await load(false)
     } catch (err: any) {
       toast.error(err.message ?? 'Failed to submit report.')
@@ -430,7 +449,7 @@ function CleanerReportPageContent() {
                 <Label>Upload evidence (optional photos/screenshots)</Label>
                 <Input
                   type="file"
-                  accept="image/jpeg,image/png,image/heic,image/heif"
+                  accept="image/jpeg,image/png,image/webp,image/heic,image/heif"
                   multiple
                   onChange={(event) => {
                     addEvidenceFiles(Array.from(event.target.files ?? []))
@@ -439,6 +458,26 @@ function CleanerReportPageContent() {
                   className="mt-1"
                 />
                 <p className="mt-1 text-xs text-slate-500">Photos/screenshots help admin review disputes faster.</p>
+                {uploadedEvidenceUrls.length > 0 && (
+                  <p className="mt-1 text-xs font-medium text-emerald-700">
+                    {uploadedEvidenceUrls.length} uploaded image(s) kept attached.
+                  </p>
+                )}
+                {uploadError && (
+                  <div className="mt-2 rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-xs text-rose-700">
+                    <p className="font-semibold">{uploadError.message}</p>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      className="mt-2 h-8 rounded-full border-rose-200 bg-white px-3 text-xs text-rose-700 hover:bg-rose-50"
+                      onClick={confirmSubmitReport}
+                      loading={uploadingEvidence || saving}
+                    >
+                      Retry failed upload
+                    </Button>
+                  </div>
+                )}
                 {evidenceFiles.length > 0 && (
                   <>
                     <p className="mt-1 text-xs text-slate-500">{evidenceFiles.length} of {MAX_EVIDENCE_IMAGES} image(s) selected</p>

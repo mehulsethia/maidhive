@@ -9,6 +9,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Separator } from '@/components/ui/separator'
 import { reportLoadError, resetLoadError } from '@/lib/load-error-policy'
 import { formatCurrency, formatDate } from '@/lib/utils'
+import { getBookingCleaningTypeLabel } from '@/lib/booking-service-labels'
 import type { BookingRead } from '@/types'
 import {
   classifyCleanerPaymentHistoryBooking,
@@ -81,7 +82,7 @@ export default function EarningsPage() {
             {upcoming.map((b) => (
               <div key={b.id} className="flex items-center justify-between text-sm py-1">
                 <div>
-                  <span className="font-medium capitalize">{b.service_type.replace('_', ' ')}</span>
+                  <span className="font-medium">{getBookingCleaningTypeLabel(b)}</span>
                   <span className="text-muted-foreground ml-2">{formatDate(b.scheduled_start)}</span>
                 </div>
                 <div className="flex items-center gap-2">
@@ -121,7 +122,7 @@ export default function EarningsPage() {
                 <div key={b.id}>
                   <div className="flex min-w-0 flex-col gap-2 py-3 sm:flex-row sm:items-center sm:justify-between">
                     <div className="min-w-0">
-                      <p className="font-medium text-sm capitalize">{b.service_type.replace('_', ' ')}</p>
+                      <p className="font-medium text-sm">{getBookingCleaningTypeLabel(b)}</p>
                       <p className="mt-0.5 text-[11px] font-semibold text-slate-600">
                         {paymentHistory?.paymentType ?? 'Booking payout'}
                       </p>

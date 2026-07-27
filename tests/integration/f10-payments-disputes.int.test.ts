@@ -712,6 +712,7 @@ describe('F10 Payments capture/refund/dispute integration', () => {
           bookingReference: 'MH-NGPAY1',
           issueType: 'Service issue',
           disputePath: '/cleaner/report?booking=booking_pay_1',
+          responseWindowMessage: 'You have 24 hours from this notification to submit one response with any supporting evidence.',
         }),
       ]),
     )
@@ -766,6 +767,7 @@ describe('F10 Payments capture/refund/dispute integration', () => {
           bookingReference: 'MH-NGPAY1',
           issueType: 'Access issue',
           disputePath: '/client/report?booking=booking_pay_1',
+          responseWindowMessage: 'You have 24 hours from this notification to submit one response with any supporting evidence.',
         }),
       ]),
     )
@@ -817,6 +819,64 @@ describe('F10 Payments capture/refund/dispute integration', () => {
       responderRole: 'cleaner',
       status: 'under_review',
     })
+  })
+
+  it('IT-PAY-10 gives the counterparty 24 hours from dispute notification to respond', async () => {
+    state.currentUser = seededUsers.cleaner
+    state.booking = {
+      ...state.booking,
+      scheduledStart: new Date(Date.now() - 48 * 60 * 60 * 1000),
+      scheduledEnd: new Date(Date.now() - 46 * 60 * 60 * 1000),
+    }
+    state.dispute = {
+      id: 'dispute_recent_response_window',
+      bookingId: state.booking.id,
+      status: 'under_review',
+      raisedBy: seededUsers.client.id,
+      reporterRole: 'client',
+      createdAt: new Date(Date.now() - 60 * 60 * 1000),
+    }
+
+    const route = await import('@/app/api/v1/disputes/[id]/route')
+    const response = await route.POST(
+      new NextRequest('http://localhost/api/v1/disputes/booking_pay_1', {
+        method: 'POST',
+        body: JSON.stringify({
+          issue_type: 'access_issue',
+          explanation: 'The booking report was received and this is my single response.',
+        }),
+        headers: { 'content-type': 'application/json' },
+      }),
+      { params: Promise.resolve({ id: 'booking_pay_1' }) } as any,
+    )
+
+    expect(response.status).toBe(200)
+    expect(state.dispute.respondedBy).toBe(seededUsers.cleaner.id)
+
+    state.dispute = {
+      id: 'dispute_expired_response_window',
+      bookingId: state.booking.id,
+      status: 'under_review',
+      raisedBy: seededUsers.client.id,
+      reporterRole: 'client',
+      createdAt: new Date(Date.now() - 25 * 60 * 60 * 1000),
+    }
+
+    const expired = await route.POST(
+      new NextRequest('http://localhost/api/v1/disputes/booking_pay_1', {
+        method: 'POST',
+        body: JSON.stringify({
+          issue_type: 'access_issue',
+          explanation: 'This response is now outside the allowed response window.',
+        }),
+        headers: { 'content-type': 'application/json' },
+      }),
+      { params: Promise.resolve({ id: 'booking_pay_1' }) } as any,
+    )
+    const body = await expired.json()
+
+    expect(expired.status).toBe(409)
+    expect(body.message).toBe('The 24-hour response window for this dispute has expired.')
   })
 
   it('IT-PAY-05 transfer webhook marks payment transferred and pushes payout notification once', async () => {

@@ -408,6 +408,7 @@ export default function CleanerBookingsPage() {
                 const clientAvatarUrl = b.client?.user?.avatar_url ?? null
                 const amendmentPending = hasPendingAmendmentRequest(b)
                 const cancellationOrigin = getCleanerCancellationOriginLabel(b)
+                const showCancellationOrigin = cancellationOrigin && cancellationOrigin !== 'Cancelled by you'
                 return (
                   <div key={b.id} className="rounded-2xl border border-slate-200 bg-white p-4 transition-all duration-200 hover:-translate-y-0.5 hover:shadow-[0_10px_26px_rgba(15,23,42,0.08)] sm:p-5">
                   <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
@@ -469,7 +470,7 @@ export default function CleanerBookingsPage() {
                       )}
                       {b.status === 'cancelled' ? (
                         <div className="mt-2 space-y-1">
-                          {cancellationOrigin && (
+                          {showCancellationOrigin && (
                             <p className="break-words text-sm font-medium text-slate-700" data-testid="cleaner-cancellation-source">
                               {cancellationOrigin}
                             </p>

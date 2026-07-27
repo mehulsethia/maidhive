@@ -1953,7 +1953,8 @@ export default function BookingFlowPage() {
                   <div>
                     <Label className="text-sm font-semibold mb-2 block">Select time of day</Label>
                     <p className="mb-2 text-xs text-slate-500">
-                      Only available time slots that fit your selected duration are shown.
+                      All booking times are shown in Cyprus local time.
+                      <span className="block">Only available time slots that fit your selected duration are shown.</span>
                     </p>
                     {slotsLoading ? (
                       <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 md:grid-cols-4">
@@ -2391,7 +2392,7 @@ export default function BookingFlowPage() {
                 <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
                   <p className="text-sm font-semibold text-slate-900">Saved booking details</p>
                   <div className="mt-2 grid gap-2 text-xs text-slate-700 sm:grid-cols-2">
-                    <p><span className="font-medium">Date/time:</span> {new Date(booking.scheduled_start).toLocaleString('en-IE', { weekday: 'short', day: '2-digit', month: 'short', year: 'numeric', hour: 'numeric', minute: '2-digit', hour12: true, timeZone: APP_TIMEZONE })}</p>
+                    <p><span className="font-medium">Date/time:</span> {new Date(booking.scheduled_start).toLocaleString('en-IE', { weekday: 'short', day: '2-digit', month: 'short', year: 'numeric', hour: 'numeric', minute: '2-digit', hour12: true, timeZone: APP_TIMEZONE })} Cyprus local time</p>
                     <p><span className="font-medium">Duration:</span> {booking.duration_hours} hour{Number(booking.duration_hours) === 1 ? '' : 's'}</p>
                     <p><span className="font-medium">Address:</span> {booking.address}, {booking.city}, {booking.postcode}</p>
                     <p><span className="font-medium">Job type:</span> {bookingSnapshot?.jobType || 'Not provided'}</p>
@@ -2555,7 +2556,7 @@ export default function BookingFlowPage() {
                   <div className="flex justify-between text-sm">
                     <span className="text-slate-500">Time:</span>
                     <span className="font-medium text-slate-900">
-                      {new Date(booking.scheduled_start).toLocaleTimeString('en-IE', { hour: '2-digit', minute: '2-digit', timeZone: APP_TIMEZONE })}
+                      {new Date(booking.scheduled_start).toLocaleTimeString('en-IE', { hour: '2-digit', minute: '2-digit', timeZone: APP_TIMEZONE })} Cyprus local time
                     </span>
                   </div>
                   <div className="flex justify-between text-sm">

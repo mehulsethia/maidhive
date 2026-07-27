@@ -8,6 +8,7 @@ const VIEWPORTS = [
   { name: 'desktop', width: 1440, height: 1000 },
 ] as const
 const RESPONSIVE_BOOKING_ID = '00000000-0000-4000-8000-000000000020'
+const RESPONSIVE_CLEANER_ID = '00000000-0000-4000-8000-000000000120'
 
 function isoHoursFromNow(hours: number) {
   return new Date(Date.now() + hours * 60 * 60 * 1000).toISOString()
@@ -327,13 +328,37 @@ test.describe('F20 commercial and lifecycle responsive regression @smoke', () =>
         page_size: 20,
         has_next: false,
       }))
+      await page.route(`**/api/v1/bookings/${RESPONSIVE_BOOKING_ID}`, (route) => fulfill(route, cancelledBooking))
+      await page.route('**/api/v1/auth/me', (route) => fulfill(route, cancelledBooking.client.user))
+      await page.route('**/api/v1/clients/favorites', (route) => fulfill(route, []))
+      await mockBookingMessages(page)
 
       for (const viewport of VIEWPORTS) {
         await page.setViewportSize(viewport)
+        await page.goto('/client/dashboard', { waitUntil: 'domcontentloaded' })
+        await expect(page.getByText('Recent Activity', { exact: true })).toBeVisible()
+        await expect(page.getByText('Cancelled by cleaner', { exact: true })).toBeVisible()
+        await expect(page.getByText('You have not been charged', { exact: true })).toBeVisible()
+        await expectNoHorizontalOverflow(page, `client cancelled dashboard activity at ${viewport.name}`)
+
         await page.goto('/client/bookings', { waitUntil: 'domcontentloaded' })
         await expect(page.getByText('Cancelled by cleaner', { exact: true })).toBeVisible()
         await expect(page.getByText('You have not been charged', { exact: true })).toBeVisible()
         await expectNoHorizontalOverflow(page, `client cancelled card at ${viewport.name}`)
+
+        await page.goto(`/client/bookings/${RESPONSIVE_BOOKING_ID}`, { waitUntil: 'domcontentloaded' })
+        await expect(page.getByText('Final payment outcome', { exact: true })).toBeVisible()
+        await expect(page.getByText('Cancellation reason', { exact: true })).toBeVisible()
+        await expect(page.getByText('Original booking total', { exact: true })).toBeVisible()
+        await expect(page.getByText('Cancellation payment outcome', { exact: true })).toHaveCount(0)
+        await expect(page.getByText('Booking read-only', { exact: true })).toBeVisible()
+        await expect(page.getByText('This booking has been cancelled. No further booking actions are available.', { exact: true })).toBeVisible()
+        await expect(page.getByText('Any unrelated account or support issue can still be raised through MaidHive’s separate Report section.', { exact: true })).toBeVisible()
+        await expect(page.getByText('Next actions', { exact: true })).toHaveCount(0)
+        await expect(page.getByRole('button', { name: 'Book again' })).toHaveCount(0)
+        await expect(page.getByRole('button', { name: /Report a problem/i })).toHaveCount(0)
+        await expect(page.getByText(/Report issues during the booking/)).toHaveCount(0)
+        await expectNoHorizontalOverflow(page, `client cancelled detail read-only at ${viewport.name}`)
       }
     })
 
@@ -389,6 +414,65 @@ test.describe('F20 commercial and lifecycle responsive regression @smoke', () =>
         const notice = page.getByTestId('minimum-platform-fee-notice')
         await expect(notice.getByText('Minimum platform fee of €2.00 applies.', { exact: true })).toBeVisible()
         await expectNoHorizontalOverflow(page, `client checkout at ${viewport.name}`)
+      }
+    })
+
+    test('E2E-RESP-20 booking time selector states Cyprus local time responsively', async ({ page }) => {
+      const selectedDate = '2026-07-31'
+      const slotStart = '2026-07-31T08:30:00.000Z'
+      await page.route(`**/api/v1/cleaners/${RESPONSIVE_CLEANER_ID}`, (route) => fulfill(route, {
+        id: RESPONSIVE_CLEANER_ID,
+        hourly_rate: 16,
+        years_experience: 4,
+        average_rating: 4.8,
+        total_jobs: 42,
+        profile_image_url: null,
+        transport_mode: 'bus_walk',
+        cleaning_supplies: 'own_supplies',
+        user: {
+          id: 'cleaner-responsive-flow-user',
+          name: 'Responsive Flow Cleaner',
+          email: 'flow-cleaner@example.test',
+          role: 'cleaner',
+          is_active: true,
+          created_at: isoHoursFromNow(-720),
+        },
+      }))
+      await page.route('**/api/v1/clients/me', (route) => fulfill(route, {
+        id: 'client-responsive-flow',
+        default_city: 'Larnaca',
+        user: {
+          id: 'client-responsive-flow-user',
+          name: 'Responsive Flow Client',
+          email: 'flow-client@example.test',
+          phone: '+35799000000',
+          email_confirmed_at: isoHoursFromNow(-720),
+          phone_verified_at: isoHoursFromNow(-720),
+        },
+      }))
+      await page.route('**/api/v1/clients/addresses', (route) => fulfill(route, []))
+      await page.route(`**/api/v1/bookings/draft?cleaner_id=${RESPONSIVE_CLEANER_ID}`, (route) => fulfill(route, null))
+      await page.route(`**/api/v1/availability/${RESPONSIVE_CLEANER_ID}/dates?**`, (route) => fulfill(route, [selectedDate]))
+      await page.route(`**/api/v1/availability/${RESPONSIVE_CLEANER_ID}/slots?**`, (route) => fulfill(route, [
+        { start: slotStart, end: '2026-07-31T10:30:00.000Z' },
+      ]))
+      await page.route('**/api/v1/bookings/preview-price?**', (route) => fulfill(route, {
+        hourly_rate: 16,
+        duration_hours: 2,
+        subtotal: 32,
+        platform_fee_pct: 10,
+        platform_fee: 3.2,
+        cleaner_payout: 32,
+        total_amount: 35.2,
+      }))
+
+      for (const viewport of VIEWPORTS) {
+        await page.setViewportSize(viewport)
+        await page.goto(`/client/book/${RESPONSIVE_CLEANER_ID}?step=1&source=responsive`, { waitUntil: 'domcontentloaded' })
+        await page.getByRole('button', { name: selectedDate }).click()
+        await expect(page.getByText(/All booking times are shown in Cyprus local time\./)).toBeVisible()
+        await expect(page.getByRole('button', { name: /11:30/i })).toBeVisible()
+        await expectNoHorizontalOverflow(page, `client booking time selector at ${viewport.name}`)
       }
     })
   })
@@ -470,7 +554,7 @@ test.describe('F20 commercial and lifecycle responsive regression @smoke', () =>
       for (const viewport of VIEWPORTS) {
         await page.setViewportSize(viewport)
         await page.goto('/cleaner/bookings', { waitUntil: 'domcontentloaded' })
-        await expect(page.getByTestId('cleaner-cancellation-source').getByText('Cancelled by you')).toBeVisible()
+        await expect(page.getByText('Cancelled by you', { exact: true })).toHaveCount(1)
         await expect(page.getByText('Final payout: €0.00', { exact: true })).toBeVisible()
         await expect(page.getByText('No cancellation charge', { exact: true })).toHaveCount(0)
         await expectClientProvidedSupplies(page)

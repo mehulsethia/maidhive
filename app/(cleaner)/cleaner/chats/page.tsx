@@ -13,20 +13,11 @@ import { compareConversationsByOperationalPriority } from '@/lib/booking-priorit
 import { canViewChatHistoryForBooking, getChatReadOnlyMessage, isChatReadOnly } from '@/lib/chat-window'
 import { reportLoadError, resetLoadError } from '@/lib/load-error-policy'
 import { formatDate } from '@/lib/utils'
+import { getBookingCleaningTypeLabel } from '@/lib/booking-service-labels'
 import type { BookingRead } from '@/types'
 
-const SERVICE_LABELS: Record<string, string> = {
-  standard: 'Standard Clean',
-  deep_clean: 'Deep Clean',
-  end_of_tenancy: 'End of Tenancy',
-  move_in: 'Move-in Clean',
-}
-
 function resolveJobTypeTitle(booking: BookingRead) {
-  const snapshotMatch = booking.special_instructions?.match(/(?:^|\n)Job type:\s*([^\n]+)/i)
-  const snapshotJobType = snapshotMatch?.[1]?.trim()
-  if (snapshotJobType) return snapshotJobType
-  return SERVICE_LABELS[booking.service_type] ?? booking.service_type
+  return getBookingCleaningTypeLabel(booking)
 }
 
 export default function CleanerChatsPage() {

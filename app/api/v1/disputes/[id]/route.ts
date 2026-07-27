@@ -11,6 +11,7 @@ import { pushInAppNotification } from '@/server/services/in-app-notification.ser
 import { db } from '@/server/db'
 import { config } from '@/server/config'
 import { DISPUTE_REASON_LABELS } from '@/lib/dispute-issues'
+import { isDisputeResponseWindowOpen } from '@/lib/dispute-actions'
 import { Prisma } from '@prisma/client'
 import { cleanerReliabilityService } from '@/server/services/cleaner-reliability.service'
 import { recordBookingActionEvent } from '@/server/services/booking-action-event.service'
@@ -97,9 +98,6 @@ export const POST = requireAuth(async (req: NextRequest, ctx, user) => {
   const issueType = disputePayload.issue_type
   const participantRole = isClient ? 'client' : isCleaner ? 'cleaner' : 'admin'
   const reportWindowEndsAt = bookingRecord.scheduledEnd.getTime() + DISPUTE_WINDOW_MS
-  if (Date.now() > reportWindowEndsAt) {
-    return err(`Reporting window has expired (${disputeWindowLabel()} after scheduled completion)`, 400)
-  }
 
   async function attachResponseToExistingDispute(existing: NonNullable<Awaited<ReturnType<typeof disputeRepo.findByBookingId>>>) {
     if (!['open', 'under_review'].includes(existing.status)) {
@@ -113,6 +111,9 @@ export const POST = requireAuth(async (req: NextRequest, ctx, user) => {
     }
     if (existing.respondedBy || existing.respondedAt || existing.responderRole) {
       return err('The other party has already submitted a response for this dispute.', 409)
+    }
+    if (!isDisputeResponseWindowOpen(existing)) {
+      return err('The 24-hour response window for this dispute has expired.', 409)
     }
 
     const responseWrite = await disputeRepo.attachParticipantResponse(existing.id, {
@@ -158,6 +159,10 @@ export const POST = requireAuth(async (req: NextRequest, ctx, user) => {
   const existing = await disputeRepo.findByBookingId(id)
   if (existing) {
     return attachResponseToExistingDispute(existing)
+  }
+
+  if (Date.now() > reportWindowEndsAt) {
+    return err(`Reporting window has expired (${disputeWindowLabel()} after scheduled completion)`, 400)
   }
 
   const allowedForClient = new Set(['cleaner_no_show', 'service_issue', 'safety_concern', 'property_issue_damage'])
@@ -244,21 +249,28 @@ export const POST = requireAuth(async (req: NextRequest, ctx, user) => {
   const clientPauseMessage = payoutPause.paused
     ? DISPUTE_PAYOUT_PAUSED_MESSAGE
     : 'This booking is now Under Review. MaidHive admin has been alerted to review the payment state for this case.'
+  const responseWindowMessage = 'You have 24 hours from this notification to submit one response with any supporting evidence.'
 
   await pushInAppNotification({
     userId: bookingRecord.client.userId,
     type: 'dispute_under_review',
     title: 'Dispute under review',
-    body: clientPauseMessage,
+    body: isCleaner
+      ? `A dispute was raised for this booking. ${responseWindowMessage}`
+      : clientPauseMessage,
     data: { booking_id: bookingRecord.id, dispute_id: dispute.id },
   })
   await pushInAppNotification({
     userId: bookingRecord.cleaner.userId,
     type: 'dispute_under_review',
     title: 'Dispute under review',
-    body: payoutPause.paused
-      ? 'A dispute was raised for this booking. Cleaner payout is paused until the case is resolved.'
-      : 'A dispute was raised for this booking. MaidHive admin has been alerted to review the payment state for this case.',
+    body: isClient
+      ? payoutPause.paused
+        ? `A dispute was raised for this booking. Payout paused pending case resolution. ${responseWindowMessage}`
+        : `A dispute was raised for this booking. MaidHive admin has been alerted to review the payment state for this case. ${responseWindowMessage}`
+      : payoutPause.paused
+        ? 'Your dispute has been sent to MaidHive admin for review. Payout paused pending case resolution.'
+        : 'Your dispute has been sent to MaidHive admin for review.',
     data: { booking_id: bookingRecord.id, dispute_id: dispute.id },
   })
 
@@ -273,7 +285,7 @@ export const POST = requireAuth(async (req: NextRequest, ctx, user) => {
         type: 'dispute_raised',
         title: 'New dispute raised',
         body: payoutPause.paused
-          ? `Booking ${bookingRecord.id.slice(0, 8)} has a new dispute requiring review. Cleaner payout is paused.`
+          ? `Booking ${bookingRecord.id.slice(0, 8)} has a new dispute requiring review. Payout paused pending case resolution.`
           : `Booking ${bookingRecord.id.slice(0, 8)} has a new dispute requiring review. Cleaner payout was not paused automatically: ${payoutPause.reason}.`,
         data: { booking_id: bookingRecord.id, dispute_id: dispute.id },
       }),
@@ -316,6 +328,7 @@ export const POST = requireAuth(async (req: NextRequest, ctx, user) => {
         bookingReference: reference,
         issueType: issueLabel,
         disputePath: counterparty.disputePath,
+        responseWindowMessage,
       }),
     ])
   } catch (emailError) {

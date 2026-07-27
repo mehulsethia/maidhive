@@ -99,7 +99,7 @@ export function getBookingFinancialOutcome(booking: BookingFinancialInput | Book
   const transferred = transferLifecycle === 'transferred'
 
   let financialStatus = 'Payment pending'
-  if (booking?.dispute?.status === 'open' || booking?.dispute?.status === 'under_review') financialStatus = 'Dispute in progress'
+  if (booking?.dispute?.status === 'open' || booking?.dispute?.status === 'under_review') financialStatus = 'Under review'
   else if (paymentStatus === 'released') financialStatus = 'Payment authorisation released'
   else if (paymentStatus === 'failed') financialStatus = 'Payment failed'
   else if (fullRefund) financialStatus = 'Refund issued'

@@ -14,6 +14,7 @@ function bestEffortName(name?: string | null, email?: string | null): string {
 }
 
 export const GET = requireAdmin(async () => {
+  const now = new Date()
   const today = todayUtcDateOnly()
   const tomorrow = addUtcDays(today, 1)
   const dayAfterTomorrow = addUtcDays(today, 2)
@@ -29,7 +30,8 @@ export const GET = requireAdmin(async () => {
     activeDisputes,
     pendingBookingRequests,
     todayJobs,
-    tomorrowJobs,
+    upcomingTodayJobs,
+    upcomingTomorrowJobs,
     paymentIssues,
     failedPayments,
     cancelledBookings,
@@ -53,7 +55,7 @@ export const GET = requireAdmin(async () => {
       db.booking.findMany({
         where: {
           status: 'pending',
-          acceptBy: { gte: new Date() },
+          acceptBy: { gte: now },
         },
         include: { cleaner: { include: { user: true } }, client: { include: { user: true } } },
         orderBy: { acceptBy: 'asc' },
@@ -70,7 +72,16 @@ export const GET = requireAdmin(async () => {
       }),
       db.booking.findMany({
         where: {
-          status: { in: ['accepted', 'confirmed', 'in_progress'] },
+          status: 'confirmed',
+          scheduledStart: { gte: now, lte: todayEnd },
+        },
+        include: { cleaner: { include: { user: true } }, client: { include: { user: true } } },
+        orderBy: { scheduledStart: 'asc' },
+        take: 20,
+      }),
+      db.booking.findMany({
+        where: {
+          status: 'confirmed',
           scheduledStart: { gte: tomorrowStart, lte: tomorrowEnd },
         },
         include: { cleaner: { include: { user: true } }, client: { include: { user: true } } },
@@ -138,6 +149,7 @@ export const GET = requireAdmin(async () => {
           respondedAt: null,
           respondedBy: null,
           responseExplanation: null,
+          createdAt: { gte: new Date(now.getTime() - 24 * 60 * 60 * 1000) },
         },
       }),
       db.dispute.count({
@@ -147,6 +159,7 @@ export const GET = requireAdmin(async () => {
             { respondedAt: { not: null } },
             { respondedBy: { not: null } },
             { responseExplanation: { not: null } },
+            { createdAt: { lt: new Date(now.getTime() - 24 * 60 * 60 * 1000) } },
           ],
         },
       }),
@@ -274,9 +287,9 @@ export const GET = requireAdmin(async () => {
       })),
     },
     upcoming_jobs: {
-      today_count: todayJobs.length,
-      tomorrow_count: tomorrowJobs.length,
-      today_items: todayJobs.map((booking) => ({
+      today_count: upcomingTodayJobs.length,
+      tomorrow_count: upcomingTomorrowJobs.length,
+      today_items: upcomingTodayJobs.map((booking) => ({
         id: booking.id,
         status: booking.status,
         city: booking.city,
@@ -284,7 +297,7 @@ export const GET = requireAdmin(async () => {
         cleaner_name: bestEffortName(booking.cleaner.user?.name, booking.cleaner.user?.email),
         client_name: bestEffortName(booking.client.user?.name, booking.client.user?.email),
       })),
-      tomorrow_items: tomorrowJobs.map((booking) => ({
+      tomorrow_items: upcomingTomorrowJobs.map((booking) => ({
         id: booking.id,
         status: booking.status,
         city: booking.city,

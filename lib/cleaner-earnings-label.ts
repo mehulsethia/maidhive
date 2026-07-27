@@ -22,7 +22,7 @@ export function getCleanerEarningsLabel(args: {
     status === 'in_progress' ||
     (status === 'completed' && !payoutReleased)
 
-  if (status === 'disputed' || disputeStatus === 'open' || disputeStatus === 'under_review') return 'Payout pending review'
+  if (status === 'disputed' || disputeStatus === 'open' || disputeStatus === 'under_review') return 'Payout paused pending case resolution'
   if (status === 'completed' && noPayoutFinalized) return 'No payout'
   if (payoutReleased) return 'You earned'
   if (showProjectedEarnings) return 'You will earn'

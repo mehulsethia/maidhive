@@ -90,10 +90,11 @@ describe('Cleaner payment history mapping', () => {
     })
 
     expect(classifyCleanerPaymentHistoryBooking(confirmedAuthorized)?.label).toBe('Payment authorised')
-    expect(classifyCleanerPaymentHistoryBooking(disputed)?.label).toBe('Payment issue - admin review')
-    expect(classifyCleanerPaymentHistoryBooking(disputed)?.paymentType).toBe('Payment issue')
+    expect(classifyCleanerPaymentHistoryBooking(disputed)?.label).toBe('Payout paused pending case resolution')
+    expect(classifyCleanerPaymentHistoryBooking(disputed)?.paymentType).toBe('Under review')
     expect(classifyCleanerPaymentHistoryBooking(failed)?.label).toBe('Payment issue - admin review')
-    expect(classifyCleanerPaymentHistoryBooking(completedUnderReview)?.label).toBe('Payout pending review')
+    expect(classifyCleanerPaymentHistoryBooking(completedUnderReview)?.label).toBe('Payout paused pending case resolution')
+    expect(classifyCleanerPaymentHistoryBooking(completedUnderReview)?.paymentType).toBe('Under review')
     expect(getReleasedCleanerEarnings([completedUnderReview])).toBe(0)
   })
 

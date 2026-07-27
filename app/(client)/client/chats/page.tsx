@@ -16,17 +16,11 @@ import { recoverBookingsFromNotifications } from '@/lib/booking-data-recovery'
 import { reportLoadError, resetLoadError } from '@/lib/load-error-policy'
 import { setupVisiblePolling } from '@/lib/visible-polling'
 import { formatDate } from '@/lib/utils'
+import { getBookingCleaningTypeLabel } from '@/lib/booking-service-labels'
 import type { BookingRead } from '@/types'
 
 const displayFont = Bricolage_Grotesque({ subsets: ['latin'], weight: ['400', '500', '700', '800'] })
 const monoFont = IBM_Plex_Mono({ subsets: ['latin'], weight: ['400', '500', '600'] })
-
-const SERVICE_LABELS: Record<string, string> = {
-  standard: 'Standard Clean',
-  deep_clean: 'Deep Clean',
-  end_of_tenancy: 'End of Tenancy',
-  move_in: 'Move-in Clean',
-}
 
 function ClientChatsPageContent() {
   const searchParams = useSearchParams()
@@ -100,7 +94,7 @@ function ClientChatsPageContent() {
   const filtered = deferredBookings.filter((booking) => {
     if (!query.trim()) return true
     const q = query.toLowerCase()
-    const service = (SERVICE_LABELS[booking.service_type] ?? booking.service_type).toLowerCase()
+    const service = getBookingCleaningTypeLabel(booking).toLowerCase()
     const cleanerName = (booking.cleaner?.user?.name ?? '').toLowerCase()
 
     return (
@@ -240,7 +234,7 @@ function ClientChatsPageContent() {
               <div className="flex h-full min-h-0 flex-col p-3 md:p-4">
                 <div className="mb-3 rounded-2xl border border-slate-200 bg-slate-50 px-3 py-2">
                   <p className={`${displayFont.className} text-base font-semibold tracking-[-0.01em] text-slate-900`}>
-                    {SERVICE_LABELS[selected.service_type] ?? selected.service_type}
+                    {getBookingCleaningTypeLabel(selected)}
                   </p>
                   <p className="text-xs text-slate-600">{selected.cleaner?.user?.name ?? 'Cleaner'}</p>
                   <p className={`${monoFont.className} text-[0.7rem] tracking-wide text-slate-500`}>

@@ -23,6 +23,7 @@ import {
   dedupeBookingsById,
 } from '@/lib/cleaner-payment-history'
 import { getCleanerPayoutSummary } from '@/lib/cleaner-payout'
+import { getBookingCleaningTypeLabel } from '@/lib/booking-service-labels'
 import { reportLoadError, resetLoadError } from '@/lib/load-error-policy'
 import { createClient } from '@/lib/supabase'
 import { formatCurrency } from '@/lib/utils'
@@ -1008,7 +1009,7 @@ function CleanerProfilePageContent() {
                         <div key={b.id} className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2">
                           <div className="min-w-0">
                             <p className="break-words text-sm font-semibold text-slate-900">
-                              {(b.service_type ?? 'Service').replace(/_/g, ' ')}
+                              {getBookingCleaningTypeLabel(b)}
                             </p>
                             <span className="mt-1 inline-flex rounded-full border border-slate-200 bg-white px-2 py-0.5 text-[11px] font-semibold text-slate-600">
                               {paymentType}

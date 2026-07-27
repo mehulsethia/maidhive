@@ -228,7 +228,7 @@ export const loopsEmailService = {
         first_name: firstName(args.fullName),
         cleaner_name: args.cleanerName,
         booking_date: formatBookingDate(args.scheduledStart),
-        booking_time: formatBookingTime(args.scheduledStart),
+        booking_time: `${formatBookingTime(args.scheduledStart)} Cyprus local time`,
         booking_duration: `${args.durationHours} hour${args.durationHours === 1 ? '' : 's'}`,
         transport_note: transportNote,
         supplies_note: suppliesNote,
@@ -428,6 +428,7 @@ export const loopsEmailService = {
     bookingReference: string
     issueType: string
     disputePath: string
+    responseWindowMessage?: string
   }) {
     return sendTransactionalEmail({
       transactionalId: DISPUTE_RAISED_AGAINST_NOTIFICATION_TRANSACTIONAL_ID,
@@ -437,6 +438,7 @@ export const loopsEmailService = {
         booking_reference: args.bookingReference,
         issue_type: args.issueType,
         dispute_link: absoluteAppLink(args.disputePath),
+        ...(args.responseWindowMessage ? { response_window_message: args.responseWindowMessage } : {}),
       },
     })
   },

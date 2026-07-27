@@ -8,7 +8,6 @@ import { authApi, availabilityApi, bookingsApi, paymentsApi, reviewsApi } from '
 import { BookingStatusBadge } from '@/components/booking-status-badge'
 import { BookingInstructions } from '@/components/booking-instructions'
 import { PriceBreakdownCard } from '@/components/price-breakdown-card'
-import { CancellationPaymentBreakdown } from '@/components/cancellation-payment-breakdown'
 import { ClientPaymentOutcome } from '@/components/client-payment-outcome'
 import { Chat } from '@/components/chat'
 import { DetailPageSkeleton } from '@/components/page-skeletons'
@@ -41,6 +40,7 @@ import { computeConfirmedCancellationPolicy, moneyFromCents } from '@/lib/cancel
 import { getCancellationOriginLabel } from '@/lib/cancellation-origin'
 import { getClientCancellationContext } from '@/lib/client-cancellation-context'
 import { getClientPaymentSummary } from '@/lib/client-payment-summary'
+import { getBookingCleaningTypeLabel } from '@/lib/booking-service-labels'
 import { AMENDMENT_EXPIRY_OUTCOME_COPY, getEffectiveProposalExpiryMs, isWithinAmendStartWindow } from '@/lib/booking-amendment'
 import type { BookingRead } from '@/types'
 import { toast } from 'sonner'
@@ -48,12 +48,6 @@ import { toast } from 'sonner'
 const displayFont = Bricolage_Grotesque({ subsets: ['latin'], weight: ['400', '500', '700', '800'] })
 const monoFont = IBM_Plex_Mono({ subsets: ['latin'], weight: ['400', '500', '600'] })
 
-const SERVICE_LABELS: Record<string, string> = {
-  standard: 'Standard Clean',
-  deep_clean: 'Deep Clean',
-  end_of_tenancy: 'End of Tenancy',
-  move_in: 'Move-in Clean',
-}
 const RESCHEDULE_CUTOFF_HOURS = 24
 const RESCHEDULE_CUTOFF_MS = RESCHEDULE_CUTOFF_HOURS * 60 * 60 * 1000
 const AMEND_MAX_SHIFT_MS = 3 * 60 * 60 * 1000
@@ -366,12 +360,19 @@ export default function ClientBookingDetailPage() {
   const canCancelBookingRequest = booking.status === 'pending' && isPaymentAuthorized(booking.payment?.status)
   const reviewWindowOpened = Number.isFinite(new Date(booking.scheduled_end).getTime()) && Date.now() >= new Date(booking.scheduled_end).getTime()
   const activeDispute = isActiveDisputeStatus(booking.dispute?.status)
+  const hasDisputeCase = Boolean(booking.dispute)
   const canReview = Boolean(booking.completed_at) && ['completed', 'disputed'].includes(booking.status) && !booking.review && reviewWindowOpened && !activeDispute
   const isPending = booking.status === 'pending'
   const hasProposal = Boolean(booking.proposed_start && booking.proposal_by)
   const cleanerProposed = booking.proposal_by === 'cleaner'
   const clientProposed = booking.proposal_by === 'client'
   const scheduledStartMs = new Date(booking.scheduled_start).getTime()
+  const cancelledAtMs = booking.cancelled_at ? new Date(booking.cancelled_at).getTime() : NaN
+  const cancelledBeforeScheduledStart =
+    booking.status === 'cancelled' &&
+    Number.isFinite(cancelledAtMs) &&
+    Number.isFinite(scheduledStartMs) &&
+    cancelledAtMs < scheduledStartMs
   const millisUntilStart = scheduledStartMs - Date.now()
   const hasStarted = Number.isFinite(scheduledStartMs) && millisUntilStart <= 0
   const moreThan24HoursAway = Number.isFinite(scheduledStartMs) && millisUntilStart > RESCHEDULE_CUTOFF_MS
@@ -428,13 +429,7 @@ export default function ClientBookingDetailPage() {
   const cancellationOriginLabel = getCancellationOriginLabel(booking)
   const cancellationContext = getClientCancellationContext(booking)
   const paymentSummary = getClientPaymentSummary(booking)
-  const cancelledHeaderTitle = booking.status === 'cancelled'
-    ? cancellationOriginLabel === 'Cancelled by cleaner'
-      ? 'Cleaner cancelled your booking'
-      : cancellationOriginLabel === 'Cancelled by client'
-        ? 'You cancelled this booking'
-        : 'Booking cancelled'
-    : SERVICE_LABELS[booking.service_type]
+  const bookingDetailTitle = getBookingCleaningTypeLabel(booking)
   const prominentPaymentResult = booking.status === 'cancelled' && paymentSummary.financialStatusLabel
     ? paymentSummary.financialStatusLabel
     : null
@@ -454,7 +449,7 @@ export default function ClientBookingDetailPage() {
     )
   const hasOpenProposalFlow = hasProposal && ['pending', 'accepted', 'confirmed'].includes(booking.status)
   const canRespondToCleanerProposal = hasOpenProposalFlow && cleanerProposed
-  const canReportInProgress = booking.status === 'in_progress'
+  const canReportInProgress = booking.status === 'in_progress' && !hasDisputeCase
   const isCompletedReleased = isCompletedBookingReleased({
     status: booking.status,
     paymentStatus,
@@ -521,7 +516,7 @@ export default function ClientBookingDetailPage() {
                 MaidHive Booking Detail
               </p>
               <h1 className={`${displayFont.className} text-2xl font-extrabold tracking-[-0.03em] text-white sm:text-3xl lg:text-4xl`}>
-                {cancelledHeaderTitle}
+                {bookingDetailTitle}
               </h1>
               <p className="max-w-xl text-sm text-slate-100/90 sm:text-base">
                 Manage actions, review booking details, and continue chat for this booking.
@@ -611,17 +606,7 @@ export default function ClientBookingDetailPage() {
                 total_amount: booking.total_amount,
               }}
             />
-            <ClientPaymentOutcome booking={booking} />
-            {booking.status === 'cancelled' && (
-              <div className="space-y-2">
-                {cancellationContext && (
-                  <p className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900">
-                    {cancellationContext}
-                  </p>
-                )}
-                <CancellationPaymentBreakdown booking={booking} />
-              </div>
-            )}
+            <ClientPaymentOutcome booking={booking} cancellationContext={booking.status === 'cancelled' ? cancellationContext : null} />
 
           </div>
 
@@ -688,203 +673,212 @@ export default function ClientBookingDetailPage() {
             <Card className="border-slate-200 bg-white/90">
               <CardContent className="space-y-2 px-5 pb-5 pt-6 sm:px-6 sm:pb-6 sm:pt-6">
                 <h2 className={`${displayFont.className} text-lg font-semibold tracking-[-0.02em] text-slate-900`}>
-                  Next actions
+                  {cancelledBeforeScheduledStart ? 'Booking read-only' : 'Next actions'}
                 </h2>
-                {Boolean(reportableStatus && reportAnchorMs) && (
-                  <p
-                    className={`rounded-xl border px-3 py-2 text-sm ${
-                      reportWindowActive
-                        ? 'border-amber-200 bg-amber-50 text-amber-800'
-                        : 'border-slate-200 bg-slate-50 text-slate-600'
-                    }`}
-                  >
-                    {reportWindowActive
-                      ? `Report window active until ${formatReportWindowDeadline(reportDeadlineMs)}.`
-                      : `Report window closed on ${formatReportWindowDeadline(reportDeadlineMs)}.`}
-                  </p>
-                )}
-                <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap">
-                  {canRespondToCleanerProposal && (
-                    <>
-                      <Button
-                        size="lg"
-                        className="w-full sm:w-auto"
-                        onClick={() => handleBookingAction('accept_proposal')}
-                        loading={actionLoading === 'accept_proposal'}
-                        disabled={Boolean(actionLoading)}
+                {cancelledBeforeScheduledStart ? (
+                  <div className="space-y-2 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-700">
+                    <p>This booking has been cancelled. No further booking actions are available.</p>
+                    <p>Any unrelated account or support issue can still be raised through MaidHive’s separate Report section.</p>
+                  </div>
+                ) : (
+                  <>
+                    {Boolean(reportableStatus && reportAnchorMs) && (
+                      <p
+                        className={`rounded-xl border px-3 py-2 text-sm ${
+                          reportWindowActive
+                            ? 'border-amber-200 bg-amber-50 text-amber-800'
+                            : 'border-slate-200 bg-slate-50 text-slate-600'
+                        }`}
                       >
-                        Accept proposed time
-                      </Button>
-                      {canCounterProposal && (
+                        {reportWindowActive
+                          ? `Report window active until ${formatReportWindowDeadline(reportDeadlineMs)}.`
+                          : `Report window closed on ${formatReportWindowDeadline(reportDeadlineMs)}.`}
+                      </p>
+                    )}
+                    <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap">
+                      {canRespondToCleanerProposal && (
+                        <>
+                          <Button
+                            size="lg"
+                            className="w-full sm:w-auto"
+                            onClick={() => handleBookingAction('accept_proposal')}
+                            loading={actionLoading === 'accept_proposal'}
+                            disabled={Boolean(actionLoading)}
+                          >
+                            Accept proposed time
+                          </Button>
+                          {canCounterProposal && (
+                            <Button
+                              variant="outline"
+                              className="w-full sm:w-auto"
+                              onClick={() => {
+                                const seed = booking.proposed_start ?? booking.scheduled_start
+                                setCounterDate(toDateInputValueCyprus(isAmendProposal ? booking.scheduled_start : seed))
+                                setCounterTime(toTimeInputValueCyprus(seed))
+                                setCounterOpen(true)
+                              }}
+                              disabled={Boolean(actionLoading)}
+                            >
+                              Counter once with another time
+                            </Button>
+                          )}
+                          <Button
+                            variant="destructive"
+                            className="w-full sm:w-auto"
+                            onClick={() => setDeclineProposalConfirmOpen(true)}
+                            disabled={Boolean(actionLoading)}
+                          >
+                            Decline proposal
+                          </Button>
+                        </>
+                      )}
+                      {canAuthorize && (
+                        <Button size="lg" className="w-full sm:w-auto" onClick={() => router.push(`/client/checkout/${id}`)}>
+                          Authorise card
+                        </Button>
+                      )}
+                      {canContinuePayment && (
+                        <>
+                          <Button variant="outline" className="w-full sm:w-auto" onClick={() => router.push(`/client/book/${booking.cleaner_id}?continue=1&bookingId=${booking.id}&step=3`)}>
+                            Continue payment
+                          </Button>
+                          <p className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-600">
+                            Need to change something? Cancel this draft and start a new booking.
+                          </p>
+                        </>
+                      )}
+                      {canCancelDraft && (
+                        <Button variant="outline" className="w-full sm:w-auto border-red-300 text-red-700 hover:bg-red-50" onClick={() => setCancelConfirmOpen(true)}>
+                          Cancel draft
+                        </Button>
+                      )}
+                      {canCancelBookingRequest && (
+                        <Button variant="outline" className="w-full sm:w-auto border-red-300 text-red-700 hover:bg-red-50" onClick={() => setCancelConfirmOpen(true)}>
+                          Cancel booking request
+                        </Button>
+                      )}
+                      {canRescheduleBooking && (
                         <Button
                           variant="outline"
                           className="w-full sm:w-auto"
                           onClick={() => {
                             const seed = booking.proposed_start ?? booking.scheduled_start
-                            setCounterDate(toDateInputValueCyprus(isAmendProposal ? booking.scheduled_start : seed))
-                            setCounterTime(toTimeInputValueCyprus(seed))
-                            setCounterOpen(true)
+                            setProposalAction('propose_alternative')
+                            setProposalDate(toDateInputValueCyprus(seed))
+                            setProposalTime(toTimeInputValueCyprus(seed))
+                            setProposalOpen(true)
                           }}
                           disabled={Boolean(actionLoading)}
                         >
-                          Counter once with another time
+                          Reschedule booking
                         </Button>
                       )}
-                      <Button
-                        variant="destructive"
-                        className="w-full sm:w-auto"
-                        onClick={() => setDeclineProposalConfirmOpen(true)}
-                        disabled={Boolean(actionLoading)}
-                      >
-                        Decline proposal
-                      </Button>
-                    </>
-                  )}
-                  {canAuthorize && (
-                    <Button size="lg" className="w-full sm:w-auto" onClick={() => router.push(`/client/checkout/${id}`)}>
-                      Authorise card
-                    </Button>
-                  )}
-                  {canContinuePayment && (
-                    <>
-                      <Button variant="outline" className="w-full sm:w-auto" onClick={() => router.push(`/client/book/${booking.cleaner_id}?continue=1&bookingId=${booking.id}&step=3`)}>
-                        Continue payment
-                      </Button>
-                      <p className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-600">
-                        Need to change something? Cancel this draft and start a new booking.
-                      </p>
-                    </>
-                  )}
-                  {canCancelDraft && (
-                    <Button variant="outline" className="w-full sm:w-auto border-red-300 text-red-700 hover:bg-red-50" onClick={() => setCancelConfirmOpen(true)}>
-                      Cancel draft
-                    </Button>
-                  )}
-                  {canCancelBookingRequest && (
-                    <Button variant="outline" className="w-full sm:w-auto border-red-300 text-red-700 hover:bg-red-50" onClick={() => setCancelConfirmOpen(true)}>
-                      Cancel booking request
-                    </Button>
-                  )}
-                  {canRescheduleBooking && (
-                    <Button
-                      variant="outline"
-                      className="w-full sm:w-auto"
-                      onClick={() => {
-                        const seed = booking.proposed_start ?? booking.scheduled_start
-                        setProposalAction('propose_alternative')
-                        setProposalDate(toDateInputValueCyprus(seed))
-                        setProposalTime(toTimeInputValueCyprus(seed))
-                        setProposalOpen(true)
-                      }}
-                      disabled={Boolean(actionLoading)}
-                    >
-                      Reschedule booking
-                    </Button>
-                  )}
-                  {canAmendStartTime && (
-                    <Button
-                      variant="outline"
-                      className="w-full sm:w-auto"
-                      onClick={() => {
-                        const seed = booking.scheduled_start
-                        setProposalAction('amend_start_time')
-                        setProposalDate(toDateInputValueCyprus(seed))
-                        setProposalTime(toTimeInputValueCyprus(seed))
-                        setProposalOpen(true)
-                      }}
-                      disabled={Boolean(actionLoading)}
-                    >
-                      Amend Start Time
-                    </Button>
-                  )}
-                  {canAmendStartTime && (
-                    <p className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-600">
-                      Small same-day adjustment only (up to +/-3 hours).
-                    </p>
-                  )}
-                  {canCancelConfirmedBooking && (
-                    <Button variant="outline" className="w-full sm:w-auto border-red-300 text-red-700 hover:bg-red-50" onClick={() => setCancelConfirmOpen(true)}>
-                      Cancel booking
-                    </Button>
-                  )}
-                  {booking.status === 'confirmed' && within24HoursBeforeStart && (
-                    <p className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
-                      Less than 24 hours remain before start. Cancellation charges may apply under the cancellation policy.
-                    </p>
-                  )}
-                  {booking.status === 'confirmed' && moreThan24HoursAway && hasAlreadyRescheduled && !hasProposal && (
-                    <p className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-600">
-                      This booking has already been rescheduled once. Further rescheduling is not available for MVP.
-                    </p>
-                  )}
-                  {booking.status === 'confirmed' && within24HoursBeforeStart && !hasProposal && clientAmendRequestUsed && !amendFinalised && (
-                    <p className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-600">
-                      You have already used your single Amend Start Time request for this booking.
-                    </p>
-                  )}
-                  {booking.status === 'confirmed' && within24HoursBeforeStart && !hasProposal && amendFinalised && (
-                    <p className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-600">
-                      Amend Start Time has already been finalised for this booking.
-                    </p>
-                  )}
-                  {(booking.status === 'expired' || booking.status === 'cancelled' || booking.status === 'declined' || overdueUnpaidDraftLike) && (
-                    <>
-                      <Button className="w-full sm:w-auto" onClick={() => router.push(`/client/book/${booking.cleaner_id}?reset=1&step=1&source=bookings`)}>
-                        Book again
-                      </Button>
-                      <Button variant="outline" className="w-full sm:w-auto" onClick={() => router.push('/client/cleaners')}>
-                        Choose another cleaner
-                      </Button>
-                    </>
-                  )}
-                  {booking.status === 'in_progress' && (
-                    <p className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-600">
-                      Cleaner can complete this job from 5 minutes before scheduled end time.
-                    </p>
-                  )}
-                  {canReportInProgress && (
-                    <Button variant="destructive" className="w-full sm:w-auto" onClick={() => router.push(`/client/report?booking=${id}`)}>
-                      Report a problem
-                    </Button>
-                  )}
-                  {activeDispute && (
-                    <p className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-700">
-                      {payoutPauseConfirmed
-                        ? 'This booking is now Under Review, and the cleaner payout has been paused until the case is resolved.'
-                        : 'This booking is now Under Review. MaidHive admin has been alerted to review the payment state for this case.'}
-                    </p>
-                  )}
-                  {reportWindowActive && activeDispute && disputeAction.kind !== 'none' && (
-                    <Button variant="outline" className="w-full sm:w-auto" onClick={() => router.push(`/client/report?booking=${id}`)}>
-                      {disputeAction.label}
-                    </Button>
-                  )}
-                  {isCompletedReleased && (
-                    <Button className="w-full sm:w-auto" onClick={() => router.push(`/client/book/${booking.cleaner_id}?reset=1&step=1&source=bookings`)}>
-                      Book again
-                    </Button>
-                  )}
-                  {canReview && (
-                    <Button variant="outline" className="w-full sm:w-auto" onClick={() => setReviewOpen(true)}>
-                      Leave a review
-                    </Button>
-                  )}
-                  {reviewSubmitted && (
-                    <span className="inline-flex h-10 items-center rounded-xl border border-emerald-200 bg-emerald-50 px-3 text-sm font-semibold text-emerald-700">
-                      Review submitted
-                    </span>
-                  )}
-                  {reportWindowActive && isCompletedAwaitingRelease && (
-                    <Button variant="destructive" className="w-full sm:w-auto" onClick={() => router.push(`/client/report?booking=${id}`)}>
-                      Report a Problem
-                    </Button>
-                  )}
-                  {reportWindowExpired && (
-                    <p className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-500">
-                      The {DISPUTE_WINDOW_HOURS}-hour report window has expired for this booking.
-                    </p>
-                  )}
-                </div>
+                      {canAmendStartTime && (
+                        <Button
+                          variant="outline"
+                          className="w-full sm:w-auto"
+                          onClick={() => {
+                            const seed = booking.scheduled_start
+                            setProposalAction('amend_start_time')
+                            setProposalDate(toDateInputValueCyprus(seed))
+                            setProposalTime(toTimeInputValueCyprus(seed))
+                            setProposalOpen(true)
+                          }}
+                          disabled={Boolean(actionLoading)}
+                        >
+                          Amend Start Time
+                        </Button>
+                      )}
+                      {canAmendStartTime && (
+                        <p className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-600">
+                          Small same-day adjustment only (up to +/-3 hours).
+                        </p>
+                      )}
+                      {canCancelConfirmedBooking && (
+                        <Button variant="outline" className="w-full sm:w-auto border-red-300 text-red-700 hover:bg-red-50" onClick={() => setCancelConfirmOpen(true)}>
+                          Cancel booking
+                        </Button>
+                      )}
+                      {booking.status === 'confirmed' && within24HoursBeforeStart && (
+                        <p className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
+                          Less than 24 hours remain before start. Cancellation charges may apply under the cancellation policy.
+                        </p>
+                      )}
+                      {booking.status === 'confirmed' && moreThan24HoursAway && hasAlreadyRescheduled && !hasProposal && (
+                        <p className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-600">
+                          This booking has already been rescheduled once. Further rescheduling is not available for MVP.
+                        </p>
+                      )}
+                      {booking.status === 'confirmed' && within24HoursBeforeStart && !hasProposal && clientAmendRequestUsed && !amendFinalised && (
+                        <p className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-600">
+                          You have already used your single Amend Start Time request for this booking.
+                        </p>
+                      )}
+                      {booking.status === 'confirmed' && within24HoursBeforeStart && !hasProposal && amendFinalised && (
+                        <p className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-600">
+                          Amend Start Time has already been finalised for this booking.
+                        </p>
+                      )}
+                      {(booking.status === 'expired' || booking.status === 'cancelled' || booking.status === 'declined' || overdueUnpaidDraftLike) && (
+                        <>
+                          <Button className="w-full sm:w-auto" onClick={() => router.push(`/client/book/${booking.cleaner_id}?reset=1&step=1&source=bookings`)}>
+                            Book again
+                          </Button>
+                          <Button variant="outline" className="w-full sm:w-auto" onClick={() => router.push('/client/cleaners')}>
+                            Choose another cleaner
+                          </Button>
+                        </>
+                      )}
+                      {booking.status === 'in_progress' && (
+                        <p className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-600">
+                          Cleaner can complete this job from 5 minutes before scheduled end time.
+                        </p>
+                      )}
+                      {canReportInProgress && (
+                        <Button variant="destructive" className="w-full sm:w-auto" onClick={() => router.push(`/client/report?booking=${id}`)}>
+                          Report a problem
+                        </Button>
+                      )}
+                      {activeDispute && (
+                        <p className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-700">
+                          {payoutPauseConfirmed
+                            ? 'This booking is now Under Review, and the cleaner payout has been paused until the case is resolved.'
+                            : 'This booking is now Under Review. MaidHive admin has been alerted to review the payment state for this case.'}
+                        </p>
+                      )}
+                      {activeDispute && disputeAction.kind !== 'none' && (
+                        <Button variant="outline" className="w-full sm:w-auto" onClick={() => router.push(`/client/report?booking=${id}`)}>
+                          {disputeAction.label}
+                        </Button>
+                      )}
+                      {isCompletedReleased && (
+                        <Button className="w-full sm:w-auto" onClick={() => router.push(`/client/book/${booking.cleaner_id}?reset=1&step=1&source=bookings`)}>
+                          Book again
+                        </Button>
+                      )}
+                      {canReview && (
+                        <Button variant="outline" className="w-full sm:w-auto" onClick={() => setReviewOpen(true)}>
+                          Leave a review
+                        </Button>
+                      )}
+                      {reviewSubmitted && (
+                        <span className="inline-flex h-10 items-center rounded-xl border border-emerald-200 bg-emerald-50 px-3 text-sm font-semibold text-emerald-700">
+                          Review submitted
+                        </span>
+                      )}
+                      {reportWindowActive && isCompletedAwaitingRelease && !hasDisputeCase && (
+                        <Button variant="destructive" className="w-full sm:w-auto" onClick={() => router.push(`/client/report?booking=${id}`)}>
+                          Report a Problem
+                        </Button>
+                      )}
+                      {reportWindowExpired && (
+                        <p className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-500">
+                          The {DISPUTE_WINDOW_HOURS}-hour report window has expired for this booking.
+                        </p>
+                      )}
+                    </div>
+                  </>
+                )}
               </CardContent>
             </Card>
 

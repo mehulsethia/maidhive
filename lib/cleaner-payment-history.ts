@@ -10,7 +10,7 @@ export type CleanerPaymentHistoryTone = 'ok' | 'warn' | 'issue'
 
 export type CleanerPaymentHistoryEntry = {
   booking: BookingRead
-  paymentType: 'Booking payout' | 'Booking cancellation' | 'Cancellation compensation' | 'No-show compensation' | 'Payment issue'
+  paymentType: 'Booking payout' | 'Booking cancellation' | 'Cancellation compensation' | 'No-show compensation' | 'Under review' | 'Payment issue'
   label: string
   tone: CleanerPaymentHistoryTone
   amount?: number
@@ -29,6 +29,14 @@ function isActiveDispute(booking: BookingRead) {
   return booking.dispute?.status === 'open' || booking.dispute?.status === 'under_review'
 }
 
+function underReviewPaymentHistoryEntry(): Omit<CleanerPaymentHistoryEntry, 'booking'> {
+  return {
+    paymentType: 'Under review',
+    label: 'Payout paused pending case resolution',
+    tone: 'warn',
+  }
+}
+
 export function classifyCleanerPaymentHistoryBooking(
   booking: BookingRead,
   nowMs = Date.now(),
@@ -42,7 +50,7 @@ export function classifyCleanerPaymentHistoryBooking(
 
   if (booking.status === 'completed') {
     if (isActiveDispute(booking)) {
-      return { paymentType: 'Payment issue', label: 'Payout pending review', tone: 'issue' }
+      return underReviewPaymentHistoryEntry()
     }
     if (isFinalNoCleanerPayoutOutcome(booking)) {
       return {
@@ -102,7 +110,11 @@ export function classifyCleanerPaymentHistoryBooking(
     return { paymentType: 'Booking cancellation', label: 'Cancelled - no payout due', tone: 'warn', amount: 0 }
   }
 
-  if (paymentStatus === 'failed' || booking.status === 'disputed' || isActiveDispute(booking)) {
+  if (booking.status === 'disputed' || isActiveDispute(booking)) {
+    return underReviewPaymentHistoryEntry()
+  }
+
+  if (paymentStatus === 'failed') {
     return { paymentType: 'Payment issue', label: 'Payment issue - admin review', tone: 'issue' }
   }
 

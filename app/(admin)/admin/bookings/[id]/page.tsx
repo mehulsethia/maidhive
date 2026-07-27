@@ -532,6 +532,12 @@ export default function AdminBookingDetailPage() {
   const useProjectedPaymentLabels = isNonPayableBookingState(booking)
   const payoutSummary = getCleanerPayoutSummary(booking)
   const financialOutcome = getBookingFinancialOutcome(booking)
+  const disputeFinalized = booking.dispute?.status === 'resolved' || booking.dispute?.status === 'closed'
+  const showMutableFinancialLabels =
+    !cancellationOutcome &&
+    ['accepted', 'confirmed', 'in_progress'].includes(booking.status) &&
+    !financialOutcome.cleanerPayoutTransferred &&
+    !disputeFinalized
   const cleanerPayoutState = describeCleanerPayoutState(booking, financialOutcome.finalCleanerPayout)
   const transferState = describeTransferState(booking)
 
@@ -681,21 +687,31 @@ export default function AdminBookingDetailPage() {
                   </>
                 ) : (
                   <>
-                    <DetailRow
-                      label={useProjectedPaymentLabels ? 'Projected cleaner payout' : 'Original cleaner payout'}
-                      value={formatCurrency(financialOutcome.originalCleanerPayout)}
-                    />
-                    <DetailRow
-                      label={useProjectedPaymentLabels ? 'Projected platform fee' : 'Original platform fee'}
-                      value={formatCurrency(financialOutcome.originalPlatformFee)}
-                    />
-                    <DetailRow label="Refund amount" value={formatCurrency(financialOutcome.refundToClient)} />
-                    {payoutSummary.hasDisputeAdjustment && (
-                      <DetailRow label="Dispute adjustment" value={formatCurrency(payoutSummary.disputeAdjustment)} />
+                    {showMutableFinancialLabels ? (
+                      <>
+                        <DetailRow label="Expected cleaner payout" value={formatCurrency(financialOutcome.originalCleanerPayout)} />
+                        <DetailRow label="Expected MaidHive fee" value={formatCurrency(financialOutcome.originalPlatformFee)} />
+                        <DetailRow label="Authorised client amount" value={formatCurrency(financialOutcome.originalClientPayment)} />
+                      </>
+                    ) : (
+                      <>
+                        <DetailRow
+                          label={useProjectedPaymentLabels ? 'Projected cleaner payout' : 'Original cleaner payout'}
+                          value={formatCurrency(financialOutcome.originalCleanerPayout)}
+                        />
+                        <DetailRow
+                          label={useProjectedPaymentLabels ? 'Projected platform fee' : 'Original platform fee'}
+                          value={formatCurrency(financialOutcome.originalPlatformFee)}
+                        />
+                        <DetailRow label="Refund amount" value={formatCurrency(financialOutcome.refundToClient)} />
+                        {payoutSummary.hasDisputeAdjustment && (
+                          <DetailRow label="Dispute adjustment" value={formatCurrency(payoutSummary.disputeAdjustment)} />
+                        )}
+                        <DetailRow label="Final cleaner payout" value={formatCurrency(financialOutcome.finalCleanerPayout)} />
+                        <DetailRow label="Final MaidHive retained fee" value={formatCurrency(financialOutcome.finalMaidHiveRetainedFee)} />
+                        <DetailRow label="Final client amount paid" value={formatCurrency(financialOutcome.finalClientAmountPaid)} />
+                      </>
                     )}
-                    <DetailRow label="Final cleaner payout" value={formatCurrency(financialOutcome.finalCleanerPayout)} />
-                    <DetailRow label="Final MaidHive retained fee" value={formatCurrency(financialOutcome.finalMaidHiveRetainedFee)} />
-                    <DetailRow label="Final client amount paid" value={formatCurrency(financialOutcome.finalClientAmountPaid)} />
                   </>
                 )}
               </div>
@@ -714,7 +730,10 @@ export default function AdminBookingDetailPage() {
                 <DetailRow label="Created" value={formatDate(booking.created_at)} />
                 <DetailRow label="Booking status" value={booking.status === 'completed' ? 'Completed' : booking.status.replace(/_/g, ' ')} />
                 <DetailRow label="Financial status" value={financialOutcome.financialStatus} />
-                <DetailRow label="Final cleaner payout" value={formatCurrency(financialOutcome.finalCleanerPayout)} />
+                <DetailRow
+                  label={showMutableFinancialLabels ? 'Expected cleaner payout' : 'Final cleaner payout'}
+                  value={formatCurrency(showMutableFinancialLabels ? financialOutcome.originalCleanerPayout : financialOutcome.finalCleanerPayout)}
+                />
                 <DetailRow label="Accept by" value={booking.accept_by ? formatDate(booking.accept_by) : null} />
                 <DetailRow label="Pay by" value={booking.pay_by ? formatDate(booking.pay_by) : null} />
                 <DetailRow label="Accepted" value={booking.accepted_at ? formatDate(booking.accepted_at) : null} />

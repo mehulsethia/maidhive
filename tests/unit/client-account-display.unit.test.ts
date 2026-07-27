@@ -2,6 +2,7 @@ import { createElement } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it } from 'vitest'
 import { BookingStatusBadge } from '@/components/booking-status-badge'
+import { ClientPaymentOutcome } from '@/components/client-payment-outcome'
 import {
   getAdminClientCancellationCopy,
   getClientCancellationContext,
@@ -167,6 +168,31 @@ describe('client account display rules', () => {
       amountLabel: 'Temporary payment hold released',
       amount: 33,
     })
+  })
+
+  it('renders cancelled client financial outcome as one final payment section with cancellation reason', () => {
+    const booking = cancelledBooking({
+      cancelled_by: 'cleaner_user',
+      total_amount: 33,
+      payment: {
+        id: 'payment_released_hold',
+        status: 'released',
+        amount: 33,
+        refund_reason: 'payment_authorisation_released',
+      },
+    })
+    const markup = renderToStaticMarkup(createElement(ClientPaymentOutcome, {
+      booking,
+      cancellationContext: getClientCancellationContext(booking),
+    }))
+
+    expect(markup).toContain('Final payment outcome')
+    expect(markup).toContain('Cancellation reason')
+    expect(markup).toContain('Cleaner cancelled this booking. No client cancellation charge applies.')
+    expect(markup).toContain('Original booking total')
+    expect(markup).toContain('Temporary payment hold released')
+    expect(markup).toContain('Final amount paid')
+    expect(markup).not.toContain('Cancellation payment outcome')
   })
 
   it('shows the client selected cleaning type before internal service classification', () => {

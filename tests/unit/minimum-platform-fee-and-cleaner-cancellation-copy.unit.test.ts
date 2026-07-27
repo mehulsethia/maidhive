@@ -34,6 +34,7 @@ describe('cleaner cancellation confirmation copy', () => {
     expect(copy.title).toBe('Cancel booking?')
     expect(copy.consequences).toContain('The client will receive a full refund for this booking.')
     expect(copy.consequences).toContain('You will not receive any payout for this booking.')
+    expect(copy.consequences).not.toContain('MaidHive retained fee: €0.00')
     expect(copy.keepButton).toBe('Keep booking')
     expect(copy.cancelButton).toBe('Cancel booking')
   })
@@ -46,12 +47,13 @@ describe('cleaner cancellation confirmation copy', () => {
     expect(copy.consequences).toContain('This cancellation will be recorded in your 12–24-hour cancellation history and included in your cancellation rate. It will not create a strike, but it may affect your Super Cleaner eligibility if your cancellation rate exceeds the permitted threshold.')
     expect(copy.consequences).toContain('Client refund: full original booking payment')
     expect(copy.consequences).toContain('Cleaner payout: €0.00')
-    expect(copy.consequences).toContain('MaidHive retained fee: €0.00')
+    expect(copy.consequences).not.toContain('MaidHive retained fee: €0.00')
   })
 
   it('explains under-12 hour cancellation consequences as last-minute', () => {
     const copy = getCleanerCancellationConfirmationCopy('under_12h')
 
-    expect(copy.consequences).toContain('This under-12-hour cancellation will be recorded in your last-minute cancellation history and may create a reliability strike under MaidHive policy.')
+    expect(copy.consequences).toContain('This under-12-hour cancellation will be recorded as a last-minute cancellation incident on your account. Repeated incidents may result in a reliability strike under the MaidHive policy.')
+    expect(copy.consequences).not.toContain('MaidHive retained fee: €0.00')
   })
 })

@@ -122,7 +122,7 @@ function makeBooking(disputeStatus: 'under_review' | 'resolved') {
     platform_fee: 2,
     cleaner_payout: 20,
     total_amount: 22,
-    special_instructions: 'Financial outcome responsive regression booking',
+    special_instructions: 'Job type: One-off clean\nCleaning supplies: Provided by client',
     accepted_at: isoHoursFromNow(-72),
     confirmed_at: isoHoursFromNow(-71),
     created_at: isoHoursFromNow(-96),
@@ -227,6 +227,36 @@ function makeBooking(disputeStatus: 'under_review' | 'resolved') {
   }
 }
 
+function makeCancelledBooking() {
+  return {
+    ...makeBooking('resolved'),
+    status: 'cancelled',
+    cancelled_by: CLEANER_USER_ID,
+    cancelled_at: isoHoursFromNow(-2),
+    scheduled_start: isoHoursFromNow(72),
+    scheduled_end: isoHoursFromNow(74),
+    completed_at: null,
+    dispute: null,
+    review: null,
+    payment: {
+      id: 'payment-cancelled-released',
+      status: 'released',
+      amount: 22,
+      currency: 'eur',
+      platform_fee: 0,
+      cleaner_payout: 0,
+      refund_amount: 0,
+      refund_reason: 'payment_authorisation_released',
+      authorized_at: isoHoursFromNow(-72),
+      captured_at: null,
+      refunded_at: null,
+      payout_scheduled_at: null,
+      transferred_at: null,
+      updated_at: isoHoursFromNow(-2),
+    },
+  }
+}
+
 function paginated(items: unknown[]) {
   return { items, bookings: items, disputes: items, total: items.length, page: 1, page_size: 50 }
 }
@@ -309,7 +339,7 @@ test.describe('F22 full-refund final-outcome responsive regression @smoke', () =
       await expect(page.getByTestId('admin-payment-state').getByText('Not transferred')).toBeVisible()
       await expect(page.getByText('Original platform fee')).toBeVisible()
       await expect(page.getByText('Final MaidHive retained fee')).toBeVisible()
-      await expect(page.getByText('Fully refunded')).toBeVisible()
+      await expect(page.getByTestId('admin-booking-state').getByText('Refund issued')).toBeVisible()
       await expect(page.getByText('Final client amount paid')).toBeVisible()
       await expect(page.getByText('Cleaner payout paused due to dispute')).toBeVisible()
       await expect(page.getByText('Cleaner payout adjusted from €20.00 to €0.00')).toBeVisible()
@@ -360,6 +390,7 @@ test.describe('F22 full-refund final-outcome responsive regression @smoke', () =
 
       await openResponsive(page, '/cleaner/profile?tab=payments', 'cleaner payment history')
       await expect(page.getByText('Payment History')).toBeVisible()
+      await expect(page.getByText('One-off clean', { exact: true })).toBeVisible()
       await expect(page.getByText('€0.00')).toBeVisible()
       await expect(page.getByText('No payout')).toBeVisible()
       await expect(page.getByText('Awaiting release')).toHaveCount(0)
@@ -383,10 +414,44 @@ test.describe('F22 full-refund final-outcome responsive regression @smoke', () =
 
       await openResponsive(page, `/client/bookings/${BOOKING_ID}`, 'client booking detail')
       await expect(page.getByText('Financial status: Refunded')).toBeVisible()
-      await expect(page.getByText('Original total')).toBeVisible()
+      await expect(page.getByText('Original booking total')).toBeVisible()
       await expect(page.getByText('Full refund')).toBeVisible()
       await expect(page.getByText('Final amount paid', { exact: true })).toBeVisible()
       await expect(page.getByText('Partial refund')).toHaveCount(0)
+    })
+
+    test('E2E-RESP-19 client cancelled lifecycle activity and single financial outcome stay responsive', async ({ page }) => {
+      const cancelledBooking = makeCancelledBooking()
+      await page.route(`**/api/v1/bookings/${BOOKING_ID}`, (route) => fulfill(route, cancelledBooking))
+      await page.route('**/api/v1/bookings?**', (route) => fulfill(route, paginated([cancelledBooking])))
+      await page.route('**/api/v1/clients/favorites', (route) => fulfill(route, []))
+      await page.route('**/api/v1/disputes?**', (route) => fulfill(route, paginated([])))
+      await page.route(`**/api/v1/messages/${BOOKING_ID}`, (route) => fulfill(route, []))
+      await page.route('**/api/v1/messages?**', (route) => fulfill(route, []))
+      await page.route('**/api/v1/notifications**', (route) => fulfill(route, paginated([])))
+      await page.route('**/api/v1/auth/me', (route) => fulfill(route, {
+        id: CLIENT_USER_ID,
+        name: 'Responsive Client',
+        email: 'client@example.test',
+        role: 'client',
+        is_active: true,
+      }))
+
+      await openResponsive(page, '/client/dashboard', 'client cancelled dashboard activity')
+      await expect(page.getByText('Recent Activity', { exact: true })).toBeVisible()
+      await expect(page.getByText('Cancelled by cleaner', { exact: true })).toBeVisible()
+      await expect(page.getByText('You have not been charged', { exact: true })).toBeVisible()
+
+      await openResponsive(page, `/client/bookings/${BOOKING_ID}`, 'client cancelled booking detail')
+      await expect(page.getByText('Final payment outcome', { exact: true })).toBeVisible()
+      await expect(page.getByText('Cancellation reason', { exact: true })).toBeVisible()
+      await expect(page.getByText('Original booking total', { exact: true })).toBeVisible()
+      await expect(page.getByText('Temporary payment hold released', { exact: true })).toBeVisible()
+      await expect(page.getByText('Final amount paid', { exact: true })).toBeVisible()
+      await expect(page.getByText('Cancellation payment outcome', { exact: true })).toHaveCount(0)
+      await expect(page.getByText('Booking read-only', { exact: true })).toBeVisible()
+      await expect(page.getByRole('button', { name: 'Book again' })).toHaveCount(0)
+      await expect(page.getByRole('button', { name: /Report a problem/i })).toHaveCount(0)
     })
   })
 })

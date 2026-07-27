@@ -12,6 +12,7 @@ import {
   Sparkles,
 } from 'lucide-react'
 import { authApi, bookingsApi, favoritesApi } from '@/lib/api'
+import { compareBookingsByRecentActivity } from '@/lib/booking-activity'
 import { subscribeBookingsRefresh } from '@/lib/booking-sync'
 import { compareBookingsByOperationalPriority } from '@/lib/booking-priority'
 import { BookingStatusBadge } from '@/components/booking-status-badge'
@@ -24,6 +25,7 @@ import { getCancellationOriginLabel } from '@/lib/cancellation-origin'
 import { UserAvatar } from '@/components/ui/user-avatar'
 import { formatCurrency, formatDate } from '@/lib/utils'
 import { getClientPaymentSummary } from '@/lib/client-payment-summary'
+import { getBookingCleaningTypeLabel } from '@/lib/booking-service-labels'
 import type { BookingRead, BookingStatus, FavoriteCleaner } from '@/types'
 
 const displayFont = Bricolage_Grotesque({ subsets: ['latin'], weight: ['400', '500', '700', '800'] })
@@ -32,13 +34,6 @@ const monoFont = IBM_Plex_Mono({ subsets: ['latin'], weight: ['400', '500', '600
 const ACTIVE_STATUSES: BookingStatus[] = ['pending', 'confirmed', 'in_progress']
 const UPCOMING_STATUSES: BookingStatus[] = ['pending', 'confirmed', 'in_progress']
 const CLOSED_STATUSES: BookingStatus[] = ['cancelled', 'declined', 'expired']
-
-const SERVICE_LABELS: Record<string, string> = {
-  standard: 'Standard Clean',
-  deep_clean: 'Deep Clean',
-  end_of_tenancy: 'End of Tenancy',
-  move_in: 'Move-in Clean',
-}
 
 const LIVE_REFRESH_MS = Number(process.env.NEXT_PUBLIC_DASHBOARD_LIVE_REFRESH_MS ?? 45000)
 
@@ -173,7 +168,8 @@ export default function ClientDashboardPage() {
     [deferredBookings],
   )
 
-  const recent = [...operationallySorted]
+  const recent = [...deferredBookings]
+    .sort(compareBookingsByRecentActivity)
     .slice(0, 5)
 
   const now = Date.now()
@@ -289,7 +285,7 @@ export default function ClientDashboardPage() {
                       className="mt-2 block rounded-2xl border border-white/30 bg-white/10 p-3 transition hover:bg-white/20"
                     >
                       <p className="text-sm font-semibold text-white">
-                        {SERVICE_LABELS[nextBooking.service_type] ?? nextBooking.service_type}
+                        {getBookingCleaningTypeLabel(nextBooking)}
                       </p>
                       <p className="mt-1 text-xs text-white/75">{formatDate(nextBooking.scheduled_start)}</p>
                       <p className="mt-1 text-sm text-white/90">{nextBooking.cleaner?.user?.name ?? 'Cleaner'}</p>
@@ -355,7 +351,7 @@ export default function ClientDashboardPage() {
                   >
                     <div className="min-w-0">
                       <p className={`${displayFont.className} truncate text-base font-semibold tracking-[-0.01em] text-slate-900`}>
-                        {SERVICE_LABELS[booking.service_type] ?? booking.service_type}
+                        {getBookingCleaningTypeLabel(booking)}
                       </p>
                       <p className="text-sm text-slate-600">{booking.cleaner?.user?.name ?? 'Cleaner'}</p>
                       <p className={`${monoFont.className} mt-1 text-[0.72rem] tracking-wide text-slate-500`}>

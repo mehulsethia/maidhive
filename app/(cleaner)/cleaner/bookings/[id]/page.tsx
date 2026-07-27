@@ -409,10 +409,12 @@ export default function CleanerBookingDetailPage() {
   const cancellationConfirmation = getCleanerCancellationConfirmationCopy(cleanerCancellationPolicy?.window)
   const startWindowExpired = Number.isFinite(bookingEndsAtMs) && Date.now() > bookingEndsAtMs + 24 * 60 * 60 * 1000
   const canStartJobNow = Number.isFinite(bookingStartsAtMs) && Date.now() >= bookingStartsAtMs - START_JOB_EARLY_WINDOW_MS && !startWindowExpired
-  const canReportProblem = ['in_progress', 'completed'].includes(booking.status) &&
-    isBookingReportWindowActive(booking.scheduled_end)
   const activeDispute = isActiveDisputeStatus(booking.dispute?.status)
-  const canOpenDisputeCase = activeDispute && isBookingReportWindowActive(booking.scheduled_end)
+  const hasDisputeCase = Boolean(booking.dispute)
+  const canReportProblem = ['in_progress', 'completed'].includes(booking.status) &&
+    isBookingReportWindowActive(booking.scheduled_end) &&
+    !hasDisputeCase
+  const canOpenDisputeCase = activeDispute
   const disputeAction = getDisputeParticipantAction('cleaner', booking.dispute, currentUserId)
   const payoutSummary = getCleanerPayoutSummary(booking)
   const noPayoutFinalized = isFinalNoCleanerPayoutOutcome(booking)

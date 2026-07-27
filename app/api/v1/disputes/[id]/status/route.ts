@@ -85,7 +85,7 @@ export const PATCH = requireAdmin(async (req: NextRequest, ctx) => {
         userId: booking.cleaner.userId,
         type: 'dispute_under_review',
         title: 'Dispute under review',
-        body: 'MaidHive is actively reviewing this dispute.',
+        body: 'MaidHive is actively reviewing this dispute. Payout paused pending case resolution.',
         data: { booking_id: booking.id, dispute_id: updated.id },
       })
     }

@@ -340,6 +340,42 @@ describe('Booking cancellation communications', () => {
     expect(state.clientCancelledByCleanerEmails).toBe(1)
   })
 
+  it('records under-12 cleaner cancellation notifications as last-minute incidents', async () => {
+    vi.useFakeTimers()
+    vi.setSystemTime(new Date('2099-06-20T09:00:00.000Z'))
+    state.booking = {
+      id: 'booking_cleaner_last_minute_cancelled_1',
+      status: 'confirmed',
+      clientId: 'client_profile_1',
+      cleanerId: 'cleaner_profile_1',
+      acceptedAt: new Date('2099-06-18T09:00:00.000Z'),
+      confirmedAt: new Date('2099-06-18T09:05:00.000Z'),
+      scheduledStart: new Date('2099-06-20T10:00:00.000Z'),
+      durationHours: 2,
+      totalAmount: 33,
+      cleanerPayout: 30,
+      platformFee: 3,
+      payment: { id: 'payment_last_minute_1', status: 'authorized', amount: 33, stripePaymentIntentId: 'pi_last_minute_1' },
+      client: { userId: seeded.clientUser.id, user: { email: seeded.clientUser.email, name: seeded.clientUser.name } },
+      cleaner: { userId: seeded.cleanerUser.id, user: { email: seeded.cleanerUser.email, name: seeded.cleanerUser.name } },
+    }
+
+    const { bookingService } = await import('@/server/services/booking.service')
+    await bookingService.cancel(
+      state.booking.id,
+      seeded.cleanerUser as any,
+      'Cancelled by cleaner under 12 hours before scheduled start',
+    )
+
+    expect(state.notifications).toContainEqual(expect.objectContaining({
+      userId: seeded.cleanerUser.id,
+      title: 'You cancelled your booking',
+      body: 'You cancelled the booking for 20 Jun 2099 at 13:00. Your final payout is €0.00. This cancellation has been recorded as a last-minute cancellation incident on your account.',
+      data: { booking_id: state.booking.id },
+    }))
+    expect(String(state.notifications.find((item) => item.userId === seeded.cleanerUser.id)?.body)).not.toContain('strike')
+  })
+
   it('cancels remaining same-day bookings when cleaner marks rest of today unavailable', async () => {
     const primary = {
       id: 'booking_rest_today_primary',

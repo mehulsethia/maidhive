@@ -4,6 +4,7 @@ import Link from 'next/link'
 import { useEffect, useMemo, useState } from 'react'
 import { CircleCheck, Clock3, Euro, Star, ArrowUpRight, CalendarClock, MessageSquare, Info } from 'lucide-react'
 import { bookingsApi, cleanersApi } from '@/lib/api'
+import { compareBookingsByRecentActivity } from '@/lib/booking-activity'
 import { subscribeBookingsRefresh, triggerBookingsRefresh } from '@/lib/booking-sync'
 import { compareBookingsByOperationalPriority } from '@/lib/booking-priority'
 import { BookingStatusBadge } from '@/components/booking-status-badge'
@@ -46,28 +47,6 @@ function resolveJobTypeTitle(booking: BookingRead) {
   const snapshotJobType = snapshotMatch?.[1]?.trim()
   if (snapshotJobType) return snapshotJobType
   return SERVICE_LABELS[booking.service_type] ?? booking.service_type
-}
-
-function eventMs(value?: string | null) {
-  const ms = value ? new Date(value).getTime() : Number.NaN
-  return Number.isFinite(ms) ? ms : 0
-}
-
-function latestCleanerActivityMs(booking: BookingRead) {
-  const actionEventMs = Math.max(
-    0,
-    ...(booking.action_events ?? []).map((event) => eventMs(event.created_at)),
-  )
-  return Math.max(
-    actionEventMs,
-    eventMs(booking.dispute?.resolved_at),
-    eventMs(booking.payment?.transferred_at),
-    eventMs(booking.completed_at),
-    eventMs(booking.cancelled_at),
-    eventMs(booking.confirmed_at),
-    eventMs(booking.accepted_at),
-    eventMs(booking.created_at),
-  )
 }
 
 export default function CleanerDashboardPage() {
@@ -201,7 +180,7 @@ export default function CleanerDashboardPage() {
       .sort(compareBookingsByOperationalPriority)
     const activeJobs = bookings.filter((b) => ACTIVE_STATUSES.includes(b.status) || UPCOMING_STATUSES.includes(b.status))
     const completed = bookings.filter((b) => COMPLETED_STATUSES.includes(b.status))
-    const prioritizedRecent = [...bookings].sort((a, b) => latestCleanerActivityMs(b) - latestCleanerActivityMs(a))
+    const prioritizedRecent = [...bookings].sort(compareBookingsByRecentActivity)
 
     return {
       requests,

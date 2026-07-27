@@ -202,15 +202,27 @@ vi.mock('@/server/db', () => {
               },
             ]
           }
-          if (bookingFindManyCall % 2 === 0) {
+          if (args?.where?.status?.in) {
             return [
               {
                 id: 'booking_today_1',
-                status: 'confirmed',
+                status: 'in_progress',
                 city: 'Larnaca',
                 scheduledStart: new Date(),
                 cleaner: { user: { name: 'Cleaner Today', email: 'ct@test.local' } },
                 client: { user: { name: 'Client Today', email: 'clt@test.local' } },
+              },
+            ]
+          }
+          if (args?.where?.status === 'confirmed') {
+            return [
+              {
+                id: 'booking_upcoming_confirmed_1',
+                status: 'confirmed',
+                city: 'Larnaca',
+                scheduledStart: new Date(Date.now() + 2 * 60 * 60 * 1000),
+                cleaner: { user: { name: 'Cleaner Upcoming', email: 'cu@test.local' } },
+                client: { user: { name: 'Client Upcoming', email: 'clu@test.local' } },
               },
             ]
           }
@@ -355,6 +367,11 @@ describe('F14 Admin routes integration', () => {
       'awaiting_response',
       'under_review',
     ])
+    expect(body.data.todays_jobs.items.map((item: any) => item.status)).toContain('in_progress')
+    expect([
+      ...body.data.upcoming_jobs.today_items,
+      ...body.data.upcoming_jobs.tomorrow_items,
+    ].map((item: any) => item.status)).toEqual(['confirmed', 'confirmed'])
     expect(state.paymentFindManyArgs.where.booking.is.NOT).toEqual({
       status: 'cancelled',
       cancelledBy: { not: null },

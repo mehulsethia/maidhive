@@ -11,13 +11,7 @@ import { isFinalNoCleanerPayoutOutcome } from '@/lib/payment-financial-outcome'
 import { formatCurrency, formatDate } from '@/lib/utils'
 import type { BookingRead } from '@/types'
 import { getCancellationOriginLabel } from '@/lib/cancellation-origin'
-
-const SERVICE_LABELS: Record<string, string> = {
-  standard: 'Standard Clean',
-  deep_clean: 'Deep Clean',
-  end_of_tenancy: 'End of Tenancy',
-  move_in: 'Move-in Clean',
-}
+import { getBookingCleaningTypeLabel } from '@/lib/booking-service-labels'
 
 function isActiveDispute(booking: BookingRead) {
   return booking.dispute?.status === 'open' || booking.dispute?.status === 'under_review'
@@ -49,7 +43,7 @@ export function BookingCard({ booking, viewAs = 'client' }: BookingCardProps) {
         <div className="flex items-start justify-between gap-4">
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-2 mb-2">
-              <span className="font-semibold">{SERVICE_LABELS[booking.service_type] ?? booking.service_type}</span>
+              <span className="font-semibold">{getBookingCleaningTypeLabel(booking)}</span>
               <BookingStatusBadge
                 status={booking.status}
                 paymentStatus={booking.payment?.status}

@@ -206,7 +206,7 @@ test.describe('F21 dispute review-lock responsive regression @smoke', () => {
       await mockSharedApis(page, 'cleaner')
 
       await assertRouteResponsive(page, '/cleaner/dashboard', 'cleaner dashboard')
-      await expect(page.getByText(/Payout pending review\s+EUR32\.00|Payout pending review\s+€32\.00/)).toBeVisible()
+      await expect(page.getByText(/Payout paused pending case resolution\s+EUR32\.00|Payout paused pending case resolution\s+€32\.00/)).toBeVisible()
 
       await assertRouteResponsive(page, `/cleaner/bookings/${BOOKING_ID}`, 'cleaner booking detail')
       await expect(page.getByText('Payout is paused until MaidHive resolves this dispute.')).toBeVisible()
