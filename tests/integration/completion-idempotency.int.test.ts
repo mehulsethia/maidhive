@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 const state = vi.hoisted(() => ({
   booking: null as any,
   notifications: [] as any[],
+  actionEvents: [] as any[],
   completionEmails: 0,
   reviewEmails: 0,
   updateManyCalls: 0,
@@ -73,6 +74,12 @@ vi.mock('@/server/db', () => ({
       create: vi.fn(async () => ({})),
       count: vi.fn(async () => 0),
     },
+    bookingActionEvent: {
+      create: vi.fn(async ({ data }: any) => {
+        state.actionEvents.push(data)
+        return { id: `event_${state.actionEvents.length}`, ...data }
+      }),
+    },
   },
 }))
 
@@ -130,6 +137,7 @@ describe('booking completion idempotency', () => {
       },
     }
     state.notifications = []
+    state.actionEvents = []
     state.completionEmails = 0
     state.reviewEmails = 0
     state.updateManyCalls = 0
@@ -149,6 +157,17 @@ describe('booking completion idempotency', () => {
     ].sort())
     expect(state.completionEmails).toBe(1)
     expect(state.reviewEmails).toBe(1)
+    expect(state.actionEvents).toEqual([
+      expect.objectContaining({
+        bookingId: state.booking.id,
+        type: 'booking_completed',
+        actorRole: 'system',
+        metadata: expect.objectContaining({
+          source: 'system',
+          scheduled_end: '2026-06-10T10:00:00.000Z',
+        }),
+      }),
+    ])
   })
 
   it('rejects cleaner completion after a booking enters dispute review', async () => {

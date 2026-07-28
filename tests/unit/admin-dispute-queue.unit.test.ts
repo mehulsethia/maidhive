@@ -28,6 +28,16 @@ describe('admin dispute queue categorisation', () => {
     ).toBe('under_review')
   })
 
+  it('marks snake-case API response fields as ready for admin review', () => {
+    expect(
+      getAdminDisputeQueueStage({
+        status: 'under_review',
+        responded_at: '2026-06-19T04:03:00.000Z',
+        response_explanation: 'Counterparty account submitted.',
+      }),
+    ).toBe('under_review')
+  })
+
   it('does not put resolved disputes in an active bucket', () => {
     expect(getAdminDisputeQueueStage({ status: 'resolved', respondedBy: 'user-1' })).toBeNull()
   })

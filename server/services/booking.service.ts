@@ -1966,6 +1966,19 @@ async function completeBookingFlow(
   const updated = await bookingRepo.findById(bookingId)
   if (!updated) throw new ServiceError('Booking not found', 404)
 
+  await recordBookingActionEvent({
+    bookingId,
+    type: 'booking_completed',
+    actorRole: args.initiatedByRole,
+    createdAt: completionAnchorAt,
+    metadata: {
+      source: args.initiatedByRole,
+      event_timestamp: completionAnchorAt.toISOString(),
+      scheduled_end: booking.scheduledEnd.toISOString(),
+      initiated_by_user_id: args.initiatedByUserId ?? null,
+    },
+  })
+
   await pushInAppNotification({
     userId: booking.client.userId,
     type: 'booking_completed',
@@ -2066,6 +2079,18 @@ async function startBookingFlow(
   if (updateResult.count === 0) {
     return updated
   }
+
+  await recordBookingActionEvent({
+    bookingId,
+    type: 'booking_started',
+    actorRole: args.initiatedBy,
+    createdAt: args.startedAt,
+    metadata: {
+      source: args.initiatedBy,
+      event_timestamp: args.startedAt.toISOString(),
+      scheduled_start: booking.scheduledStart.toISOString(),
+    },
+  })
 
   await pushInAppNotification({
     userId: booking.client.userId,

@@ -114,6 +114,7 @@ function makeBooking(disputeStatus: 'under_review' | 'resolved') {
     scheduled_start: isoHoursFromNow(-48),
     scheduled_end: isoHoursFromNow(-46),
     started_at: isoHoursFromNow(-48),
+    start_initiated_by: 'system',
     completed_at: isoHoursFromNow(-46),
     duration_hours: 1.25,
     hourly_rate: 16,
@@ -163,6 +164,20 @@ function makeBooking(disputeStatus: 'under_review' | 'resolved') {
       resolved_at: resolved ? isoHoursFromNow(-2) : null,
     },
     action_events: resolved ? [
+      {
+        id: 'event-booking-started',
+        type: 'booking_started',
+        actor_role: 'system',
+        metadata: { source: 'system', scheduled_start: isoHoursFromNow(-48) },
+        created_at: isoHoursFromNow(-48),
+      },
+      {
+        id: 'event-booking-completed',
+        type: 'booking_completed',
+        actor_role: 'system',
+        metadata: { source: 'system', scheduled_end: isoHoursFromNow(-46) },
+        created_at: isoHoursFromNow(-46),
+      },
       {
         id: 'event-payout-paused',
         type: 'cleaner_payout_paused',
@@ -299,10 +314,56 @@ async function mockCommonApis(page: Page, role: 'admin' | 'client' | 'cleaner') 
   await page.route('**/api/v1/admin/bookings?**', (route) => fulfill(route, paginated([resolvedBooking])))
   await page.route(`**/api/v1/bookings/${BOOKING_ID}`, (route) => fulfill(route, resolvedBooking))
   await page.route('**/api/v1/bookings?**', (route) => fulfill(route, paginated([resolvedBooking])))
+  await page.route('**/api/v1/admin/stats', (route) => fulfill(route, {
+    total_users: 3,
+    total_cleaners: 1,
+    pending_cleaners: 0,
+    total_clients: 1,
+    total_bookings: 1,
+    open_disputes: 2,
+    revenue_total: 0,
+    platform_fees_total: 0,
+  }))
+  await page.route('**/api/v1/admin/ops-queues', (route) => fulfill(route, {
+    pending_cleaner_approvals: { count: 0, items: [] },
+    active_disputes: {
+      count: 2,
+      breakdown: { open: 0, awaiting_response: 1, under_review: 1 },
+      items: [
+        {
+          id: 'dispute-awaiting-response',
+          booking_id: BOOKING_ID,
+          status: 'under_review',
+          queue_stage: 'awaiting_response',
+          reason: 'Awaiting counterparty response',
+          created_at: isoHoursFromNow(-2),
+        },
+        {
+          id: 'dispute-ready-review',
+          booking_id: BOOKING_ID,
+          status: 'under_review',
+          queue_stage: 'under_review',
+          reason: 'Ready for admin decision',
+          created_at: isoHoursFromNow(-26),
+        },
+      ],
+    },
+    pending_booking_requests: { count: 0, items: [] },
+    todays_jobs: { count: 0, items: [] },
+    upcoming_jobs: { today_count: 0, tomorrow_count: 0, today_items: [], tomorrow_items: [] },
+    payment_failures: { count: 0, items: [] },
+    payment_issues: { count: 0, items: [] },
+    cancellations_no_shows: { count: 0, items: [] },
+    generated_at: new Date().toISOString(),
+  }))
   await page.route('**/api/v1/disputes?**', (route) => {
     const url = new URL(route.request().url())
     if (url.searchParams.get('status') === 'resolved') return fulfill(route, paginated([]))
-    return fulfill(route, paginated([{ ...activeDispute, booking: activeBooking }]))
+    return fulfill(route, paginated([{
+      ...activeDispute,
+      created_at: isoHoursFromNow(-26),
+      booking: activeBooking,
+    }]))
   })
   await page.route(`**/api/v1/messages/${BOOKING_ID}`, (route) => fulfill(route, []))
   await page.route('**/api/v1/messages?**', (route) => fulfill(route, []))
@@ -363,6 +424,10 @@ test.describe('F22 full-refund final-outcome responsive regression @smoke', () =
       await installSupabaseSession(page, 'admin')
       await mockCommonApis(page, 'admin')
 
+      await openResponsive(page, '/admin', 'admin dispute overview')
+      await expect(page.getByRole('link', { name: /Under Review 1 Ready for admin decision/ })).toBeVisible()
+      await expect(page.getByText('Response received; decision pending')).toHaveCount(0)
+
       await openResponsive(page, `/admin/bookings/${BOOKING_ID}`, 'admin booking detail')
       await expect(page.getByTestId('admin-payment-state').getByText('Cleaner payout', { exact: true })).toBeVisible()
       await expect(page.getByTestId('admin-payment-state').getByText('Not transferred')).toBeVisible()
@@ -370,6 +435,12 @@ test.describe('F22 full-refund final-outcome responsive regression @smoke', () =
       await expect(page.getByText('Final MaidHive retained fee')).toBeVisible()
       await expect(page.getByTestId('admin-booking-state').getByText('Refund issued')).toBeVisible()
       await expect(page.getByText('Final client amount paid')).toBeVisible()
+      await expect(page.getByText('Cleaning started automatically')).toBeVisible()
+      await expect(page.getByText('The booking moved to In Progress automatically at the scheduled start time.')).toBeVisible()
+      await expect(page.getByText('Cleaning completed automatically')).toBeVisible()
+      await expect(page.getByText('The booking was automatically completed after the scheduled end time.')).toBeVisible()
+      await expect(page.getByText('Start was started manually by cleaner.')).toHaveCount(0)
+      await expect(page.getByText('The cleaner marked the booking as complete.')).toHaveCount(0)
       await expect(page.getByText('Cleaner payout paused due to dispute')).toBeVisible()
       await expect(page.getByText('Cleaner payout adjusted from €20.00 to €0.00')).toBeVisible()
 
@@ -377,6 +448,9 @@ test.describe('F22 full-refund final-outcome responsive regression @smoke', () =
         await page.setViewportSize(viewport)
         await page.goto('/admin/disputes', { waitUntil: 'domcontentloaded' })
         await expect(page).not.toHaveURL(/\/login(?:\?|$)/)
+        await expect(page.getByText('Under Review', { exact: true })).toBeVisible()
+        await expect(page.getByText('No response submitted — deadline expired.')).toBeVisible()
+        await expect(page.getByText('Response received; decision pending')).toHaveCount(0)
         await page.getByRole('button', { name: /^Resolve$/ }).first().click()
         const dialog = page.getByRole('dialog')
         await dialog.locator('select').first().selectOption('full_refund')

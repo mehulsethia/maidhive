@@ -109,6 +109,54 @@ function hasActionEvent(booking: BookingRead, ...types: string[]) {
   return (booking.action_events ?? []).some((event) => types.includes(event.type))
 }
 
+function actionEventSource(
+  event: NonNullable<BookingRead['action_events']>[number],
+): 'client' | 'cleaner' | 'admin' | 'system' | null {
+  const metadataSource = actionEventString(event.metadata, 'source')
+  if (metadataSource === 'client' || metadataSource === 'cleaner' || metadataSource === 'admin' || metadataSource === 'system') {
+    return metadataSource
+  }
+  return event.actor_role ?? null
+}
+
+function bookingStartedTimelineCopy(source: string | null | undefined) {
+  if (source === 'system') {
+    return {
+      title: 'Cleaning started automatically',
+      description: 'The booking moved to In Progress automatically at the scheduled start time.',
+    }
+  }
+  if (source === 'cleaner') {
+    return {
+      title: 'Cleaning started by cleaner',
+      description: 'The cleaner started the booking manually.',
+    }
+  }
+  return {
+    title: 'Cleaning started',
+    description: 'The booking moved to In Progress. The start source was not recorded.',
+  }
+}
+
+function bookingCompletedTimelineCopy(source: string | null | undefined) {
+  if (source === 'system') {
+    return {
+      title: 'Cleaning completed automatically',
+      description: 'The booking was automatically completed after the scheduled end time.',
+    }
+  }
+  if (source === 'cleaner') {
+    return {
+      title: 'Cleaning completed by cleaner',
+      description: 'The cleaner marked the booking as complete.',
+    }
+  }
+  return {
+    title: 'Cleaning completed',
+    description: 'The booking was completed. The completion source was not recorded.',
+  }
+}
+
 function describeCleanerPayoutState(booking: BookingRead, finalCleanerPayout: number) {
   const paymentStatus = String(booking.payment?.status ?? '')
   const transferLifecycle = getCleanerTransferLifecycle(booking.payment)
@@ -188,6 +236,28 @@ function buildTimeline(booking: BookingRead): TimelineEvent[] {
     const originalStart = actionEventDate(metadata, 'original_start')
     const proposedStart = actionEventDate(metadata, 'proposed_start')
     const proposedBy = metadata?.proposed_by === 'client' ? 'Client' : 'Cleaner'
+
+    if (event.type === 'booking_started') {
+      const copy = bookingStartedTimelineCopy(actionEventSource(event))
+      addEvent(events, {
+        id: event.id,
+        at: event.created_at,
+        title: copy.title,
+        description: copy.description,
+        tone: 'success',
+      })
+    }
+
+    if (event.type === 'booking_completed') {
+      const copy = bookingCompletedTimelineCopy(actionEventSource(event))
+      addEvent(events, {
+        id: event.id,
+        at: event.created_at,
+        title: copy.title,
+        description: copy.description,
+        tone: 'success',
+      })
+    }
 
     if (event.type === 'payment_authorized') {
       const amount = actionEventMoney(metadata, 'amount')
@@ -357,19 +427,19 @@ function buildTimeline(booking: BookingRead): TimelineEvent[] {
     }
   }
 
-  addEvent(events, booking.started_at ? {
+  addEvent(events, booking.started_at && !hasActionEvent(booking, 'booking_started') ? {
     id: 'started',
     at: booking.started_at,
-    title: 'Cleaning started',
-    description: `Start was ${booking.start_initiated_by === 'system' ? 'auto-started by system' : 'started manually by cleaner'}.`,
+    title: bookingStartedTimelineCopy(booking.start_initiated_by).title,
+    description: bookingStartedTimelineCopy(booking.start_initiated_by).description,
     tone: 'success',
   } : null)
 
-  addEvent(events, booking.completed_at ? {
+  addEvent(events, booking.completed_at && !hasActionEvent(booking, 'booking_completed') ? {
     id: 'completed',
     at: booking.completed_at,
-    title: 'Cleaning completed',
-    description: 'The cleaner marked the booking as complete.',
+    title: bookingCompletedTimelineCopy(null).title,
+    description: bookingCompletedTimelineCopy(null).description,
     tone: 'success',
   } : null)
 

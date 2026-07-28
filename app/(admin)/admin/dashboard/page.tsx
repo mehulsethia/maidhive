@@ -213,7 +213,7 @@ export default function AdminDashboard() {
           <KpiCard
             label="Under Review"
             value={queues?.active_disputes.breakdown.under_review ?? 0}
-            sub="Response received; decision pending"
+            sub="Ready for admin decision"
             icon={AlertCircle}
             href="/admin/disputes"
           />

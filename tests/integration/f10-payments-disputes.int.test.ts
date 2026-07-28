@@ -245,6 +245,7 @@ vi.mock('@/server/services/cleaner-reliability.service', () => ({
   cleanerReliabilityService: {
     recalculate: vi.fn(async () => true),
     markDirty: vi.fn(async () => true),
+    recordConfirmedNoShow: vi.fn(async () => true),
   },
 }))
 
@@ -259,7 +260,7 @@ vi.mock('@/server/stripe', () => ({
       cancel: vi.fn(async () => ({ id: 'pi_cancelled' })),
     },
     refunds: {
-      create: vi.fn(async () => ({ id: 're_1' })),
+      create: vi.fn(async () => ({ id: 're_1', transfer_reversal: 'trr_1' })),
     },
     transfers: {
       createReversal: vi.fn(async () => ({ id: 'trr_1' })),
@@ -556,7 +557,7 @@ describe('F10 Payments capture/refund/dispute integration', () => {
     ]))
   })
 
-  it('IT-PAY-11 reverses an existing Stripe Connect transfer before completing a full refund', async () => {
+  it('IT-PAY-11 reverses the Stripe Connect transfer through the full refund request', async () => {
     state.payment = {
       ...state.payment,
       status: 'transferred',
@@ -580,10 +581,12 @@ describe('F10 Payments capture/refund/dispute integration', () => {
 
     expect(res.status).toBe(200)
     expect(body.success).toBe(true)
-    expect(stripe.transfers.createReversal).toHaveBeenCalledWith('tr_existing', { amount: 7200 })
+    expect(stripe.transfers.createReversal).not.toHaveBeenCalled()
     expect(stripe.refunds.create).toHaveBeenCalledWith({
       payment_intent: 'pi_123',
       refund_application_fee: true,
+      reverse_transfer: true,
+      expand: ['transfer_reversal'],
     })
     expect(state.payment.status).toBe('refunded')
     expect(state.payment.refundAmount).toBe(80)
@@ -620,7 +623,7 @@ describe('F10 Payments capture/refund/dispute integration', () => {
     ]))
   })
 
-  it('IT-PAY-12 leaves the dispute unresolved and logs a failed transfer reversal', async () => {
+  it('IT-PAY-12 leaves the dispute unresolved and logs a failed refund-linked transfer reversal', async () => {
     state.payment = {
       ...state.payment,
       status: 'transferred',
@@ -629,7 +632,7 @@ describe('F10 Payments capture/refund/dispute integration', () => {
     }
     const route = await import('@/app/api/v1/disputes/[id]/resolve/route')
     const { stripe } = await import('@/server/stripe')
-    ;(stripe.transfers.createReversal as any).mockRejectedValueOnce(new Error('Insufficient connected account balance'))
+    ;(stripe.refunds.create as any).mockRejectedValueOnce(new Error('Insufficient connected account balance'))
 
     const res = await route.POST(
       new NextRequest('http://localhost/api/v1/disputes/dispute_1/resolve', {
@@ -647,7 +650,12 @@ describe('F10 Payments capture/refund/dispute integration', () => {
     expect(res.status).toBe(409)
     expect(body.success).toBe(false)
     expect(body.message).toContain('transfer reversal failed')
-    expect(stripe.refunds.create).not.toHaveBeenCalled()
+    expect(stripe.refunds.create).toHaveBeenCalledWith({
+      payment_intent: 'pi_123',
+      refund_application_fee: true,
+      reverse_transfer: true,
+      expand: ['transfer_reversal'],
+    })
     expect(state.payment.status).toBe('transferred')
     expect(state.dispute?.status).toBe('open')
     expect(state.actionEvents).toEqual(expect.arrayContaining([
@@ -661,6 +669,126 @@ describe('F10 Payments capture/refund/dispute integration', () => {
         }),
       }),
     ]))
+  })
+
+  it('IT-PAY-13 completes a confirmed cleaner no-show full refund and records reliability side effects', async () => {
+    state.dispute = {
+      ...state.dispute,
+      issueType: 'cleaner_no_show',
+      status: 'under_review',
+    }
+    state.payment = {
+      ...state.payment,
+      status: 'transferred',
+      transferredAt: new Date('2099-01-03T12:00:00.000Z'),
+      stripeTransferId: null,
+      payoutScheduledAt: null,
+    }
+    const route = await import('@/app/api/v1/disputes/[id]/resolve/route')
+    const { stripe } = await import('@/server/stripe')
+    const { cleanerReliabilityService } = await import('@/server/services/cleaner-reliability.service')
+
+    const res = await route.POST(
+      new NextRequest('http://localhost/api/v1/disputes/dispute_1/resolve', {
+        method: 'POST',
+        body: JSON.stringify({
+          resolution_type: 'full_refund',
+          resolution_note: 'Cleaner did not attend the confirmed booking.',
+          no_show_finding: 'confirmed',
+        }),
+        headers: { 'content-type': 'application/json' },
+      }),
+      { params: Promise.resolve({ id: 'dispute_1' }) } as any,
+    )
+    const body = await res.json()
+
+    expect(res.status).toBe(200)
+    expect(body.success).toBe(true)
+    expect(stripe.refunds.create).toHaveBeenCalledWith({
+      payment_intent: 'pi_123',
+      refund_application_fee: true,
+      reverse_transfer: true,
+      expand: ['transfer_reversal'],
+    })
+    expect(state.dispute).toMatchObject({
+      status: 'resolved',
+      resolutionType: 'full_refund',
+      noShowFinding: 'confirmed',
+      refundAmount: 80,
+    })
+    expect(state.booking.status).toBe('completed')
+    expect(state.payment).toMatchObject({
+      status: 'refunded',
+      refundAmount: 80,
+      cleanerPayout: 0,
+      platformFee: 0,
+      payoutScheduledAt: null,
+      transferReversedAmount: 72,
+      transferReversalStatus: 'succeeded',
+      stripeTransferReversalId: 'trr_1',
+    })
+    expect(cleanerReliabilityService.recordConfirmedNoShow).toHaveBeenCalledWith({
+      cleanerId: 'cleaner_profile_1',
+      bookingId: 'booking_pay_1',
+      occurredAt: state.booking.scheduledStart,
+      confirmedBy: seededUsers.admin.id,
+    })
+    expect(state.notifications).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        userId: seededUsers.client.id,
+        type: 'dispute_resolved',
+        body: 'Full refund issued to client.',
+      }),
+      expect.objectContaining({
+        userId: seededUsers.cleaner.id,
+        type: 'dispute_resolved',
+        body: 'Full refund issued to client.',
+      }),
+    ]))
+    expect(state.emails).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        kind: 'dispute_resolved_outcome',
+        email: 'client@test.local',
+        resolutionOutcome: 'Full refund issued to client.',
+        cleanerPayoutOutcome: 'Cleaner payout was not released.',
+      }),
+      expect.objectContaining({
+        kind: 'dispute_resolved_outcome',
+        email: 'cleaner@test.local',
+        resolutionOutcome: 'Full refund issued to client.',
+        cleanerPayoutOutcome: 'Cleaner payout was not released.',
+      }),
+    ]))
+    expect(state.actionEvents).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        type: 'stripe_transfer_reversed',
+        metadata: expect.objectContaining({
+          amount: 72,
+          status: 'succeeded',
+          stripe_transfer_id: null,
+          stripe_transfer_reversal_id: 'trr_1',
+          stripe_refund_id: 're_1',
+        }),
+      }),
+      expect.objectContaining({
+        type: 'cleaner_payout_adjusted',
+        metadata: expect.objectContaining({ from_amount: 72, to_amount: 0 }),
+      }),
+      expect.objectContaining({
+        type: 'payment_refunded',
+        metadata: expect.objectContaining({
+          amount: 80,
+          final_client_amount_paid: 0,
+          final_cleaner_payout: 0,
+          final_maidhive_retained_fee: 0,
+        }),
+      }),
+    ]))
+    expect(state.actionEvents.map((event) => event.type)).toEqual([
+      'stripe_transfer_reversed',
+      'cleaner_payout_adjusted',
+      'payment_refunded',
+    ])
   })
 
   it('IT-PAY-06 client report emails confirmation to client and against-notification to cleaner', async () => {

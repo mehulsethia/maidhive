@@ -14,6 +14,7 @@ import { calculateDisputeAdjustedCleanerPayoutCents } from '@/lib/cleaner-payout
 import { formatCurrency } from '@/lib/utils'
 import { cleanerReliabilityService } from '@/server/services/cleaner-reliability.service'
 import { recordBookingActionEvent } from '@/server/services/booking-action-event.service'
+import type Stripe from 'stripe'
 
 export const POST = requireAdmin(async (req: NextRequest, ctx, user) => {
   try {
@@ -49,21 +50,6 @@ export const POST = requireAdmin(async (req: NextRequest, ctx, user) => {
       const paymentAmountCents = Math.round(paymentAmount * 100)
       const originalPlatformFeeCents = Math.round(Number(payment.platformFee) * 100)
       const originalCleanerPayoutCents = Math.round(Number(payment.cleanerPayout) * 100)
-      const cleanerPayoutAlreadyTransferred =
-        payment.status === 'transferred' ||
-        Boolean(payment.transferredAt) ||
-        Boolean(payment.stripeTransferId)
-      const refundResolution =
-        parsed.data.resolution_type === 'full_refund' ||
-        parsed.data.resolution_type === 'partial_refund'
-      if (
-        cleanerPayoutAlreadyTransferred &&
-        refundResolution &&
-        !payment.stripeTransferId
-      ) {
-        return err('Cleaner payout has already been transferred, but no Stripe Connect transfer id is recorded. Resolve the transfer recovery manually before completing this dispute.', 409)
-      }
-
       if (parsed.data.resolution_type === 'full_refund') {
         const refundedAt = new Date()
         if (pi.status === 'requires_capture') {
@@ -79,25 +65,24 @@ export const POST = requireAdmin(async (req: NextRequest, ctx, user) => {
             refundedAt,
           })
         } else if (pi.status === 'succeeded') {
-          let transferReversalPatch = {}
-          if (cleanerPayoutAlreadyTransferred) {
-            try {
-              transferReversalPatch = await reverseStripeTransferForDispute({
-                bookingId: dispute.bookingId,
-                payment,
-                reverseAmountCents: originalCleanerPayoutCents,
-                reason: 'full_refund_dispute_resolution',
-              })
-            } catch (error) {
-              if (error instanceof TransferReversalError) {
-                return err(error.message, 409)
-              }
-              throw error
-            }
-          }
-          const refund = await stripe.refunds.create({
-            payment_intent: payment.stripePaymentIntentId,
-            refund_application_fee: true,
+          const refund = await createStripeRefundForDispute({
+            bookingId: dispute.bookingId,
+            payment,
+            params: {
+              payment_intent: payment.stripePaymentIntentId,
+              refund_application_fee: true,
+              reverse_transfer: true,
+              expand: ['transfer_reversal'],
+            },
+            expectedCleanerReversalCents: originalCleanerPayoutCents,
+            reason: 'full_refund_dispute_resolution',
+          })
+          const transferReversalPatch = await recordStripeRefundTransferReversal({
+            bookingId: dispute.bookingId,
+            payment,
+            refund,
+            expectedCleanerReversalCents: originalCleanerPayoutCents,
+            reason: 'full_refund_dispute_resolution',
           })
           resolvedRefundAmount = paymentAmount
           await paymentRepo.update(payment.id, {
@@ -237,26 +222,25 @@ export const POST = requireAdmin(async (req: NextRequest, ctx, user) => {
             paymentAmountCents - refundCents,
             adjustedCleanerPayoutCents,
           )
-          let transferReversalPatch = {}
-          if (cleanerPayoutAlreadyTransferred) {
-            try {
-              transferReversalPatch = await reverseStripeTransferForDispute({
-                bookingId: dispute.bookingId,
-                payment,
-                reverseAmountCents: Math.max(0, originalCleanerPayoutCents - adjustedCleanerPayoutCents),
-                reason: 'partial_refund_dispute_resolution',
-              })
-            } catch (error) {
-              if (error instanceof TransferReversalError) {
-                return err(error.message, 409)
-              }
-              throw error
-            }
-          }
-          const refund = await stripe.refunds.create({
-            payment_intent: payment.stripePaymentIntentId,
-            amount: refundCents,
-            ...(cleanerPayoutAlreadyTransferred ? {} : { reverse_transfer: true }),
+          const expectedCleanerReversalCents = Math.max(0, originalCleanerPayoutCents - adjustedCleanerPayoutCents)
+          const refund = await createStripeRefundForDispute({
+            bookingId: dispute.bookingId,
+            payment,
+            params: {
+              payment_intent: payment.stripePaymentIntentId,
+              amount: refundCents,
+              reverse_transfer: true,
+              expand: ['transfer_reversal'],
+            },
+            expectedCleanerReversalCents,
+            reason: 'partial_refund_dispute_resolution',
+          })
+          const transferReversalPatch = await recordStripeRefundTransferReversal({
+            bookingId: dispute.bookingId,
+            payment,
+            refund,
+            expectedCleanerReversalCents,
+            reason: 'partial_refund_dispute_resolution',
           })
           const refundedAt = new Date()
           resolvedRefundAmount = Number((refundCents / 100).toFixed(2))
@@ -478,6 +462,9 @@ export const POST = requireAdmin(async (req: NextRequest, ctx, user) => {
 
     return ok(updated)
   } catch (error: any) {
+    if (error instanceof TransferReversalError) {
+      return err(error.message, 409)
+    }
     
     // Handle Stripe errors specifically
     if (error?.type?.startsWith('Stripe')) {
@@ -491,7 +478,42 @@ export const POST = requireAdmin(async (req: NextRequest, ctx, user) => {
 
 class TransferReversalError extends Error {}
 
-async function reverseStripeTransferForDispute(args: {
+async function createStripeRefundForDispute(args: {
+  bookingId: string
+  payment: {
+    id: string
+    stripeTransferId?: string | null
+  }
+  params: Stripe.RefundCreateParams
+  expectedCleanerReversalCents: number
+  reason: string
+}) {
+  try {
+    return await stripe.refunds.create(args.params)
+  } catch (error) {
+    if (args.params.reverse_transfer) {
+      const failedAt = new Date()
+      await recordBookingActionEvent({
+        bookingId: args.bookingId,
+        type: 'stripe_transfer_reversed',
+        actorRole: 'admin',
+        metadata: {
+          amount: Number((Math.max(0, args.expectedCleanerReversalCents) / 100).toFixed(2)),
+          status: 'failed',
+          stripe_transfer_id: args.payment.stripeTransferId ?? null,
+          failed_at: failedAt.toISOString(),
+          reason: args.reason,
+          error_message: error instanceof Error ? error.message : String(error),
+        },
+        createdAt: failedAt,
+      })
+      throw new TransferReversalError('Stripe Connect transfer reversal failed. The dispute remains unresolved until MaidHive confirms financial recovery.')
+    }
+    throw error
+  }
+}
+
+async function recordStripeRefundTransferReversal(args: {
   bookingId: string
   payment: {
     id: string
@@ -500,49 +522,24 @@ async function reverseStripeTransferForDispute(args: {
     transferAmount?: unknown
     transferReversedAmount?: unknown
   }
-  reverseAmountCents: number
+  refund: Stripe.Refund
+  expectedCleanerReversalCents: number
   reason: string
 }) {
   const existingReversedCents = Math.round(Number(args.payment.transferReversedAmount ?? 0) * 100)
-  const remainingReversalCents = Math.max(0, args.reverseAmountCents - existingReversedCents)
-  if (remainingReversalCents <= 0) {
+  const newReversalCents = Math.max(0, args.expectedCleanerReversalCents)
+  const totalReversedAmount = Number(((existingReversedCents + newReversalCents) / 100).toFixed(2))
+  if (newReversalCents <= 0) {
     return {
       transferReversalStatus: 'succeeded',
     }
   }
 
-  if (!args.payment.stripeTransferId) {
-    throw new TransferReversalError('Stripe Connect transfer reversal cannot be completed automatically because no transfer id is recorded.')
-  }
-
   const reversedAt = new Date()
-  const reversalAmount = Number((remainingReversalCents / 100).toFixed(2))
-  let reversal: Awaited<ReturnType<typeof stripe.transfers.createReversal>>
-  try {
-    reversal = await stripe.transfers.createReversal(args.payment.stripeTransferId, {
-      amount: remainingReversalCents,
-    })
-  } catch (error) {
-    await recordBookingActionEvent({
-      bookingId: args.bookingId,
-      type: 'stripe_transfer_reversed',
-      actorRole: 'admin',
-      metadata: {
-        amount: reversalAmount,
-        status: 'failed',
-        stripe_transfer_id: args.payment.stripeTransferId,
-        failed_at: reversedAt.toISOString(),
-        reason: args.reason,
-        error_message: error instanceof Error ? error.message : String(error),
-      },
-      createdAt: reversedAt,
-    })
-    throw new TransferReversalError('Stripe Connect transfer reversal failed. The dispute remains unresolved until MaidHive confirms financial recovery.')
-  }
-
-  const totalReversedAmount = Number(((existingReversedCents + remainingReversalCents) / 100).toFixed(2))
+  const reversalAmount = Number((newReversalCents / 100).toFixed(2))
+  const transferReversalId = stripeObjectId(args.refund.transfer_reversal)
   const patch = {
-    stripeTransferReversalId: reversal.id,
+    stripeTransferReversalId: transferReversalId,
     transferAmount: Number(args.payment.transferAmount ?? args.payment.cleanerPayout ?? 0),
     transferReversedAmount: totalReversedAmount,
     transferReversedAt: reversedAt,
@@ -559,7 +556,8 @@ async function reverseStripeTransferForDispute(args: {
       total_reversed_amount: totalReversedAmount,
       status: 'succeeded',
       stripe_transfer_id: args.payment.stripeTransferId,
-      stripe_transfer_reversal_id: reversal.id,
+      stripe_transfer_reversal_id: transferReversalId,
+      stripe_refund_id: args.refund.id,
       reversed_at: reversedAt.toISOString(),
       reason: args.reason,
     },
@@ -567,6 +565,11 @@ async function reverseStripeTransferForDispute(args: {
   })
 
   return patch
+}
+
+function stripeObjectId(value: string | { id?: string } | null | undefined) {
+  if (!value) return null
+  return typeof value === 'string' ? value : value.id ?? null
 }
 
 function bookingReference(bookingId: string) {

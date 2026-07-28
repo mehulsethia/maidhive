@@ -20,6 +20,7 @@ import { reportLoadError, resetLoadError } from '@/lib/load-error-policy'
 import { cn, formatCurrency, formatDate } from '@/lib/utils'
 import { getDisputeResolutionOutcome } from '@/lib/dispute-resolution'
 import { getResolutionFinancialPreview } from '@/lib/payment-financial-outcome'
+import { getAdminDisputeQueueStage } from '@/lib/admin-dispute-queue'
 import type { AdminDispute } from '@/types'
 import { toast } from 'sonner'
 
@@ -30,10 +31,11 @@ const RESOLUTION_TYPES = [
 ]
 
 const STATUS_CONFIG: Record<string, { variant: any; label: string; icon: React.ElementType }> = {
-  open:         { variant: 'destructive', label: 'Open',         icon: AlertTriangle },
-  under_review: { variant: 'warning',     label: 'Under review', icon: Clock },
-  resolved:     { variant: 'success',     label: 'Resolved',     icon: CheckCircle2 },
-  closed:       { variant: 'secondary',   label: 'Closed',       icon: CheckCircle2 },
+  open:              { variant: 'destructive', label: 'Open',              icon: AlertTriangle },
+  awaiting_response: { variant: 'secondary',   label: 'Awaiting Response', icon: Clock },
+  under_review:      { variant: 'warning',     label: 'Under Review',      icon: Clock },
+  resolved:          { variant: 'success',     label: 'Resolved',          icon: CheckCircle2 },
+  closed:            { variant: 'secondary',   label: 'Closed',            icon: CheckCircle2 },
 }
 
 const ISSUE_QUEUE_LABEL: Record<string, string> = {
@@ -71,6 +73,27 @@ function getEvidenceLinks(value?: string[] | null) {
   return Array.isArray(value) ? value.filter(Boolean) : []
 }
 
+function hasCounterpartyResponse(dispute: AdminDispute) {
+  return Boolean(
+    dispute.response_explanation ||
+    dispute.response_evidence?.length ||
+    dispute.responded_by ||
+    dispute.responder_role ||
+    dispute.responded_at,
+  )
+}
+
+function getNoResponseCopy(dispute: AdminDispute) {
+  const queueStage = getAdminDisputeQueueStage(dispute)
+  if (queueStage === 'under_review' && dispute.status === 'under_review') {
+    return 'No response submitted — deadline expired.'
+  }
+  if (queueStage === 'awaiting_response') {
+    return 'No counterparty response submitted. Response window still open.'
+  }
+  return 'No counterparty response submitted.'
+}
+
 // ── Dispute card ──────────────────────────────────────────────────────────────
 
 function DisputeCard({
@@ -86,7 +109,11 @@ function DisputeCard({
   actionLoading: boolean
   highlighted?: boolean
 }) {
-  const cfg = STATUS_CONFIG[dispute.status] ?? STATUS_CONFIG.closed
+  const queueStage = getAdminDisputeQueueStage(dispute)
+  const statusKey = dispute.status === 'resolved' || dispute.status === 'closed'
+    ? dispute.status
+    : queueStage ?? dispute.status
+  const cfg = STATUS_CONFIG[statusKey] ?? STATUS_CONFIG.closed
   const resolutionLabel = ['resolved', 'closed'].includes(dispute.status)
     ? getDisputeResolutionOutcome(dispute.resolution_type, dispute.refund_amount)
     : null
@@ -124,10 +151,12 @@ function DisputeCard({
                 {dispute.explanation && <p className="mt-1 text-muted-foreground">{dispute.explanation}</p>}
                 <EvidenceLinks links={originalEvidence} />
               </div>
-              {dispute.response_explanation ? (
+              {hasCounterpartyResponse(dispute) ? (
                 <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2">
                   <p className="text-xs font-semibold uppercase tracking-wide text-amber-700">Counterparty response</p>
-                  <p className="mt-1 text-amber-950">{dispute.response_explanation}</p>
+                  {dispute.response_explanation && (
+                    <p className="mt-1 text-amber-950">{dispute.response_explanation}</p>
+                  )}
                   <EvidenceLinks links={responseEvidence} />
                   {dispute.responder_role && (
                     <p className="mt-1 text-xs text-amber-700">
@@ -138,7 +167,7 @@ function DisputeCard({
                 </div>
               ) : (
                 <p className="rounded-lg border border-dashed border-slate-200 px-3 py-2 text-xs text-muted-foreground">
-                  No counterparty response submitted.
+                  {getNoResponseCopy(dispute)}
                 </p>
               )}
             </div>
