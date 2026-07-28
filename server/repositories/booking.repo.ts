@@ -108,24 +108,27 @@ export const bookingRepo = {
   findById: (id: string) =>
     db.booking.findUnique({ where: { id }, include: bookingInclude() }),
 
-  findByClient: (clientId: string, params: { page: number; pageSize: number; status?: string }) => {
+  findByClient: (clientId: string, params: { page: number; pageSize: number; status?: string; sort?: 'created' | 'activity' }) => {
     const where: Prisma.BookingWhereInput = {
       clientId,
       ...(params.status ? { status: params.status } : {}),
     }
+    const orderBy: Prisma.BookingOrderByWithRelationInput[] = params.sort === 'activity'
+      ? [{ updatedAt: 'desc' }, { createdAt: 'desc' }]
+      : [{ createdAt: 'desc' }]
     return Promise.all([
       db.booking.findMany({
         where,
         include: bookingListInclude(),
         skip: (params.page - 1) * params.pageSize,
         take: params.pageSize,
-        orderBy: { createdAt: 'desc' },
+        orderBy,
       }),
       db.booking.count({ where }),
     ])
   },
 
-  findByCleaner: (cleanerId: string, params: { page: number; pageSize: number; status?: string }) => {
+  findByCleaner: (cleanerId: string, params: { page: number; pageSize: number; status?: string; sort?: 'created' | 'activity' }) => {
     const where: Prisma.BookingWhereInput = {
       cleanerId,
       ...(params.status ? { status: params.status } : {}),
@@ -161,13 +164,16 @@ export const bookingRepo = {
         },
       ],
     }
+    const orderBy: Prisma.BookingOrderByWithRelationInput[] = params.sort === 'activity'
+      ? [{ updatedAt: 'desc' }, { createdAt: 'desc' }]
+      : [{ createdAt: 'desc' }]
     return Promise.all([
       db.booking.findMany({
         where,
         include: bookingListInclude(),
         skip: (params.page - 1) * params.pageSize,
         take: params.pageSize,
-        orderBy: { createdAt: 'desc' },
+        orderBy,
       }),
       db.booking.count({ where }),
     ])

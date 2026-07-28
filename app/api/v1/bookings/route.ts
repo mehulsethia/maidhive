@@ -18,8 +18,9 @@ export const GET = requireAuth(async (req: NextRequest, _ctx, user) => {
   const parsed = myBookingsQuerySchema.safeParse(params)
   if (!parsed.success) return err(parsed.error.message, 422)
 
-  const { page, page_size, status } = parsed.data
+  const { page, page_size, status, sort } = parsed.data
   const shouldScheduleReconcile = shouldScheduleListReconcile(page, status)
+  const listParams = { page, pageSize: page_size, ...(status ? { status } : {}), ...(sort === 'activity' ? { sort } : {}) }
 
   if (user.role === 'client') {
     let client = await clientRepo.findByUserId(user.id)
@@ -33,7 +34,7 @@ export const GET = requireAuth(async (req: NextRequest, _ctx, user) => {
       })
     }
     const listStartedAt = Date.now()
-    const [bookings, total] = await bookingRepo.findByClient(client.id, { page, pageSize: page_size, status })
+    const [bookings, total] = await bookingRepo.findByClient(client.id, listParams)
     const bookingIds = bookings.map((b) => b.id)
     if (total === 0) {
       console.info('bookings.list.client.empty', {
@@ -80,7 +81,7 @@ export const GET = requireAuth(async (req: NextRequest, _ctx, user) => {
       })
     }
     const listStartedAt = Date.now()
-    const [bookings, total] = await bookingRepo.findByCleaner(cleaner.id, { page, pageSize: page_size, status })
+    const [bookings, total] = await bookingRepo.findByCleaner(cleaner.id, listParams)
     const bookingIds = bookings.map((b) => b.id)
     if (total === 0) {
       console.info('bookings.list.cleaner.empty', {

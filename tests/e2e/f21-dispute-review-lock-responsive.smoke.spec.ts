@@ -195,6 +195,8 @@ test.describe('F21 dispute review-lock responsive regression @smoke', () => {
 
       await assertRouteResponsive(page, `/client/bookings/${BOOKING_ID}`, 'client booking detail')
       await expect(page.getByText('This booking is now Under Review, and the cleaner payout has been paused until the case is resolved.')).toBeVisible()
+      await expect(page.getByRole('button', { name: 'View report details' })).toBeVisible()
+      await expect(page.getByRole('button', { name: /Report a Problem/i })).toHaveCount(0)
       await expect(page.getByRole('button', { name: 'Leave a review' })).toHaveCount(0)
     })
   })

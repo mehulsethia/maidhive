@@ -257,6 +257,35 @@ function makeCancelledBooking() {
   }
 }
 
+function makeMutableInProgressBooking() {
+  return {
+    ...makeBooking('under_review'),
+    status: 'in_progress',
+    scheduled_start: isoHoursFromNow(-1),
+    scheduled_end: isoHoursFromNow(1),
+    started_at: isoHoursFromNow(-1),
+    completed_at: null,
+    dispute: null,
+    action_events: [],
+    payment: {
+      id: 'payment-authorized-in-progress',
+      status: 'authorized',
+      amount: 22,
+      currency: 'eur',
+      platform_fee: 2,
+      cleaner_payout: 20,
+      refund_amount: 0,
+      authorized_at: isoHoursFromNow(-3),
+      captured_at: null,
+      refunded_at: null,
+      payout_scheduled_at: null,
+      transferred_at: null,
+      stripe_transfer_id: null,
+      created_at: isoHoursFromNow(-3),
+    },
+  }
+}
+
 function paginated(items: unknown[]) {
   return { items, bookings: items, disputes: items, total: items.length, page: 1, page_size: 50 }
 }
@@ -363,6 +392,21 @@ test.describe('F22 full-refund final-outcome responsive regression @smoke', () =
         await expectNoHorizontalOverflow(page, `admin resolution dialog at ${viewport.name}`)
       }
     })
+
+    test('E2E-RESP-21 admin in-progress authorised payment uses mutable financial labels', async ({ page }) => {
+      await installSupabaseSession(page, 'admin')
+      await mockCommonApis(page, 'admin')
+      await page.route(`**/api/v1/admin/bookings/${BOOKING_ID}`, (route) => fulfill(route, makeMutableInProgressBooking()))
+
+      await openResponsive(page, `/admin/bookings/${BOOKING_ID}`, 'admin in-progress mutable financial labels')
+      await expect(page.getByTestId('admin-payment-state').getByText('Expected cleaner payout', { exact: true })).toBeVisible()
+      await expect(page.getByTestId('admin-payment-state').getByText('Expected MaidHive fee', { exact: true })).toBeVisible()
+      await expect(page.getByTestId('admin-payment-state').getByText('Authorised client amount', { exact: true })).toBeVisible()
+      await expect(page.getByTestId('admin-payment-state').getByText('Final cleaner payout', { exact: true })).toHaveCount(0)
+      await expect(page.getByTestId('admin-payment-state').getByText('Final MaidHive retained fee', { exact: true })).toHaveCount(0)
+      await expect(page.getByTestId('admin-payment-state').getByText('Final client amount paid', { exact: true })).toHaveCount(0)
+      await expect(page.getByTestId('admin-booking-state').getByText('Expected cleaner payout', { exact: true })).toBeVisible()
+    })
   })
 
   test.describe('cleaner session', () => {
@@ -422,8 +466,12 @@ test.describe('F22 full-refund final-outcome responsive regression @smoke', () =
 
     test('E2E-RESP-19 client cancelled lifecycle activity and single financial outcome stay responsive', async ({ page }) => {
       const cancelledBooking = makeCancelledBooking()
+      const bookingListRequests: string[] = []
       await page.route(`**/api/v1/bookings/${BOOKING_ID}`, (route) => fulfill(route, cancelledBooking))
-      await page.route('**/api/v1/bookings?**', (route) => fulfill(route, paginated([cancelledBooking])))
+      await page.route('**/api/v1/bookings?**', (route) => {
+        bookingListRequests.push(route.request().url())
+        return fulfill(route, paginated([cancelledBooking]))
+      })
       await page.route('**/api/v1/clients/favorites', (route) => fulfill(route, []))
       await page.route('**/api/v1/disputes?**', (route) => fulfill(route, paginated([])))
       await page.route(`**/api/v1/messages/${BOOKING_ID}`, (route) => fulfill(route, []))
@@ -441,6 +489,10 @@ test.describe('F22 full-refund final-outcome responsive regression @smoke', () =
       await expect(page.getByText('Recent Activity', { exact: true })).toBeVisible()
       await expect(page.getByText('Cancelled by cleaner', { exact: true })).toBeVisible()
       await expect(page.getByText('You have not been charged', { exact: true })).toBeVisible()
+      expect(bookingListRequests.some((url) => {
+        const params = new URL(url).searchParams
+        return params.get('sort') === 'activity' && params.get('page_size') === '50'
+      })).toBe(true)
 
       await openResponsive(page, `/client/bookings/${BOOKING_ID}`, 'client cancelled booking detail')
       await expect(page.getByText('Final payment outcome', { exact: true })).toBeVisible()

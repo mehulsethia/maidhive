@@ -130,6 +130,20 @@ describe('F17 lists/counts/visibility integration', () => {
     expect(body.data.total).toBe(1)
   })
 
+  it('IT-LIST-01b list endpoint can page by recent booking activity for dashboard feeds', async () => {
+    const route = await import('@/app/api/v1/bookings/route')
+
+    const res = await route.GET(
+      new NextRequest('http://localhost/api/v1/bookings?page=1&page_size=50&sort=activity'),
+      { params: Promise.resolve({}) } as any,
+    )
+    const body = await res.json()
+
+    expect(res.status).toBe(200)
+    expect(body.success).toBe(true)
+    expect(state.findByClientArgs).toEqual({ page: 1, pageSize: 50, sort: 'activity' })
+  })
+
   it('IT-LIST-02 counts endpoint returns stable role metrics aligned with role query logic', async () => {
     state.currentUser = seededUsers.cleaner as User
     const route = await import('@/app/api/v1/counts/route')

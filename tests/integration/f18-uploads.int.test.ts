@@ -154,4 +154,55 @@ describe('F18 upload routes integration', () => {
     expect(body.success).toBe(false)
     expect(String(body.message).toLowerCase()).toContain('cannot be changed')
   })
+
+  it('IT-UPLOAD-04 dispute evidence accepts typical desktop and mobile screenshots and returns attachment URLs', async () => {
+    const route = await import('@/app/api/v1/upload/dispute-evidence/route')
+    const files = [
+      new File([
+        new Uint8Array([
+          0x89, 0x50, 0x4e, 0x47,
+          0x0d, 0x0a, 0x1a, 0x0a,
+        ]),
+      ], 'desktop-screenshot.png', { type: 'image/png' }),
+      new File([new Uint8Array([0xff, 0xd8, 0xff, 0xe0])], 'mobile-screenshot.jpg', { type: 'image/jpeg' }),
+    ]
+
+    for (const file of files) {
+      const form = new FormData()
+      form.set('file', file)
+      const res = await route.POST(
+        new NextRequest('http://localhost/api/v1/upload/dispute-evidence', {
+          method: 'POST',
+          body: form,
+        }),
+        { params: Promise.resolve({}) } as any,
+      )
+      const body = await res.json()
+
+      expect(res.status).toBe(200)
+      expect(body.success).toBe(true)
+      expect(body.data.url).toBe('https://example.test/uploaded-file')
+    }
+    expect(state.uploadCalls).toBe(2)
+  })
+
+  it('IT-UPLOAD-05 dispute evidence identifies invalid screenshot files before upload', async () => {
+    const route = await import('@/app/api/v1/upload/dispute-evidence/route')
+    const form = new FormData()
+    form.set('file', new File([new Uint8Array([0x00, 0x01, 0x02])], 'broken-screenshot.png', { type: 'image/png' }))
+
+    const res = await route.POST(
+      new NextRequest('http://localhost/api/v1/upload/dispute-evidence', {
+        method: 'POST',
+        body: form,
+      }),
+      { params: Promise.resolve({}) } as any,
+    )
+    const body = await res.json()
+
+    expect(res.status).toBe(400)
+    expect(body.success).toBe(false)
+    expect(body.message).toContain('broken-screenshot.png')
+    expect(state.uploadCalls).toBe(0)
+  })
 })

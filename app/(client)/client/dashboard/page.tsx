@@ -36,6 +36,7 @@ const UPCOMING_STATUSES: BookingStatus[] = ['pending', 'confirmed', 'in_progress
 const CLOSED_STATUSES: BookingStatus[] = ['cancelled', 'declined', 'expired']
 
 const LIVE_REFRESH_MS = Number(process.env.NEXT_PUBLIC_DASHBOARD_LIVE_REFRESH_MS ?? 45000)
+const RECENT_ACTIVITY_PAGE_SIZE = 50
 
 function isPaymentAuthorized(paymentStatus?: string | null) {
   return ['authorized', 'captured', 'transferred'].includes(String(paymentStatus ?? ''))
@@ -71,7 +72,7 @@ export default function ClientDashboardPage() {
     try {
       const [meRes, bookingRes, favoritesRes] = await Promise.allSettled([
         authApi.me(),
-        bookingsApi.my(),
+        bookingsApi.my(1, undefined, RECENT_ACTIVITY_PAGE_SIZE, 'activity'),
         favoritesApi.list(),
       ])
 

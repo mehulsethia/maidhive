@@ -486,12 +486,13 @@ export const bookingsApi = {
   },
   create: (body: BookingCreate) =>
     request<APIResponse<BookingRead>>('/bookings', { method: 'POST', body: JSON.stringify(body) }),
-  my: async (page = 1, status?: string, pageSize?: number) => {
+  my: async (page = 1, status?: string, pageSize?: number, sort?: 'created' | 'activity') => {
     const qs = new URLSearchParams({ page: String(page) })
     if (status) qs.set('status', status)
     if (typeof pageSize === 'number' && Number.isFinite(pageSize) && pageSize > 0) {
       qs.set('page_size', String(Math.floor(pageSize)))
     }
+    if (sort) qs.set('sort', sort)
     const res = await request<APIResponse<any>>(`/bookings?${qs.toString()}`)
     return { ...res, data: normalizePaginated<BookingRead>(res.data ?? {}, 'bookings') }
   },
