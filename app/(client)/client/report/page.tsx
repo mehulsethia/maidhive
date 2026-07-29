@@ -18,6 +18,7 @@ import { getDisputeParticipantAction, isDisputeResponseWindowOpen } from '@/lib/
 import { reportLoadError, resetLoadError } from '@/lib/load-error-policy'
 import { formatDate } from '@/lib/utils'
 import { getDisputeResolutionOutcome } from '@/lib/dispute-resolution'
+import { MAX_EVIDENCE_IMAGES, MAX_EVIDENCE_SIZE_BYTES, prepareEvidenceFileForUpload } from '@/lib/evidence-upload'
 import type { BookingRead, ClientDispute } from '@/types'
 import { toast } from 'sonner'
 
@@ -26,8 +27,6 @@ type ReportDashboardFilter = 'open' | 'under_review' | 'resolved'
 const DISPUTE_WINDOW_HOURS = Number(process.env.NEXT_PUBLIC_DISPUTE_WINDOW_HOURS ?? 24)
 const DISPUTE_WINDOW_MS = DISPUTE_WINDOW_HOURS * 60 * 60 * 1000
 const NO_SHOW_DELAY_MS = 30 * 60 * 1000
-const MAX_EVIDENCE_IMAGES = 5
-const MAX_EVIDENCE_SIZE_BYTES = 10 * 1024 * 1024
 const REPORT_AVAILABILITY_COPY = 'Report issues during the booking and up to 24 hours after scheduled completion.'
 
 const STATUS_STYLES: Record<ReportStatus, string> = {
@@ -300,8 +299,9 @@ function ClientReportPageContent() {
         for (let index = 0; index < evidenceFiles.length; index += 1) {
           const file = evidenceFiles[index]
           const form = new FormData()
-          form.append('file', file)
           try {
+            const uploadFile = await prepareEvidenceFileForUpload(file)
+            form.append('file', uploadFile)
             const res = await fetch('/api/v1/upload/dispute-evidence', {
               method: 'POST',
               body: form,

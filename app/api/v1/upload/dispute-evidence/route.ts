@@ -11,6 +11,7 @@ const supabaseAdmin = createClient(
 
 const DISPUTE_EVIDENCE_BUCKET = (process.env.SUPABASE_DISPUTE_EVIDENCE_BUCKET ?? 'dispute-evidence').trim()
 const ALLOWED_MIME = new Set(IMAGE_MIME_TYPES)
+const MAX_UPLOAD_BYTES = 10 * 1024 * 1024
 const EXT_BY_MIME: Record<string, string> = {
   'image/jpeg': 'jpg',
   'image/png': 'png',
@@ -21,23 +22,36 @@ const EXT_BY_MIME: Record<string, string> = {
 
 let bucketEnsured = false
 
+async function updateDisputeBucketPolicy() {
+  const { error } = await supabaseAdmin.storage.updateBucket(DISPUTE_EVIDENCE_BUCKET, {
+    public: true,
+    fileSizeLimit: MAX_UPLOAD_BYTES,
+    allowedMimeTypes: Array.from(ALLOWED_MIME),
+  })
+  if (error) throw error
+}
+
 async function ensureDisputeBucketExists() {
   if (bucketEnsured) return
 
   const { data: existing, error: fetchError } = await supabaseAdmin.storage.getBucket(DISPUTE_EVIDENCE_BUCKET)
   if (!fetchError && existing) {
+    await updateDisputeBucketPolicy()
     bucketEnsured = true
     return
   }
 
   const { error: createError } = await supabaseAdmin.storage.createBucket(DISPUTE_EVIDENCE_BUCKET, {
     public: true,
-    fileSizeLimit: 10 * 1024 * 1024,
+    fileSizeLimit: MAX_UPLOAD_BYTES,
     allowedMimeTypes: Array.from(ALLOWED_MIME),
   })
 
-  if (createError && !String(createError.message ?? '').toLowerCase().includes('already exists')) {
-    throw createError
+  if (createError) {
+    if (!String(createError.message ?? '').toLowerCase().includes('already exists')) {
+      throw createError
+    }
+    await updateDisputeBucketPolicy()
   }
 
   bucketEnsured = true
@@ -53,7 +67,7 @@ export const POST = requireAuth(async (req: NextRequest, _ctx, user) => {
   if (!ALLOWED_MIME.has(file.type)) {
     return NextResponse.json({ success: false, message: `${file.name} is not supported. Only JPG, PNG, WebP, and HEIC images are allowed.` }, { status: 400 })
   }
-  if (file.size > 10 * 1024 * 1024) {
+  if (file.size > MAX_UPLOAD_BYTES) {
     return NextResponse.json({ success: false, message: `${file.name} must be under 10MB.` }, { status: 400 })
   }
 
@@ -81,7 +95,17 @@ export const POST = requireAuth(async (req: NextRequest, _ctx, user) => {
     })
 
   if (uploadError) {
-    return NextResponse.json({ success: false, message: uploadError.message }, { status: 500 })
+    console.error('dispute_evidence.upload_failed', {
+      bucket: DISPUTE_EVIDENCE_BUCKET,
+      content_type: file.type,
+      size: file.size,
+      name: file.name,
+      message: uploadError.message,
+      status: (uploadError as any).status,
+      status_code: (uploadError as any).statusCode,
+      error: (uploadError as any).error,
+    })
+    return NextResponse.json({ success: false, message: uploadError.message || 'Storage upload failed' }, { status: 500 })
   }
 
   const { data: urlData } = supabaseAdmin.storage

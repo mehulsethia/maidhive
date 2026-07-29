@@ -13,6 +13,7 @@ const state = vi.hoisted(() => ({
   cleanerProfile: { id: 'cleaner_profile_1', userId: seededUsers.cleaner.id, profileComplete: false, status: 'pending' },
   clientProfile: { id: 'client_profile_1', userId: seededUsers.client.id },
   uploadCalls: 0,
+  updateBucketCalls: 0,
   updatedClientMeta: null as any,
   updatedCleanerMeta: null as any,
 }))
@@ -63,6 +64,10 @@ vi.mock('@supabase/supabase-js', () => ({
   createClient: vi.fn(() => ({
     storage: {
       getBucket: vi.fn(async () => ({ data: { name: 'bucket' }, error: null })),
+      updateBucket: vi.fn(async () => {
+        state.updateBucketCalls += 1
+        return { error: null }
+      }),
       createBucket: vi.fn(async () => ({ error: null })),
       from: vi.fn(() => ({
         upload: vi.fn(async () => {
@@ -82,6 +87,7 @@ describe('F18 upload routes integration', () => {
     state.cleanerProfile = { id: 'cleaner_profile_1', userId: seededUsers.cleaner.id, profileComplete: false, status: 'pending' }
     state.clientProfile = { id: 'client_profile_1', userId: seededUsers.client.id }
     state.uploadCalls = 0
+    state.updateBucketCalls = 0
     state.updatedClientMeta = null
     state.updatedCleanerMeta = null
   })
@@ -184,6 +190,7 @@ describe('F18 upload routes integration', () => {
       expect(body.data.url).toBe('https://example.test/uploaded-file')
     }
     expect(state.uploadCalls).toBe(2)
+    expect(state.updateBucketCalls).toBe(1)
   })
 
   it('IT-UPLOAD-05 dispute evidence identifies invalid screenshot files before upload', async () => {
