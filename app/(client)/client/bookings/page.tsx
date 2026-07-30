@@ -25,7 +25,7 @@ import { formatCurrency, formatDate } from '@/lib/utils'
 import { hasPendingAmendmentRequest } from '@/lib/booking-amendment'
 import { getCancellationOriginLabel } from '@/lib/cancellation-origin'
 import { getClientPaymentSummary } from '@/lib/client-payment-summary'
-import type { BookingRead, BookingStatus, ClientDispute } from '@/types'
+import type { BookingRead, BookingStatus, ClientBookingStats, ClientDispute } from '@/types'
 import { toast } from 'sonner'
 
 const displayFont = Bricolage_Grotesque({ subsets: ['latin'], weight: ['400', '500', '700', '800'] })
@@ -56,6 +56,7 @@ const SERVICE_LABELS: Record<string, string> = {
 }
 
 const LIVE_REFRESH_MS = Number(process.env.NEXT_PUBLIC_BOOKINGS_LIVE_REFRESH_MS ?? 45000)
+const BOOKINGS_PAGE_SIZE = 50
 
 function getBookingDisplayTitle(booking: BookingRead) {
   const instructions = String(booking.special_instructions ?? '')
@@ -78,12 +79,34 @@ function isOverdueUnpaid(booking: BookingRead) {
 
 function isOperationalActiveBooking(booking: BookingRead) {
   if (booking.status === 'pending') return isPaymentAuthorized(booking.payment?.status)
-  return booking.status === 'confirmed' || booking.status === 'in_progress'
+  return booking.status === 'accepted' || booking.status === 'confirmed' || booking.status === 'in_progress'
+}
+
+async function loadAllClientBookings() {
+  const allItems: BookingRead[] = []
+  let page = 1
+
+  while (true) {
+    const res = await bookingsApi.my(page, undefined, BOOKINGS_PAGE_SIZE)
+    const data = res.data
+    const beforeCount = allItems.length
+    allItems.push(...(data?.items ?? []))
+
+    if (!data?.has_next || allItems.length >= data.total || allItems.length === beforeCount) {
+      return {
+        ...res,
+        data: data ? { ...data, items: allItems } : data,
+      }
+    }
+
+    page += 1
+  }
 }
 
 export default function ClientBookingsPage() {
   const [loading, setLoading] = useState(true)
   const [bookings, setBookings] = useState<BookingRead[]>([])
+  const [bookingStats, setBookingStats] = useState<ClientBookingStats | null>(null)
   const [listError, setListError] = useState<string | null>(null)
   const [bookingDisputes, setBookingDisputes] = useState<Map<string, ClientDispute>>(new Map())
   const [actionLoadingId, setActionLoadingId] = useState<string | null>(null)
@@ -96,7 +119,11 @@ export default function ClientBookingsPage() {
 
   async function loadBookings() {
     try {
-      const [bookingsRes, disputesRes] = await Promise.allSettled([bookingsApi.my(1), disputesApi.listMine()])
+      const [bookingsRes, statsRes, disputesRes] = await Promise.allSettled([
+        loadAllClientBookings(),
+        bookingsApi.stats(),
+        disputesApi.listMine(),
+      ])
       const res = bookingsRes.status === 'fulfilled' ? bookingsRes.value : null
       const disputes = disputesRes.status === 'fulfilled' ? disputesRes.value : null
       let recoveredBookings: BookingRead[] = []
@@ -111,6 +138,7 @@ export default function ClientBookingsPage() {
       }
       startTransition(() => {
         setBookings(listItems.length > 0 ? listItems : recoveredBookings)
+        setBookingStats(statsRes.status === 'fulfilled' ? statsRes.value?.data ?? null : null)
         setBookingDisputes(disputeMap)
         setLoading(false)
       })
@@ -121,6 +149,9 @@ export default function ClientBookingsPage() {
             : null,
         )
         resetLoadError('client-bookings')
+      } else if (statsRes.status === 'fulfilled') {
+        setListError('Booking list could not be loaded right now. Counters are up to date.')
+        reportLoadError('client-bookings', 'Failed to load booking list.')
       } else {
         setListError('We could not load your bookings right now. Please refresh and try again.')
         reportLoadError('client-bookings', 'Failed to load bookings.')
@@ -256,6 +287,12 @@ export default function ClientBookingsPage() {
   const cancelledCount = deferredBookings.filter((booking) =>
     ['cancelled', 'declined', 'expired'].includes(booking.status),
   ).length
+  const metricCounts = {
+    all: bookingStats?.all ?? deferredBookings.length,
+    active: bookingStats?.active ?? activeCount,
+    completed: bookingStats?.completed ?? completedCount,
+    closed: bookingStats?.closed ?? cancelledCount,
+  }
 
   if (loading) return <ListPageSkeleton />
 
@@ -287,10 +324,10 @@ export default function ClientBookingsPage() {
 
             <div className="animate-stage-up delay-120">
               <div className="ml-auto grid w-full max-w-sm grid-cols-1 gap-2 rounded-3xl border border-white/20 bg-black/35 p-4 backdrop-blur-sm sm:grid-cols-4 sm:gap-3">
-                <MetricChip label="All Bookings" value={deferredBookings.length} icon={<Search className="h-4 w-4" />} monoFont={monoFont.className} displayFont={displayFont.className} active={dashboardFilter === null} onClick={() => { setDashboardFilter(null); setFilter('all') }} />
-                <MetricChip label="Active" value={activeCount} icon={<Clock3 className="h-4 w-4" />} monoFont={monoFont.className} displayFont={displayFont.className} active={dashboardFilter === 'active'} onClick={() => { setDashboardFilter('active'); setFilter('all') }} />
-                <MetricChip label="Completed" value={completedCount} icon={<CalendarCheck2 className="h-4 w-4" />} monoFont={monoFont.className} displayFont={displayFont.className} active={dashboardFilter === 'completed'} onClick={() => { setDashboardFilter('completed'); setFilter('all') }} />
-                <MetricChip label="Closed" value={cancelledCount} icon={<CircleX className="h-4 w-4" />} monoFont={monoFont.className} displayFont={displayFont.className} active={dashboardFilter === 'closed'} onClick={() => { setDashboardFilter('closed'); setFilter('all') }} />
+                <MetricChip label="All Bookings" value={metricCounts.all} icon={<Search className="h-4 w-4" />} monoFont={monoFont.className} displayFont={displayFont.className} active={dashboardFilter === null} onClick={() => { setDashboardFilter(null); setFilter('all') }} />
+                <MetricChip label="Active" value={metricCounts.active} icon={<Clock3 className="h-4 w-4" />} monoFont={monoFont.className} displayFont={displayFont.className} active={dashboardFilter === 'active'} onClick={() => { setDashboardFilter('active'); setFilter('all') }} />
+                <MetricChip label="Completed" value={metricCounts.completed} icon={<CalendarCheck2 className="h-4 w-4" />} monoFont={monoFont.className} displayFont={displayFont.className} active={dashboardFilter === 'completed'} onClick={() => { setDashboardFilter('completed'); setFilter('all') }} />
+                <MetricChip label="Closed" value={metricCounts.closed} icon={<CircleX className="h-4 w-4" />} monoFont={monoFont.className} displayFont={displayFont.className} active={dashboardFilter === 'closed'} onClick={() => { setDashboardFilter('closed'); setFilter('all') }} />
               </div>
             </div>
           </div>

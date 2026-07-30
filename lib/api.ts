@@ -15,6 +15,7 @@ import type {
   BookingCreate,
   BookingFlowDraftRead,
   BookingRead,
+  ClientBookingStats,
   CleanerRead,
   CleanerOnboardingProgress,
   CleanerSummary,
@@ -496,6 +497,7 @@ export const bookingsApi = {
     const res = await request<APIResponse<any>>(`/bookings?${qs.toString()}`)
     return { ...res, data: normalizePaginated<BookingRead>(res.data ?? {}, 'bookings') }
   },
+  stats: () => request<APIResponse<ClientBookingStats>>('/bookings/stats'),
   getById: (id: string) => request<APIResponse<BookingRead>>(`/bookings/${id}`),
   action: (
     id: string,

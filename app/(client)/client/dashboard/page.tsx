@@ -26,26 +26,18 @@ import { UserAvatar } from '@/components/ui/user-avatar'
 import { formatCurrency, formatDate } from '@/lib/utils'
 import { getClientPaymentSummary } from '@/lib/client-payment-summary'
 import { getBookingCleaningTypeLabel } from '@/lib/booking-service-labels'
-import type { BookingRead, BookingStatus, FavoriteCleaner } from '@/types'
+import type { BookingRead, ClientBookingStats, FavoriteCleaner } from '@/types'
 
 const displayFont = Bricolage_Grotesque({ subsets: ['latin'], weight: ['400', '500', '700', '800'] })
 const monoFont = IBM_Plex_Mono({ subsets: ['latin'], weight: ['400', '500', '600'] })
 
-const ACTIVE_STATUSES: BookingStatus[] = ['pending', 'confirmed', 'in_progress']
-const UPCOMING_STATUSES: BookingStatus[] = ['pending', 'confirmed', 'in_progress']
-const CLOSED_STATUSES: BookingStatus[] = ['cancelled', 'declined', 'expired']
+const UPCOMING_STATUSES = ['pending', 'accepted', 'confirmed', 'in_progress']
 
 const LIVE_REFRESH_MS = Number(process.env.NEXT_PUBLIC_DASHBOARD_LIVE_REFRESH_MS ?? 45000)
 const RECENT_ACTIVITY_PAGE_SIZE = 50
 
 function isPaymentAuthorized(paymentStatus?: string | null) {
   return ['authorized', 'captured', 'transferred'].includes(String(paymentStatus ?? ''))
-}
-
-function isRealActiveBooking(booking: BookingRead) {
-  if (!ACTIVE_STATUSES.includes(booking.status)) return false
-  if (booking.status === 'pending' && !isPaymentAuthorized(booking.payment?.status)) return false
-  return true
 }
 
 function isValidUpcomingBooking(booking: BookingRead, nowMs: number) {
@@ -60,9 +52,17 @@ function isValidUpcomingBooking(booking: BookingRead, nowMs: number) {
   return scheduledStartMs >= nowMs
 }
 
+function getLocalActiveCount(bookings: BookingRead[]) {
+  return bookings.filter((booking) => {
+    if (booking.status === 'pending') return isPaymentAuthorized(booking.payment?.status)
+    return booking.status === 'accepted' || booking.status === 'confirmed' || booking.status === 'in_progress'
+  }).length
+}
+
 export default function ClientDashboardPage() {
   const [loading, setLoading] = useState(true)
   const [bookings, setBookings] = useState<BookingRead[]>([])
+  const [bookingStats, setBookingStats] = useState<ClientBookingStats | null>(null)
   const [dashboardError, setDashboardError] = useState<string | null>(null)
   const [favorites, setFavorites] = useState<FavoriteCleaner[]>([])
   const [name, setName] = useState('')
@@ -70,9 +70,10 @@ export default function ClientDashboardPage() {
 
   async function refreshDashboard() {
     try {
-      const [meRes, bookingRes, favoritesRes] = await Promise.allSettled([
+      const [meRes, bookingRes, statsRes, favoritesRes] = await Promise.allSettled([
         authApi.me(),
         bookingsApi.my(1, undefined, RECENT_ACTIVITY_PAGE_SIZE, 'activity'),
+        bookingsApi.stats(),
         favoritesApi.list(),
       ])
 
@@ -89,8 +90,10 @@ export default function ClientDashboardPage() {
       startTransition(() => {
         const me = meRes.status === 'fulfilled' ? meRes.value : null
         const favorites = favoritesRes.status === 'fulfilled' ? favoritesRes.value : null
+        const stats = statsRes.status === 'fulfilled' ? statsRes.value?.data ?? null : null
         setName((me?.data?.name ?? '').trim())
         setBookings(listItems.length > 0 ? listItems : recoveredBookings)
+        setBookingStats(stats)
         setFavorites(favorites?.data ?? [])
         setLoading(false)
       })
@@ -101,6 +104,9 @@ export default function ClientDashboardPage() {
             : null,
         )
         resetLoadError('client-dashboard')
+      } else if (statsRes.status === 'fulfilled') {
+        setDashboardError('Dashboard activity could not be loaded right now. Counters are up to date.')
+        reportLoadError('client-dashboard', 'Failed to load dashboard activity.')
       } else {
         setDashboardError('Dashboard data could not be loaded right now. Please refresh and try again.')
         reportLoadError('client-dashboard', 'Failed to load dashboard data.')
@@ -159,10 +165,10 @@ export default function ClientDashboardPage() {
   const deferredBookings = useDeferredValue(bookings)
   const firstName = name ? name.split(' ')[0] : ''
 
-  const total = deferredBookings.length
-  const activeCount = deferredBookings.filter((b) => isRealActiveBooking(b)).length
-  const completedCount = deferredBookings.filter((b) => b.status === 'completed').length
-  const closedCount = deferredBookings.filter((b) => CLOSED_STATUSES.includes(b.status)).length
+  const total = bookingStats?.all ?? deferredBookings.length
+  const activeCount = bookingStats?.active ?? getLocalActiveCount(deferredBookings)
+  const completedCount = bookingStats?.completed ?? deferredBookings.filter((b) => b.status === 'completed').length
+  const closedCount = bookingStats?.closed ?? deferredBookings.filter((b) => ['cancelled', 'declined', 'expired'].includes(b.status)).length
 
   const operationallySorted = useMemo(
     () => [...deferredBookings].sort(compareBookingsByOperationalPriority),

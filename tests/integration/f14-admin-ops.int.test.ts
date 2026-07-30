@@ -100,9 +100,26 @@ vi.mock('@/server/repositories/booking.repo', () => ({
         platformFee: 3.2,
         cleanerPayout: 32,
         createdAt: new Date('2026-06-01T10:00:00.000Z'),
+        startedAt: new Date('2026-06-07T12:03:00.000Z'),
+        startInitiatedBy: 'cleaner',
         client: { user: { name: 'Client User' } },
         cleaner: { user: { name: 'Cleaner User' } },
         payment: { status: 'authorized', authorizedAt: new Date('2026-06-01T10:05:00.000Z') },
+        startVerification: {
+          id: 'start_verification_1',
+          bookingId: id,
+          cleanerId: 'cleaner_admin_1',
+          latitude: 34.912345,
+          longitude: 33.635432,
+          accuracyM: 12,
+          distanceM: 42,
+          verified: true,
+          onTime: true,
+          failureReason: null,
+          startedAt: new Date('2026-06-07T12:03:00.000Z'),
+          createdAt: new Date('2026-06-07T12:03:01.000Z'),
+          updatedAt: new Date('2026-06-07T12:03:01.000Z'),
+        },
       }
     }),
   },
@@ -406,5 +423,13 @@ describe('F14 Admin routes integration', () => {
     expect(body.data.id).toBe('booking_admin_1')
     expect(body.data.service_type).toBe('standard')
     expect(body.data.payment.status).toBe('authorized')
+    expect(body.data.start_verification).toMatchObject({
+      verified: true,
+      on_time: true,
+      distance_m: 42,
+      accuracy_m: 12,
+      latitude: 34.912345,
+      longitude: 33.635432,
+    })
   })
 })

@@ -138,6 +138,42 @@ function bookingStartedTimelineCopy(source: string | null | undefined) {
   }
 }
 
+function formatMeters(value?: number | null) {
+  if (typeof value !== 'number' || !Number.isFinite(value)) return 'Not available'
+  if (value >= 1000) return `${(value / 1000).toFixed(2)} km`
+  return `${Math.round(value)} m`
+}
+
+function formatStartVerificationReason(reason?: string | null) {
+  if (reason === 'gps_unavailable') return 'GPS permission denied or location unavailable'
+  if (reason === 'booking_coordinates_unavailable') return 'Booking address coordinates unavailable'
+  if (reason === 'gps_accuracy_insufficient') return 'GPS accuracy insufficient'
+  if (reason === 'outside_required_radius') return 'Outside required arrival radius'
+  return reason ? reason.replace(/_/g, ' ') : null
+}
+
+function formatStartVerificationStatus(booking: BookingRead) {
+  const verification = booking.start_verification
+  if (!booking.started_at) return null
+  if (!verification && booking.start_initiated_by === 'cleaner') return 'Not recorded for cleaner-started booking'
+  if (!verification) return null
+  return verification.verified ? 'GPS verified arrival' : 'Not GPS verified'
+}
+
+function formatStartCoordinates(verification: BookingRead['start_verification']) {
+  const latitude = verification?.latitude
+  const longitude = verification?.longitude
+  if (
+    typeof latitude !== 'number' ||
+    typeof longitude !== 'number' ||
+    !Number.isFinite(latitude) ||
+    !Number.isFinite(longitude)
+  ) {
+    return 'Not available'
+  }
+  return `${latitude.toFixed(6)}, ${longitude.toFixed(6)}`
+}
+
 function bookingCompletedTimelineCopy(source: string | null | undefined) {
   if (source === 'system') {
     return {
@@ -588,6 +624,9 @@ export default function AdminBookingDetailPage() {
   const subtotal = booking.subtotal ?? booking.total_amount - booking.platform_fee
   const cleaningTypeLabel = getBookingCleaningTypeLabel(booking)
   const serviceClassificationLabel = getBookingServiceClassificationLabel(booking)
+  const startVerificationStatus = formatStartVerificationStatus(booking)
+  const startVerificationReason = formatStartVerificationReason(booking.start_verification?.failure_reason)
+  const shouldShowStartVerification = Boolean(startVerificationStatus)
   const cancellationLeadTimeLabel = getCancellationLeadTimeLabel(booking)
   const cancellationPolicyBandLabel = getCancellationPolicyBandLabel(booking)
   const adminCancellationRecordSummary = getAdminCancellationRecordSummary(booking)
@@ -809,6 +848,21 @@ export default function AdminBookingDetailPage() {
                 <DetailRow label="Accepted" value={booking.accepted_at ? formatDate(booking.accepted_at) : null} />
                 <DetailRow label="Confirmed" value={booking.confirmed_at ? formatDate(booking.confirmed_at) : null} />
                 <DetailRow label="Started" value={booking.started_at ? formatDate(booking.started_at) : null} />
+                {shouldShowStartVerification && (
+                  <>
+                    <DetailRow label="Start GPS verification" value={startVerificationStatus} />
+                    {booking.start_verification && (
+                      <>
+                        <DetailRow label="Start GPS distance" value={formatMeters(booking.start_verification.distance_m)} />
+                        <DetailRow label="Start GPS accuracy" value={formatMeters(booking.start_verification.accuracy_m)} />
+                        <DetailRow label="Start GPS coordinates" value={formatStartCoordinates(booking.start_verification)} />
+                        {startVerificationReason && (
+                          <DetailRow label="Start verification reason" value={startVerificationReason} />
+                        )}
+                      </>
+                    )}
+                  </>
+                )}
                 <DetailRow label="Completed" value={booking.completed_at ? formatDate(booking.completed_at) : null} />
                 {booking.dispute?.created_at && (
                   <DetailRow label="Under Review" value={formatDate(booking.dispute.created_at)} />

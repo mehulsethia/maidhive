@@ -165,6 +165,13 @@ export type BookingStatus =
 
 export type ServiceType = 'standard' | 'deep_clean' | 'end_of_tenancy' | 'move_in'
 
+export interface ClientBookingStats {
+  all: number
+  active: number
+  completed: number
+  closed: number
+}
+
 export interface BookingCreate {
   cleaner_id: string
   service_type: ServiceType
@@ -218,6 +225,21 @@ export interface BookingRead {
   confirmed_at?: string
   started_at?: string
   start_initiated_by?: 'cleaner' | 'system' | null
+  start_verification?: {
+    id: string
+    booking_id: string
+    cleaner_id: string
+    latitude?: number | null
+    longitude?: number | null
+    accuracy_m?: number | null
+    distance_m?: number | null
+    verified: boolean
+    on_time: boolean
+    failure_reason?: string | null
+    started_at: string
+    created_at?: string
+    updated_at?: string
+  } | null
   completed_at?: string
   cancelled_by?: string | null
   cancelled_at?: string

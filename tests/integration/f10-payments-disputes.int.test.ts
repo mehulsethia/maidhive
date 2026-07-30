@@ -732,6 +732,7 @@ describe('F10 Payments capture/refund/dispute integration', () => {
       bookingId: 'booking_pay_1',
       occurredAt: state.booking.scheduledStart,
       confirmedBy: seededUsers.admin.id,
+      confirmedAt: expect.any(Date),
     })
     expect(state.notifications).toEqual(expect.arrayContaining([
       expect.objectContaining({
@@ -789,6 +790,41 @@ describe('F10 Payments capture/refund/dispute integration', () => {
       'cleaner_payout_adjusted',
       'payment_refunded',
     ])
+  })
+
+  it('does not resolve a confirmed no-show dispute when reliability consequences fail', async () => {
+    state.dispute = {
+      ...state.dispute,
+      issueType: 'cleaner_no_show',
+      status: 'under_review',
+    }
+    const route = await import('@/app/api/v1/disputes/[id]/resolve/route')
+    const { cleanerReliabilityService } = await import('@/server/services/cleaner-reliability.service')
+    vi.mocked(cleanerReliabilityService.recordConfirmedNoShow).mockRejectedValueOnce(
+      new Error('snapshot write failed'),
+    )
+
+    const res = await route.POST(
+      new NextRequest('http://localhost/api/v1/disputes/dispute_1/resolve', {
+        method: 'POST',
+        body: JSON.stringify({
+          resolution_type: 'full_refund',
+          resolution_note: 'Cleaner did not attend the confirmed booking.',
+          no_show_finding: 'confirmed',
+        }),
+        headers: { 'content-type': 'application/json' },
+      }),
+      { params: Promise.resolve({ id: 'dispute_1' }) } as any,
+    )
+    const body = await res.json()
+
+    expect(res.status).toBe(500)
+    expect(body.message).toBe(
+      'Confirmed no-show reliability update failed. The dispute was not resolved.',
+    )
+    expect(state.dispute?.status).toBe('under_review')
+    expect(state.notifications).toHaveLength(0)
+    expect(state.emails).toHaveLength(0)
   })
 
   it('IT-PAY-06 client report emails confirmation to client and against-notification to cleaner', async () => {

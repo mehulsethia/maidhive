@@ -31,6 +31,7 @@ function bookingInclude() {
     payment: true,
     review: true,
     dispute: true,
+    startVerification: true,
     actionEvents: {
       orderBy: { createdAt: 'asc' },
     },
@@ -126,6 +127,26 @@ export const bookingRepo = {
       }),
       db.booking.count({ where }),
     ])
+  },
+
+  countClientStats: async (clientId: string) => {
+    const paymentAuthorized = { status: { in: ['authorized', 'captured', 'transferred'] } }
+    const [all, active, completed, closed] = await Promise.all([
+      db.booking.count({ where: { clientId } }),
+      db.booking.count({
+        where: {
+          clientId,
+          OR: [
+            { status: 'pending', payment: { is: paymentAuthorized } },
+            { status: { in: ['accepted', 'confirmed', 'in_progress'] } },
+          ],
+        },
+      }),
+      db.booking.count({ where: { clientId, status: 'completed' } }),
+      db.booking.count({ where: { clientId, status: { in: ['cancelled', 'declined', 'expired'] } } }),
+    ])
+
+    return { all, active, completed, closed }
   },
 
   findByCleaner: (cleanerId: string, params: { page: number; pageSize: number; status?: string; sort?: 'created' | 'activity' }) => {

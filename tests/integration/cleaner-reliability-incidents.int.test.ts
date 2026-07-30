@@ -4,7 +4,15 @@ const state = vi.hoisted(() => ({
   incidents: [] as any[],
   strikes: [] as any[],
   snapshotUpdates: [] as any[],
+  snapshotUpserts: [] as any[],
   cancellationEvents: [] as any[],
+  reliabilitySnapshot: {
+    isSuperCleaner: true,
+    recoveryCancellationStartedAt: null,
+    recoveryNoShowStartedAt: null,
+    lostAt: null,
+    lossReason: null,
+  } as any,
 }))
 
 vi.mock('@/server/db', () => {
@@ -29,6 +37,22 @@ vi.mock('@/server/db', () => {
       state.incidents.push(incident)
       return incident
     }),
+    upsert: vi.fn(async ({ where, create, update }: any) => {
+      const key = where.cleanerId_incidentType_sourceKey
+      const existing = state.incidents.find(
+        (incident) =>
+          incident.cleanerId === key.cleanerId &&
+          incident.incidentType === key.incidentType &&
+          incident.sourceKey === key.sourceKey,
+      )
+      if (existing) {
+        Object.assign(existing, update)
+        return existing
+      }
+      const incident = { id: `incident_${state.incidents.length + 1}`, ...create }
+      state.incidents.push(incident)
+      return incident
+    }),
     findFirst: vi.fn(async ({ where }: any) =>
       state.incidents.find(
         (incident) =>
@@ -41,19 +65,35 @@ vi.mock('@/server/db', () => {
   }
   const db: any = {
     cleanerReliabilitySnapshot: {
-      findUnique: vi.fn(async () => ({
-        isSuperCleaner: true,
-        recoveryCancellationStartedAt: null,
-      })),
+      findUnique: vi.fn(async () => state.reliabilitySnapshot),
       updateMany: vi.fn(async ({ data }: any) => {
         state.snapshotUpdates.push(data)
         return { count: 1 }
+      }),
+      upsert: vi.fn(async ({ create, update }: any) => {
+        const data = state.reliabilitySnapshot ? update : create
+        state.snapshotUpserts.push(data)
+        state.reliabilitySnapshot = {
+          ...(state.reliabilitySnapshot ?? {}),
+          ...data,
+        }
+        return state.reliabilitySnapshot
       }),
     },
     cleanerReliabilityIncident,
     cleanerStrike: {
       create: vi.fn(async ({ data }: any) => {
         const strike = { id: `strike_${state.strikes.length + 1}`, ...data }
+        state.strikes.push(strike)
+        return strike
+      }),
+      upsert: vi.fn(async ({ where, create, update }: any) => {
+        const existing = state.strikes.find((strike) => strike.incidentId === where.incidentId)
+        if (existing) {
+          Object.assign(existing, update)
+          return existing
+        }
+        const strike = { id: `strike_${state.strikes.length + 1}`, ...create }
         state.strikes.push(strike)
         return strike
       }),
@@ -91,7 +131,15 @@ describe('cleaner reliability incident integration', () => {
     state.incidents.length = 0
     state.strikes.length = 0
     state.snapshotUpdates.length = 0
+    state.snapshotUpserts.length = 0
     state.cancellationEvents.length = 0
+    state.reliabilitySnapshot = {
+      isSuperCleaner: true,
+      recoveryCancellationStartedAt: null,
+      recoveryNoShowStartedAt: null,
+      lostAt: null,
+      lossReason: null,
+    }
     vi.clearAllMocks()
   })
 
@@ -183,5 +231,57 @@ describe('cleaner reliability incident integration', () => {
     expect(state.incidents).toHaveLength(1)
     expect(state.strikes).toHaveLength(0)
     expect(state.cancellationEvents.at(-1).incidentId).toBe('incident_1')
+  })
+
+  it('applies a strike and active recovery for every admin-confirmed no-show', async () => {
+    const { cleanerReliabilityService } = await import(
+      '@/server/services/cleaner-reliability.service'
+    )
+    vi.spyOn(cleanerReliabilityService, 'recalculate').mockResolvedValue({
+      cleanerId: 'cleaner_1',
+      noShowCount60d: 1,
+      activeStrikeCount: 1,
+      recoveryNoShowStartedAt: new Date('2026-07-29T10:00:00.000Z'),
+    } as any)
+    state.reliabilitySnapshot = {
+      isSuperCleaner: false,
+      recoveryCancellationStartedAt: null,
+      recoveryNoShowStartedAt: null,
+      lostAt: null,
+      lossReason: null,
+    }
+
+    const confirmedAt = new Date('2026-07-29T10:00:00.000Z')
+    await cleanerReliabilityService.recordConfirmedNoShow({
+      cleanerId: 'cleaner_1',
+      bookingId: 'booking_no_show',
+      occurredAt: new Date('2026-07-28T19:00:00.000Z'),
+      confirmedBy: 'admin_1',
+      confirmedAt,
+    })
+
+    expect(state.incidents).toHaveLength(1)
+    expect(state.incidents[0]).toMatchObject({
+      cleanerId: 'cleaner_1',
+      bookingId: 'booking_no_show',
+      incidentType: 'confirmed_no_show',
+      confirmedBy: 'admin_1',
+    })
+    expect(state.strikes).toHaveLength(1)
+    expect(state.strikes[0]).toMatchObject({
+      cleanerId: 'cleaner_1',
+      bookingId: 'booking_no_show',
+      strikeType: 'reliability_no_show',
+      reason: 'Admin-confirmed cleaner no-show',
+      issuedBy: 'admin_1',
+    })
+    expect(state.strikes[0].expiresAt).toEqual(new Date('2026-10-27T10:00:00.000Z'))
+    expect(state.snapshotUpserts.at(-1)).toMatchObject({
+      isSuperCleaner: false,
+      recoveryNoShowStartedAt: confirmedAt,
+      lossReason: 'confirmed_no_show',
+      dirtyAt: confirmedAt,
+    })
+    expect(cleanerReliabilityService.recalculate).toHaveBeenCalledWith('cleaner_1', confirmedAt)
   })
 })

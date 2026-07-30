@@ -318,6 +318,31 @@ export const POST = requireAdmin(async (req: NextRequest, ctx, user) => {
     }
 
 
+    const resolvedAt = new Date()
+    const booking = await bookingRepo.findById(dispute.bookingId)
+    if (
+      dispute.issueType === 'cleaner_no_show' &&
+      parsed.data.no_show_finding === 'confirmed'
+    ) {
+      if (!booking) return err('Booking not found for confirmed no-show dispute', 404)
+      try {
+        await cleanerReliabilityService.recordConfirmedNoShow({
+          cleanerId: booking.cleanerId,
+          bookingId: booking.id,
+          occurredAt: booking.scheduledStart,
+          confirmedBy: user.id,
+          confirmedAt: resolvedAt,
+        })
+      } catch (error) {
+        console.error('cleaner_reliability.no_show_record_failed', {
+          cleaner_id: booking.cleanerId,
+          booking_id: booking.id,
+          message: error instanceof Error ? error.message : String(error),
+        })
+        return err('Confirmed no-show reliability update failed. The dispute was not resolved.', 500)
+      }
+    }
+
     const updated = await disputeRepo.update(id, {
       status: 'resolved',
       resolutionType: parsed.data.resolution_type,
@@ -325,7 +350,7 @@ export const POST = requireAdmin(async (req: NextRequest, ctx, user) => {
       noShowFinding: parsed.data.no_show_finding,
       refundAmount: resolvedRefundAmount,
       resolvedByUser: { connect: { id: user.id } },
-      resolvedAt: new Date(),
+      resolvedAt,
     })
 
     try {
@@ -367,29 +392,8 @@ export const POST = requireAdmin(async (req: NextRequest, ctx, user) => {
       console.error('Resolved dispute but failed to restore dispute-hidden reviews:', reviewUnlockError)
     }
 
-    const booking = await bookingRepo.findById(dispute.bookingId)
     const resolvedPayment = await paymentRepo.findByBookingId(dispute.bookingId)
     if (booking) {
-      if (
-        dispute.issueType === 'cleaner_no_show' &&
-        parsed.data.no_show_finding === 'confirmed'
-      ) {
-        try {
-          await cleanerReliabilityService.recordConfirmedNoShow({
-            cleanerId: booking.cleanerId,
-            bookingId: booking.id,
-            occurredAt: booking.scheduledStart,
-            confirmedBy: user.id,
-          })
-        } catch (error) {
-          await cleanerReliabilityService.markDirty(booking.cleanerId)
-          console.error('cleaner_reliability.no_show_record_failed', {
-            cleaner_id: booking.cleanerId,
-            booking_id: booking.id,
-            message: error instanceof Error ? error.message : String(error),
-          })
-        }
-      }
       const resolutionCopy = getDisputeResolutionOutcome(
         parsed.data.resolution_type,
         resolvedRefundAmount,

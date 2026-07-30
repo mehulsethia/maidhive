@@ -12,6 +12,7 @@ const state = vi.hoisted(() => ({
   currentUser: seededUsers.client as User | null,
   findByClientArgs: null as any,
   findByCleanerArgs: null as any,
+  countClientStatsArgs: null as any,
   lastBookingCountArgs: null as any,
   countsResponse: {
     unreadChats: 2,
@@ -66,6 +67,10 @@ vi.mock('@/server/repositories/booking.repo', () => ({
         { id: 'b_cleaner_2', status: 'confirmed' },
       ], 2]
     }),
+    countClientStats: vi.fn(async (clientId: string) => {
+      state.countClientStatsArgs = clientId
+      return { all: 8, active: 4, completed: 2, closed: 1 }
+    }),
   },
 }))
 
@@ -112,6 +117,7 @@ describe('F17 lists/counts/visibility integration', () => {
     state.currentUser = seededUsers.client as User
     state.findByClientArgs = null
     state.findByCleanerArgs = null
+    state.countClientStatsArgs = null
     state.lastBookingCountArgs = null
   })
 
@@ -128,6 +134,21 @@ describe('F17 lists/counts/visibility integration', () => {
     expect(body.success).toBe(true)
     expect(state.findByClientArgs).toEqual({ page: 2, pageSize: 15, status: 'accepted' })
     expect(body.data.total).toBe(1)
+  })
+
+  it('IT-LIST-04 client booking stats endpoint returns shared counter totals', async () => {
+    const route = await import('@/app/api/v1/bookings/stats/route')
+
+    const res = await route.GET(
+      new NextRequest('http://localhost/api/v1/bookings/stats'),
+      { params: Promise.resolve({}) } as any,
+    )
+    const body = await res.json()
+
+    expect(res.status).toBe(200)
+    expect(body.success).toBe(true)
+    expect(state.countClientStatsArgs).toBe('client_profile_1')
+    expect(body.data).toEqual({ all: 8, active: 4, completed: 2, closed: 1 })
   })
 
   it('IT-LIST-01b list endpoint can page by recent booking activity for dashboard feeds', async () => {

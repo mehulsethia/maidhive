@@ -408,61 +408,78 @@ export const cleanerReliabilityService = {
     bookingId: string
     occurredAt: Date
     confirmedBy: string
+    confirmedAt?: Date
   }) {
+    const confirmedAt = input.confirmedAt ?? new Date()
     const incidentDate = cyprusCalendarDate(input.occurredAt)
     const previous = await db.cleanerReliabilitySnapshot.findUnique({
       where: { cleanerId: input.cleanerId },
     })
-    const incident = await db.cleanerReliabilityIncident.upsert({
-      where: {
-        cleanerId_incidentType_sourceKey: {
-          cleanerId: input.cleanerId,
-          incidentType: INCIDENT_NO_SHOW,
-          sourceKey: input.bookingId,
+    const recoveryNoShowStartedAt = previous?.recoveryNoShowStartedAt ?? confirmedAt
+    await db.$transaction(async (tx) => {
+      const incident = await tx.cleanerReliabilityIncident.upsert({
+        where: {
+          cleanerId_incidentType_sourceKey: {
+            cleanerId: input.cleanerId,
+            incidentType: INCIDENT_NO_SHOW,
+            sourceKey: input.bookingId,
+          },
         },
-      },
-      create: {
-        cleanerId: input.cleanerId,
-        bookingId: input.bookingId,
-        bookingIds: [input.bookingId],
-        incidentType: INCIDENT_NO_SHOW,
-        incidentDate,
-        sourceKey: input.bookingId,
-        occurredAt: input.occurredAt,
-        latestAt: input.occurredAt,
-        confirmedBy: input.confirmedBy,
-      },
-      update: {
-        latestAt: input.occurredAt,
-        confirmedBy: input.confirmedBy,
-      },
-    })
-    await db.cleanerStrike.upsert({
-      where: { incidentId: incident.id },
-      create: {
-        cleanerId: input.cleanerId,
-        bookingId: input.bookingId,
-        incidentId: incident.id,
-        strikeType: 'reliability_no_show',
-        reason: 'Admin-confirmed cleaner no-show',
-        issuedBy: input.confirmedBy,
-        expiresAt: addDays(input.occurredAt, STRIKE_ACTIVE_DAYS),
-      },
-      update: {},
-    })
-    if (previous?.isSuperCleaner || previous?.recoveryNoShowStartedAt) {
-      await db.cleanerReliabilitySnapshot.updateMany({
-        where: { cleanerId: input.cleanerId },
-        data: {
-          isSuperCleaner: false,
-          recoveryNoShowStartedAt: input.occurredAt,
-          lostAt: input.occurredAt,
-          lossReason: 'confirmed_no_show',
-          dirtyAt: input.occurredAt,
+        create: {
+          cleanerId: input.cleanerId,
+          bookingId: input.bookingId,
+          bookingIds: [input.bookingId],
+          incidentType: INCIDENT_NO_SHOW,
+          incidentDate,
+          sourceKey: input.bookingId,
+          occurredAt: input.occurredAt,
+          latestAt: input.occurredAt,
+          confirmedBy: input.confirmedBy,
+        },
+        update: {
+          latestAt: input.occurredAt,
+          confirmedBy: input.confirmedBy,
         },
       })
-    }
-    return this.recalculate(input.cleanerId, input.occurredAt)
+      await tx.cleanerStrike.upsert({
+        where: { incidentId: incident.id },
+        create: {
+          cleanerId: input.cleanerId,
+          bookingId: input.bookingId,
+          incidentId: incident.id,
+          strikeType: 'reliability_no_show',
+          reason: 'Admin-confirmed cleaner no-show',
+          issuedBy: input.confirmedBy,
+          expiresAt: addDays(confirmedAt, STRIKE_ACTIVE_DAYS),
+        },
+        update: {
+          bookingId: input.bookingId,
+          reason: 'Admin-confirmed cleaner no-show',
+          issuedBy: input.confirmedBy,
+          expiresAt: addDays(confirmedAt, STRIKE_ACTIVE_DAYS),
+        },
+      })
+      await tx.cleanerReliabilitySnapshot.upsert({
+        where: { cleanerId: input.cleanerId },
+        create: {
+          cleanerId: input.cleanerId,
+          isSuperCleaner: false,
+          criteria: {},
+          recoveryNoShowStartedAt,
+          lostAt: previous?.isSuperCleaner ? confirmedAt : null,
+          lossReason: 'confirmed_no_show',
+          dirtyAt: confirmedAt,
+        },
+        update: {
+          isSuperCleaner: false,
+          recoveryNoShowStartedAt,
+          lostAt: previous?.isSuperCleaner ? previous.lostAt ?? confirmedAt : previous?.lostAt ?? null,
+          lossReason: 'confirmed_no_show',
+          dirtyAt: confirmedAt,
+        },
+      })
+    })
+    return this.recalculate(input.cleanerId, confirmedAt)
   },
 
   async recordStartVerification(input: {
