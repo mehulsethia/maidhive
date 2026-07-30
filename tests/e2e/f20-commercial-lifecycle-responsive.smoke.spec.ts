@@ -10,6 +10,70 @@ const VIEWPORTS = [
 const RESPONSIVE_BOOKING_ID = '00000000-0000-4000-8000-000000000020'
 const RESPONSIVE_CLEANER_ID = '00000000-0000-4000-8000-000000000120'
 
+function authCookieName() {
+  const supabaseUrl =
+    process.env.NEXT_PUBLIC_SUPABASE_URL ?? 'https://phbbzgszfbnvvksklzss.supabase.co'
+  const projectRef = new URL(supabaseUrl).hostname.split('.')[0]
+  return `sb-${projectRef}-auth-token`
+}
+
+function base64Url(input: unknown) {
+  return Buffer.from(JSON.stringify(input)).toString('base64url')
+}
+
+async function seedRoleSession(page: Page, role: 'admin' | 'client' | 'cleaner') {
+  await page.context().clearCookies()
+  const expiresAt = Math.floor(Date.now() / 1000) + 60 * 60
+  const id = `${role}-user`
+  const email = `${role}@example.test`
+  const accessToken = [
+    base64Url({ alg: 'HS256', typ: 'JWT' }),
+    base64Url({
+      aud: 'authenticated',
+      exp: expiresAt,
+      sub: id,
+      email,
+      role: 'authenticated',
+      user_metadata: { role },
+    }),
+    'test-signature',
+  ].join('.')
+  const session = {
+    access_token: accessToken,
+    refresh_token: 'test-refresh-token',
+    expires_in: 3600,
+    expires_at: expiresAt,
+    token_type: 'bearer',
+    user: {
+      id,
+      aud: 'authenticated',
+      role: 'authenticated',
+      email,
+      user_metadata: { role },
+    },
+  }
+  const cookieValue = `base64-${Buffer.from(JSON.stringify(session)).toString('base64')}`
+
+  await page.context().addCookies([
+    {
+      name: authCookieName(),
+      value: cookieValue,
+      domain: 'localhost',
+      path: '/',
+      expires: expiresAt,
+      httpOnly: false,
+      secure: false,
+      sameSite: 'Lax',
+    },
+  ])
+  await page.addInitScript(
+    ({ key, value }) => {
+      window.localStorage.setItem(key, value)
+    },
+    { key: authCookieName(), value: JSON.stringify(session) },
+  )
+}
+
 function isoHoursFromNow(hours: number) {
   return new Date(Date.now() + hours * 60 * 60 * 1000).toISOString()
 }
@@ -148,8 +212,7 @@ test.describe('F20 commercial and lifecycle responsive regression @smoke', () =>
     test.use({ storageState: authStatePath('admin') })
 
     test('E2E-RESP-04 dispute lifecycle and amendment audit stay readable at all viewports', async ({ page }) => {
-      test.skip(!hasRoleCredentialCandidates('admin'), 'Admin E2E credentials are required')
-
+      await seedRoleSession(page, 'admin')
       const createdAt = isoHoursFromNow(-36)
       const proposedAt = isoHoursFromNow(-30)
       const resolvedAt = isoHoursFromNow(-12)
@@ -207,8 +270,37 @@ test.describe('F20 commercial and lifecycle responsive regression @smoke', () =>
             created_at: isoHoursFromNow(-29),
           },
         ],
+        start_verification: {
+          id: 'start-verification-responsive',
+          booking_id: RESPONSIVE_BOOKING_ID,
+          cleaner_id: RESPONSIVE_CLEANER_ID,
+          latitude: 34.9174,
+          longitude: 33.6291,
+          accuracy_m: 35,
+          distance_m: 42,
+          verified: true,
+          on_time: true,
+          failure_reason: null,
+          started_at: isoHoursFromNow(-48),
+        },
       })
 
+      await page.route('**/api/v1/auth/me', (route) => fulfill(route, {
+        id: 'admin-user',
+        role: 'admin',
+        email: 'admin@example.test',
+      }))
+      await page.route('**/api/v1/counts', (route) => fulfill(route, {
+        unread_chats: 0,
+        pending_bookings: 0,
+        unread_notifications: 0,
+      }))
+      await page.route('**/api/v1/notifications**', (route) => fulfill(route, {
+        notifications: [],
+        total: 0,
+        page: 1,
+        page_size: 20,
+      }))
       await page.route(`**/api/v1/admin/bookings/${RESPONSIVE_BOOKING_ID}`, (route) => fulfill(route, adminBooking))
 
       for (const viewport of VIEWPORTS) {
@@ -219,6 +311,12 @@ test.describe('F20 commercial and lifecycle responsive regression @smoke', () =>
         await expect(bookingState.getByText('Under Review', { exact: true })).toBeVisible()
         await expect(bookingState.getByText('Dispute Resolved', { exact: true })).toBeVisible()
         await expect(bookingState.getByText('Completed – Released', { exact: true })).toBeVisible()
+        await expect(bookingState.getByText('Start GPS verification', { exact: true })).toBeVisible()
+        await expect(bookingState.getByText('GPS verified arrival', { exact: true })).toBeVisible()
+        await expect(bookingState.getByText('Start GPS distance', { exact: true })).toBeVisible()
+        await expect(bookingState.getByText('42 m', { exact: true })).toBeVisible()
+        await expect(bookingState.getByText('Start GPS accuracy', { exact: true })).toBeVisible()
+        await expect(bookingState.getByText('35 m', { exact: true })).toBeVisible()
         await expect(page.getByTestId('admin-payment-state').getByText('Stripe Payment Status')).toBeVisible()
         await expect(page.getByTestId('admin-booking-action-log').getByText('Cleaner proposed Amend Start Time')).toBeVisible()
         await expect(page.getByTestId('admin-booking-action-log').getByText('Client declined Amend Start Time')).toBeVisible()
@@ -281,6 +379,64 @@ test.describe('F20 commercial and lifecycle responsive regression @smoke', () =>
 
   test.describe('client session', () => {
     test.use({ storageState: authStatePath('client') })
+
+    test('E2E-RESP-15 shared client booking counters stay responsive on Dashboard and Bookings', async ({ page }) => {
+      test.skip(!hasRoleCredentialCandidates('client'), 'Client E2E credentials are required')
+
+      const activeBooking = bookingFixture({
+        status: 'confirmed',
+        scheduled_start: isoHoursFromNow(48),
+        scheduled_end: isoHoursFromNow(50),
+      })
+      const stats = { all: 8, active: 3, completed: 2, closed: 3 }
+
+      await page.route('**/api/v1/auth/me', (route) => fulfill(route, activeBooking.client.user))
+      await page.route('**/api/v1/counts', (route) => fulfill(route, {
+        unread_chats: 0,
+        pending_bookings: 0,
+        unread_notifications: 0,
+      }))
+      await page.route('**/api/v1/notifications**', (route) => fulfill(route, {
+        notifications: [],
+        total: 0,
+        page: 1,
+        page_size: 20,
+      }))
+      await page.route('**/api/v1/bookings/stats', (route) => fulfill(route, stats))
+      await page.route('**/api/v1/bookings?*', (route) => fulfill(route, {
+        items: [activeBooking],
+        bookings: [activeBooking],
+        total: 1,
+        page: 1,
+        page_size: 50,
+        has_next: false,
+      }))
+      await page.route('**/api/v1/clients/favorites', (route) => fulfill(route, []))
+      await page.route('**/api/v1/disputes?*', (route) => fulfill(route, []))
+
+      for (const viewport of VIEWPORTS) {
+        await page.setViewportSize(viewport)
+        await page.goto('/client/dashboard', { waitUntil: 'domcontentloaded' })
+        await expect(page.getByText('All Bookings', { exact: true })).toBeVisible()
+        await expect(page.getByText('Active', { exact: true })).toBeVisible()
+        await expect(page.getByText('Completed', { exact: true })).toBeVisible()
+        await expect(page.getByText('Closed', { exact: true })).toBeVisible()
+        await expect(page.getByText('8', { exact: true }).first()).toBeVisible()
+        await expect(page.getByText('3', { exact: true }).first()).toBeVisible()
+        await expect(page.getByText('2', { exact: true }).first()).toBeVisible()
+        await expectNoHorizontalOverflow(page, `client dashboard counters at ${viewport.name}`)
+
+        await page.goto('/client/bookings', { waitUntil: 'domcontentloaded' })
+        await expect(page.getByText('All Bookings', { exact: true })).toBeVisible()
+        await expect(page.getByText('Active', { exact: true })).toBeVisible()
+        await expect(page.getByRole('button', { name: 'Completed' })).toBeVisible()
+        await expect(page.getByRole('button', { name: 'Closed' })).toBeVisible()
+        await expect(page.getByText('8', { exact: true }).first()).toBeVisible()
+        await expect(page.getByText('3', { exact: true }).first()).toBeVisible()
+        await expect(page.getByText('2', { exact: true }).first()).toBeVisible()
+        await expectNoHorizontalOverflow(page, `client bookings counters at ${viewport.name}`)
+      }
+    })
 
     test('E2E-RESP-05 minimum-fee disclosure stays visible and expandable at all viewports', async ({ page }) => {
       test.skip(!hasRoleCredentialCandidates('client'), 'Client E2E credentials are required')
@@ -637,6 +793,72 @@ test.describe('F20 commercial and lifecycle responsive regression @smoke', () =>
         await expectClientProvidedSupplies(page)
         await expectNoHorizontalOverflow(page, `cleaner dashboard supplies at ${viewport.name}`)
       }
+    })
+
+    test('E2E-RESP-14 cleaner dashboard Start Job sends GPS coordinates when permission is granted', async ({ page }) => {
+      test.skip(!hasRoleCredentialCandidates('cleaner'), 'Cleaner E2E credentials are required')
+
+      await page.context().grantPermissions(['geolocation'])
+      await page.context().setGeolocation({ latitude: 34.9174, longitude: 33.6291, accuracy: 35 })
+      const startableBooking = bookingFixture({
+        status: 'confirmed',
+        scheduled_start: isoHoursFromNow(0.05),
+        scheduled_end: isoHoursFromNow(2),
+      })
+      let startPayload: any = null
+
+      await page.route('**/api/v1/bookings?*', (route) => fulfill(route, {
+        bookings: [startableBooking],
+        total: 1,
+        page: 1,
+        page_size: 50,
+        has_next: false,
+      }))
+      await page.route('**/api/v1/auth/me', (route) => fulfill(route, startableBooking.cleaner.user))
+      await page.route('**/api/v1/counts', (route) => fulfill(route, {
+        unread_chats: 0,
+        pending_bookings: 0,
+        unread_notifications: 0,
+      }))
+      await page.route('**/api/v1/notifications**', (route) => fulfill(route, {
+        notifications: [],
+        total: 0,
+        page: 1,
+        page_size: 20,
+      }))
+      await page.route('**/api/v1/cleaners/me', (route) => fulfill(route, {
+        cleaner: {
+          id: 'cleaner-profile',
+          status: 'approved',
+          lifecycle_status: 'live',
+          stripe_onboarding_complete: true,
+          profile_complete: true,
+        },
+        onboarding: { completion_pct: 100, steps: {} },
+      }))
+      await page.route(`**/api/v1/bookings/${RESPONSIVE_BOOKING_ID}/action`, async (route) => {
+        startPayload = route.request().postDataJSON()
+        await fulfill(route, {
+          ...startableBooking,
+          status: 'in_progress',
+          started_at: new Date().toISOString(),
+          start_initiated_by: 'cleaner',
+        })
+      })
+
+      await page.setViewportSize({ width: 1440, height: 1000 })
+      await page.goto('/cleaner/dashboard', { waitUntil: 'domcontentloaded' })
+      await page.getByRole('button', { name: 'Start job' }).click()
+      await expect.poll(() => startPayload).not.toBeNull()
+
+      expect(startPayload).toMatchObject({
+        action: 'start',
+        start_location: {
+          latitude: 34.9174,
+          longitude: 33.6291,
+          accuracy_m: 35,
+        },
+      })
     })
   })
 })

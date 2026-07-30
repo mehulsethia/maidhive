@@ -21,6 +21,7 @@ import { formatCurrency, formatDate } from '@/lib/utils'
 import type { BookingRead, BookingStatus, CleanerOnboardingProgress } from '@/types'
 import { deriveCleanerLifecycleStatus } from '@/lib/cleaner-status'
 import { showJobStartedToast } from '@/lib/job-start-toast'
+import { getStartLocationForVerification } from '@/lib/start-location'
 import { getReleasedCleanerEarnings } from '@/lib/cleaner-payment-history'
 import { setupVisiblePolling } from '@/lib/visible-polling'
 import { getCleanerEarningsLabel } from '@/lib/cleaner-earnings-label'
@@ -128,7 +129,10 @@ export default function CleanerDashboardPage() {
   async function handleAction(bookingId: string, action: 'accept' | 'start') {
     setActionLoading(`${bookingId}-${action}`)
     try {
-      await bookingsApi.action(bookingId, action)
+      const startLocation = action === 'start'
+        ? await getStartLocationForVerification()
+        : undefined
+      await bookingsApi.action(bookingId, action, undefined, startLocation)
       if (action === 'accept') toast.success('Booking accepted.')
       if (action === 'start') showJobStartedToast(bookingId)
       await refresh()

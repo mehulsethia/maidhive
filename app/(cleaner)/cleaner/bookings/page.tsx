@@ -37,6 +37,7 @@ import { getClientTrustMetadata } from '@/lib/client-trust'
 import { getCleanerBookingRequestDeadlineCopy } from '@/lib/booking-expiry-copy'
 import { subscribeBookingsRefresh, triggerBookingsRefresh } from '@/lib/booking-sync'
 import { showJobStartedToast } from '@/lib/job-start-toast'
+import { getStartLocationForVerification } from '@/lib/start-location'
 import { setupVisiblePolling } from '@/lib/visible-polling'
 import { formatCurrency, formatDate } from '@/lib/utils'
 import { hasPendingAmendmentRequest } from '@/lib/booking-amendment'
@@ -190,7 +191,10 @@ export default function CleanerBookingsPage() {
   ) {
     setActionLoading(`${id}-${type}`)
     try {
-      await bookingsApi.action(id, type, customProposedStart)
+      const startLocation = type === 'start'
+        ? await getStartLocationForVerification()
+        : undefined
+      await bookingsApi.action(id, type, customProposedStart, startLocation)
       if (type === 'accept') toast.success('Booking accepted.')
       if (type === 'decline') toast.success('Booking request declined.')
       if (type === 'start') showJobStartedToast(id)

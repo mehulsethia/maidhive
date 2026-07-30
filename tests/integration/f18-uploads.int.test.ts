@@ -1,5 +1,5 @@
 import { NextRequest } from 'next/server'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterAll, beforeEach, describe, expect, it, vi } from 'vitest'
 
 type User = { id: string; role: 'client' | 'cleaner' | 'admin' }
 
@@ -13,10 +13,14 @@ const state = vi.hoisted(() => ({
   cleanerProfile: { id: 'cleaner_profile_1', userId: seededUsers.cleaner.id, profileComplete: false, status: 'pending' },
   clientProfile: { id: 'client_profile_1', userId: seededUsers.client.id },
   uploadCalls: 0,
+  uploadBuckets: [] as string[],
   updateBucketCalls: 0,
+  updateBucketNames: [] as string[],
   updatedClientMeta: null as any,
   updatedCleanerMeta: null as any,
 }))
+
+const originalDisputeEvidenceBucket = process.env.SUPABASE_DISPUTE_EVIDENCE_BUCKET
 
 vi.mock('@/server/auth', () => {
   const unauthorized = () => new Response(JSON.stringify({ success: false, message: 'Unauthorized' }), { status: 401 })
@@ -64,18 +68,22 @@ vi.mock('@supabase/supabase-js', () => ({
   createClient: vi.fn(() => ({
     storage: {
       getBucket: vi.fn(async () => ({ data: { name: 'bucket' }, error: null })),
-      updateBucket: vi.fn(async () => {
+      updateBucket: vi.fn(async (bucket: string) => {
         state.updateBucketCalls += 1
+        state.updateBucketNames.push(bucket)
         return { error: null }
       }),
       createBucket: vi.fn(async () => ({ error: null })),
-      from: vi.fn(() => ({
-        upload: vi.fn(async () => {
-          state.uploadCalls += 1
-          return { error: null }
-        }),
-        getPublicUrl: vi.fn(() => ({ data: { publicUrl: 'https://example.test/uploaded-file' } })),
-      })),
+      from: vi.fn((bucket: string) => {
+        state.uploadBuckets.push(bucket)
+        return {
+          upload: vi.fn(async () => {
+            state.uploadCalls += 1
+            return { error: null }
+          }),
+          getPublicUrl: vi.fn(() => ({ data: { publicUrl: 'https://example.test/uploaded-file' } })),
+        }
+      }),
     },
   })),
 }))
@@ -87,9 +95,20 @@ describe('F18 upload routes integration', () => {
     state.cleanerProfile = { id: 'cleaner_profile_1', userId: seededUsers.cleaner.id, profileComplete: false, status: 'pending' }
     state.clientProfile = { id: 'client_profile_1', userId: seededUsers.client.id }
     state.uploadCalls = 0
+    state.uploadBuckets = []
     state.updateBucketCalls = 0
+    state.updateBucketNames = []
     state.updatedClientMeta = null
     state.updatedCleanerMeta = null
+    delete process.env.SUPABASE_DISPUTE_EVIDENCE_BUCKET
+  })
+
+  afterAll(() => {
+    if (originalDisputeEvidenceBucket === undefined) {
+      delete process.env.SUPABASE_DISPUTE_EVIDENCE_BUCKET
+      return
+    }
+    process.env.SUPABASE_DISPUTE_EVIDENCE_BUCKET = originalDisputeEvidenceBucket
   })
 
   it('IT-UPLOAD-01 authenticated client ID upload stores metadata', async () => {
@@ -190,10 +209,43 @@ describe('F18 upload routes integration', () => {
       expect(body.data.url).toBe('https://example.test/uploaded-file')
     }
     expect(state.uploadCalls).toBe(2)
+    expect(state.uploadBuckets).toEqual([
+      'dispute-evidence',
+      'dispute-evidence',
+      'dispute-evidence',
+      'dispute-evidence',
+    ])
     expect(state.updateBucketCalls).toBe(1)
+    expect(state.updateBucketNames).toEqual(['dispute-evidence'])
   })
 
-  it('IT-UPLOAD-05 dispute evidence identifies invalid screenshot files before upload', async () => {
+  it('IT-UPLOAD-05 dispute evidence ignores the legacy profile-images bucket override', async () => {
+    process.env.SUPABASE_DISPUTE_EVIDENCE_BUCKET = 'profile-images'
+    const route = await import('@/app/api/v1/upload/dispute-evidence/route')
+    const form = new FormData()
+    form.set('file', new File([
+      new Uint8Array([
+        0x89, 0x50, 0x4e, 0x47,
+        0x0d, 0x0a, 0x1a, 0x0a,
+      ]),
+    ], 'legacy-config-screenshot.png', { type: 'image/png' }))
+
+    const res = await route.POST(
+      new NextRequest('http://localhost/api/v1/upload/dispute-evidence', {
+        method: 'POST',
+        body: form,
+      }),
+      { params: Promise.resolve({}) } as any,
+    )
+    const body = await res.json()
+
+    expect(res.status).toBe(200)
+    expect(body.success).toBe(true)
+    expect(state.updateBucketNames).toEqual(['dispute-evidence'])
+    expect(state.uploadBuckets).toEqual(['dispute-evidence', 'dispute-evidence'])
+  })
+
+  it('IT-UPLOAD-06 dispute evidence identifies invalid screenshot files before upload', async () => {
     const route = await import('@/app/api/v1/upload/dispute-evidence/route')
     const form = new FormData()
     form.set('file', new File([new Uint8Array([0x00, 0x01, 0x02])], 'broken-screenshot.png', { type: 'image/png' }))
@@ -210,6 +262,24 @@ describe('F18 upload routes integration', () => {
     expect(res.status).toBe(400)
     expect(body.success).toBe(false)
     expect(body.message).toContain('broken-screenshot.png')
+    expect(state.uploadCalls).toBe(0)
+  })
+
+  it('IT-UPLOAD-07 dispute evidence rejects malformed multipart requests without throwing a 500', async () => {
+    const route = await import('@/app/api/v1/upload/dispute-evidence/route')
+    const res = await route.POST(
+      new NextRequest('http://localhost/api/v1/upload/dispute-evidence', {
+        method: 'POST',
+        headers: { 'content-type': 'multipart/form-data' },
+        body: new Uint8Array([0x00, 0x01, 0x02]),
+      }),
+      { params: Promise.resolve({}) } as any,
+    )
+    const body = await res.json()
+
+    expect(res.status).toBe(400)
+    expect(body.success).toBe(false)
+    expect(body.message).toContain('Upload request was malformed')
     expect(state.uploadCalls).toBe(0)
   })
 })

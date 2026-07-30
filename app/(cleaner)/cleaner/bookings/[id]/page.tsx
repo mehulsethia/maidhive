@@ -39,6 +39,7 @@ import { getCancellationPaymentOutcome } from '@/lib/booking-payment-outcome'
 import { computeConfirmedCancellationPolicy } from '@/lib/cancellation-policy'
 import { subscribeBookingsRefresh, triggerBookingsRefresh } from '@/lib/booking-sync'
 import { showJobStartedToast } from '@/lib/job-start-toast'
+import { getStartLocationForVerification } from '@/lib/start-location'
 import { reportLoadError, resetLoadError } from '@/lib/load-error-policy'
 import { formatCurrency, formatDate } from '@/lib/utils'
 import { AMENDMENT_EXPIRY_OUTCOME_COPY, getEffectiveProposalExpiryMs, isWithinAmendStartWindow } from '@/lib/booking-amendment'
@@ -244,33 +245,7 @@ export default function CleanerBookingDetailPage() {
   async function handleAction(action: 'start') {
     setActionLoading(action)
     try {
-      let startLocation:
-        | {
-            latitude: number
-            longitude: number
-            accuracy_m?: number
-          }
-        | undefined
-
-      if (action === 'start' && typeof navigator !== 'undefined' && navigator.geolocation) {
-        try {
-          const position = await new Promise<GeolocationPosition>((resolve, reject) => {
-            navigator.geolocation.getCurrentPosition(resolve, reject, {
-              enableHighAccuracy: true,
-              timeout: 7000,
-              maximumAge: 60000,
-            })
-          })
-          startLocation = {
-            latitude: position.coords.latitude,
-            longitude: position.coords.longitude,
-            accuracy_m: position.coords.accuracy,
-          }
-        } catch {
-          // Start Cleaning must remain available even when GPS is unavailable.
-        }
-      }
-
+      const startLocation = await getStartLocationForVerification()
       await bookingsApi.action(id, action, undefined, startLocation)
       showJobStartedToast(id)
       await refresh()

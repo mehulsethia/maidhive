@@ -9,7 +9,9 @@ const supabaseAdmin = createClient(
   process.env.SUPABASE_SERVICE_ROLE_KEY!,
 )
 
-const DISPUTE_EVIDENCE_BUCKET = (process.env.SUPABASE_DISPUTE_EVIDENCE_BUCKET ?? 'dispute-evidence').trim()
+const DEFAULT_DISPUTE_EVIDENCE_BUCKET = 'dispute-evidence'
+const LEGACY_PROFILE_IMAGE_BUCKET = 'profile-images'
+const DISPUTE_EVIDENCE_BUCKET = resolveDisputeEvidenceBucket()
 const ALLOWED_MIME = new Set(IMAGE_MIME_TYPES)
 const MAX_UPLOAD_BYTES = 10 * 1024 * 1024
 const EXT_BY_MIME: Record<string, string> = {
@@ -21,6 +23,14 @@ const EXT_BY_MIME: Record<string, string> = {
 }
 
 let bucketEnsured = false
+
+function resolveDisputeEvidenceBucket() {
+  const configuredBucket = process.env.SUPABASE_DISPUTE_EVIDENCE_BUCKET?.trim()
+  if (!configuredBucket || configuredBucket === LEGACY_PROFILE_IMAGE_BUCKET) {
+    return DEFAULT_DISPUTE_EVIDENCE_BUCKET
+  }
+  return configuredBucket
+}
 
 async function updateDisputeBucketPolicy() {
   const { error } = await supabaseAdmin.storage.updateBucket(DISPUTE_EVIDENCE_BUCKET, {
@@ -58,7 +68,19 @@ async function ensureDisputeBucketExists() {
 }
 
 export const POST = requireAuth(async (req: NextRequest, _ctx, user) => {
-  const formData = await req.formData()
+  let formData: FormData
+  try {
+    formData = await req.formData()
+  } catch (formError) {
+    console.error('dispute_evidence.form_data_parse_failed', {
+      content_type: req.headers.get('content-type'),
+      message: formError instanceof Error ? formError.message : String(formError),
+    })
+    return NextResponse.json(
+      { success: false, message: 'Upload request was malformed. Please reselect the image and try again.' },
+      { status: 400 },
+    )
+  }
   const file = formData.get('file') as File | null
   if (!file) {
     return NextResponse.json({ success: false, message: 'No file provided' }, { status: 400 })
@@ -81,6 +103,13 @@ export const POST = requireAuth(async (req: NextRequest, _ctx, user) => {
   try {
     await ensureDisputeBucketExists()
   } catch (bucketError: any) {
+    console.error('dispute_evidence.bucket_init_failed', {
+      bucket: DISPUTE_EVIDENCE_BUCKET,
+      message: bucketError?.message,
+      status: bucketError?.status,
+      status_code: bucketError?.statusCode,
+      error: bucketError?.error,
+    })
     return NextResponse.json(
       { success: false, message: bucketError?.message ?? 'Failed to initialize dispute evidence bucket' },
       { status: 500 },
