@@ -516,6 +516,7 @@ export const bookingsApi = {
       longitude: number
       accuracy_m?: number
     },
+    startLocationUnavailableReason?: 'permission_denied' | 'location_unavailable',
   ) =>
     request<APIResponse<BookingRead>>(`/bookings/${id}/action`, {
       method: 'POST',
@@ -523,6 +524,7 @@ export const bookingsApi = {
         action,
         ...(proposedStart ? { proposed_start: proposedStart } : {}),
         ...(startLocation ? { start_location: startLocation } : {}),
+        ...(startLocationUnavailableReason ? { start_location_unavailable_reason: startLocationUnavailableReason } : {}),
       }),
     }),
   complete: (id: string) =>

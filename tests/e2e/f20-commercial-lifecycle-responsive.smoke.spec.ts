@@ -312,11 +312,14 @@ test.describe('F20 commercial and lifecycle responsive regression @smoke', () =>
         await expect(bookingState.getByText('Dispute Resolved', { exact: true })).toBeVisible()
         await expect(bookingState.getByText('Completed – Released', { exact: true })).toBeVisible()
         await expect(bookingState.getByText('Start GPS verification', { exact: true })).toBeVisible()
-        await expect(bookingState.getByText('GPS verified arrival', { exact: true })).toBeVisible()
+        await expect(bookingState.getByText('Verified', { exact: true })).toBeVisible()
         await expect(bookingState.getByText('Start GPS distance', { exact: true })).toBeVisible()
         await expect(bookingState.getByText('42 m', { exact: true })).toBeVisible()
         await expect(bookingState.getByText('Start GPS accuracy', { exact: true })).toBeVisible()
         await expect(bookingState.getByText('35 m', { exact: true })).toBeVisible()
+        await expect(bookingState.getByText('Permitted verification radius', { exact: true })).toBeVisible()
+        await expect(bookingState.getByText('Started without verified location', { exact: true })).toBeVisible()
+        await expect(bookingState.getByText('Arrival verified. Cleaner started the booking 42 m from the booking address')).toBeVisible()
         await expect(page.getByTestId('admin-payment-state').getByText('Stripe Payment Status')).toBeVisible()
         await expect(page.getByTestId('admin-booking-action-log').getByText('Cleaner proposed Amend Start Time')).toBeVisible()
         await expect(page.getByTestId('admin-booking-action-log').getByText('Client declined Amend Start Time')).toBeVisible()
@@ -417,23 +420,25 @@ test.describe('F20 commercial and lifecycle responsive regression @smoke', () =>
       for (const viewport of VIEWPORTS) {
         await page.setViewportSize(viewport)
         await page.goto('/client/dashboard', { waitUntil: 'domcontentloaded' })
-        await expect(page.getByText('All Bookings', { exact: true })).toBeVisible()
-        await expect(page.getByText('Active', { exact: true })).toBeVisible()
-        await expect(page.getByText('Completed', { exact: true })).toBeVisible()
-        await expect(page.getByText('Closed', { exact: true })).toBeVisible()
-        await expect(page.getByText('8', { exact: true }).first()).toBeVisible()
-        await expect(page.getByText('3', { exact: true }).first()).toBeVisible()
-        await expect(page.getByText('2', { exact: true }).first()).toBeVisible()
+        const dashboardCounters = page.locator('section').filter({ hasText: 'Live Snapshot' }).first()
+        await expect(dashboardCounters.getByText('All Bookings', { exact: true })).toBeVisible()
+        await expect(dashboardCounters.getByText('Active', { exact: true })).toBeVisible()
+        await expect(dashboardCounters.getByText('Completed', { exact: true })).toBeVisible()
+        await expect(dashboardCounters.getByText('Closed', { exact: true })).toBeVisible()
+        await expect(dashboardCounters.getByText('8', { exact: true })).toBeVisible()
+        await expect(dashboardCounters.getByText('3', { exact: true }).first()).toBeVisible()
+        await expect(dashboardCounters.getByText('2', { exact: true })).toBeVisible()
         await expectNoHorizontalOverflow(page, `client dashboard counters at ${viewport.name}`)
 
         await page.goto('/client/bookings', { waitUntil: 'domcontentloaded' })
-        await expect(page.getByText('All Bookings', { exact: true })).toBeVisible()
-        await expect(page.getByText('Active', { exact: true })).toBeVisible()
-        await expect(page.getByRole('button', { name: 'Completed' })).toBeVisible()
-        await expect(page.getByRole('button', { name: 'Closed' })).toBeVisible()
-        await expect(page.getByText('8', { exact: true }).first()).toBeVisible()
-        await expect(page.getByText('3', { exact: true }).first()).toBeVisible()
-        await expect(page.getByText('2', { exact: true }).first()).toBeVisible()
+        const bookingsCounters = page.locator('section').filter({ hasText: 'MaidHive Booking Command' }).first()
+        await expect(bookingsCounters.getByText('All Bookings', { exact: true })).toBeVisible()
+        await expect(bookingsCounters.getByText('Active', { exact: true })).toBeVisible()
+        await expect(bookingsCounters.getByRole('button', { name: 'Completed' })).toBeVisible()
+        await expect(bookingsCounters.getByRole('button', { name: 'Closed' })).toBeVisible()
+        await expect(bookingsCounters.getByText('8', { exact: true })).toBeVisible()
+        await expect(bookingsCounters.getByText('3', { exact: true }).first()).toBeVisible()
+        await expect(bookingsCounters.getByText('2', { exact: true })).toBeVisible()
         await expectNoHorizontalOverflow(page, `client bookings counters at ${viewport.name}`)
       }
     })
@@ -795,7 +800,7 @@ test.describe('F20 commercial and lifecycle responsive regression @smoke', () =>
       }
     })
 
-    test('E2E-RESP-14 cleaner dashboard Start Job sends GPS coordinates when permission is granted', async ({ page }) => {
+    test('E2E-RESP-14 cleaner bookings Start Job sends GPS coordinates when permission is granted', async ({ page }) => {
       test.skip(!hasRoleCredentialCandidates('cleaner'), 'Cleaner E2E credentials are required')
 
       await page.context().grantPermissions(['geolocation'])
@@ -847,7 +852,7 @@ test.describe('F20 commercial and lifecycle responsive regression @smoke', () =>
       })
 
       await page.setViewportSize({ width: 1440, height: 1000 })
-      await page.goto('/cleaner/dashboard', { waitUntil: 'domcontentloaded' })
+      await page.goto('/cleaner/bookings', { waitUntil: 'domcontentloaded' })
       await page.getByRole('button', { name: 'Start job' }).click()
       await expect.poll(() => startPayload).not.toBeNull()
 

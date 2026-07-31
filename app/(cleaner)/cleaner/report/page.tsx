@@ -1,6 +1,6 @@
 'use client'
 
-import { Suspense, useDeferredValue, useEffect, useMemo, useState, startTransition } from 'react'
+import { Suspense, useDeferredValue, useEffect, useMemo, useRef, useState, startTransition } from 'react'
 import { useSearchParams } from 'next/navigation'
 import { Bricolage_Grotesque, IBM_Plex_Mono } from 'next/font/google'
 import { CalendarDays, Search } from 'lucide-react'
@@ -77,6 +77,8 @@ function disputeWindowLabel() {
 function CleanerReportPageContent() {
   const searchParams = useSearchParams()
   const bookingFromQuery = searchParams.get('booking') ?? ''
+  const caseFromQuery = searchParams.get('case') ?? ''
+  const highlightedReportRef = useRef<HTMLElement | null>(null)
 
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
@@ -159,6 +161,16 @@ function CleanerReportPageContent() {
   useEffect(() => {
     load()
   }, [bookingFromQuery])
+
+  useEffect(() => {
+    if (!caseFromQuery || loading || disputes.length === 0) return
+    setDashboardFilter(null)
+    setStatusFilter('all')
+    setSearch('')
+    window.setTimeout(() => {
+      highlightedReportRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+    }, 100)
+  }, [caseFromQuery, loading, disputes.length])
 
   const deferredBookings = useDeferredValue(bookings)
   const deferredDisputes = useDeferredValue(disputes)
@@ -540,8 +552,13 @@ function CleanerReportPageContent() {
               {filteredDisputes.map((dispute) => {
                 const status = (dispute.status ?? 'open') as ReportStatus
                 const bookingReference = getFriendlyBookingReference(dispute)
+                const isHighlighted = caseFromQuery === dispute.id
                 return (
-                  <article key={dispute.id} className="rounded-2xl border border-slate-200 bg-white p-4">
+                  <article
+                    key={dispute.id}
+                    ref={isHighlighted ? highlightedReportRef : undefined}
+                    className={`rounded-2xl border bg-white p-4 ${isHighlighted ? 'border-[#0d4bc9] shadow-[0_0_0_3px_rgba(13,75,201,0.14)]' : 'border-slate-200'}`}
+                  >
                     <div className="flex flex-wrap items-start justify-between gap-2">
                       <div>
                         <p className={`${displayFont.className} text-base font-semibold tracking-[-0.01em] text-slate-900`}>

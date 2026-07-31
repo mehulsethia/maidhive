@@ -25,6 +25,7 @@ import { formatCurrency, formatDate } from '@/lib/utils'
 import { hasPendingAmendmentRequest } from '@/lib/booking-amendment'
 import { getCancellationOriginLabel } from '@/lib/cancellation-origin'
 import { getClientPaymentSummary } from '@/lib/client-payment-summary'
+import { canOfferStandardServiceReview } from '@/lib/booking-review-eligibility'
 import type { BookingRead, BookingStatus, ClientBookingStats, ClientDispute } from '@/types'
 import { toast } from 'sonner'
 
@@ -280,18 +281,11 @@ export default function ClientBookingsPage() {
     )
   }).sort(compareBookingsByOperationalPriority)
 
-  const activeCount = deferredBookings.filter((booking) => {
-    return isOperationalActiveBooking(booking)
-  }).length
-  const completedCount = deferredBookings.filter((booking) => booking.status === 'completed').length
-  const cancelledCount = deferredBookings.filter((booking) =>
-    ['cancelled', 'declined', 'expired'].includes(booking.status),
-  ).length
   const metricCounts = {
-    all: bookingStats?.all ?? deferredBookings.length,
-    active: bookingStats?.active ?? activeCount,
-    completed: bookingStats?.completed ?? completedCount,
-    closed: bookingStats?.closed ?? cancelledCount,
+    all: bookingStats?.all ?? 0,
+    active: bookingStats?.active ?? 0,
+    completed: bookingStats?.completed ?? 0,
+    closed: bookingStats?.closed ?? 0,
   }
 
   if (loading) return <ListPageSkeleton />
@@ -403,7 +397,14 @@ export default function ClientBookingsPage() {
                   const disputeAction = getDisputeParticipantAction('client', disputeForBooking)
                   const activeDispute = isActiveDisputeStatus(disputeStatusForBooking)
                   const reviewWindowOpened = Number.isFinite(scheduledEndMs) && Date.now() >= scheduledEndMs
-                  const canLeaveReview = Boolean(booking.completed_at) && booking.status === 'completed' && !booking.review && reviewWindowOpened && !activeDispute
+                  const canLeaveReview = canOfferStandardServiceReview({
+                    completedAt: booking.completed_at,
+                    status: booking.status,
+                    hasReview: Boolean(booking.review),
+                    reviewWindowOpened,
+                    activeDispute,
+                    dispute: disputeForBooking,
+                  })
                   const reviewSubmitted = Boolean(booking.review)
                   const canOpenMessageCta = canShowActiveMessageCta(booking)
                   const isOverdueDraftState = isOverdueUnpaid(booking)

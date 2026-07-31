@@ -61,6 +61,7 @@ export const bookingActionSchema = z.object({
     longitude: z.number().min(-180).max(180),
     accuracy_m: z.number().positive().optional(),
   }).optional(),
+  start_location_unavailable_reason: z.enum(['permission_denied', 'location_unavailable']).optional(),
 }).superRefine((val, ctx) => {
   if ((val.action === 'propose_alternative' || val.action === 'counter_proposal' || val.action === 'amend_start_time') && !val.proposed_start) {
     ctx.addIssue({

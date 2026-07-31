@@ -300,6 +300,7 @@ export interface BookingRead {
     responded_at?: string | null
     resolution_type?: string | null
     resolution_note?: string | null
+    no_show_finding?: 'confirmed' | 'rejected' | null
     refund_amount?: number | null
     resolved_at?: string | null
     created_at: string
@@ -731,6 +732,7 @@ export interface ClientDispute {
   responded_at?: string | null
   status: 'open' | 'under_review' | 'resolved' | 'closed'
   resolution_type?: string
+  no_show_finding?: 'confirmed' | 'rejected'
   refund_amount?: number
   resolved_at?: string
   created_at: string

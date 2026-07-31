@@ -17,6 +17,7 @@ import { AMENDMENT_EXPIRED_BODY, AMENDMENT_EXPIRED_TITLE, AMENDMENT_EXPIRY_OUTCO
 import { DEFAULT_PLATFORM_FEE_PCT } from '@/lib/platform-fee'
 import { cleanerReliabilityService } from './cleaner-reliability.service'
 import { isLastMinuteCancellation } from '@/lib/super-cleaner'
+import { isResolvedConfirmedCleanerNoShow } from '@/lib/booking-review-eligibility'
 import { geocodingService } from './geocoding.service'
 import { recordBookingActionEvent } from './booking-action-event.service'
 import type { User } from '@prisma/client'
@@ -368,6 +369,7 @@ export const bookingService = {
         longitude: number
         accuracy_m?: number
       }
+      start_location_unavailable_reason?: 'permission_denied' | 'location_unavailable'
     },
   ) {
     let booking = await bookingRepo.findById(bookingId)
@@ -403,6 +405,7 @@ export const bookingService = {
         initiatedBy: 'cleaner',
         startedAt: new Date(),
         startLocation: payload.start_location,
+        startLocationUnavailableReason: payload.start_location_unavailable_reason,
       })
     }
 
@@ -2013,7 +2016,7 @@ async function completeBookingFlow(
     console.error('Failed to send client completion email via Loops:', completionEmailError)
   }
 
-  if (!unresolvedDispute) {
+  if (!unresolvedDispute && !isResolvedConfirmedCleanerNoShow(booking.dispute)) {
     try {
       await loopsEmailService.sendClientReviewRequest({
         email: booking.client.user.email,
@@ -2039,6 +2042,7 @@ async function startBookingFlow(
       longitude: number
       accuracy_m?: number
     }
+    startLocationUnavailableReason?: 'permission_denied' | 'location_unavailable'
   },
 ) {
   const booking = await bookingRepo.findById(bookingId)
@@ -2115,6 +2119,7 @@ async function startBookingFlow(
         serviceLongitude:
           booking.serviceLongitude === null ? null : Number(booking.serviceLongitude),
         startLocation: args.startLocation,
+        startLocationUnavailableReason: args.startLocationUnavailableReason,
       })
     } catch (error) {
       await cleanerReliabilityService.markDirty(booking.cleanerId)

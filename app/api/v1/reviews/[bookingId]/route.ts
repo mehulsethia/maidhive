@@ -7,6 +7,7 @@ import { pushInAppNotification } from '@/server/services/in-app-notification.ser
 import { ok, err } from '@/server/response'
 import { createReviewSchema } from '@/server/schemas/review.schema'
 import { cleanerReliabilityService } from '@/server/services/cleaner-reliability.service'
+import { isResolvedConfirmedCleanerNoShow } from '@/lib/booking-review-eligibility'
 
 function isActiveDispute(dispute?: { status?: string | null } | null) {
   return dispute?.status === 'open' || dispute?.status === 'under_review'
@@ -23,6 +24,9 @@ export const POST = requireClient(async (req: NextRequest, ctx, user) => {
   }
   if (isActiveDispute(booking.dispute)) {
     return err('Reviews are locked while this booking is Under Review.', 409)
+  }
+  if (isResolvedConfirmedCleanerNoShow(booking.dispute)) {
+    return err('Reviews are not available for confirmed cleaner no-show bookings.', 409)
   }
 
   const client = await clientRepo.findByUserId(user.id)

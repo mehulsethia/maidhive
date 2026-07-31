@@ -22,9 +22,11 @@ describe('start location helper', () => {
     })
 
     await expect(getStartLocationForVerification()).resolves.toEqual({
-      latitude: 34.917,
-      longitude: 33.629,
-      accuracy_m: 35,
+      location: {
+        latitude: 34.917,
+        longitude: 33.629,
+        accuracy_m: 35,
+      },
     })
   })
 
@@ -37,6 +39,22 @@ describe('start location helper', () => {
       },
     })
 
-    await expect(getStartLocationForVerification()).resolves.toBeUndefined()
+    await expect(getStartLocationForVerification()).resolves.toEqual({
+      unavailableReason: 'location_unavailable',
+    })
+  })
+
+  it('records permission denial distinctly from unavailable GPS', async () => {
+    vi.stubGlobal('navigator', {
+      geolocation: {
+        getCurrentPosition: vi.fn((_resolve: PositionCallback, reject: PositionErrorCallback) => {
+          reject({ code: 1, message: 'denied' } as GeolocationPositionError)
+        }),
+      },
+    })
+
+    await expect(getStartLocationForVerification()).resolves.toEqual({
+      unavailableReason: 'permission_denied',
+    })
   })
 })

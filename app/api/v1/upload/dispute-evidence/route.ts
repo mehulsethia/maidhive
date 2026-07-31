@@ -4,6 +4,8 @@ import { createClient } from '@supabase/supabase-js'
 import { randomUUID } from 'crypto'
 import { IMAGE_MIME_TYPES, matchesFileSignature } from '@/lib/file-signature'
 
+export const runtime = 'nodejs'
+
 const supabaseAdmin = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
   process.env.SUPABASE_SERVICE_ROLE_KEY!,
@@ -24,12 +26,105 @@ const EXT_BY_MIME: Record<string, string> = {
 
 let bucketEnsured = false
 
+type ParsedUploadFile = {
+  name: string
+  type: string
+  size: number
+  bytes: Uint8Array
+}
+
+class MultipartParseError extends Error {
+  constructor(
+    message: string,
+    readonly code: string,
+  ) {
+    super(message)
+  }
+}
+
 function resolveDisputeEvidenceBucket() {
   const configuredBucket = process.env.SUPABASE_DISPUTE_EVIDENCE_BUCKET?.trim()
   if (!configuredBucket || configuredBucket === LEGACY_PROFILE_IMAGE_BUCKET) {
     return DEFAULT_DISPUTE_EVIDENCE_BUCKET
   }
   return configuredBucket
+}
+
+function getMultipartBoundary(contentType: string | null) {
+  const match = contentType?.match(/(?:^|;)\s*boundary=(?:"([^"]+)"|([^;]+))/i)
+  return match?.[1] ?? match?.[2]?.trim() ?? null
+}
+
+function parseContentDisposition(value: string | undefined) {
+  const name = value?.match(/(?:^|;)\s*name="([^"]+)"/i)?.[1] ?? null
+  const filename = value?.match(/(?:^|;)\s*filename="([^"]*)"/i)?.[1] ?? null
+  return { name, filename }
+}
+
+function parsePartHeaders(headerText: string) {
+  const headers = new Map<string, string>()
+  for (const line of headerText.split('\r\n')) {
+    const separator = line.indexOf(':')
+    if (separator <= 0) continue
+    headers.set(line.slice(0, separator).trim().toLowerCase(), line.slice(separator + 1).trim())
+  }
+  return headers
+}
+
+async function parseMultipartFile(req: NextRequest): Promise<ParsedUploadFile> {
+  const contentType = req.headers.get('content-type')
+  const boundary = getMultipartBoundary(contentType)
+  if (!boundary) {
+    throw new MultipartParseError('Missing multipart boundary', 'missing_boundary')
+  }
+
+  const body = Buffer.from(await req.arrayBuffer())
+  if (body.length === 0) {
+    throw new MultipartParseError('Multipart body is empty', 'empty_body')
+  }
+
+  const delimiter = Buffer.from(`--${boundary}`)
+  const headerSeparator = Buffer.from('\r\n\r\n')
+  const lineBreak = Buffer.from('\r\n')
+  let cursor = body.indexOf(delimiter)
+
+  while (cursor !== -1) {
+    const partStart = cursor + delimiter.length
+    if (body.slice(partStart, partStart + 2).toString('utf8') === '--') break
+
+    const headerStart = body.indexOf(lineBreak, partStart)
+    if (headerStart === -1) {
+      throw new MultipartParseError('Multipart part is missing header line break', 'missing_part_header')
+    }
+
+    const headerEnd = body.indexOf(headerSeparator, headerStart + lineBreak.length)
+    if (headerEnd === -1) {
+      throw new MultipartParseError('Multipart part is missing header separator', 'missing_header_separator')
+    }
+
+    const headers = parsePartHeaders(body.slice(headerStart + lineBreak.length, headerEnd).toString('utf8'))
+    const disposition = parseContentDisposition(headers.get('content-disposition'))
+    const dataStart = headerEnd + headerSeparator.length
+    const nextDelimiter = body.indexOf(Buffer.from(`\r\n--${boundary}`), dataStart)
+    if (nextDelimiter === -1) {
+      throw new MultipartParseError('Multipart file part is incomplete', 'incomplete_file_part')
+    }
+
+    if (disposition.name === 'file') {
+      const fileBytes = body.slice(dataStart, nextDelimiter)
+      const type = headers.get('content-type') ?? 'application/octet-stream'
+      return {
+        name: disposition.filename || 'evidence-upload',
+        type,
+        size: fileBytes.length,
+        bytes: new Uint8Array(fileBytes),
+      }
+    }
+
+    cursor = body.indexOf(delimiter, nextDelimiter)
+  }
+
+  throw new MultipartParseError('No file field found in multipart body', 'missing_file')
 }
 
 async function updateDisputeBucketPolicy() {
@@ -68,22 +163,20 @@ async function ensureDisputeBucketExists() {
 }
 
 export const POST = requireAuth(async (req: NextRequest, _ctx, user) => {
-  let formData: FormData
+  let file: ParsedUploadFile
   try {
-    formData = await req.formData()
+    file = await parseMultipartFile(req)
   } catch (formError) {
     console.error('dispute_evidence.form_data_parse_failed', {
       content_type: req.headers.get('content-type'),
+      content_length: req.headers.get('content-length'),
+      code: formError instanceof MultipartParseError ? formError.code : 'unknown',
       message: formError instanceof Error ? formError.message : String(formError),
     })
     return NextResponse.json(
       { success: false, message: 'Upload request was malformed. Please reselect the image and try again.' },
       { status: 400 },
     )
-  }
-  const file = formData.get('file') as File | null
-  if (!file) {
-    return NextResponse.json({ success: false, message: 'No file provided' }, { status: 400 })
   }
 
   if (!ALLOWED_MIME.has(file.type)) {
@@ -93,8 +186,7 @@ export const POST = requireAuth(async (req: NextRequest, _ctx, user) => {
     return NextResponse.json({ success: false, message: `${file.name} must be under 10MB.` }, { status: 400 })
   }
 
-  const arrayBuffer = await file.arrayBuffer()
-  if (!matchesFileSignature(new Uint8Array(arrayBuffer), file.type)) {
+  if (!matchesFileSignature(file.bytes, file.type)) {
     return NextResponse.json({ success: false, message: `${file.name} is not a valid ${file.type || 'image'} file.` }, { status: 400 })
   }
   const ext = EXT_BY_MIME[file.type]
@@ -118,7 +210,7 @@ export const POST = requireAuth(async (req: NextRequest, _ctx, user) => {
 
   const { error: uploadError } = await supabaseAdmin.storage
     .from(DISPUTE_EVIDENCE_BUCKET)
-    .upload(path, arrayBuffer, {
+    .upload(path, file.bytes, {
       contentType: file.type,
       upsert: false,
     })

@@ -364,28 +364,34 @@ export const POST = requireAdmin(async (req: NextRequest, ctx, user) => {
     }
 
     try {
-      const restoredReviews = await db.review.updateMany({
-        where: {
-          bookingId: dispute.bookingId,
-          hiddenByDispute: true,
-        } as any,
-        data: {
-          isPublic: true,
-          hiddenByDispute: false,
-        } as any,
+      const confirmedCleanerNoShow =
+        dispute.issueType === 'cleaner_no_show' &&
+        parsed.data.no_show_finding === 'confirmed'
+      const review = await db.review.findUnique({
+        where: { bookingId: dispute.bookingId },
+        select: { cleanerId: true },
       })
-      if (restoredReviews.count > 0) {
-        const review = await db.review.findUnique({
-          where: { bookingId: dispute.bookingId },
-          select: { cleanerId: true },
-        })
-        if (review) {
-          try {
-            await cleanerReliabilityService.recalculate(review.cleanerId)
-          } catch (reliabilityError) {
-            await cleanerReliabilityService.markDirty(review.cleanerId)
-            console.error('dispute.review_unlock.reliability_failed', reliabilityError)
-          }
+      const changedReviews = confirmedCleanerNoShow
+        ? await db.review.updateMany({
+            where: { bookingId: dispute.bookingId },
+            data: { isPublic: false, hiddenByDispute: true } as any,
+          })
+        : await db.review.updateMany({
+            where: {
+              bookingId: dispute.bookingId,
+              hiddenByDispute: true,
+            } as any,
+            data: {
+              isPublic: true,
+              hiddenByDispute: false,
+            } as any,
+          })
+      if (changedReviews.count > 0 && review) {
+        try {
+          await cleanerReliabilityService.recalculate(review.cleanerId)
+        } catch (reliabilityError) {
+          await cleanerReliabilityService.markDirty(review.cleanerId)
+          console.error('dispute.review_unlock.reliability_failed', reliabilityError)
         }
       }
     } catch (reviewUnlockError) {

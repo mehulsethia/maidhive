@@ -191,10 +191,16 @@ export default function CleanerBookingsPage() {
   ) {
     setActionLoading(`${id}-${type}`)
     try {
-      const startLocation = type === 'start'
+      const startLocationAttempt = type === 'start'
         ? await getStartLocationForVerification()
         : undefined
-      await bookingsApi.action(id, type, customProposedStart, startLocation)
+      await bookingsApi.action(
+        id,
+        type,
+        customProposedStart,
+        startLocationAttempt?.location,
+        startLocationAttempt?.unavailableReason,
+      )
       if (type === 'accept') toast.success('Booking accepted.')
       if (type === 'decline') toast.success('Booking request declined.')
       if (type === 'start') showJobStartedToast(id)

@@ -41,6 +41,12 @@ import { getCancellationOriginLabel } from '@/lib/cancellation-origin'
 import { getClientCancellationContext } from '@/lib/client-cancellation-context'
 import { getClientPaymentSummary } from '@/lib/client-payment-summary'
 import { getBookingCleaningTypeLabel } from '@/lib/booking-service-labels'
+import { canOfferStandardServiceReview } from '@/lib/booking-review-eligibility'
+import {
+  getResolutionReportHref,
+  getResolutionSummaryRows,
+  hasResolvedBookingCase,
+} from '@/lib/resolved-booking-case'
 import { AMENDMENT_EXPIRY_OUTCOME_COPY, getEffectiveProposalExpiryMs, isWithinAmendStartWindow } from '@/lib/booking-amendment'
 import type { BookingRead } from '@/types'
 import { toast } from 'sonner'
@@ -361,7 +367,14 @@ export default function ClientBookingDetailPage() {
   const reviewWindowOpened = Number.isFinite(new Date(booking.scheduled_end).getTime()) && Date.now() >= new Date(booking.scheduled_end).getTime()
   const activeDispute = isActiveDisputeStatus(booking.dispute?.status)
   const hasDisputeCase = Boolean(booking.dispute)
-  const canReview = Boolean(booking.completed_at) && ['completed', 'disputed'].includes(booking.status) && !booking.review && reviewWindowOpened && !activeDispute
+  const canReview = canOfferStandardServiceReview({
+    completedAt: booking.completed_at,
+    status: booking.status,
+    hasReview: Boolean(booking.review),
+    reviewWindowOpened,
+    activeDispute,
+    dispute: booking.dispute,
+  })
   const isPending = booking.status === 'pending'
   const hasProposal = Boolean(booking.proposed_start && booking.proposal_by)
   const cleanerProposed = booking.proposal_by === 'cleaner'
@@ -502,6 +515,9 @@ export default function ClientBookingDetailPage() {
   const proposalCountdownLabel = proposalExpiresMs && proposalExpiresMs > nowTick
     ? `${Math.ceil((proposalExpiresMs - nowTick) / 60_000)} min`
     : null
+  const resolvedCase = hasResolvedBookingCase(booking)
+  const resolutionRows = resolvedCase ? getResolutionSummaryRows(booking) : null
+  const resolutionReportHref = resolvedCase ? getResolutionReportHref('client', booking) : null
 
   return (
     <>
@@ -595,6 +611,24 @@ export default function ClientBookingDetailPage() {
               </CardContent>
             </Card>
 
+            {resolutionRows && resolutionReportHref && (
+              <Card className="border-emerald-200 bg-emerald-50/60">
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-base">Resolution outcome</CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-2 text-sm text-emerald-950">
+                  <p className="font-semibold">{resolutionRows.outcome}</p>
+                  <p>{resolutionRows.clientPaymentOutcome}</p>
+                  <p>{resolutionRows.cleanerPayoutOutcome}</p>
+                  {resolutionRows.reliabilityOutcome && <p>{resolutionRows.reliabilityOutcome}</p>}
+                  {resolutionRows.resolvedAt && <p>Resolution date: {formatDate(resolutionRows.resolvedAt)}</p>}
+                  <Button variant="outline" className="w-full bg-white sm:w-auto" onClick={() => router.push(resolutionReportHref)}>
+                    View full report
+                  </Button>
+                </CardContent>
+              </Card>
+            )}
+
             <PriceBreakdownCard
               breakdown={{
                 hourly_rate: booking.hourly_rate,
@@ -682,7 +716,15 @@ export default function ClientBookingDetailPage() {
                   </div>
                 ) : (
                   <>
-                    {Boolean(reportableStatus && reportAnchorMs) && (
+                    {resolvedCase && resolutionRows && resolutionReportHref ? (
+                      <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-800">
+                        <p className="font-semibold">Case resolved</p>
+                        <p>{resolutionRows.clientPaymentOutcome}</p>
+                        <Button variant="outline" size="sm" className="mt-2 bg-white" onClick={() => router.push(resolutionReportHref)}>
+                          View resolution details
+                        </Button>
+                      </div>
+                    ) : Boolean(reportableStatus && reportAnchorMs) && (
                       <p
                         className={`rounded-xl border px-3 py-2 text-sm ${
                           reportWindowActive
@@ -871,7 +913,7 @@ export default function ClientBookingDetailPage() {
                           Report a Problem
                         </Button>
                       )}
-                      {reportWindowExpired && (
+                      {!resolvedCase && reportWindowExpired && (
                         <p className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-500">
                           The {DISPUTE_WINDOW_HOURS}-hour report window has expired for this booking.
                         </p>

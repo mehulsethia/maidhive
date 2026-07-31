@@ -52,13 +52,6 @@ function isValidUpcomingBooking(booking: BookingRead, nowMs: number) {
   return scheduledStartMs >= nowMs
 }
 
-function getLocalActiveCount(bookings: BookingRead[]) {
-  return bookings.filter((booking) => {
-    if (booking.status === 'pending') return isPaymentAuthorized(booking.payment?.status)
-    return booking.status === 'accepted' || booking.status === 'confirmed' || booking.status === 'in_progress'
-  }).length
-}
-
 export default function ClientDashboardPage() {
   const [loading, setLoading] = useState(true)
   const [bookings, setBookings] = useState<BookingRead[]>([])
@@ -165,10 +158,10 @@ export default function ClientDashboardPage() {
   const deferredBookings = useDeferredValue(bookings)
   const firstName = name ? name.split(' ')[0] : ''
 
-  const total = bookingStats?.all ?? deferredBookings.length
-  const activeCount = bookingStats?.active ?? getLocalActiveCount(deferredBookings)
-  const completedCount = bookingStats?.completed ?? deferredBookings.filter((b) => b.status === 'completed').length
-  const closedCount = bookingStats?.closed ?? deferredBookings.filter((b) => ['cancelled', 'declined', 'expired'].includes(b.status)).length
+  const total = bookingStats?.all ?? 0
+  const activeCount = bookingStats?.active ?? 0
+  const completedCount = bookingStats?.completed ?? 0
+  const closedCount = bookingStats?.closed ?? 0
 
   const operationallySorted = useMemo(
     () => [...deferredBookings].sort(compareBookingsByOperationalPriority),
@@ -419,10 +412,10 @@ export default function ClientDashboardPage() {
 
             <div className="rounded-[1.25rem] border border-slate-200/80 bg-gradient-to-br from-[#0e2a66] to-[#0c448f] p-4 text-white shadow-[0_16px_36px_rgba(11,33,78,0.25)] sm:p-5">
               <p className={`${monoFont.className} text-[0.68rem] uppercase tracking-[0.22em] text-cyan-200/85`}>
-                This Week
+                Account Overview
               </p>
               <h2 className={`${displayFont.className} mt-1 text-xl font-bold tracking-[-0.02em]`}>
-                Service rhythm
+                Service history
               </h2>
 
               <div className="mt-4 space-y-3">

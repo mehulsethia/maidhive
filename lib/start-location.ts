@@ -4,8 +4,16 @@ export type StartLocationForVerification = {
   accuracy_m?: number
 }
 
-export async function getStartLocationForVerification(): Promise<StartLocationForVerification | undefined> {
-  if (typeof navigator === 'undefined' || !navigator.geolocation) return undefined
+export type StartLocationUnavailableReason = 'permission_denied' | 'location_unavailable'
+
+export type StartLocationAttempt =
+  | { location: StartLocationForVerification; unavailableReason?: never }
+  | { location?: undefined; unavailableReason: StartLocationUnavailableReason }
+
+export async function getStartLocationForVerification(): Promise<StartLocationAttempt> {
+  if (typeof navigator === 'undefined' || !navigator.geolocation) {
+    return { unavailableReason: 'location_unavailable' }
+  }
 
   try {
     const position = await new Promise<GeolocationPosition>((resolve, reject) => {
@@ -16,12 +24,18 @@ export async function getStartLocationForVerification(): Promise<StartLocationFo
       })
     })
     return {
-      latitude: position.coords.latitude,
-      longitude: position.coords.longitude,
-      accuracy_m: position.coords.accuracy,
+      location: {
+        latitude: position.coords.latitude,
+        longitude: position.coords.longitude,
+        accuracy_m: position.coords.accuracy,
+      },
     }
-  } catch {
+  } catch (error) {
     // Starting a job must remain available if location permission is denied or unavailable.
-    return undefined
+    const code = typeof error === 'object' && error && 'code' in error ? Number((error as GeolocationPositionError).code) : null
+    return {
+      unavailableReason:
+        code === 1 ? 'permission_denied' : 'location_unavailable',
+    }
   }
 }

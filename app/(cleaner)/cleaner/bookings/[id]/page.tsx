@@ -47,6 +47,11 @@ import { getCancellationOriginLabel } from '@/lib/cancellation-origin'
 import { getCleanerCancellationConfirmationCopy } from '@/lib/cleaner-cancellation-copy'
 import { getCleanerPayoutSummary } from '@/lib/cleaner-payout'
 import { isFinalNoCleanerPayoutOutcome } from '@/lib/payment-financial-outcome'
+import {
+  getResolutionReportHref,
+  getResolutionSummaryRows,
+  hasResolvedBookingCase,
+} from '@/lib/resolved-booking-case'
 import type { BookingRead } from '@/types'
 import { toast } from 'sonner'
 
@@ -245,8 +250,14 @@ export default function CleanerBookingDetailPage() {
   async function handleAction(action: 'start') {
     setActionLoading(action)
     try {
-      const startLocation = await getStartLocationForVerification()
-      await bookingsApi.action(id, action, undefined, startLocation)
+      const startLocationAttempt = await getStartLocationForVerification()
+      await bookingsApi.action(
+        id,
+        action,
+        undefined,
+        startLocationAttempt.location,
+        startLocationAttempt.unavailableReason,
+      )
       showJobStartedToast(id)
       await refresh()
       triggerBookingsRefresh({ bookingId: id, reason: 'cleaner-booking-detail:start' })
@@ -487,6 +498,9 @@ export default function CleanerBookingDetailPage() {
     ? `${Math.ceil((proposalExpiresMs - nowTick) / 60_000)} min`
     : null
   const cancellationOriginLabel = getCancellationOriginLabel(booking)
+  const resolvedCase = hasResolvedBookingCase(booking)
+  const resolutionRows = resolvedCase ? getResolutionSummaryRows(booking) : null
+  const resolutionReportHref = resolvedCase ? getResolutionReportHref('cleaner', booking) : null
 
   return (
     <div className="w-full space-y-5">
@@ -617,6 +631,23 @@ export default function CleanerBookingDetailPage() {
           </Card>
           {booking.status === 'cancelled' && (
             <CancellationPaymentBreakdown booking={booking} audience="cleaner" />
+          )}
+          {resolutionRows && resolutionReportHref && (
+            <Card className="border-emerald-200 bg-emerald-50/60">
+              <CardHeader className="pb-2">
+                <CardTitle className="text-base">Resolution outcome</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-2 text-sm text-emerald-950">
+                <p className="font-semibold">{resolutionRows.outcome}</p>
+                <p>{resolutionRows.clientPaymentOutcome}</p>
+                <p>{resolutionRows.cleanerPayoutOutcome}</p>
+                {resolutionRows.reliabilityOutcome && <p>{resolutionRows.reliabilityOutcome}</p>}
+                {resolutionRows.resolvedAt && <p>Resolution date: {formatDate(resolutionRows.resolvedAt)}</p>}
+                <Button variant="outline" className="w-full bg-white sm:w-auto" onClick={() => router.push(resolutionReportHref)}>
+                  View full report
+                </Button>
+              </CardContent>
+            </Card>
           )}
         </div>
 
@@ -890,7 +921,25 @@ export default function CleanerBookingDetailPage() {
             This booking is currently under review.
           </p>
         )}
-        {!isCancelledPreConfirmation && !activeDispute && !canReportProblem && (
+        {!isCancelledPreConfirmation && resolvedCase && resolutionRows && resolutionReportHref && (
+          <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-800">
+            <p className="font-semibold">Case resolved</p>
+            <p>
+              {resolutionRows.outcome === 'Cleaner no-show confirmed'
+                ? 'The client received a full refund and no cleaner payout is due for this booking.'
+                : resolutionRows.cleanerPayoutOutcome}
+            </p>
+            <Button
+              variant="outline"
+              size="sm"
+              className="mt-2 bg-white"
+              onClick={() => router.push(resolutionReportHref)}
+            >
+              View resolution details
+            </Button>
+          </div>
+        )}
+        {!isCancelledPreConfirmation && !resolvedCase && !activeDispute && !canReportProblem && (
           <p className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-600">
             {`Report issues during the booking and up to ${disputeWindowLabel()} after scheduled completion.`}
           </p>

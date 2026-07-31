@@ -57,6 +57,7 @@ import {
   getCancellationPolicyBandLabel,
 } from '@/lib/cancellation-record'
 import { getCancellationOriginLabel } from '@/lib/cancellation-origin'
+import { START_VERIFICATION_RADIUS_M } from '@/lib/super-cleaner'
 import { formatCurrency, formatDate } from '@/lib/utils'
 import type { BookingRead } from '@/types'
 
@@ -145,7 +146,8 @@ function formatMeters(value?: number | null) {
 }
 
 function formatStartVerificationReason(reason?: string | null) {
-  if (reason === 'gps_unavailable') return 'GPS permission denied or location unavailable'
+  if (reason === 'gps_permission_denied') return 'Location permission denied'
+  if (reason === 'gps_unavailable') return 'Location unavailable'
   if (reason === 'booking_coordinates_unavailable') return 'Booking address coordinates unavailable'
   if (reason === 'gps_accuracy_insufficient') return 'GPS accuracy insufficient'
   if (reason === 'outside_required_radius') return 'Outside required arrival radius'
@@ -157,7 +159,11 @@ function formatStartVerificationStatus(booking: BookingRead) {
   if (!booking.started_at) return null
   if (!verification && booking.start_initiated_by === 'cleaner') return 'Not recorded for cleaner-started booking'
   if (!verification) return null
-  return verification.verified ? 'GPS verified arrival' : 'Not GPS verified'
+  if (verification.verified) return 'Verified'
+  if (verification.failure_reason === 'outside_required_radius') return 'Outside permitted area'
+  if (verification.failure_reason === 'gps_permission_denied') return 'Permission denied'
+  if (verification.failure_reason === 'gps_unavailable') return 'Location unavailable'
+  return 'Location unavailable'
 }
 
 function formatStartCoordinates(verification: BookingRead['start_verification']) {
@@ -172,6 +178,20 @@ function formatStartCoordinates(verification: BookingRead['start_verification'])
     return 'Not available'
   }
   return `${latitude.toFixed(6)}, ${longitude.toFixed(6)}`
+}
+
+function getStartVerificationSummary(booking: BookingRead) {
+  const verification = booking.start_verification
+  if (!booking.started_at || !verification) return null
+  const startedAt = formatDate(booking.started_at)
+  if (verification.verified) {
+    return `Arrival verified. Cleaner started the booking ${formatMeters(verification.distance_m)} from the booking address at ${startedAt}.`
+  }
+  const reason = formatStartVerificationReason(verification.failure_reason) ?? 'Location verification was not successful'
+  const distance = typeof verification.distance_m === 'number'
+    ? ` Distance from booking address: ${formatMeters(verification.distance_m)}.`
+    : ''
+  return `Arrival not verified. ${reason}.${distance} Booking was allowed to start without verified location.`
 }
 
 function bookingCompletedTimelineCopy(source: string | null | undefined) {
@@ -626,6 +646,7 @@ export default function AdminBookingDetailPage() {
   const serviceClassificationLabel = getBookingServiceClassificationLabel(booking)
   const startVerificationStatus = formatStartVerificationStatus(booking)
   const startVerificationReason = formatStartVerificationReason(booking.start_verification?.failure_reason)
+  const startVerificationSummary = getStartVerificationSummary(booking)
   const shouldShowStartVerification = Boolean(startVerificationStatus)
   const cancellationLeadTimeLabel = getCancellationLeadTimeLabel(booking)
   const cancellationPolicyBandLabel = getCancellationPolicyBandLabel(booking)
@@ -855,11 +876,21 @@ export default function AdminBookingDetailPage() {
                       <>
                         <DetailRow label="Start GPS distance" value={formatMeters(booking.start_verification.distance_m)} />
                         <DetailRow label="Start GPS accuracy" value={formatMeters(booking.start_verification.accuracy_m)} />
+                        <DetailRow label="Permitted verification radius" value={formatMeters(START_VERIFICATION_RADIUS_M)} />
+                        <DetailRow
+                          label="Started without verified location"
+                          value={booking.start_verification.verified ? 'No' : 'Yes'}
+                        />
                         <DetailRow label="Start GPS coordinates" value={formatStartCoordinates(booking.start_verification)} />
                         {startVerificationReason && (
                           <DetailRow label="Start verification reason" value={startVerificationReason} />
                         )}
                       </>
+                    )}
+                    {startVerificationSummary && (
+                      <p className="break-words rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-700">
+                        {startVerificationSummary}
+                      </p>
                     )}
                   </>
                 )}

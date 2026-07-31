@@ -85,6 +85,7 @@ function bookingListInclude() {
         respondedAt: true,
         resolutionType: true,
         resolutionNote: true,
+        noShowFinding: true,
         resolvedAt: true,
         createdAt: true,
         updatedAt: true,

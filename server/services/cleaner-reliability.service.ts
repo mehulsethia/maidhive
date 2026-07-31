@@ -490,6 +490,7 @@ export const cleanerReliabilityService = {
     serviceLatitude: number | null
     serviceLongitude: number | null
     startLocation?: { latitude: number; longitude: number; accuracy_m?: number }
+    startLocationUnavailableReason?: 'permission_denied' | 'location_unavailable'
   }) {
     const accuracy = input.startLocation?.accuracy_m ?? null
     const hasTrustedCoordinates =
@@ -504,12 +505,17 @@ export const cleanerReliabilityService = {
             input.startLocation,
           )
         : null
-    const { verified, failureReason } = evaluateStartVerification({
+    const evaluated = evaluateStartVerification({
       hasStartLocation: Boolean(input.startLocation),
       hasTrustedCoordinates,
       accuracyM: accuracy,
       distanceM: distance,
     })
+    const verified = evaluated.verified
+    const failureReason =
+      !input.startLocation && input.startLocationUnavailableReason === 'permission_denied'
+        ? 'gps_permission_denied'
+        : evaluated.failureReason
     const onTime =
       verified &&
       input.startedAt.getTime() <=

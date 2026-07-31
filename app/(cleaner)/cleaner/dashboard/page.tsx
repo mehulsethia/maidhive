@@ -129,10 +129,16 @@ export default function CleanerDashboardPage() {
   async function handleAction(bookingId: string, action: 'accept' | 'start') {
     setActionLoading(`${bookingId}-${action}`)
     try {
-      const startLocation = action === 'start'
+      const startLocationAttempt = action === 'start'
         ? await getStartLocationForVerification()
         : undefined
-      await bookingsApi.action(bookingId, action, undefined, startLocation)
+      await bookingsApi.action(
+        bookingId,
+        action,
+        undefined,
+        startLocationAttempt?.location,
+        startLocationAttempt?.unavailableReason,
+      )
       if (action === 'accept') toast.success('Booking accepted.')
       if (action === 'start') showJobStartedToast(bookingId)
       await refresh()
