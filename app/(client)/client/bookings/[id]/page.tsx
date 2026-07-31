@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import Link from 'next/link'
 import { useParams, useRouter, useSearchParams } from 'next/navigation'
 import { Bricolage_Grotesque, IBM_Plex_Mono } from 'next/font/google'
 import { ArrowLeft, Calendar, Clock, MapPin } from 'lucide-react'
@@ -11,7 +12,7 @@ import { PriceBreakdownCard } from '@/components/price-breakdown-card'
 import { ClientPaymentOutcome } from '@/components/client-payment-outcome'
 import { Chat } from '@/components/chat'
 import { DetailPageSkeleton } from '@/components/page-skeletons'
-import { Button } from '@/components/ui/button'
+import { Button, buttonVariants } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Separator } from '@/components/ui/separator'
 import { Dialog, DialogTitle } from '@/components/ui/dialog'
@@ -31,7 +32,7 @@ import {
 import { subscribeBookingsRefresh } from '@/lib/booking-sync'
 import { reportLoadError, resetLoadError } from '@/lib/load-error-policy'
 import { createClient } from '@/lib/supabase'
-import { formatCurrency, formatDate } from '@/lib/utils'
+import { cn, formatCurrency, formatDate } from '@/lib/utils'
 import { canViewChatHistoryForBooking, getChatReadOnlyMessage, isChatReadOnly } from '@/lib/chat-window'
 import { isCompletedBookingReleased } from '@/lib/booking-release'
 import { getDisputeParticipantAction, isActiveDisputeStatus } from '@/lib/dispute-actions'
@@ -622,9 +623,9 @@ export default function ClientBookingDetailPage() {
                   <p>{resolutionRows.cleanerPayoutOutcome}</p>
                   {resolutionRows.reliabilityOutcome && <p>{resolutionRows.reliabilityOutcome}</p>}
                   {resolutionRows.resolvedAt && <p>Resolution date: {formatDate(resolutionRows.resolvedAt)}</p>}
-                  <Button variant="outline" className="w-full bg-white sm:w-auto" onClick={() => router.push(resolutionReportHref)}>
+                  <Link href={resolutionReportHref} className={cn(buttonVariants({ variant: 'outline' }), 'w-full bg-white sm:w-auto')}>
                     View full report
-                  </Button>
+                  </Link>
                 </CardContent>
               </Card>
             )}
@@ -720,9 +721,12 @@ export default function ClientBookingDetailPage() {
                       <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-800">
                         <p className="font-semibold">Case resolved</p>
                         <p>{resolutionRows.clientPaymentOutcome}</p>
-                        <Button variant="outline" size="sm" className="mt-2 bg-white" onClick={() => router.push(resolutionReportHref)}>
+                        <Link
+                          href={resolutionReportHref}
+                          className={cn(buttonVariants({ variant: 'outline', size: 'sm' }), 'mt-2 bg-white')}
+                        >
                           View resolution details
-                        </Button>
+                        </Link>
                       </div>
                     ) : Boolean(reportableStatus && reportAnchorMs) && (
                       <p

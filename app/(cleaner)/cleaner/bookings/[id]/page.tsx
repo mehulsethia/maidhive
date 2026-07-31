@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import Link from 'next/link'
 import { useParams, useRouter } from 'next/navigation'
 import { Calendar, Clock, MapPin, ArrowLeft } from 'lucide-react'
 import { authApi, availabilityApi, bookingsApi, cleanersApi } from '@/lib/api'
@@ -9,7 +10,7 @@ import { BookingInstructions } from '@/components/booking-instructions'
 import { CancellationPaymentBreakdown } from '@/components/cancellation-payment-breakdown'
 import { Chat } from '@/components/chat'
 import { DetailPageSkeleton } from '@/components/page-skeletons'
-import { Button } from '@/components/ui/button'
+import { Button, buttonVariants } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Separator } from '@/components/ui/separator'
 import { Dialog, DialogTitle } from '@/components/ui/dialog'
@@ -41,7 +42,7 @@ import { subscribeBookingsRefresh, triggerBookingsRefresh } from '@/lib/booking-
 import { showJobStartedToast } from '@/lib/job-start-toast'
 import { getStartLocationForVerification } from '@/lib/start-location'
 import { reportLoadError, resetLoadError } from '@/lib/load-error-policy'
-import { formatCurrency, formatDate } from '@/lib/utils'
+import { cn, formatCurrency, formatDate } from '@/lib/utils'
 import { AMENDMENT_EXPIRY_OUTCOME_COPY, getEffectiveProposalExpiryMs, isWithinAmendStartWindow } from '@/lib/booking-amendment'
 import { getCancellationOriginLabel } from '@/lib/cancellation-origin'
 import { getCleanerCancellationConfirmationCopy } from '@/lib/cleaner-cancellation-copy'
@@ -643,9 +644,9 @@ export default function CleanerBookingDetailPage() {
                 <p>{resolutionRows.cleanerPayoutOutcome}</p>
                 {resolutionRows.reliabilityOutcome && <p>{resolutionRows.reliabilityOutcome}</p>}
                 {resolutionRows.resolvedAt && <p>Resolution date: {formatDate(resolutionRows.resolvedAt)}</p>}
-                <Button variant="outline" className="w-full bg-white sm:w-auto" onClick={() => router.push(resolutionReportHref)}>
+                <Link href={resolutionReportHref} className={cn(buttonVariants({ variant: 'outline' }), 'w-full bg-white sm:w-auto')}>
                   View full report
-                </Button>
+                </Link>
               </CardContent>
             </Card>
           )}
@@ -929,14 +930,12 @@ export default function CleanerBookingDetailPage() {
                 ? 'The client received a full refund and no cleaner payout is due for this booking.'
                 : resolutionRows.cleanerPayoutOutcome}
             </p>
-            <Button
-              variant="outline"
-              size="sm"
-              className="mt-2 bg-white"
-              onClick={() => router.push(resolutionReportHref)}
+            <Link
+              href={resolutionReportHref}
+              className={cn(buttonVariants({ variant: 'outline', size: 'sm' }), 'mt-2 bg-white')}
             >
               View resolution details
-            </Button>
+            </Link>
           </div>
         )}
         {!isCancelledPreConfirmation && !resolvedCase && !activeDispute && !canReportProblem && (

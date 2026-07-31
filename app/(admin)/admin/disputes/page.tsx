@@ -21,6 +21,7 @@ import { cn, formatCurrency, formatDate } from '@/lib/utils'
 import { getDisputeResolutionOutcome } from '@/lib/dispute-resolution'
 import { getResolutionFinancialPreview } from '@/lib/payment-financial-outcome'
 import { getAdminDisputeQueueStage } from '@/lib/admin-dispute-queue'
+import { START_VERIFICATION_RADIUS_M } from '@/lib/super-cleaner'
 import type { AdminDispute } from '@/types'
 import { toast } from 'sonner'
 
@@ -94,6 +95,31 @@ function getNoResponseCopy(dispute: AdminDispute) {
   return 'No counterparty response submitted.'
 }
 
+function formatMeters(value?: number | null) {
+  if (typeof value !== 'number' || !Number.isFinite(value)) return 'Not available'
+  if (value >= 1000) return `${(value / 1000).toFixed(2)} km`
+  return `${Math.round(value)} m`
+}
+
+function formatStartVerificationReason(reason?: string | null) {
+  if (reason === 'gps_permission_denied') return 'Location permission denied'
+  if (reason === 'gps_unavailable') return 'Location unavailable'
+  if (reason === 'booking_coordinates_unavailable') return 'Booking address coordinates unavailable'
+  if (reason === 'gps_accuracy_insufficient') return 'GPS accuracy insufficient'
+  if (reason === 'outside_required_radius') return 'Outside permitted arrival area'
+  return reason ? reason.replace(/_/g, ' ') : null
+}
+
+function formatStartVerificationStatus(dispute: AdminDispute) {
+  const verification = dispute.booking?.start_verification
+  if (!verification) return null
+  if (verification.verified) return 'Verified'
+  if (verification.failure_reason === 'outside_required_radius') return 'Outside permitted area'
+  if (verification.failure_reason === 'gps_permission_denied') return 'Permission denied'
+  if (verification.failure_reason === 'gps_unavailable') return 'Location unavailable'
+  return 'Location unavailable'
+}
+
 // ── Dispute card ──────────────────────────────────────────────────────────────
 
 function DisputeCard({
@@ -121,6 +147,9 @@ function DisputeCard({
   const responseEvidence = getEvidenceLinks(dispute.response_evidence)
   const clientName = dispute.booking?.client?.user?.name?.trim() || 'Not recorded'
   const cleanerName = dispute.booking?.cleaner?.user?.name?.trim() || 'Not recorded'
+  const startVerification = dispute.booking?.start_verification
+  const startVerificationStatus = formatStartVerificationStatus(dispute)
+  const startVerificationReason = formatStartVerificationReason(startVerification?.failure_reason)
   const reporterLabel = dispute.reporter_role
     ? `${dispute.reporter_role.charAt(0).toUpperCase()}${dispute.reporter_role.slice(1)} Report`
     : 'Reporter Unknown'
@@ -169,6 +198,22 @@ function DisputeCard({
                 <p className="rounded-lg border border-dashed border-slate-200 px-3 py-2 text-xs text-muted-foreground">
                   {getNoResponseCopy(dispute)}
                 </p>
+              )}
+              {startVerification && startVerificationStatus && (
+                <div className="rounded-lg border border-blue-200 bg-blue-50 px-3 py-2">
+                  <p className="text-xs font-semibold uppercase tracking-wide text-blue-700">Start Job arrival evidence</p>
+                  <div className="mt-1 grid gap-1 text-xs text-blue-950 sm:grid-cols-2">
+                    <p><span className="font-medium">Started:</span> {formatDate(startVerification.started_at)}</p>
+                    <p><span className="font-medium">GPS verification:</span> {startVerificationStatus}</p>
+                    <p><span className="font-medium">GPS distance:</span> {formatMeters(startVerification.distance_m)}</p>
+                    <p><span className="font-medium">GPS accuracy:</span> {formatMeters(startVerification.accuracy_m)}</p>
+                    <p><span className="font-medium">Permitted radius:</span> {formatMeters(START_VERIFICATION_RADIUS_M)}</p>
+                    <p><span className="font-medium">Started without verified location:</span> {startVerification.verified ? 'No' : 'Yes'}</p>
+                    {startVerificationReason && (
+                      <p className="sm:col-span-2"><span className="font-medium">Verification reason:</span> {startVerificationReason}</p>
+                    )}
+                  </div>
+                </div>
               )}
             </div>
             {dispute.issue_type === 'cleaner_no_show' && dispute.no_show_finding && (

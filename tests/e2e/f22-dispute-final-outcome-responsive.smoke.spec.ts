@@ -359,10 +359,32 @@ async function mockCommonApis(page: Page, role: 'admin' | 'client' | 'cleaner') 
   await page.route('**/api/v1/disputes?**', (route) => {
     const url = new URL(route.request().url())
     if (url.searchParams.get('status') === 'resolved') return fulfill(route, paginated([]))
+    if (role !== 'admin') {
+      return fulfill(route, paginated([{
+        ...resolvedBooking.dispute,
+        booking: resolvedBooking,
+      }]))
+    }
     return fulfill(route, paginated([{
       ...activeDispute,
       created_at: isoHoursFromNow(-26),
-      booking: activeBooking,
+      booking: {
+        ...activeBooking,
+        start_initiated_by: 'cleaner',
+        start_verification: {
+          id: 'start-verification-dispute',
+          booking_id: BOOKING_ID,
+          cleaner_id: CLEANER_ID,
+          latitude: 34.9174,
+          longitude: 33.6291,
+          accuracy_m: 35,
+          distance_m: 42,
+          verified: true,
+          on_time: true,
+          failure_reason: null,
+          started_at: isoHoursFromNow(-48),
+        },
+      },
     }]))
   })
   await page.route(`**/api/v1/messages/${BOOKING_ID}`, (route) => fulfill(route, []))
@@ -450,6 +472,10 @@ test.describe('F22 full-refund final-outcome responsive regression @smoke', () =
         await expect(page).not.toHaveURL(/\/login(?:\?|$)/)
         await expect(page.getByText('Under Review', { exact: true })).toBeVisible()
         await expect(page.getByText('No response submitted — deadline expired.')).toBeVisible()
+        await expect(page.getByText('Start Job arrival evidence', { exact: true })).toBeVisible()
+        await expect(page.getByText('GPS verification:')).toBeVisible()
+        await expect(page.getByText('GPS distance:')).toBeVisible()
+        await expect(page.getByText('Started without verified location:')).toBeVisible()
         await expect(page.getByText('Response received; decision pending')).toHaveCount(0)
         await page.getByRole('button', { name: /^Resolve$/ }).first().click()
         const dialog = page.getByRole('dialog')
@@ -504,7 +530,14 @@ test.describe('F22 full-refund final-outcome responsive regression @smoke', () =
       await expect(page.getByText('Dispute adjustment: -€20.00')).toBeVisible()
       await expect(page.getByText('Final cleaner payout: €0.00')).toBeVisible()
       await expect(page.getByText('No payout is due for this booking after the resolved dispute.')).toBeVisible()
+      await expect(page.getByText('Resolution outcome', { exact: true })).toBeVisible()
+      await expect(page.getByRole('link', { name: 'View full report' })).toBeVisible()
+      await expect(page.getByText('Case resolved', { exact: true })).toBeVisible()
+      await expect(page.getByRole('link', { name: 'View resolution details' })).toBeVisible()
       await expect(page.getByText(/Released after the .* report window from scheduled completion/)).toHaveCount(0)
+      await page.getByRole('link', { name: 'View full report' }).click()
+      await expect(page).toHaveURL(new RegExp(`/cleaner/report\\?booking=${BOOKING_ID}&case=${DISPUTE_ID}`))
+      await expect(page.getByText('This case has been resolved. It is read-only unless admin reopens it.')).toBeVisible()
 
       await openResponsive(page, '/cleaner/profile?tab=payments', 'cleaner payment history')
       await expect(page.getByText('Payment History')).toBeVisible()
@@ -535,7 +568,14 @@ test.describe('F22 full-refund final-outcome responsive regression @smoke', () =
       await expect(page.getByText('Original booking total')).toBeVisible()
       await expect(page.getByText('Full refund')).toBeVisible()
       await expect(page.getByText('Final amount paid', { exact: true })).toBeVisible()
+      await expect(page.getByText('Resolution outcome', { exact: true })).toBeVisible()
+      await expect(page.getByRole('link', { name: 'View full report' })).toBeVisible()
+      await expect(page.getByText('Case resolved', { exact: true })).toBeVisible()
+      await expect(page.getByRole('link', { name: 'View resolution details' })).toBeVisible()
       await expect(page.getByText('Partial refund')).toHaveCount(0)
+      await page.getByRole('link', { name: 'View full report' }).click()
+      await expect(page).toHaveURL(new RegExp(`/client/report\\?booking=${BOOKING_ID}&case=${DISPUTE_ID}`))
+      await expect(page.getByText('This case has been resolved. It is read-only unless admin reopens it.')).toBeVisible()
     })
 
     test('E2E-RESP-19 client cancelled lifecycle activity and single financial outcome stay responsive', async ({ page }) => {

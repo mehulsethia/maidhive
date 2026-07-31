@@ -710,6 +710,7 @@ export interface AdminDispute {
     platform_fee?: number
     cleaner_payout?: number
     payment?: BookingRead['payment']
+    start_verification?: BookingRead['start_verification']
     client?: { user?: Pick<UserRead, 'name'> | null } | null
     cleaner?: { user?: Pick<UserRead, 'name'> | null } | null
   } | null

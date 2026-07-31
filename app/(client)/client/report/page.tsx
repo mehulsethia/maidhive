@@ -262,6 +262,7 @@ function ClientReportPageContent() {
   const isViewingActiveDispute = Boolean(selectedActiveDispute && !isRespondingToDispute)
   const disputePanelTitle = selectedActiveDispute ? selectedDisputeAction.label || 'View report details' : 'Report a problem'
   const activeDisputeStatus = selectedActiveDispute?.status ?? queryBookingDisputeStatus
+  const isViewingResolvedDispute = selectedActiveDispute?.status === 'resolved' || selectedActiveDispute?.status === 'closed'
   const canUseCleanerNoShowOption = selectedBooking
     ? Date.now() >= new Date(selectedBooking.scheduled_start).getTime() + NO_SHOW_DELAY_MS
     : false
@@ -462,7 +463,9 @@ function ClientReportPageContent() {
 
                 {isViewingActiveDispute ? (
                   <div className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-600">
-                    This case is already under review. No additional response can be submitted from your account.
+                    {isViewingResolvedDispute
+                      ? 'This case has been resolved. It is read-only unless admin reopens it.'
+                      : 'This case is already under review. No additional response can be submitted from your account.'}
                   </div>
                 ) : (
                   <>
