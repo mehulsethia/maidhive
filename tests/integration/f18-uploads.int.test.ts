@@ -282,4 +282,34 @@ describe('F18 upload routes integration', () => {
     expect(body.message).toContain('Upload request was malformed')
     expect(state.uploadCalls).toBe(0)
   })
+
+  it('IT-UPLOAD-08 dispute evidence infers multipart boundary when header omits it', async () => {
+    const route = await import('@/app/api/v1/upload/dispute-evidence/route')
+    const boundary = '----MaidHiveBoundaryForMalformedHeaderRegression'
+    const pngBytes = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a])
+    const body = Buffer.concat([
+      Buffer.from(
+        `--${boundary}\r\n` +
+          'Content-Disposition: form-data; name="file"; filename="screenshot.png"\r\n' +
+          'Content-Type: image/png\r\n\r\n',
+      ),
+      pngBytes,
+      Buffer.from(`\r\n--${boundary}--\r\n`),
+    ])
+
+    const res = await route.POST(
+      new NextRequest('http://localhost/api/v1/upload/dispute-evidence', {
+        method: 'POST',
+        headers: { 'content-type': 'multipart/form-data' },
+        body,
+      }),
+      { params: Promise.resolve({}) } as any,
+    )
+    const payload = await res.json()
+
+    expect(res.status).toBe(200)
+    expect(payload.success).toBe(true)
+    expect(payload.data.url).toBe('https://example.test/uploaded-file')
+    expect(state.uploadCalls).toBe(1)
+  })
 })

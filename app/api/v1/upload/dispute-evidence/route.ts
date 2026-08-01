@@ -55,6 +55,15 @@ function getMultipartBoundary(contentType: string | null) {
   return match?.[1] ?? match?.[2]?.trim() ?? null
 }
 
+function inferMultipartBoundary(body: Buffer) {
+  if (!body.subarray(0, 2).equals(Buffer.from('--'))) return null
+  const lineEnd = body.indexOf(Buffer.from('\r\n'))
+  if (lineEnd <= 2) return null
+  const boundary = body.subarray(2, lineEnd).toString('utf8').trim()
+  if (!boundary || boundary.includes('\r') || boundary.includes('\n')) return null
+  return boundary.endsWith('--') ? boundary.slice(0, -2) : boundary
+}
+
 function parseContentDisposition(value: string | undefined) {
   const name = value?.match(/(?:^|;)\s*name="([^"]+)"/i)?.[1] ?? null
   const filename = value?.match(/(?:^|;)\s*filename="([^"]*)"/i)?.[1] ?? null
@@ -73,14 +82,13 @@ function parsePartHeaders(headerText: string) {
 
 async function parseMultipartFile(req: NextRequest): Promise<ParsedUploadFile> {
   const contentType = req.headers.get('content-type')
-  const boundary = getMultipartBoundary(contentType)
-  if (!boundary) {
-    throw new MultipartParseError('Missing multipart boundary', 'missing_boundary')
-  }
-
   const body = Buffer.from(await req.arrayBuffer())
   if (body.length === 0) {
     throw new MultipartParseError('Multipart body is empty', 'empty_body')
+  }
+  const boundary = getMultipartBoundary(contentType) ?? inferMultipartBoundary(body)
+  if (!boundary) {
+    throw new MultipartParseError('Missing multipart boundary', 'missing_boundary')
   }
 
   const delimiter = Buffer.from(`--${boundary}`)

@@ -58,19 +58,24 @@ export async function proxy(request: NextRequest) {
     },
   )
 
-  // getSession reads from cookies only (no network). Acceptable for routing —
-  // backend re-validates JWT on every authenticated request.
-  let session = null
+  // getUser validates the cookie-backed session with Supabase and refreshes
+  // cookies through setAll when needed.
   const staleAuthCookieNames = supabaseAuthCookieNames(request)
   let shouldClearStaleAuthCookies = false
+  let user = null
   try {
-    const result = await supabase.auth.getSession()
-    session = result.data.session
+    const result = await supabase.auth.getUser()
+    if (result.error) {
+      if (isSupabaseInvalidRefreshTokenError(result.error)) {
+        shouldClearStaleAuthCookies = true
+      }
+    } else {
+      user = result.data.user
+    }
   } catch (error) {
     if (!isSupabaseInvalidRefreshTokenError(error)) throw error
     shouldClearStaleAuthCookies = true
   }
-  const user = session?.user ?? null
   const role =
     user && typeof user.user_metadata?.role === 'string'
       ? (user.user_metadata.role as string)

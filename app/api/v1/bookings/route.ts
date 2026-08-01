@@ -1,4 +1,4 @@
-import { after, NextRequest } from 'next/server'
+import { NextRequest } from 'next/server'
 import { requireAuth, requireClient } from '@/server/auth'
 import { bookingRepo } from '@/server/repositories/booking.repo'
 import { clientRepo } from '@/server/repositories/client.repo'
@@ -19,7 +19,6 @@ export const GET = requireAuth(async (req: NextRequest, _ctx, user) => {
   if (!parsed.success) return err(parsed.error.message, 422)
 
   const { page, page_size, status, sort } = parsed.data
-  const shouldScheduleReconcile = shouldScheduleListReconcile(page, status)
   const listParams = { page, pageSize: page_size, ...(status ? { status } : {}), ...(sort === 'activity' ? { sort } : {}) }
 
   if (user.role === 'client') {
@@ -35,7 +34,6 @@ export const GET = requireAuth(async (req: NextRequest, _ctx, user) => {
     }
     const listStartedAt = Date.now()
     const [bookings, total] = await bookingRepo.findByClient(client.id, listParams)
-    const bookingIds = bookings.map((b) => b.id)
     if (total === 0) {
       console.info('bookings.list.client.empty', {
         clientRequestId,
@@ -59,13 +57,6 @@ export const GET = requireAuth(async (req: NextRequest, _ctx, user) => {
       count: bookings.length,
       duration_ms: Date.now() - listStartedAt,
     })
-    scheduleNonBlockingReconcile({
-      enabled: shouldScheduleReconcile,
-      bookingIds,
-      clientRequestId,
-      userId: user.id,
-      role: user.role,
-    })
     return ok({ bookings, total, page, page_size })
   }
 
@@ -82,7 +73,6 @@ export const GET = requireAuth(async (req: NextRequest, _ctx, user) => {
     }
     const listStartedAt = Date.now()
     const [bookings, total] = await bookingRepo.findByCleaner(cleaner.id, listParams)
-    const bookingIds = bookings.map((b) => b.id)
     if (total === 0) {
       console.info('bookings.list.cleaner.empty', {
         clientRequestId,
@@ -106,13 +96,6 @@ export const GET = requireAuth(async (req: NextRequest, _ctx, user) => {
       count: bookings.length,
       duration_ms: Date.now() - listStartedAt,
     })
-    scheduleNonBlockingReconcile({
-      enabled: shouldScheduleReconcile,
-      bookingIds,
-      clientRequestId,
-      userId: user.id,
-      role: user.role,
-    })
     return ok({ bookings: sanitizeBookingsForRole(bookings as any[], 'cleaner'), total, page, page_size })
   }
 
@@ -127,54 +110,6 @@ function detectBrowserFamily(userAgent: string | null) {
   if (ua.includes('safari/') && !ua.includes('chrome/')) return 'safari'
   if (ua.includes('firefox/')) return 'firefox'
   return 'other'
-}
-
-function shouldScheduleListReconcile(page: number, status?: string) {
-  if (page !== 1) return false
-  if (!status) return true
-  return ['pending', 'accepted', 'confirmed', 'in_progress', 'completed', 'disputed'].includes(status)
-}
-
-function scheduleNonBlockingReconcile(args: {
-  enabled: boolean
-  bookingIds: string[]
-  clientRequestId: string | null
-  userId: string
-  role: string
-}) {
-  if (!args.enabled) return
-  const uniqueIds = Array.from(new Set(args.bookingIds.filter(Boolean)))
-  if (uniqueIds.length === 0) return
-
-  const run = async () => {
-    const startedAt = Date.now()
-    try {
-      await bookingService.reconcileDeadlinesForBookings(uniqueIds)
-      console.info('bookings.list.reconcile.completed', {
-        clientRequestId: args.clientRequestId,
-        userId: args.userId,
-        role: args.role,
-        count: uniqueIds.length,
-        duration_ms: Date.now() - startedAt,
-      })
-    } catch (error) {
-      console.error('bookings.list.reconcile.failed', {
-        clientRequestId: args.clientRequestId,
-        userId: args.userId,
-        role: args.role,
-        count: uniqueIds.length,
-        duration_ms: Date.now() - startedAt,
-        message: error instanceof Error ? error.message : String(error),
-      })
-    }
-  }
-
-  try {
-    after(run)
-  } catch {
-    // Vitest route handler calls execute outside a Next request scope.
-    void run()
-  }
 }
 
 // POST /api/v1/bookings — create booking

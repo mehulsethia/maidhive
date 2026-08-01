@@ -223,7 +223,7 @@ describe('F04 Booking draft lifecycle integration', () => {
     expect(body.message).toBe('Forbidden')
   })
 
-  it('IT-DRAFT-04 booking list schedules pending booking reconciliation without blocking the response', async () => {
+  it('IT-DRAFT-04 booking list does not schedule deadline reconciliation work', async () => {
     const bookingsRoute = await import('@/app/api/v1/bookings/route')
     const res = await bookingsRoute.GET(
       new NextRequest('http://localhost/api/v1/bookings?page=1&page_size=20&status=pending'),
@@ -235,8 +235,6 @@ describe('F04 Booking draft lifecycle integration', () => {
     expect(body.success).toBe(true)
     expect(body.data.bookings[0].status).toBe('pending')
     expect(state.bookingFindByClientCall).toBe(1)
-    await vi.waitFor(() => {
-      expect(state.reconciledBookingIds).toEqual([['b_pending']])
-    })
+    expect(state.reconciledBookingIds).toEqual([])
   })
 })
