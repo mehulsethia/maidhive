@@ -12,6 +12,7 @@ import { db } from '@/server/db'
 import { config } from '@/server/config'
 import { DISPUTE_REASON_LABELS } from '@/lib/dispute-issues'
 import { isDisputeResponseWindowOpen } from '@/lib/dispute-actions'
+import { getDisputeResponseDeadlineLabel } from '@/lib/dispute-case'
 import { Prisma } from '@prisma/client'
 import { cleanerReliabilityService } from '@/server/services/cleaner-reliability.service'
 import { recordBookingActionEvent } from '@/server/services/booking-action-event.service'
@@ -249,7 +250,10 @@ export const POST = requireAuth(async (req: NextRequest, ctx, user) => {
   const clientPauseMessage = payoutPause.paused
     ? DISPUTE_PAYOUT_PAUSED_MESSAGE
     : 'This booking is now Under Review. MaidHive admin has been alerted to review the payment state for this case.'
-  const responseWindowMessage = 'You have 24 hours from this notification to submit one response with any supporting evidence.'
+  const responseDeadlineLabel = getDisputeResponseDeadlineLabel(dispute)
+  const responseWindowMessage = responseDeadlineLabel
+    ? `You have 24 hours from this notification to submit one response with any supporting evidence. ${responseDeadlineLabel}`
+    : 'You have 24 hours from this notification to submit one response with any supporting evidence.'
 
   await pushInAppNotification({
     userId: bookingRecord.client.userId,

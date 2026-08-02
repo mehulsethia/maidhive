@@ -16,6 +16,7 @@ import { compareBookingsByRecentActivity } from '@/lib/booking-activity'
 import { subscribeBookingsRefresh } from '@/lib/booking-sync'
 import { compareBookingsByOperationalPriority } from '@/lib/booking-priority'
 import { BookingStatusBadge } from '@/components/booking-status-badge'
+import { Badge } from '@/components/ui/badge'
 import { DashboardPageSkeleton } from '@/components/page-skeletons'
 import { reportLoadError, resetLoadError } from '@/lib/load-error-policy'
 import { recoverBookingsFromNotifications } from '@/lib/booking-data-recovery'
@@ -25,6 +26,7 @@ import { getCancellationOriginLabel } from '@/lib/cancellation-origin'
 import { UserAvatar } from '@/components/ui/user-avatar'
 import { formatCurrency, formatDate } from '@/lib/utils'
 import { getClientPaymentSummary } from '@/lib/client-payment-summary'
+import { getDisputeCaseStatusLabel, getDisputeCaseStatusVariant } from '@/lib/dispute-case'
 import { getBookingCleaningTypeLabel } from '@/lib/booking-service-labels'
 import type { BookingRead, ClientBookingStats, FavoriteCleaner } from '@/types'
 
@@ -342,6 +344,7 @@ export default function ClientDashboardPage() {
                     ? `${proposalActor} requested Amend Start Time: ${formatDate(booking.scheduled_start)} → ${formatDate(booking.proposed_start ?? booking.scheduled_start)}`
                     : `${proposalActor} proposed: ${formatDate(booking.scheduled_start)} → ${formatDate(booking.proposed_start ?? booking.scheduled_start)}`
                   const paymentSummary = getClientPaymentSummary(booking)
+                  const caseStatusLabel = getDisputeCaseStatusLabel(booking.dispute)
                   return (
                   <Link
                     key={booking.id}
@@ -367,6 +370,11 @@ export default function ClientDashboardPage() {
                         proposalBy={booking.proposal_by}
                         audience="client"
                       />
+                      {caseStatusLabel && (
+                        <Badge variant={getDisputeCaseStatusVariant(booking.dispute)}>
+                          Case status: {caseStatusLabel}
+                        </Badge>
+                      )}
                       {getCancellationOriginLabel(booking) && (
                         <span className="inline-flex rounded-full border border-rose-200 bg-rose-50 px-2 py-0.5 text-[11px] font-semibold text-rose-700">
                           {getCancellationOriginLabel(booking)}

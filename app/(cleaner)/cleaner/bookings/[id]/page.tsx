@@ -33,6 +33,7 @@ import {
 import { canViewChatHistoryForBooking, getChatReadOnlyMessage, isChatReadOnly } from '@/lib/chat-window'
 import { isBookingReportWindowActive } from '@/lib/booking-release'
 import { getDisputeParticipantAction, isActiveDisputeStatus } from '@/lib/dispute-actions'
+import { getDisputeResponseDeadlineLabel } from '@/lib/dispute-case'
 import { getCleanerEarningsLabel } from '@/lib/cleaner-earnings-label'
 import { getClientTrustMetadata } from '@/lib/client-trust'
 import { getCleanerBookingRequestDeadlineCopy } from '@/lib/booking-expiry-copy'
@@ -403,6 +404,7 @@ export default function CleanerBookingDetailPage() {
     !hasDisputeCase
   const canOpenDisputeCase = activeDispute
   const disputeAction = getDisputeParticipantAction('cleaner', booking.dispute, currentUserId)
+  const disputeResponseDeadlineLabel = getDisputeResponseDeadlineLabel(booking.dispute)
   const payoutSummary = getCleanerPayoutSummary(booking)
   const noPayoutFinalized = isFinalNoCleanerPayoutOutcome(booking)
   const earningsLabel = getCleanerEarningsLabel({
@@ -916,6 +918,11 @@ export default function CleanerBookingDetailPage() {
           >
             {disputeAction.label}
           </Button>
+        )}
+        {!isCancelledPreConfirmation && activeDispute && disputeAction.kind === 'add_response' && disputeResponseDeadlineLabel && (
+          <p className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs font-semibold text-amber-800">
+            {disputeResponseDeadlineLabel}
+          </p>
         )}
         {!isCancelledPreConfirmation && activeDispute && (
           <p className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-700">

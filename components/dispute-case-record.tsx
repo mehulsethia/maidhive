@@ -1,0 +1,101 @@
+import { CalendarDays } from 'lucide-react'
+import {
+  getCounterpartyRole,
+  getDisputeActorLabel,
+  getDisputeCreatedAt,
+  getDisputeEvidence,
+  getDisputeRespondedAt,
+  getDisputeResponseExplanation,
+  hasCounterpartyResponse,
+  type DisputeCaseInput,
+} from '@/lib/dispute-case'
+import { cn, formatDate } from '@/lib/utils'
+
+export function DisputeCaseRecord({
+  dispute,
+  className,
+  noResponseCopy = 'No counterparty response submitted.',
+}: {
+  dispute: DisputeCaseInput
+  className?: string
+  noResponseCopy?: string
+}) {
+  const reporterRole = dispute.reporter_role ?? dispute.reporterRole ?? null
+  const responderRole = dispute.responder_role ?? dispute.responderRole ?? getCounterpartyRole(reporterRole)
+  const reporterLabel = getDisputeActorLabel(reporterRole)
+  const responderLabel = getDisputeActorLabel(responderRole)
+  const originalEvidence = getDisputeEvidence(dispute, 'original')
+  const responseEvidence = getDisputeEvidence(dispute, 'response')
+  const createdAt = getDisputeCreatedAt(dispute)
+  const respondedAt = getDisputeRespondedAt(dispute)
+  const responseExplanation = getDisputeResponseExplanation(dispute)
+
+  return (
+    <div className={cn('space-y-2 text-sm text-slate-700', className)}>
+      <div className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2">
+        <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+          Original report
+        </p>
+        <p className="mt-1 text-xs font-medium text-slate-600">
+          Submitted by {reporterLabel.toLowerCase()}
+          {createdAt ? ` · ${formatDate(createdAt)}` : ''}
+        </p>
+        {dispute.reason && <p className="mt-1 font-medium text-slate-900">{dispute.reason}</p>}
+        {dispute.explanation && <p className="mt-1 text-slate-700">{dispute.explanation}</p>}
+        <EvidenceLinks links={originalEvidence} label={`${reporterLabel} evidence`} />
+      </div>
+
+      {hasCounterpartyResponse(dispute) ? (
+        <div className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2">
+          <p className="text-xs font-semibold uppercase tracking-wide text-amber-700">
+            Counterparty response
+          </p>
+          <p className="mt-1 text-xs font-medium text-amber-700">
+            Response submitted by {responderLabel.toLowerCase()}
+            {respondedAt ? ` · ${formatDate(respondedAt)}` : ''}
+          </p>
+          {responseExplanation && <p className="mt-1 text-amber-950">{responseExplanation}</p>}
+          <EvidenceLinks links={responseEvidence} label={`${responderLabel} evidence`} />
+        </div>
+      ) : (
+        <p className="rounded-xl border border-dashed border-slate-200 px-3 py-2 text-xs text-slate-500">
+          {noResponseCopy}
+        </p>
+      )}
+
+      <div className="space-y-1 text-xs text-slate-500">
+        {createdAt && (
+          <div className="inline-flex items-center gap-1">
+            <CalendarDays className="h-3.5 w-3.5" />
+            Reported on: {formatDate(createdAt)}
+          </div>
+        )}
+        {respondedAt && (
+          <div className="flex items-center gap-1">
+            <CalendarDays className="h-3.5 w-3.5" />
+            Response submitted on: {formatDate(respondedAt)}
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}
+
+function EvidenceLinks({ links, label }: { links: string[]; label: string }) {
+  if (links.length === 0) return null
+  return (
+    <div className="mt-2 flex flex-wrap gap-2">
+      {links.map((link, index) => (
+        <a
+          key={`${link}-${index}`}
+          href={link}
+          target="_blank"
+          rel="noreferrer"
+          className="rounded-full border border-slate-200 bg-white px-2.5 py-1 text-xs font-medium text-slate-600 hover:border-slate-300"
+        >
+          {label} {index + 1}
+        </a>
+      ))}
+    </div>
+  )
+}

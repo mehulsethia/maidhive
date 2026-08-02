@@ -13,6 +13,7 @@ import { ClientPaymentOutcome } from '@/components/client-payment-outcome'
 import { Chat } from '@/components/chat'
 import { DetailPageSkeleton } from '@/components/page-skeletons'
 import { Button, buttonVariants } from '@/components/ui/button'
+import { Badge } from '@/components/ui/badge'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Separator } from '@/components/ui/separator'
 import { Dialog, DialogTitle } from '@/components/ui/dialog'
@@ -41,6 +42,7 @@ import { computeConfirmedCancellationPolicy, moneyFromCents } from '@/lib/cancel
 import { getCancellationOriginLabel } from '@/lib/cancellation-origin'
 import { getClientCancellationContext } from '@/lib/client-cancellation-context'
 import { getClientPaymentSummary } from '@/lib/client-payment-summary'
+import { getDisputeCaseStatusLabel, getDisputeCaseStatusVariant, getDisputeResponseDeadlineLabel } from '@/lib/dispute-case'
 import { getBookingCleaningTypeLabel } from '@/lib/booking-service-labels'
 import { canOfferStandardServiceReview } from '@/lib/booking-review-eligibility'
 import {
@@ -512,6 +514,7 @@ export default function ClientBookingDetailPage() {
   const reportWindowActive = Boolean(reportableStatus && reportAnchorMs && Date.now() <= reportDeadlineMs)
   const reportWindowExpired = Boolean(reportableStatus && reportAnchorMs && Date.now() > reportDeadlineMs)
   const disputeAction = getDisputeParticipantAction('client', booking.dispute, currentUserId)
+  const disputeResponseDeadlineLabel = getDisputeResponseDeadlineLabel(booking.dispute)
   const proposalExpiresMs = getEffectiveProposalExpiryMs(booking)
   const proposalCountdownLabel = proposalExpiresMs && proposalExpiresMs > nowTick
     ? `${Math.ceil((proposalExpiresMs - nowTick) / 60_000)} min`
@@ -519,6 +522,7 @@ export default function ClientBookingDetailPage() {
   const resolvedCase = hasResolvedBookingCase(booking)
   const resolutionRows = resolvedCase ? getResolutionSummaryRows(booking) : null
   const resolutionReportHref = resolvedCase ? getResolutionReportHref('client', booking) : null
+  const caseStatusLabel = getDisputeCaseStatusLabel(booking.dispute)
 
   return (
     <>
@@ -546,14 +550,25 @@ export default function ClientBookingDetailPage() {
                   Current Status
                 </p>
                 <div className="mt-2 flex flex-wrap items-center justify-between gap-3">
-                  <BookingStatusBadge
-                    status={booking.status}
-                    paymentStatus={booking.payment?.status}
-                    transferredAt={booking.payment?.transferred_at}
-                    scheduledEnd={booking.scheduled_end}
-                    proposalBy={booking.proposal_by}
-                    audience="client"
-                  />
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="text-xs font-semibold text-white/80">Booking status:</span>
+                    <BookingStatusBadge
+                      status={booking.status}
+                      paymentStatus={booking.payment?.status}
+                      transferredAt={booking.payment?.transferred_at}
+                      scheduledEnd={booking.scheduled_end}
+                      proposalBy={booking.proposal_by}
+                      audience="client"
+                    />
+                    {caseStatusLabel && (
+                      <>
+                        <span className="text-xs font-semibold text-white/80">Case status:</span>
+                        <Badge variant={getDisputeCaseStatusVariant(booking.dispute)}>
+                          {caseStatusLabel}
+                        </Badge>
+                      </>
+                    )}
+                  </div>
                   {cancellationOriginLabel && (
                     <span className="rounded-full border border-rose-200 bg-rose-50 px-2.5 py-1 text-xs font-semibold text-rose-700">
                       {cancellationOriginLabel}
@@ -728,7 +743,7 @@ export default function ClientBookingDetailPage() {
                           View resolution details
                         </Link>
                       </div>
-                    ) : Boolean(reportableStatus && reportAnchorMs) && (
+                    ) : !hasDisputeCase && Boolean(reportableStatus && reportAnchorMs) && (
                       <p
                         className={`rounded-xl border px-3 py-2 text-sm ${
                           reportWindowActive
@@ -897,6 +912,11 @@ export default function ClientBookingDetailPage() {
                           {disputeAction.label}
                         </Button>
                       )}
+                      {activeDispute && disputeAction.kind === 'add_response' && disputeResponseDeadlineLabel && (
+                        <p className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs font-semibold text-amber-800">
+                          {disputeResponseDeadlineLabel}
+                        </p>
+                      )}
                       {isCompletedReleased && (
                         <Button className="w-full sm:w-auto" onClick={() => router.push(`/client/book/${booking.cleaner_id}?reset=1&step=1&source=bookings`)}>
                           Book again
@@ -917,7 +937,7 @@ export default function ClientBookingDetailPage() {
                           Report a Problem
                         </Button>
                       )}
-                      {!resolvedCase && reportWindowExpired && (
+                      {!hasDisputeCase && reportWindowExpired && (
                         <p className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-500">
                           The {DISPUTE_WINDOW_HOURS}-hour report window has expired for this booking.
                         </p>

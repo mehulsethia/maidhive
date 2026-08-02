@@ -1,6 +1,6 @@
-type ParticipantRole = 'client' | 'cleaner' | 'admin'
+export type DisputeParticipantRole = 'client' | 'cleaner' | 'admin'
 
-type DisputeActionInput = {
+export type DisputeActionInput = {
   status?: string | null
   created_at?: string | Date | null
   createdAt?: string | Date | null
@@ -46,7 +46,7 @@ export function isDisputeResponseWindowOpen(dispute: DisputeActionInput, nowMs =
 }
 
 export function getDisputeParticipantAction(
-  viewerRole: ParticipantRole,
+  viewerRole: DisputeParticipantRole,
   dispute: DisputeActionInput,
   currentUserId?: string | null,
 ): DisputeParticipantAction {

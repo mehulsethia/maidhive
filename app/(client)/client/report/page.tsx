@@ -3,10 +3,11 @@
 import { Suspense, useDeferredValue, useEffect, useMemo, useRef, useState, startTransition } from 'react'
 import { useSearchParams } from 'next/navigation'
 import { Bricolage_Grotesque, IBM_Plex_Mono } from 'next/font/google'
-import { CalendarDays, Search } from 'lucide-react'
+import { Search } from 'lucide-react'
 import { bookingsApi, disputesApi } from '@/lib/api'
 import { EmptyState } from '@/components/empty-state'
 import { ReportPageSkeleton } from '@/components/page-skeletons'
+import { DisputeCaseRecord } from '@/components/dispute-case-record'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogTitle } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
@@ -15,6 +16,7 @@ import { Select } from '@/components/ui/select'
 import { Textarea } from '@/components/ui/textarea'
 import { CLIENT_DISPUTE_ISSUES } from '@/lib/dispute-issues'
 import { getDisputeParticipantAction, isDisputeResponseWindowOpen } from '@/lib/dispute-actions'
+import { getCounterpartyResponseInstruction, getDisputeResolvedAt } from '@/lib/dispute-case'
 import { reportLoadError, resetLoadError } from '@/lib/load-error-policy'
 import { formatDate } from '@/lib/utils'
 import { getDisputeResolutionOutcome } from '@/lib/dispute-resolution'
@@ -54,26 +56,6 @@ function getFriendlyBookingReference(dispute: any) {
   const raw = String(getDisputeBookingId(dispute) ?? '').replace(/[^a-z0-9]/gi, '')
   if (!raw) return 'MH-UNKNOWN'
   return `MH-${raw.slice(-6).toUpperCase()}`
-}
-
-function getDisputeCreatedAt(dispute: any) {
-  return dispute?.created_at ?? dispute?.createdAt ?? new Date().toISOString()
-}
-
-function getDisputeResolvedAt(dispute: any) {
-  return dispute?.resolved_at ?? dispute?.resolvedAt ?? null
-}
-
-function getDisputeResponseExplanation(dispute: any) {
-  return dispute?.response_explanation ?? dispute?.responseExplanation ?? ''
-}
-
-function getDisputeEvidence(dispute: any, field: 'original' | 'response') {
-  const value =
-    field === 'response'
-      ? dispute?.response_evidence ?? dispute?.responseEvidence
-      : dispute?.evidence
-  return Array.isArray(value) ? value.filter(Boolean) : []
 }
 
 function ClientReportPageContent() {
@@ -263,6 +245,14 @@ function ClientReportPageContent() {
   const disputePanelTitle = selectedActiveDispute ? selectedDisputeAction.label || 'View report details' : 'Report a problem'
   const activeDisputeStatus = selectedActiveDispute?.status ?? queryBookingDisputeStatus
   const isViewingResolvedDispute = selectedActiveDispute?.status === 'resolved' || selectedActiveDispute?.status === 'closed'
+  const responseInstruction = getCounterpartyResponseInstruction(selectedActiveDispute)
+  const panelInstruction = selectedActiveDispute
+    ? isRespondingToDispute
+      ? responseInstruction
+      : isViewingResolvedDispute
+        ? 'This case has been resolved and remains available for review.'
+        : 'This booking is under review. Existing case details remain available below.'
+    : REPORT_AVAILABILITY_COPY
   const canUseCleanerNoShowOption = selectedBooking
     ? Date.now() >= new Date(selectedBooking.scheduled_start).getTime() + NO_SHOW_DELAY_MS
     : false
@@ -432,7 +422,9 @@ function ClientReportPageContent() {
             <h2 className={`${displayFont.className} text-2xl font-bold tracking-[-0.02em] text-slate-900`}>
               {isRespondingToDispute ? 'Add your response' : disputePanelTitle}
             </h2>
-            <p className="mt-1 text-sm text-slate-500">{REPORT_AVAILABILITY_COPY}</p>
+            <p className="mt-1 text-sm text-slate-500">
+              {panelInstruction}
+            </p>
             {isActiveDisputeStatus(activeDisputeStatus) && (
               <p className="mt-2 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-700">
                 {isRespondingToDispute
@@ -637,21 +629,7 @@ function ClientReportPageContent() {
                         </span>
                       </div>
 
-                      <div className="mt-2 space-y-2 text-sm text-slate-700">
-                        <div>
-                          <p className="text-xs font-semibold uppercase text-slate-500">Original report</p>
-                          <p className="mt-1">{dispute.reason}</p>
-                          {dispute.explanation && <p className="mt-1">{dispute.explanation}</p>}
-                          <EvidenceLinks links={getDisputeEvidence(dispute, 'original')} />
-                        </div>
-                        {getDisputeResponseExplanation(dispute) && (
-                          <div className="rounded-xl border border-amber-100 bg-amber-50 px-3 py-2">
-                            <p className="text-xs font-semibold uppercase text-amber-700">Response added to case</p>
-                            <p className="mt-1">{getDisputeResponseExplanation(dispute)}</p>
-                            <EvidenceLinks links={getDisputeEvidence(dispute, 'response')} />
-                          </div>
-                        )}
-                      </div>
+                      <DisputeCaseRecord dispute={dispute} className="mt-2" />
 
                       {(status === 'resolved' || status === 'closed') && (
                         <p className="mt-2 rounded-md bg-emerald-50 px-3 py-2 text-xs text-emerald-700">
@@ -659,18 +637,11 @@ function ClientReportPageContent() {
                         </p>
                       )}
 
-                      <div className="mt-2 space-y-1 text-xs text-slate-500">
-                        <span className="inline-flex items-center gap-1">
-                          <CalendarDays className="h-3.5 w-3.5" />
-                          Reported on: {formatDate(getDisputeCreatedAt(dispute))}
-                        </span>
-                        {(status === 'resolved' || status === 'closed') && getDisputeResolvedAt(dispute) && (
-                          <span className="flex items-center gap-1">
-                            <CalendarDays className="h-3.5 w-3.5" />
-                            Resolved on: {formatDate(getDisputeResolvedAt(dispute))}
-                          </span>
+                      {(status === 'resolved' || status === 'closed') && getDisputeResolvedAt(dispute) && (
+                        <div className="mt-2 text-xs text-slate-500">
+                          Resolved on: {formatDate(getDisputeResolvedAt(dispute)!)}
+                        </div>
                         )}
-                      </div>
                     </article>
                   )
                 })}
@@ -783,25 +754,6 @@ function ClientReportPageContent() {
         }
       `}</style>
     </>
-  )
-}
-
-function EvidenceLinks({ links }: { links: string[] }) {
-  if (links.length === 0) return null
-  return (
-    <div className="mt-2 flex flex-wrap gap-2">
-      {links.map((link, index) => (
-        <a
-          key={`${link}-${index}`}
-          href={link}
-          target="_blank"
-          rel="noreferrer"
-          className="rounded-full border border-slate-200 bg-white px-2.5 py-1 text-xs font-medium text-slate-600 hover:border-slate-300"
-        >
-          Evidence {index + 1}
-        </a>
-      ))}
-    </div>
   )
 }
 

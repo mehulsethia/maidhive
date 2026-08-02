@@ -3,10 +3,11 @@
 import { Suspense, useDeferredValue, useEffect, useMemo, useRef, useState, startTransition } from 'react'
 import { useSearchParams } from 'next/navigation'
 import { Bricolage_Grotesque, IBM_Plex_Mono } from 'next/font/google'
-import { CalendarDays, Search } from 'lucide-react'
+import { Search } from 'lucide-react'
 import { bookingsApi, disputesApi } from '@/lib/api'
 import { EmptyState } from '@/components/empty-state'
 import { ReportPageSkeleton } from '@/components/page-skeletons'
+import { DisputeCaseRecord } from '@/components/dispute-case-record'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogTitle } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
@@ -15,6 +16,7 @@ import { Select } from '@/components/ui/select'
 import { Textarea } from '@/components/ui/textarea'
 import { CLEANER_DISPUTE_ISSUES } from '@/lib/dispute-issues'
 import { getDisputeParticipantAction, isDisputeResponseWindowOpen } from '@/lib/dispute-actions'
+import { getCounterpartyResponseInstruction, getDisputeResolvedAt } from '@/lib/dispute-case'
 import { reportLoadError, resetLoadError } from '@/lib/load-error-policy'
 import { formatDate } from '@/lib/utils'
 import { getDisputeResolutionOutcome } from '@/lib/dispute-resolution'
@@ -54,18 +56,6 @@ function getFriendlyBookingReference(dispute: any) {
   const raw = String(getDisputeBookingId(dispute) ?? '').replace(/[^a-z0-9]/gi, '')
   if (!raw) return 'MH-UNKNOWN'
   return `MH-${raw.slice(-6).toUpperCase()}`
-}
-
-function getDisputeResponseExplanation(dispute: any) {
-  return dispute?.response_explanation ?? dispute?.responseExplanation ?? ''
-}
-
-function getDisputeEvidence(dispute: any, field: 'original' | 'response') {
-  const value =
-    field === 'response'
-      ? dispute?.response_evidence ?? dispute?.responseEvidence
-      : dispute?.evidence
-  return Array.isArray(value) ? value.filter(Boolean) : []
 }
 
 function disputeWindowLabel() {
@@ -239,6 +229,14 @@ function CleanerReportPageContent() {
   const disputePanelTitle = selectedActiveDispute ? selectedDisputeAction.label || 'View report details' : 'Report a problem'
   const activeDisputeStatus = selectedActiveDispute?.status ?? queryBookingDisputeStatus
   const isViewingResolvedDispute = selectedActiveDispute?.status === 'resolved' || selectedActiveDispute?.status === 'closed'
+  const responseInstruction = getCounterpartyResponseInstruction(selectedActiveDispute)
+  const panelInstruction = selectedActiveDispute
+    ? isRespondingToDispute
+      ? responseInstruction
+      : isViewingResolvedDispute
+        ? 'This case has been resolved and remains available for review.'
+        : 'This booking is under review. Existing case details remain available below.'
+    : REPORT_AVAILABILITY_COPY
   const canUseClientNoShowOption = selectedBooking
     ? Date.now() >= new Date(selectedBooking.scheduled_start).getTime() + NO_SHOW_DELAY_MS
     : false
@@ -396,10 +394,12 @@ function CleanerReportPageContent() {
 
       <section className="grid gap-4 xl:grid-cols-[1fr_1fr]">
         <div className="rounded-[1.5rem] border border-slate-200/80 bg-white/90 p-4 shadow-[0_18px_45px_rgba(11,33,78,0.08)] sm:p-5">
-          <h2 className={`${displayFont.className} text-2xl font-bold tracking-[-0.02em] text-slate-900`}>
-            {isRespondingToDispute ? 'Add your response' : disputePanelTitle}
+            <h2 className={`${displayFont.className} text-2xl font-bold tracking-[-0.02em] text-slate-900`}>
+              {isRespondingToDispute ? 'Add your response' : disputePanelTitle}
           </h2>
-          <p className="mt-1 text-sm text-slate-500">{REPORT_AVAILABILITY_COPY}</p>
+          <p className="mt-1 text-sm text-slate-500">
+            {panelInstruction}
+          </p>
           {isActiveDisputeStatus(activeDisputeStatus) && (
             <p className="mt-2 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-700">
               {isRespondingToDispute
@@ -575,41 +575,20 @@ function CleanerReportPageContent() {
                         {STATUS_LABELS[status]}
                       </span>
                     </div>
-                    <div className="mt-2 space-y-2 text-sm text-slate-700">
-                      <div>
-                        <p className="text-xs font-semibold uppercase text-slate-500">Original report</p>
-                        <p className="mt-1">{dispute.reason}</p>
-                        {dispute.explanation && <p className="mt-1">{dispute.explanation}</p>}
-                        <EvidenceLinks links={getDisputeEvidence(dispute, 'original')} />
+                    <DisputeCaseRecord dispute={dispute} className="mt-2" />
+                    {(status === 'resolved' || status === 'closed') && (
+                      <div className="mt-2 rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm">
+                        <p className="text-xs font-semibold uppercase text-emerald-700">Resolution Outcome</p>
+                        <p className="mt-1 font-medium text-emerald-950">
+                          {getDisputeResolutionOutcome(dispute.resolution_type, dispute.refund_amount)}
+                        </p>
                       </div>
-                      {getDisputeResponseExplanation(dispute) && (
-                        <div className="rounded-xl border border-amber-100 bg-amber-50 px-3 py-2">
-                          <p className="text-xs font-semibold uppercase text-amber-700">Response added to case</p>
-                          <p className="mt-1">{getDisputeResponseExplanation(dispute)}</p>
-                          <EvidenceLinks links={getDisputeEvidence(dispute, 'response')} />
-                        </div>
-                      )}
-                      {(status === 'resolved' || status === 'closed') && (
-                        <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2">
-                          <p className="text-xs font-semibold uppercase text-emerald-700">Resolution Outcome</p>
-                          <p className="mt-1 font-medium text-emerald-950">
-                            {getDisputeResolutionOutcome(dispute.resolution_type, dispute.refund_amount)}
-                          </p>
-                        </div>
-                      )}
-                    </div>
-                    <div className="mt-2 space-y-1 text-xs text-slate-500">
-                      <div className="inline-flex items-center gap-1">
-                        <CalendarDays className="h-3.5 w-3.5" />
-                        Reported on: {formatDate(dispute.created_at)}
+                    )}
+                    {(status === 'resolved' || status === 'closed') && getDisputeResolvedAt(dispute) && (
+                      <div className="mt-2 text-xs text-slate-500">
+                        Resolved on: {formatDate(getDisputeResolvedAt(dispute)!)}
                       </div>
-                      {(status === 'resolved' || status === 'closed') && dispute.resolved_at && (
-                        <div className="flex items-center gap-1">
-                          <CalendarDays className="h-3.5 w-3.5" />
-                          Resolved on: {formatDate(dispute.resolved_at)}
-                        </div>
-                      )}
-                    </div>
+                    )}
                   </article>
                 )
               })}
@@ -701,25 +680,6 @@ function CleanerReportPageContent() {
       }
     `}</style>
     </>
-  )
-}
-
-function EvidenceLinks({ links }: { links: string[] }) {
-  if (links.length === 0) return null
-  return (
-    <div className="mt-2 flex flex-wrap gap-2">
-      {links.map((link, index) => (
-        <a
-          key={`${link}-${index}`}
-          href={link}
-          target="_blank"
-          rel="noreferrer"
-          className="rounded-full border border-slate-200 bg-white px-2.5 py-1 text-xs font-medium text-slate-600 hover:border-slate-300"
-        >
-          Evidence {index + 1}
-        </a>
-      ))}
-    </div>
   )
 }
 

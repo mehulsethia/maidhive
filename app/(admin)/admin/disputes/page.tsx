@@ -8,6 +8,7 @@ import { adminApi } from '@/lib/api'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Card, CardContent } from '@/components/ui/card'
+import { DisputeCaseRecord } from '@/components/dispute-case-record'
 import { Dialog, DialogTitle } from '@/components/ui/dialog'
 import { Label } from '@/components/ui/label'
 import { Select } from '@/components/ui/select'
@@ -70,20 +71,6 @@ function classifyQueue(dispute: AdminDispute): 'urgent' | 'no_show' | 'payment' 
   return 'payment'
 }
 
-function getEvidenceLinks(value?: string[] | null) {
-  return Array.isArray(value) ? value.filter(Boolean) : []
-}
-
-function hasCounterpartyResponse(dispute: AdminDispute) {
-  return Boolean(
-    dispute.response_explanation ||
-    dispute.response_evidence?.length ||
-    dispute.responded_by ||
-    dispute.responder_role ||
-    dispute.responded_at,
-  )
-}
-
 function getNoResponseCopy(dispute: AdminDispute) {
   const queueStage = getAdminDisputeQueueStage(dispute)
   if (queueStage === 'under_review' && dispute.status === 'under_review') {
@@ -143,8 +130,6 @@ function DisputeCard({
   const resolutionLabel = ['resolved', 'closed'].includes(dispute.status)
     ? getDisputeResolutionOutcome(dispute.resolution_type, dispute.refund_amount)
     : null
-  const originalEvidence = getEvidenceLinks(dispute.evidence)
-  const responseEvidence = getEvidenceLinks(dispute.response_evidence)
   const clientName = dispute.booking?.client?.user?.name?.trim() || 'Not recorded'
   const cleanerName = dispute.booking?.cleaner?.user?.name?.trim() || 'Not recorded'
   const startVerification = dispute.booking?.start_verification
@@ -174,31 +159,7 @@ function DisputeCard({
               <p><span className="font-medium text-slate-700">Cleaner:</span> {cleanerName}</p>
             </div>
             <div className="mt-2 space-y-2 text-sm">
-              <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2">
-                <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Original report</p>
-                <p className="mt-1 font-medium">{dispute.reason}</p>
-                {dispute.explanation && <p className="mt-1 text-muted-foreground">{dispute.explanation}</p>}
-                <EvidenceLinks links={originalEvidence} />
-              </div>
-              {hasCounterpartyResponse(dispute) ? (
-                <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2">
-                  <p className="text-xs font-semibold uppercase tracking-wide text-amber-700">Counterparty response</p>
-                  {dispute.response_explanation && (
-                    <p className="mt-1 text-amber-950">{dispute.response_explanation}</p>
-                  )}
-                  <EvidenceLinks links={responseEvidence} />
-                  {dispute.responder_role && (
-                    <p className="mt-1 text-xs text-amber-700">
-                      Responded by: {dispute.responder_role}
-                      {dispute.responded_at ? ` · ${formatDate(dispute.responded_at)}` : ''}
-                    </p>
-                  )}
-                </div>
-              ) : (
-                <p className="rounded-lg border border-dashed border-slate-200 px-3 py-2 text-xs text-muted-foreground">
-                  {getNoResponseCopy(dispute)}
-                </p>
-              )}
+              <DisputeCaseRecord dispute={dispute} noResponseCopy={getNoResponseCopy(dispute)} />
               {startVerification && startVerificationStatus && (
                 <div className="rounded-lg border border-blue-200 bg-blue-50 px-3 py-2">
                   <p className="text-xs font-semibold uppercase tracking-wide text-blue-700">Start Job arrival evidence</p>
@@ -287,25 +248,6 @@ function DisputeCard({
         )}
       </CardContent>
     </Card>
-  )
-}
-
-function EvidenceLinks({ links }: { links: string[] }) {
-  if (links.length === 0) return null
-  return (
-    <div className="mt-2 flex flex-wrap gap-2">
-      {links.map((link, index) => (
-        <a
-          key={`${link}-${index}`}
-          href={link}
-          target="_blank"
-          rel="noreferrer"
-          className="rounded-full border border-slate-200 bg-white px-2.5 py-1 text-xs font-medium text-slate-600 hover:border-slate-300"
-        >
-          Evidence {index + 1}
-        </a>
-      ))}
-    </div>
   )
 }
 

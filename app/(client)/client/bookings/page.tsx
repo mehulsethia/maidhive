@@ -12,6 +12,7 @@ import { CancellationPaymentBreakdown } from '@/components/cancellation-payment-
 import { EmptyState } from '@/components/empty-state'
 import { ListPageSkeleton } from '@/components/page-skeletons'
 import { Button } from '@/components/ui/button'
+import { Badge } from '@/components/ui/badge'
 import { Dialog, DialogTitle } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import { Select } from '@/components/ui/select'
@@ -25,6 +26,7 @@ import { formatCurrency, formatDate } from '@/lib/utils'
 import { hasPendingAmendmentRequest } from '@/lib/booking-amendment'
 import { getCancellationOriginLabel } from '@/lib/cancellation-origin'
 import { getClientPaymentSummary } from '@/lib/client-payment-summary'
+import { getDisputeCaseStatusLabel, getDisputeCaseStatusVariant } from '@/lib/dispute-case'
 import { canOfferStandardServiceReview } from '@/lib/booking-review-eligibility'
 import type { BookingRead, BookingStatus, ClientBookingStats, ClientDispute } from '@/types'
 import { toast } from 'sonner'
@@ -412,6 +414,7 @@ export default function ClientBookingsPage() {
                   const canCancelDraft = !isOverdueDraftState && (booking.status === 'draft' || (booking.status === 'pending' && !isPaymentAuthorized(booking.payment?.status)))
                   const amendmentPending = hasPendingAmendmentRequest(booking)
                   const paymentSummary = getClientPaymentSummary(booking)
+                  const caseStatusLabel = getDisputeCaseStatusLabel(disputeForBooking)
 
                   return (
                     <article
@@ -447,6 +450,13 @@ export default function ClientBookingsPage() {
                             proposalBy={booking.proposal_by}
                             audience="client"
                           />
+                          {caseStatusLabel && (
+                            <div className="mt-2">
+                              <Badge variant={getDisputeCaseStatusVariant(disputeForBooking)}>
+                                Case status: {caseStatusLabel}
+                              </Badge>
+                            </div>
+                          )}
                           {getCancellationOriginLabel(booking) && (
                             <div className="mt-2">
                               <span className="inline-flex rounded-full border border-rose-200 bg-rose-50 px-2 py-0.5 text-left text-[11px] font-semibold text-rose-700">

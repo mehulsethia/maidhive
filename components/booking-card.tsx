@@ -3,6 +3,7 @@ import { Calendar, Clock, MapPin } from 'lucide-react'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { BookingStatusBadge } from '@/components/booking-status-badge'
+import { Badge } from '@/components/ui/badge'
 import { CancellationPaymentBreakdown } from '@/components/cancellation-payment-breakdown'
 import { getCleanerPayoutSummary } from '@/lib/cleaner-payout'
 import { getCleanerEarningsLabel } from '@/lib/cleaner-earnings-label'
@@ -12,6 +13,7 @@ import { formatCurrency, formatDate } from '@/lib/utils'
 import type { BookingRead } from '@/types'
 import { getCancellationOriginLabel } from '@/lib/cancellation-origin'
 import { getBookingCleaningTypeLabel } from '@/lib/booking-service-labels'
+import { getDisputeCaseStatusLabel, getDisputeCaseStatusVariant } from '@/lib/dispute-case'
 
 function isActiveDispute(booking: BookingRead) {
   return booking.dispute?.status === 'open' || booking.dispute?.status === 'under_review'
@@ -25,6 +27,7 @@ interface BookingCardProps {
 export function BookingCard({ booking, viewAs = 'client' }: BookingCardProps) {
   const basePath = viewAs === 'client' ? '/client' : '/cleaner'
   const activeDispute = isActiveDispute(booking)
+  const caseStatusLabel = getDisputeCaseStatusLabel(booking.dispute)
   const payoutSummary = getCleanerPayoutSummary(booking)
   const noPayoutFinalized = isFinalNoCleanerPayoutOutcome(booking)
   const clientPaymentSummary = getClientPaymentSummary(booking)
@@ -59,10 +62,10 @@ export function BookingCard({ booking, viewAs = 'client' }: BookingCardProps) {
                   {getCancellationOriginLabel(booking)}
                 </span>
               )}
-              {activeDispute && booking.status !== 'disputed' && (
-                <span className="inline-flex rounded-full border border-amber-200 bg-amber-50 px-2 py-0.5 text-[11px] font-semibold text-amber-700">
-                  Under Review
-                </span>
+              {caseStatusLabel && booking.status !== 'disputed' && (
+                <Badge variant={getDisputeCaseStatusVariant(booking.dispute)}>
+                  Case status: {caseStatusLabel}
+                </Badge>
               )}
             </div>
 
