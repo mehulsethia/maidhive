@@ -1,5 +1,6 @@
 import { NextRequest } from 'next/server'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { formatDate } from '@/lib/utils'
 
 type User = { id: string; role: 'client' | 'cleaner' | 'admin' }
 
@@ -98,7 +99,7 @@ vi.mock('@/server/repositories/dispute.repo', () => ({
     findById: vi.fn(async (id: string) => (id === state.dispute?.id ? state.dispute : null)),
     findByBookingId: vi.fn(async (bookingId: string) => (state.dispute?.bookingId === bookingId ? state.dispute : null)),
     create: vi.fn(async (payload: any) => {
-      state.dispute = { id: 'dispute_created_1', status: 'open', ...payload }
+      state.dispute = { id: 'dispute_created_1', status: 'open', createdAt: new Date(), ...payload }
       return state.dispute
     }),
     listForAdmin: vi.fn(async (_page: number, _pageSize: number, queue: string) => {
@@ -830,6 +831,9 @@ describe('F10 Payments capture/refund/dispute integration', () => {
   it('IT-PAY-06 client report emails confirmation to client and against-notification to cleaner', async () => {
     state.currentUser = seededUsers.client
     state.dispute = null
+    const submittedAt = new Date()
+    const expectedResponseWindowMessage =
+      `You have 24 hours from this notification to submit one response with any supporting evidence. Response required by: ${formatDate(new Date(submittedAt.getTime() + 24 * 60 * 60 * 1000))}`
     const route = await import('@/app/api/v1/disputes/[id]/route')
     const res = await route.POST(
       new NextRequest('http://localhost/api/v1/disputes/booking_pay_1', {
@@ -876,15 +880,24 @@ describe('F10 Payments capture/refund/dispute integration', () => {
           bookingReference: 'MH-NGPAY1',
           issueType: 'Service issue',
           disputePath: '/cleaner/report?booking=booking_pay_1',
-          responseWindowMessage: 'You have 24 hours from this notification to submit one response with any supporting evidence.',
+          responseWindowMessage: expectedResponseWindowMessage,
         }),
       ]),
     )
+    expect(state.notifications).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        userId: seededUsers.cleaner.id,
+        body: expect.stringContaining(expectedResponseWindowMessage),
+      }),
+    ]))
   })
 
   it('IT-PAY-07 cleaner report emails confirmation to cleaner and against-notification to client', async () => {
     state.currentUser = seededUsers.cleaner
     state.dispute = null
+    const submittedAt = new Date()
+    const expectedResponseWindowMessage =
+      `You have 24 hours from this notification to submit one response with any supporting evidence. Response required by: ${formatDate(new Date(submittedAt.getTime() + 24 * 60 * 60 * 1000))}`
     const route = await import('@/app/api/v1/disputes/[id]/route')
     const res = await route.POST(
       new NextRequest('http://localhost/api/v1/disputes/booking_pay_1', {
@@ -931,10 +944,16 @@ describe('F10 Payments capture/refund/dispute integration', () => {
           bookingReference: 'MH-NGPAY1',
           issueType: 'Access issue',
           disputePath: '/client/report?booking=booking_pay_1',
-          responseWindowMessage: 'You have 24 hours from this notification to submit one response with any supporting evidence.',
+          responseWindowMessage: expectedResponseWindowMessage,
         }),
       ]),
     )
+    expect(state.notifications).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        userId: seededUsers.client.id,
+        body: expect.stringContaining(expectedResponseWindowMessage),
+      }),
+    ]))
   })
 
   it('IT-PAY-09 attaches the counterparty response to the existing case exactly once', async () => {
