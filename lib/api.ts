@@ -16,6 +16,7 @@ import type {
   BookingFlowDraftRead,
   BookingRead,
   ClientBookingStats,
+  CleanerBookingStats,
   CleanerRead,
   CleanerOnboardingProgress,
   CleanerSummary,
@@ -426,6 +427,7 @@ export const cleanersApi = {
   getById: (id: string) => request<APIResponse<CleanerRead>>(`/cleaners/${id}`),
   me: () =>
     request<APIResponse<{ cleaner: CleanerRead; onboarding: CleanerOnboardingProgress }>>('/cleaners/me'),
+  stats: () => request<APIResponse<CleanerBookingStats>>('/cleaners/stats'),
   updateMyProfile: (body: { bio?: string; years_experience?: number; hourly_rate: number }) =>
     request<APIResponse<CleanerRead>>('/cleaners/me', { method: 'PATCH', body: JSON.stringify(body) }),
   updateMyOnboarding: (body: Record<string, unknown>) =>

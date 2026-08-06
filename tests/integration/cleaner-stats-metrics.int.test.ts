@@ -91,6 +91,25 @@ vi.mock('@/server/db', () => ({
     },
     payment: {
       aggregate: vi.fn(async () => ({ _sum: { cleanerPayout: 68 } })),
+      findMany: vi.fn(async () => [
+        {
+          status: 'transferred',
+          cleanerPayout: 68,
+          refundAmount: null,
+          refundReason: null,
+          booking: {
+            status: 'completed',
+            scheduledStart: new Date('2026-05-10T10:00:00.000Z'),
+            cancelledAt: null,
+            cancellationReason: null,
+            totalAmount: 75,
+            subtotal: 68,
+            platformFee: 7,
+            cleanerPayout: 68,
+            dispute: null,
+          },
+        },
+      ]),
     },
   },
 }))

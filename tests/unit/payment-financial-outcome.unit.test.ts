@@ -86,7 +86,7 @@ describe('payment financial outcome', () => {
     expect(preview.safetyMessage).toContain('will attempt to reverse')
   })
 
-  it('blocks a transferred refund preview when no Stripe transfer id is recorded', () => {
+  it('allows transferred destination-charge refund previews when no local Stripe transfer id is recorded', () => {
     const preview = getResolutionFinancialPreview({
       total_amount: 22,
       platform_fee: 2,
@@ -101,14 +101,18 @@ describe('payment financial outcome', () => {
 
     expect(preview).toMatchObject({
       cleanerPayoutTransferred: true,
-      transferCanBeReversed: false,
-      canSafelyApply: false,
+      transferCanBeReversed: true,
+      canSafelyApply: true,
     })
-    expect(preview.safetyMessage).toContain('no Stripe Connect transfer id')
+    expect(preview.safetyMessage).toContain('will attempt to reverse')
   })
 
   it('labels transfer lifecycle states from payment reversal fields', () => {
     expect(getCleanerTransferLifecycleLabel(null)).toBe('Not transferred')
+    expect(getCleanerTransferLifecycleLabel({
+      status: 'captured',
+      payout_scheduled_at: '2026-07-14T16:38:00.000Z',
+    })).toBe('Transfer scheduled')
     expect(getCleanerTransferLifecycleLabel({
       status: 'transferred',
       cleaner_payout: 20,
@@ -131,5 +135,11 @@ describe('payment financial outcome', () => {
       transfer_reversed_amount: 15,
       transfer_reversal_status: 'succeeded',
     })).toBe('Partially reversed')
+    expect(getCleanerTransferLifecycleLabel({
+      status: 'transferred',
+      cleaner_payout: 20,
+      stripe_transfer_id: 'tr_123',
+      transfer_reversal_status: 'failed',
+    })).toBe('Transfer reversal failed')
   })
 })

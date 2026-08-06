@@ -44,7 +44,7 @@ import { hasPendingAmendmentRequest } from '@/lib/booking-amendment'
 import { getCleanerCancellationOriginLabel } from '@/lib/cancellation-origin'
 import { getCleanerPayoutSummary } from '@/lib/cleaner-payout'
 import { isFinalNoCleanerPayoutOutcome } from '@/lib/payment-financial-outcome'
-import type { BookingRead, BookingStatus } from '@/types'
+import type { BookingRead, BookingStatus, CleanerBookingStats } from '@/types'
 import { toast } from 'sonner'
 
 const STATUS_FILTERS: Array<{ key: 'all' | BookingStatus; label: string }> = [
@@ -74,6 +74,7 @@ export default function CleanerBookingsPage() {
   const searchParams = useSearchParams()
   const [bookings, setBookings] = useState<BookingRead[]>([])
   const [stripeConnected, setStripeConnected] = useState(false)
+  const [bookingStats, setBookingStats] = useState<CleanerBookingStats | null>(null)
   const [loading, setLoading] = useState(true)
   const [actionLoading, setActionLoading] = useState<string | null>(null)
   const [filter, setFilter] = useState<'all' | BookingStatus>('all')
@@ -110,9 +111,13 @@ export default function CleanerBookingsPage() {
   async function refresh() {
     try {
       try {
-        const cleanerRes = await cleanersApi.me()
+        const [cleanerRes, statsRes] = await Promise.all([
+          cleanersApi.me(),
+          cleanersApi.stats().catch(() => null),
+        ])
         const cleaner = cleanerRes.data?.cleaner as any
         setStripeConnected(Boolean(cleaner?.stripe_onboarding_complete ?? cleaner?.stripeOnboardingComplete))
+        setBookingStats(statsRes?.data ?? null)
       } catch {
         // no-op: page can still load bookings
       }
@@ -290,8 +295,12 @@ export default function CleanerBookingsPage() {
     const pending = cleanerVisible.filter((b) => b.status === 'pending').length
     const inProgress = cleanerVisible.filter((b) => b.status === 'in_progress').length
     const completed = cleanerVisible.filter((b) => b.status === 'completed' || b.status === 'disputed').length
-    return { pending, inProgress, completed }
-  }, [bookings])
+    return {
+      pending: bookingStats?.pending ?? pending,
+      inProgress: bookingStats?.in_progress ?? inProgress,
+      completed: bookingStats?.completed ?? completed,
+    }
+  }, [bookings, bookingStats])
 
   if (loading) return <ListPageSkeleton />
 
@@ -383,8 +392,9 @@ export default function CleanerBookingsPage() {
                 const scheduledEndMs = new Date(b.scheduled_end).getTime()
                 const createdAtMs = new Date(b.created_at).getTime()
                 const reportWindowActive = isBookingReportWindowActive(b.scheduled_end)
-                const canReportProblem = ['in_progress', 'completed'].includes(b.status) && reportWindowActive
                 const activeDispute = b.dispute?.status === 'open' || b.dispute?.status === 'under_review'
+                const hasDisputeCase = Boolean(b.dispute)
+                const canReportProblem = ['in_progress', 'completed'].includes(b.status) && reportWindowActive && !hasDisputeCase
                 const canOpenDisputeCase = activeDispute && reportWindowActive
                 const disputeAction = getDisputeParticipantAction('cleaner', b.dispute)
                 const payoutSummary = getCleanerPayoutSummary(b)
@@ -562,6 +572,11 @@ export default function CleanerBookingsPage() {
                         >
                           Start job
                         </Button>
+                        {startJobState.canStart && (
+                          <p className="text-xs font-medium text-blue-700">
+                            Start the job when you arrive. This records your verified arrival location and may help support your case if a dispute arises.
+                          </p>
+                        )}
                         <p className="text-xs text-slate-500">
                           Location access is only used when starting a booking for arrival verification and dispute protection.
                         </p>

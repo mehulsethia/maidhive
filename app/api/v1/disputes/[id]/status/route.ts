@@ -8,6 +8,7 @@ import { pushInAppNotification } from '@/server/services/in-app-notification.ser
 import { db } from '@/server/db'
 import { cleanerReliabilityService } from '@/server/services/cleaner-reliability.service'
 import { recordBookingActionEvent } from '@/server/services/booking-action-event.service'
+import { getCleanerTransferLifecycle, getCleanerTransferLifecycleLabel } from '@/lib/payment-financial-outcome'
 
 export const PATCH = requireAdmin(async (req: NextRequest, ctx) => {
   const { id } = await ctx.params
@@ -50,18 +51,36 @@ export const PATCH = requireAdmin(async (req: NextRequest, ctx) => {
           cleanerPayout: true,
           transferredAt: true,
           stripeTransferId: true,
+          transferAmount: true,
+          transferReversedAmount: true,
+          transferReversedAt: true,
+          transferReversalStatus: true,
         },
       })
       const cleanerPayout = Number(payment?.cleanerPayout ?? 0)
-      const payoutAlreadyTransferred =
-        payment?.status === 'transferred' ||
-        Boolean(payment?.transferredAt) ||
-        Boolean(payment?.stripeTransferId)
-      if (payment && cleanerPayout > 0 && !payoutAlreadyTransferred) {
+      const lifecyclePayment = payment
+        ? {
+            status: payment.status,
+            cleaner_payout: payment.cleanerPayout,
+            transferred_at: payment.transferredAt,
+            stripe_transfer_id: payment.stripeTransferId,
+            transfer_amount: payment.transferAmount,
+            transfer_reversed_amount: payment.transferReversedAmount,
+            transfer_reversed_at: payment.transferReversedAt,
+            transfer_reversal_status: payment.transferReversalStatus,
+          }
+        : null
+      const transferStatus = getCleanerTransferLifecycle(lifecyclePayment)
+      const transferStatusLabel = transferStatus === 'transferred'
+        ? 'Transferred — subject to reversal if required'
+        : getCleanerTransferLifecycleLabel(lifecyclePayment)
+      if (payment && cleanerPayout > 0 && transferStatus === 'not_transferred') {
         await db.payment.update({
           where: { id: payment.id },
           data: { payoutScheduledAt: null },
         })
+      }
+      if (payment && cleanerPayout > 0) {
         await recordBookingActionEvent({
           bookingId: booking.id,
           type: 'cleaner_payout_paused',
@@ -69,7 +88,8 @@ export const PATCH = requireAdmin(async (req: NextRequest, ctx) => {
           metadata: {
             amount: cleanerPayout,
             reason: 'dispute_under_review',
-            transfer_status: 'not_transferred',
+            transfer_status: transferStatus,
+            transfer_status_label: transferStatusLabel,
           },
         })
       }

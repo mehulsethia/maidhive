@@ -49,7 +49,7 @@ export function classifyAdminCancellationQueueItem(input: {
     const actor = noShowActor(input)
     if (actor === 'cleaner') {
       return {
-        label: 'Cleaner no-show',
+        label: 'Reported cleaner no-show',
         severity: 'critical',
         sortPriority: 50,
         leadTimeHours: null,
@@ -57,7 +57,7 @@ export function classifyAdminCancellationQueueItem(input: {
     }
     if (actor === 'client') {
       return {
-        label: 'Client no-show',
+        label: 'Reported client no-show',
         severity: 'high',
         sortPriority: 40,
         leadTimeHours: null,

@@ -520,7 +520,7 @@ export default function ClientBookingDetailPage() {
     ? `${Math.ceil((proposalExpiresMs - nowTick) / 60_000)} min`
     : null
   const resolvedCase = hasResolvedBookingCase(booking)
-  const resolutionRows = resolvedCase ? getResolutionSummaryRows(booking) : null
+  const resolutionRows = resolvedCase ? getResolutionSummaryRows(booking, 'client') : null
   const resolutionReportHref = resolvedCase ? getResolutionReportHref('client', booking) : null
   const caseStatusLabel = getDisputeCaseStatusLabel(booking.dispute)
 
@@ -635,8 +635,8 @@ export default function ClientBookingDetailPage() {
                 <CardContent className="space-y-2 text-sm text-emerald-950">
                   <p className="font-semibold">{resolutionRows.outcome}</p>
                   <p>{resolutionRows.clientPaymentOutcome}</p>
-                  <p>{resolutionRows.cleanerPayoutOutcome}</p>
                   {resolutionRows.reliabilityOutcome && <p>{resolutionRows.reliabilityOutcome}</p>}
+                  {resolutionRows.resolutionNote && <p>{resolutionRows.resolutionNote}</p>}
                   {resolutionRows.resolvedAt && <p>Resolution date: {formatDate(resolutionRows.resolvedAt)}</p>}
                   <Link href={resolutionReportHref} className={cn(buttonVariants({ variant: 'outline' }), 'w-full bg-white sm:w-auto')}>
                     View full report

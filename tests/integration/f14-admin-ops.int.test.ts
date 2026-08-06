@@ -13,6 +13,7 @@ const state = vi.hoisted(() => ({
   listAllArgs: null as any,
   findByIdArgs: null as any,
   paymentFindManyArgs: null as any,
+  noShowDisputeFindManyArgs: null as any,
 }))
 
 vi.mock('@/server/auth', () => {
@@ -264,6 +265,20 @@ vi.mock('@/server/db', () => {
         }),
         findMany: vi.fn(async (args: any) => {
           disputeFindManyCall += 1
+          if (args?.where?.OR?.some?.((clause: any) => clause.issueType || clause.reason)) {
+            state.noShowDisputeFindManyArgs = args
+            return [
+              {
+                id: 'dispute_noshow_1',
+                bookingId: 'booking_noshow_1',
+                status: 'under_review',
+                reason: 'Cleaner no-show',
+                issueType: 'cleaner_no_show',
+                reporterRole: 'client',
+                createdAt: new Date(),
+              },
+            ]
+          }
           if (args?.where?.status?.in) {
             return [
               {
@@ -295,15 +310,7 @@ vi.mock('@/server/db', () => {
               },
             ]
           }
-          return [
-            {
-              id: 'dispute_noshow_1',
-              bookingId: 'booking_cancel_1',
-              status: 'under_review',
-              reason: 'Cleaner no-show',
-              createdAt: new Date(),
-            },
-          ]
+          return []
         }),
       },
       payment: {
@@ -331,6 +338,7 @@ describe('F14 Admin routes integration', () => {
     vi.resetModules()
     state.currentUser = seededUsers.admin as User
     state.listAllArgs = null
+    state.noShowDisputeFindManyArgs = null
   })
 
   it('IT-ADMIN-01 pending cleaners route returns approval-eligible cleaners', async () => {
@@ -393,6 +401,15 @@ describe('F14 Admin routes integration', () => {
       status: 'cancelled',
       cancelledBy: { not: null },
     })
+    expect(state.noShowDisputeFindManyArgs.where.status).toEqual({ in: ['open', 'under_review'] })
+    expect(body.data.cancellations_no_shows.items).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        id: 'noshow-dispute_noshow_1',
+        booking_id: 'booking_noshow_1',
+        label: 'Reported cleaner no-show',
+        status: 'under_review',
+      }),
+    ]))
   })
 
   it('IT-ADMIN-04 admin bookings filters preserve status + pagination arguments', async () => {

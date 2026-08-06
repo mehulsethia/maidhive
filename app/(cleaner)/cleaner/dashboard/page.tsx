@@ -18,7 +18,7 @@ import { EmptyState } from '@/components/empty-state'
 import { reportLoadError, resetLoadError } from '@/lib/load-error-policy'
 import { getClientTrustMetadata } from '@/lib/client-trust'
 import { formatCurrency, formatDate } from '@/lib/utils'
-import type { BookingRead, BookingStatus, CleanerOnboardingProgress } from '@/types'
+import type { BookingRead, BookingStatus, CleanerBookingStats, CleanerOnboardingProgress } from '@/types'
 import { deriveCleanerLifecycleStatus } from '@/lib/cleaner-status'
 import { showJobStartedToast } from '@/lib/job-start-toast'
 import { getStartLocationForVerification } from '@/lib/start-location'
@@ -62,6 +62,7 @@ export default function CleanerDashboardPage() {
   const [profileComplete, setProfileComplete] = useState(false)
   const [avgRating, setAvgRating] = useState<number | null>(null)
   const [releasedEarningsTotal, setReleasedEarningsTotal] = useState<number | null>(null)
+  const [bookingStats, setBookingStats] = useState<CleanerBookingStats | null>(null)
   const [loading, setLoading] = useState(true)
   const [actionLoading, setActionLoading] = useState<string | null>(null)
   const [submittingApproval, setSubmittingApproval] = useState(false)
@@ -72,7 +73,10 @@ export default function CleanerDashboardPage() {
       // Call cleaners/me first — it auto-creates the cleaner profile if missing.
       // Bookings endpoint needs the cleaner row to exist, so this must complete first.
       try {
-        const cleanerRes = await cleanersApi.me()
+        const [cleanerRes, statsRes] = await Promise.all([
+          cleanersApi.me(),
+          cleanersApi.stats().catch(() => null),
+        ])
         setCompletionPct(cleanerRes.data?.onboarding?.completion_pct ?? 0)
         setOnboardingSteps(cleanerRes.data?.onboarding?.steps ?? null)
         const cleaner = cleanerRes.data?.cleaner as any
@@ -91,6 +95,7 @@ export default function CleanerDashboardPage() {
         setReleasedEarningsTotal(
           cleaner?.released_earnings == null ? null : Number(cleaner.released_earnings),
         )
+        setBookingStats(statsRes?.data ?? null)
         resetLoadError('cleaner-dashboard-profile')
       } catch {
         reportLoadError('cleaner-dashboard-profile', 'Failed to load profile data.')
@@ -197,10 +202,11 @@ export default function CleanerDashboardPage() {
       upcoming,
       activeJobs,
       completed,
+      completedCount: bookingStats?.completed ?? completed.length,
       prioritizedRecent,
       releasedEarnings: releasedEarningsTotal ?? getReleasedCleanerEarnings(bookings),
     }
-  }, [bookings, releasedEarningsTotal])
+  }, [bookings, releasedEarningsTotal, bookingStats])
 
   const nextUpcoming = useMemo(() => {
     if (stats.upcoming.length === 0) return null
@@ -265,7 +271,7 @@ export default function CleanerDashboardPage() {
                   value={stats.releasedEarnings > 0 ? formatCurrency(stats.releasedEarnings) : '€0.00'}
                   tooltip="Includes completed booking payouts and any released compensation payments."
                 />
-                <SnapshotStat label="Completed" value={String(stats.completed.length)} />
+                <SnapshotStat label="Completed" value={String(stats.completedCount)} />
                 <SnapshotStat label="Active" value={String(stats.activeJobs.length)} />
                 <SnapshotStat label="Rating" value={avgRating ? Number(avgRating).toFixed(1) : '-'} />
               </div>

@@ -504,7 +504,7 @@ describe('F10 Payments capture/refund/dispute integration', () => {
         bookingReference: 'MH-NGPAY1',
         resolutionOutcome: 'Partial refund €20.00 issued to client.',
         refundAmount: 20,
-        cleanerPayoutOutcome: 'Cleaner payout adjusted to €52.00 after a €20.00 dispute adjustment.',
+        cleanerPayoutOutcome: 'Client refund issued: €20.00.',
         resolutionNote: 'Half of the requested work was not completed.',
       }),
       expect.objectContaining({
@@ -564,6 +564,7 @@ describe('F10 Payments capture/refund/dispute integration', () => {
       status: 'transferred',
       transferredAt: new Date('2099-01-03T12:00:00.000Z'),
       stripeTransferId: 'tr_existing',
+      transferAmount: 80,
     }
     const route = await import('@/app/api/v1/disputes/[id]/resolve/route')
     const { stripe } = await import('@/server/stripe')
@@ -593,8 +594,8 @@ describe('F10 Payments capture/refund/dispute integration', () => {
     expect(state.payment.refundAmount).toBe(80)
     expect(state.payment.cleanerPayout).toBe(0)
     expect(state.payment.platformFee).toBe(0)
-    expect(state.payment.transferAmount).toBe(72)
-    expect(state.payment.transferReversedAmount).toBe(72)
+    expect(state.payment.transferAmount).toBe(80)
+    expect(state.payment.transferReversedAmount).toBe(80)
     expect(state.payment.transferReversalStatus).toBe('succeeded')
     expect(state.payment.stripeTransferReversalId).toBe('trr_1')
     expect(state.dispute?.status).toBe('resolved')
@@ -602,7 +603,9 @@ describe('F10 Payments capture/refund/dispute integration', () => {
       expect.objectContaining({
         type: 'stripe_transfer_reversed',
         metadata: expect.objectContaining({
-          amount: 72,
+          amount: 80,
+          cleaner_payout_adjustment_amount: 72,
+          application_fee_amount: 8,
           status: 'succeeded',
           stripe_transfer_id: 'tr_existing',
           stripe_transfer_reversal_id: 'trr_1',
@@ -683,6 +686,7 @@ describe('F10 Payments capture/refund/dispute integration', () => {
       status: 'transferred',
       transferredAt: new Date('2099-01-03T12:00:00.000Z'),
       stripeTransferId: null,
+      transferAmount: 80,
       payoutScheduledAt: null,
     }
     const route = await import('@/app/api/v1/disputes/[id]/resolve/route')
@@ -724,7 +728,7 @@ describe('F10 Payments capture/refund/dispute integration', () => {
       cleanerPayout: 0,
       platformFee: 0,
       payoutScheduledAt: null,
-      transferReversedAmount: 72,
+      transferReversedAmount: 80,
       transferReversalStatus: 'succeeded',
       stripeTransferReversalId: 'trr_1',
     })
@@ -739,12 +743,12 @@ describe('F10 Payments capture/refund/dispute integration', () => {
       expect.objectContaining({
         userId: seededUsers.client.id,
         type: 'dispute_resolved',
-        body: 'Full refund issued to client.',
+        body: 'Cleaner no-show confirmed. You received a full refund.',
       }),
       expect.objectContaining({
         userId: seededUsers.cleaner.id,
         type: 'dispute_resolved',
-        body: 'Full refund issued to client.',
+        body: 'Cleaner no-show confirmed. No cleaner payout is due. The client received a full refund.',
       }),
     ]))
     expect(state.emails).toEqual(expect.arrayContaining([
@@ -752,7 +756,7 @@ describe('F10 Payments capture/refund/dispute integration', () => {
         kind: 'dispute_resolved_outcome',
         email: 'client@test.local',
         resolutionOutcome: 'Full refund issued to client.',
-        cleanerPayoutOutcome: 'Cleaner payout was not released.',
+        cleanerPayoutOutcome: 'No cleaner payout details are shown to clients.',
       }),
       expect.objectContaining({
         kind: 'dispute_resolved_outcome',
@@ -765,7 +769,9 @@ describe('F10 Payments capture/refund/dispute integration', () => {
       expect.objectContaining({
         type: 'stripe_transfer_reversed',
         metadata: expect.objectContaining({
-          amount: 72,
+          amount: 80,
+          cleaner_payout_adjustment_amount: 72,
+          application_fee_amount: 8,
           status: 'succeeded',
           stripe_transfer_id: null,
           stripe_transfer_reversal_id: 'trr_1',
@@ -826,6 +832,67 @@ describe('F10 Payments capture/refund/dispute integration', () => {
     expect(state.dispute?.status).toBe('under_review')
     expect(state.notifications).toHaveLength(0)
     expect(state.emails).toHaveLength(0)
+  })
+
+  it('does not apply no-show reliability consequences when the report is not confirmed', async () => {
+    state.dispute = {
+      ...state.dispute,
+      issueType: 'cleaner_no_show',
+      status: 'under_review',
+    }
+    const route = await import('@/app/api/v1/disputes/[id]/resolve/route')
+    const { cleanerReliabilityService } = await import('@/server/services/cleaner-reliability.service')
+
+    const res = await route.POST(
+      new NextRequest('http://localhost/api/v1/disputes/dispute_1/resolve', {
+        method: 'POST',
+        body: JSON.stringify({
+          resolution_type: 'no_refund',
+          resolution_note: 'The report was reviewed and not confirmed.',
+          no_show_finding: 'rejected',
+        }),
+        headers: { 'content-type': 'application/json' },
+      }),
+      { params: Promise.resolve({ id: 'dispute_1' }) } as any,
+    )
+    const body = await res.json()
+
+    expect(res.status).toBe(200)
+    expect(body.success).toBe(true)
+    expect(state.dispute).toMatchObject({
+      status: 'resolved',
+      noShowFinding: 'rejected',
+    })
+    expect(cleanerReliabilityService.recordConfirmedNoShow).not.toHaveBeenCalled()
+  })
+
+  it('does not reapply no-show reliability consequences when resolution is retried after success', async () => {
+    state.dispute = {
+      ...state.dispute,
+      issueType: 'cleaner_no_show',
+      status: 'resolved',
+      noShowFinding: 'confirmed',
+    }
+    const route = await import('@/app/api/v1/disputes/[id]/resolve/route')
+    const { cleanerReliabilityService } = await import('@/server/services/cleaner-reliability.service')
+
+    const res = await route.POST(
+      new NextRequest('http://localhost/api/v1/disputes/dispute_1/resolve', {
+        method: 'POST',
+        body: JSON.stringify({
+          resolution_type: 'full_refund',
+          resolution_note: 'Retry from a stale admin screen.',
+          no_show_finding: 'confirmed',
+        }),
+        headers: { 'content-type': 'application/json' },
+      }),
+      { params: Promise.resolve({ id: 'dispute_1' }) } as any,
+    )
+    const body = await res.json()
+
+    expect(res.status).toBe(200)
+    expect(body.success).toBe(true)
+    expect(cleanerReliabilityService.recordConfirmedNoShow).not.toHaveBeenCalled()
   })
 
   it('IT-PAY-06 client report emails confirmation to client and against-notification to cleaner', async () => {

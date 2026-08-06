@@ -19,7 +19,7 @@ import { getAccessToken } from '@/lib/auth-cache'
 import { toApiV1Url } from '@/lib/api-base'
 import { reportLoadError, resetLoadError } from '@/lib/load-error-policy'
 import { createClient } from '@/lib/supabase'
-import type { BookingRead, ClientAddressRead } from '@/types'
+import type { BookingRead, ClientAddressRead, ClientBookingStats } from '@/types'
 import { toast } from 'sonner'
 import { MAX_SAVED_ADDRESSES, MVP_CITY, MVP_COUNTRY_CODE, MVP_COUNTRY_NAME, normalizeCyprusPostcode } from '@/lib/location-policy'
 
@@ -32,6 +32,7 @@ export default function ClientProfilePage() {
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [bookings, setBookings] = useState<BookingRead[]>([])
+  const [bookingStats, setBookingStats] = useState<ClientBookingStats | null>(null)
   const [totalSpent, setTotalSpent] = useState(0)
 
   const [firstName, setFirstName] = useState('')
@@ -91,9 +92,10 @@ export default function ClientProfilePage() {
   useEffect(() => {
     ;(async () => {
       try {
-        const [clientRes, bookingRes, addressesRes] = await Promise.allSettled([
+        const [clientRes, bookingRes, statsRes, addressesRes] = await Promise.allSettled([
           clientsApi.me(),
-          bookingsApi.my(),
+          bookingsApi.my(1, undefined, 50, 'activity'),
+          bookingsApi.stats(),
           clientsApi.listAddresses(),
         ])
         const client = (clientRes.status === 'fulfilled' ? clientRes.value.data : null) as any
@@ -103,6 +105,7 @@ export default function ClientProfilePage() {
         const loadedAddresses = ((addressesRes.status === 'fulfilled' ? addressesRes.value?.data : []) ?? []) as ClientAddressRead[]
         const defaultEntry = loadedAddresses.find((entry) => entry.is_default) ?? loadedAddresses[0]
         const bookingItems = bookingRes.status === 'fulfilled' ? bookingRes.value.data?.items ?? [] : []
+        const sharedStats = statsRes.status === 'fulfilled' ? statsRes.value.data ?? null : null
 
         startTransition(() => {
           setFirstName(parts[0] ?? '')
@@ -126,6 +129,7 @@ export default function ClientProfilePage() {
           setEmailVerified(Boolean(user?.email_confirmed_at))
           setPhoneVerified(Boolean(user?.phone_verified_at))
           setBookings(bookingItems)
+          setBookingStats(sharedStats)
           setTotalSpent(Number(client?.total_spent ?? (client as any)?.totalSpent ?? 0))
           setLoading(false)
         })
@@ -156,7 +160,8 @@ export default function ClientProfilePage() {
   }, [])
 
   const deferredBookings = useDeferredValue(bookings)
-  const totalBookings = deferredBookings.length
+  const totalBookings = bookingStats?.all ?? deferredBookings.length
+  const completedBookings = bookingStats?.completed ?? deferredBookings.filter((booking) => booking.status === 'completed').length
 
   async function saveProfile() {
     if (!firstName.trim()) return toast.error('First name is required.')
@@ -604,7 +609,7 @@ export default function ClientProfilePage() {
                     </span>
                   )}
                   <span className="inline-flex items-center rounded-full bg-slate-100 px-2.5 py-1 text-xs font-semibold text-slate-700">
-                    {deferredBookings.filter((booking) => booking.status === 'completed').length} completed bookings
+                    {completedBookings} completed bookings
                   </span>
                   {idFileUrl && (
                     <span className="inline-flex items-center gap-1 rounded-full bg-emerald-100 px-2.5 py-1 text-xs font-semibold text-emerald-700">

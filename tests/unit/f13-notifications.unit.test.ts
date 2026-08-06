@@ -58,14 +58,15 @@ describe('F13 Notifications + deep links unit coverage', () => {
     expect(getNotificationHref('client', notif)).toBe('/client/report?booking=booking_1')
   })
 
-  it('UT-NOTIF-05 resolved disputes route admins to the related booking history', () => {
+  it('UT-NOTIF-05 resolved dispute admin notifications route to the case with booking access', () => {
     const resolved: any = {
       type: 'dispute_resolved',
       data: { dispute_id: 'disp_1', booking_id: 'booking_1' },
     }
 
-    expect(getNotificationHref('admin', resolved)).toBe('/admin/bookings/booking_1')
-    expect(getNotificationHref('cleaner', resolved)).toBe('/cleaner/bookings/booking_1')
+    expect(getNotificationHref('admin', resolved)).toBe('/admin/disputes?filter=resolved&dispute=disp_1')
+    expect(getNotificationHref('cleaner', resolved)).toBe('/cleaner/report?booking=booking_1&case=disp_1')
+    expect(getNotificationHref('client', resolved)).toBe('/client/report?booking=booking_1&case=disp_1')
   })
 
   it('UT-NOTIF-06 client completed notifications hide cleaner payout release states', () => {

@@ -4,6 +4,7 @@ const state = vi.hoisted(() => ({
   booking: null as any,
   notifications: [] as any[],
   actionEvents: [] as any[],
+  dispute: null as any,
   completionEmails: 0,
   reviewEmails: 0,
   updateManyCalls: 0,
@@ -41,7 +42,7 @@ vi.mock('@/server/repositories/availability.repo', () => ({ availabilityRepo: {}
 vi.mock('@/server/repositories/payment.repo', () => ({ paymentRepo: {} }))
 vi.mock('@/server/repositories/dispute.repo', () => ({
   disputeRepo: {
-    findByBookingId: vi.fn(async () => null),
+    findByBookingId: vi.fn(async () => state.dispute),
   },
 }))
 
@@ -138,9 +139,37 @@ describe('booking completion idempotency', () => {
     }
     state.notifications = []
     state.actionEvents = []
+    state.dispute = null
     state.completionEmails = 0
     state.reviewEmails = 0
     state.updateManyCalls = 0
+  })
+
+  it('uses dispute-aware auto-completion notifications when an active dispute exists', async () => {
+    state.dispute = {
+      id: 'dispute-active-1',
+      bookingId: state.booking.id,
+      status: 'under_review',
+    }
+    const { bookingService } = await import('@/server/services/booking.service')
+
+    await bookingService.completeBySystem(state.booking.id, state.booking.scheduledEnd)
+
+    expect(state.notifications).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        userId: seeded.clientUser.id,
+        title: 'Booking completed – dispute under review',
+        body: 'Your booking has been completed automatically. A dispute relating to this booking is currently under review by MaidHive. We will notify you once the case has been resolved.',
+        data: expect.objectContaining({ dispute_id: 'dispute-active-1' }),
+      }),
+      expect.objectContaining({
+        userId: seeded.cleanerUser.id,
+        title: 'Booking completed – dispute under review',
+        body: 'Your booking has been completed automatically. Your payout is currently paused while MaidHive reviews the reported dispute. Payment will only be released after the case has been resolved.',
+        data: expect.objectContaining({ dispute_id: 'dispute-active-1' }),
+      }),
+    ]))
+    expect(state.notifications.map((item) => item.body).join(' ')).not.toContain('report window')
   })
 
   it('sends completion notifications and review request only once', async () => {

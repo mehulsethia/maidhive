@@ -52,7 +52,7 @@ describe('admin cancellation queue severity', () => {
         issueType: 'cleaner_no_show',
       }),
     ).toMatchObject({
-      label: 'Cleaner no-show',
+      label: 'Reported cleaner no-show',
       severity: 'critical',
       sortPriority: 50,
     })
@@ -63,7 +63,7 @@ describe('admin cancellation queue severity', () => {
         issueType: 'client_no_show',
       }),
     ).toMatchObject({
-      label: 'Client no-show',
+      label: 'Reported client no-show',
       severity: 'high',
       sortPriority: 40,
     })

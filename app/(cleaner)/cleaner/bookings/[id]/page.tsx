@@ -502,7 +502,7 @@ export default function CleanerBookingDetailPage() {
     : null
   const cancellationOriginLabel = getCancellationOriginLabel(booking)
   const resolvedCase = hasResolvedBookingCase(booking)
-  const resolutionRows = resolvedCase ? getResolutionSummaryRows(booking) : null
+  const resolutionRows = resolvedCase ? getResolutionSummaryRows(booking, 'cleaner') : null
   const resolutionReportHref = resolvedCase ? getResolutionReportHref('cleaner', booking) : null
 
   return (
@@ -645,6 +645,7 @@ export default function CleanerBookingDetailPage() {
                 <p>{resolutionRows.clientPaymentOutcome}</p>
                 <p>{resolutionRows.cleanerPayoutOutcome}</p>
                 {resolutionRows.reliabilityOutcome && <p>{resolutionRows.reliabilityOutcome}</p>}
+                {resolutionRows.resolutionNote && <p>{resolutionRows.resolutionNote}</p>}
                 {resolutionRows.resolvedAt && <p>Resolution date: {formatDate(resolutionRows.resolvedAt)}</p>}
                 <Link href={resolutionReportHref} className={cn(buttonVariants({ variant: 'outline' }), 'w-full bg-white sm:w-auto')}>
                   View full report
@@ -879,6 +880,11 @@ export default function CleanerBookingDetailPage() {
             <Button size="lg" onClick={() => handleAction('start')} loading={actionLoading === 'start'} disabled={!canStartJobNow}>
               Start job
             </Button>
+            {canStartJobNow && (
+              <p className="rounded-xl border border-blue-200 bg-blue-50 px-3 py-2 text-sm text-blue-700">
+                Start the job when you arrive. This records your verified arrival location and may help support your case if a dispute arises.
+              </p>
+            )}
             <p className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-600">
               Location access is only used when starting a booking for arrival verification and dispute protection.
             </p>

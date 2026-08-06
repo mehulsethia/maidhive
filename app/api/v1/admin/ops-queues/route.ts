@@ -131,6 +131,7 @@ export const GET = requireAdmin(async () => {
       }),
       db.dispute.findMany({
         where: {
+          status: { in: ['open', 'under_review'] },
           OR: [
             { issueType: { in: ['cleaner_no_show', 'client_no_show'] } },
             { reason: { contains: 'no-show', mode: 'insensitive' } },

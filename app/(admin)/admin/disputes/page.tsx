@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
 import { useSearchParams } from 'next/navigation'
-import { AlertTriangle, CheckCircle2, Clock } from 'lucide-react'
+import { AlertTriangle, CheckCircle2, Clock, FileText } from 'lucide-react'
 import { adminApi } from '@/lib/api'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -115,12 +115,14 @@ function DisputeCard({
   onResolve,
   actionLoading,
   highlighted = false,
+  returnTo,
 }: {
   dispute: AdminDispute
   onMarkUnderReview?: () => void
   onResolve?: () => void
   actionLoading: boolean
   highlighted?: boolean
+  returnTo: string
 }) {
   const queueStage = getAdminDisputeQueueStage(dispute)
   const statusKey = dispute.status === 'resolved' || dispute.status === 'closed'
@@ -138,6 +140,7 @@ function DisputeCard({
   const reporterLabel = dispute.reporter_role
     ? `${dispute.reporter_role.charAt(0).toUpperCase()}${dispute.reporter_role.slice(1)} Report`
     : 'Reporter Unknown'
+  const bookingHref = `/admin/bookings/${dispute.booking_id}?returnTo=${encodeURIComponent(returnTo)}`
 
   return (
     <Card className={cn(highlighted && 'border-primary/60 ring-2 ring-primary/20')}>
@@ -196,6 +199,13 @@ function DisputeCard({
           </div>
 
           <div className="flex w-full flex-wrap gap-2 sm:w-auto sm:shrink-0">
+            <Link
+              href={bookingHref}
+              className="inline-flex min-h-8 w-full items-center justify-center gap-2 rounded-lg border border-input bg-background px-3 py-1.5 text-xs font-semibold text-slate-700 transition-all duration-200 hover:-translate-y-0.5 hover:bg-accent hover:text-accent-foreground sm:w-auto"
+            >
+              <FileText className="h-3.5 w-3.5" />
+              View booking
+            </Link>
             {dispute.status === 'open' && (
               <>
                 <Button
@@ -238,14 +248,6 @@ function DisputeCard({
             Resolved {formatDate(dispute.resolved_at)}
           </p>
         )}
-        {['resolved', 'closed'].includes(dispute.status) && (
-          <Link
-            href={`/admin/bookings/${dispute.booking_id}`}
-            className="mt-3 inline-flex min-h-9 items-center rounded-lg border border-slate-300 px-3 text-xs font-semibold text-slate-700 transition hover:bg-slate-50"
-          >
-            View booking history
-          </Link>
-        )}
       </CardContent>
     </Card>
   )
@@ -256,12 +258,17 @@ function DisputeCard({
 export default function AdminDisputesPage() {
   const searchParams = useSearchParams()
   const selectedDisputeId = searchParams.get('dispute')
+  const requestedFilter = searchParams.get('filter')
   const [disputes, setDisputes] = useState<AdminDispute[]>([])
   const [resolvedDisputes, setResolvedDisputes] = useState<AdminDispute[]>([])
   const [resolvedTotal, setResolvedTotal] = useState(0)
   const [resolvedPage, setResolvedPage] = useState(1)
   const [loadingMoreResolved, setLoadingMoreResolved] = useState(false)
-  const [activeFilter, setActiveFilter] = useState<DisputeFilter>('all')
+  const [activeFilter, setActiveFilter] = useState<DisputeFilter>(
+    DISPUTE_FILTERS.includes(requestedFilter as DisputeFilter)
+      ? requestedFilter as DisputeFilter
+      : 'all',
+  )
   const [loading, setLoading] = useState(true)
   const [actionLoading, setActionLoading] = useState<string | null>(null)
 
@@ -306,6 +313,10 @@ export default function AdminDisputesPage() {
 
   useEffect(() => {
     if (!selectedDisputeId) return
+    if (DISPUTE_FILTERS.includes(requestedFilter as DisputeFilter)) {
+      setActiveFilter(requestedFilter as DisputeFilter)
+      return
+    }
     if (resolvedDisputes.some((dispute) => dispute.id === selectedDisputeId)) {
       setActiveFilter('resolved')
       return
@@ -313,7 +324,7 @@ export default function AdminDisputesPage() {
     if (disputes.some((dispute) => dispute.id === selectedDisputeId)) {
       setActiveFilter('all')
     }
-  }, [disputes, resolvedDisputes, selectedDisputeId])
+  }, [disputes, requestedFilter, resolvedDisputes, selectedDisputeId])
 
   async function loadMoreResolved() {
     const nextPage = resolvedPage + 1
@@ -417,6 +428,8 @@ export default function AdminDisputesPage() {
     selectedDisputeId
       ? [...items].sort((a, b) => Number(b.id === selectedDisputeId) - Number(a.id === selectedDisputeId))
       : items
+  const disputeReturnTo = (filter: DisputeFilter, disputeId: string) =>
+    `/admin/disputes?filter=${encodeURIComponent(filter)}&dispute=${encodeURIComponent(disputeId)}`
 
   return (
     <div className="space-y-6 w-full">
@@ -457,6 +470,7 @@ export default function AdminDisputesPage() {
                     dispute={d}
                     actionLoading={actionLoading === d.id}
                     highlighted={d.id === selectedDisputeId}
+                    returnTo={disputeReturnTo(filter, d.id)}
                     onMarkUnderReview={() => markUnderReview(d)}
                     onResolve={() => setResolveTarget(d)}
                   />

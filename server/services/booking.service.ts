@@ -1982,27 +1982,45 @@ async function completeBookingFlow(
     },
   })
 
-  await pushInAppNotification({
-    userId: booking.client.userId,
-    type: 'booking_completed',
-    title: 'Booking completed',
-    body:
-      args.initiatedByRole === 'system'
-        ? `Your booking has been marked as completed. If there was an issue, please report it within ${formatDisputeWindowLabel(config.DISPUTE_WINDOW_HOURS)} of scheduled completion.`
-        : `Cleaner marked this booking as completed. If there was an issue, please report it within ${formatDisputeWindowLabel(config.DISPUTE_WINDOW_HOURS)} of scheduled completion.`,
-    data: { booking_id: bookingId },
-  })
+  if (unresolvedDispute && args.initiatedByRole === 'system') {
+    await pushInAppNotification({
+      userId: booking.client.userId,
+      type: 'booking_completed',
+      title: 'Booking completed – dispute under review',
+      body: 'Your booking has been completed automatically. A dispute relating to this booking is currently under review by MaidHive. We will notify you once the case has been resolved.',
+      data: { booking_id: bookingId, dispute_id: dispute?.id },
+    })
 
-  await pushInAppNotification({
-    userId: booking.cleaner.userId,
-    type: 'booking_completed',
-    title: 'Completed - awaiting release',
-    body:
-      args.initiatedByRole === 'system'
-        ? `This booking was auto-completed after scheduled end time. Payout will release after the ${formatDisputeWindowLabel(config.DISPUTE_WINDOW_HOURS)} report window from scheduled completion if no issue is raised.`
-        : `Booking marked complete. Payout will release after the ${formatDisputeWindowLabel(config.DISPUTE_WINDOW_HOURS)} report window from scheduled completion if no issue is raised.`,
-    data: { booking_id: bookingId },
-  })
+    await pushInAppNotification({
+      userId: booking.cleaner.userId,
+      type: 'booking_completed',
+      title: 'Booking completed – dispute under review',
+      body: 'Your booking has been completed automatically. Your payout is currently paused while MaidHive reviews the reported dispute. Payment will only be released after the case has been resolved.',
+      data: { booking_id: bookingId, dispute_id: dispute?.id },
+    })
+  } else {
+    await pushInAppNotification({
+      userId: booking.client.userId,
+      type: 'booking_completed',
+      title: 'Booking completed',
+      body:
+        args.initiatedByRole === 'system'
+          ? `Your booking has been marked as completed. If there was an issue, please report it within ${formatDisputeWindowLabel(config.DISPUTE_WINDOW_HOURS)} of scheduled completion.`
+          : `Cleaner marked this booking as completed. If there was an issue, please report it within ${formatDisputeWindowLabel(config.DISPUTE_WINDOW_HOURS)} of scheduled completion.`,
+      data: { booking_id: bookingId },
+    })
+
+    await pushInAppNotification({
+      userId: booking.cleaner.userId,
+      type: 'booking_completed',
+      title: 'Completed - awaiting release',
+      body:
+        args.initiatedByRole === 'system'
+          ? `This booking was auto-completed after scheduled end time. Payout will release after the ${formatDisputeWindowLabel(config.DISPUTE_WINDOW_HOURS)} report window from scheduled completion if no issue is raised.`
+          : `Booking marked complete. Payout will release after the ${formatDisputeWindowLabel(config.DISPUTE_WINDOW_HOURS)} report window from scheduled completion if no issue is raised.`,
+      data: { booking_id: bookingId },
+    })
+  }
 
   try {
     await loopsEmailService.sendClientBookingCompleted({

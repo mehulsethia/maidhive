@@ -6,9 +6,11 @@ import {
   getDisputeEvidence,
   getDisputeRespondedAt,
   getDisputeResponseExplanation,
+  getDisputeResolvedAt,
   hasCounterpartyResponse,
   type DisputeCaseInput,
 } from '@/lib/dispute-case'
+import { getDisputeResolutionOutcome } from '@/lib/dispute-resolution'
 import { cn, formatDate } from '@/lib/utils'
 
 export function DisputeCaseRecord({
@@ -28,7 +30,12 @@ export function DisputeCaseRecord({
   const responseEvidence = getDisputeEvidence(dispute, 'response')
   const createdAt = getDisputeCreatedAt(dispute)
   const respondedAt = getDisputeRespondedAt(dispute)
+  const resolvedAt = getDisputeResolvedAt(dispute)
   const responseExplanation = getDisputeResponseExplanation(dispute)
+  const resolved = dispute.status === 'resolved' || dispute.status === 'closed'
+  const resolutionNote = dispute.resolution_note ?? dispute.resolutionNote ?? null
+  const refundAmountValue = Number(dispute.refund_amount ?? dispute.refundAmount ?? 0)
+  const refundAmount = Number.isFinite(refundAmountValue) ? refundAmountValue : undefined
 
   return (
     <div className={cn('space-y-2 text-sm text-slate-700', className)}>
@@ -61,6 +68,27 @@ export function DisputeCaseRecord({
         <p className="rounded-xl border border-dashed border-slate-200 px-3 py-2 text-xs text-slate-500">
           {noResponseCopy}
         </p>
+      )}
+
+      {resolved && (
+        <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2">
+          <p className="text-xs font-semibold uppercase tracking-wide text-emerald-700">
+            Final resolution outcome
+          </p>
+          <p className="mt-1 font-medium text-emerald-950">
+            {getDisputeResolutionOutcome(dispute.resolution_type ?? dispute.resolutionType, refundAmount)}
+          </p>
+          {resolutionNote && (
+            <p className="mt-2 text-emerald-900">
+              {resolutionNote}
+            </p>
+          )}
+          {resolvedAt && (
+            <p className="mt-2 text-xs font-medium text-emerald-700">
+              Resolution date: {formatDate(resolvedAt)}
+            </p>
+          )}
+        </div>
       )}
 
       <div className="space-y-1 text-xs text-slate-500">

@@ -172,6 +172,12 @@ export interface ClientBookingStats {
   closed: number
 }
 
+export interface CleanerBookingStats {
+  pending: number
+  in_progress: number
+  completed: number
+}
+
 export interface BookingCreate {
   cleaner_id: string
   service_type: ServiceType
@@ -560,6 +566,8 @@ export interface AdminCleaner {
   reliability_incidents?: Array<{
     id: string
     type: string
+    booking_id?: string | null
+    dispute_id?: string | null
     incident_date: string
     booking_count: number
     occurred_at: string
@@ -581,6 +589,8 @@ export interface AdminCleaner {
   reliability_strikes?: Array<{
     id: string
     type: string
+    booking_id?: string | null
+    dispute_id?: string | null
     reason: string
     issued_at: string
     expires_at?: string | null

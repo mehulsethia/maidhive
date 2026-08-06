@@ -7,6 +7,12 @@ export type DisputeCaseInput = DisputeActionInput & {
   evidence?: unknown
   response_evidence?: unknown
   responseEvidence?: unknown
+  resolution_type?: string | null
+  resolutionType?: string | null
+  resolution_note?: string | null
+  resolutionNote?: string | null
+  refund_amount?: unknown
+  refundAmount?: unknown
   resolved_at?: string | Date | null
   resolvedAt?: string | Date | null
 }

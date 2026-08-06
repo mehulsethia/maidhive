@@ -384,9 +384,9 @@ export default function AdminDashboard() {
         </WidgetShell>
 
         <WidgetShell
-          title="Cancellations / No-shows"
+          title="Cancellations / Reported No-shows"
           count={queues?.cancellations_no_shows.count ?? 0}
-          href="/admin/bookings"
+          href="/admin/disputes?filter=no_show"
         >
           {queues?.cancellations_no_shows.items.length ? (
             queues.cancellations_no_shows.items.map((incident) => (

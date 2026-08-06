@@ -454,9 +454,6 @@ export const cleanerReliabilityService = {
         },
         update: {
           bookingId: input.bookingId,
-          reason: 'Admin-confirmed cleaner no-show',
-          issuedBy: input.confirmedBy,
-          expiresAt: addDays(confirmedAt, STRIKE_ACTIVE_DAYS),
         },
       })
       await tx.cleanerReliabilitySnapshot.upsert({

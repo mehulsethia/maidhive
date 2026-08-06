@@ -35,7 +35,7 @@ export function getResolutionReportHref(role: Role, booking: BookingRead) {
   return `${base}?${params.toString()}`
 }
 
-export function getResolutionSummaryRows(booking: BookingRead) {
+export function getResolutionSummaryRows(booking: BookingRead, role: Role = 'client') {
   const originalClientPayment = Number(booking.payment?.amount ?? booking.total_amount ?? 0)
   const refundAmount = Number(booking.payment?.refund_amount ?? booking.dispute?.refund_amount ?? 0)
   const finalClientPaid = Math.max(0, originalClientPayment - Math.max(0, refundAmount))
@@ -52,7 +52,7 @@ export function getResolutionSummaryRows(booking: BookingRead) {
     outcome: getResolutionOutcomeLabel(booking),
     clientPaymentOutcome:
       resolutionType === 'full_refund'
-        ? 'Client received a complete refund.'
+        ? `You received a full refund of ${formatCurrency(refundAmount > 0 ? refundAmount : originalClientPayment)}.`
         : refundAmount > 0
           ? `${formatCurrency(refundAmount)} refund issued. Final client payment: ${formatCurrency(finalClientPaid)}.`
           : `Final client payment: ${formatCurrency(finalClientPaid)}.`,
@@ -60,7 +60,8 @@ export function getResolutionSummaryRows(booking: BookingRead) {
       finalCleanerPayout <= 0
         ? 'No cleaner payout is due for this booking.'
         : `Final cleaner payout: ${formatCurrency(finalCleanerPayout)}.`,
-    reliabilityOutcome,
+    reliabilityOutcome: role === 'cleaner' ? reliabilityOutcome : null,
+    resolutionNote: booking.dispute?.resolution_note ?? null,
     resolvedAt: booking.dispute?.resolved_at ?? null,
   }
 }

@@ -2,14 +2,15 @@ import type { BookingRead } from '@/types'
 
 type PaymentLike = {
   status?: string | null
-  amount?: number | null
-  platform_fee?: number | null
-  cleaner_payout?: number | null
-  refund_amount?: number | null
+  amount?: unknown
+  platform_fee?: unknown
+  cleaner_payout?: unknown
+  refund_amount?: unknown
+  payout_scheduled_at?: string | Date | null
   transferred_at?: string | Date | null
   stripe_transfer_id?: string | null
-  transfer_amount?: number | null
-  transfer_reversed_amount?: number | null
+  transfer_amount?: unknown
+  transfer_reversed_amount?: unknown
   transfer_reversed_at?: string | Date | null
   transfer_reversal_status?: string | null
 }
@@ -50,9 +51,14 @@ export function hasCleanerPayoutTransferred(payment?: PaymentLike | null) {
 }
 
 export function getCleanerTransferLifecycle(payment?: PaymentLike | null) {
-  if (!hasCleanerPayoutTransferred(payment)) return 'not_transferred'
+  if (!hasCleanerPayoutTransferred(payment)) {
+    if (payment?.payout_scheduled_at) return 'scheduled'
+    return 'not_transferred'
+  }
 
   const reversedCents = moneyCents(payment?.transfer_reversed_amount)
+  if (payment?.transfer_reversal_status === 'failed') return 'reversal_failed'
+  if (payment?.transfer_reversal_status === 'pending') return 'reversal_pending'
   if (reversedCents <= 0) return 'transferred'
 
   const currentCleanerPayoutCents = moneyCents(payment?.cleaner_payout)
@@ -68,10 +74,26 @@ export function getCleanerTransferLifecycle(payment?: PaymentLike | null) {
 
 export function getCleanerTransferLifecycleLabel(payment?: PaymentLike | null) {
   const lifecycle = getCleanerTransferLifecycle(payment)
+  if (lifecycle === 'scheduled') return 'Transfer scheduled'
   if (lifecycle === 'transferred') return 'Transferred'
+  if (lifecycle === 'reversal_pending') return 'Transfer reversal pending'
+  if (lifecycle === 'reversal_failed') return 'Transfer reversal failed'
   if (lifecycle === 'reversed') return 'Reversed'
   if (lifecycle === 'partially_reversed') return 'Partially reversed'
   return 'Not transferred'
+}
+
+export function getAdminTransferLifecycleLabel(
+  booking?: { payment?: PaymentLike | null; dispute?: DisputeLike | null } | null,
+) {
+  const lifecycle = getCleanerTransferLifecycle(booking?.payment)
+  const disputeActive = booking?.dispute?.status === 'open' || booking?.dispute?.status === 'under_review'
+
+  if (lifecycle === 'transferred' && disputeActive) {
+    return 'Transferred — subject to reversal if required'
+  }
+
+  return getCleanerTransferLifecycleLabel(booking?.payment)
 }
 
 export function getBookingFinancialOutcome(booking: BookingFinancialInput | BookingRead | null | undefined) {
@@ -144,7 +166,7 @@ export function getResolutionFinancialPreview(
       : originalCleanerPayout
   const finalMaidHiveRetainedFee = roundMoney(Math.max(0, finalClientAmountPaid - finalCleanerPayout))
   const cleanerPayoutTransferred = hasCleanerPayoutTransferred(booking?.payment)
-  const transferCanBeReversed = Boolean(booking?.payment?.stripe_transfer_id)
+  const transferCanBeReversed = cleanerPayoutTransferred
   const refundResolution = resolutionType === 'full_refund' || resolutionType === 'partial_refund'
   const partialRefundInvalid =
     resolutionType === 'partial_refund' &&

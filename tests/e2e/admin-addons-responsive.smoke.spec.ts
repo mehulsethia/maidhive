@@ -162,7 +162,7 @@ async function mockAdminApis(page: Page) {
                 status: 'open',
                 reason: 'Cleaner did not arrive for the scheduled booking',
                 occurred_at: '2026-07-17T14:45:00.000Z',
-                label: 'Cleaner no-show',
+                label: 'Reported cleaner no-show',
                 severity: 'critical',
                 sort_priority: 50,
                 lead_time_hours: null,
@@ -398,7 +398,6 @@ test.describe('Admin add-on responsive UI @smoke', () => {
 
   for (const viewport of VIEWPORTS) {
     test(`Super Cleaner eligibility is responsive on ${viewport.name}`, async ({ page }) => {
-      await seedAdminSession(page)
       await mockAdminApis(page)
       await page.setViewportSize({ width: viewport.width, height: viewport.height })
       await page.goto('/admin/cleaners')
@@ -413,13 +412,12 @@ test.describe('Admin add-on responsive UI @smoke', () => {
     })
 
     test(`Cancellation severity queue is responsive on ${viewport.name}`, async ({ page }) => {
-      await seedAdminSession(page)
       await mockAdminApis(page)
       await page.setViewportSize({ width: viewport.width, height: viewport.height })
       await page.goto('/admin/dashboard')
 
-      await expect(page.getByText('Cancellations / No-shows')).toBeVisible()
-      await expect(page.getByText('Cleaner no-show')).toBeVisible()
+      await expect(page.getByText('Cancellations / Reported No-shows')).toBeVisible()
+      await expect(page.getByText('Reported cleaner no-show')).toBeVisible()
       await expect(page.getByText('Cleaner cancellation (<12 hours)')).toBeVisible()
       await expect(page.getByText('Cleaner cancellation (12–24 hours)')).toBeVisible()
 

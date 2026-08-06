@@ -443,7 +443,6 @@ test.describe('F22 full-refund final-outcome responsive regression @smoke', () =
     test.use({ storageState: authStatePath('admin') })
 
     test('E2E-RESP-16 admin final payment outcome and resolution preview stay responsive', async ({ page }) => {
-      await installSupabaseSession(page, 'admin')
       await mockCommonApis(page, 'admin')
 
       await openResponsive(page, '/admin', 'admin dispute overview')
@@ -494,7 +493,6 @@ test.describe('F22 full-refund final-outcome responsive regression @smoke', () =
     })
 
     test('E2E-RESP-21 admin in-progress authorised payment uses mutable financial labels', async ({ page }) => {
-      await installSupabaseSession(page, 'admin')
       await mockCommonApis(page, 'admin')
       await page.route(`**/api/v1/admin/bookings/${BOOKING_ID}`, (route) => fulfill(route, makeMutableInProgressBooking()))
 
@@ -566,7 +564,7 @@ test.describe('F22 full-refund final-outcome responsive regression @smoke', () =
       await openResponsive(page, `/client/bookings/${BOOKING_ID}`, 'client booking detail')
       await expect(page.getByText('Financial status: Refunded')).toBeVisible()
       await expect(page.getByText('Original booking total')).toBeVisible()
-      await expect(page.getByText('Full refund')).toBeVisible()
+      await expect(page.getByText('Full refund', { exact: true })).toBeVisible()
       await expect(page.getByText('Final amount paid', { exact: true })).toBeVisible()
       await expect(page.getByText('Resolution outcome', { exact: true })).toBeVisible()
       await expect(page.getByRole('link', { name: 'View full report' })).toBeVisible()

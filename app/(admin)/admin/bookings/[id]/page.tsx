@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useMemo, useState } from 'react'
-import { useParams, useRouter } from 'next/navigation'
+import { useParams, useRouter, useSearchParams } from 'next/navigation'
 import {
   ArrowLeft,
   Calendar,
@@ -42,9 +42,9 @@ import {
 import { getAdminClientCancellationCopy } from '@/lib/client-cancellation-context'
 import { getCleanerPayoutSummary } from '@/lib/cleaner-payout'
 import {
+  getAdminTransferLifecycleLabel,
   getBookingFinancialOutcome,
   getCleanerTransferLifecycle,
-  getCleanerTransferLifecycleLabel,
   hasCleanerPayoutTransferred,
 } from '@/lib/payment-financial-outcome'
 import {
@@ -216,12 +216,12 @@ function bookingCompletedTimelineCopy(source: string | null | undefined) {
 function describeCleanerPayoutState(booking: BookingRead, finalCleanerPayout: number) {
   const paymentStatus = String(booking.payment?.status ?? '')
   const transferLifecycle = getCleanerTransferLifecycle(booking.payment)
+  if (booking.dispute?.status === 'open' || booking.dispute?.status === 'under_review') {
+    return 'Paused pending dispute resolution'
+  }
   if (transferLifecycle === 'reversed') return 'Not due — transfer reversed'
   if (transferLifecycle === 'partially_reversed') return 'Adjusted — transfer partially reversed'
   if (transferLifecycle === 'transferred') return 'Released — transferred to cleaner'
-  if (booking.dispute?.status === 'open' || booking.dispute?.status === 'under_review') {
-    return 'Paused — dispute under review'
-  }
   if (paymentStatus === 'refunded' || finalCleanerPayout <= 0) return 'Not due'
   if (booking.payment?.payout_scheduled_at) return 'Scheduled'
   if (paymentStatus === 'captured' || paymentStatus === 'authorized') return 'Awaiting release'
@@ -229,7 +229,7 @@ function describeCleanerPayoutState(booking: BookingRead, finalCleanerPayout: nu
 }
 
 function describeTransferState(booking: BookingRead) {
-  return getCleanerTransferLifecycleLabel(booking.payment)
+  return getAdminTransferLifecycleLabel(booking)
 }
 
 function buildTimeline(booking: BookingRead): TimelineEvent[] {
@@ -382,7 +382,11 @@ function buildTimeline(booking: BookingRead): TimelineEvent[] {
 
     if (event.type === 'cleaner_payout_paused') {
       const amount = actionEventMoney(metadata, 'amount')
-      const transferStatus = metadata?.transfer_status === 'not_transferred' ? 'Not transferred' : 'Not recorded'
+      const transferStatus = actionEventString(metadata, 'transfer_status_label')
+        ?? (metadata?.transfer_status === 'transferred' ? 'Transferred — subject to reversal if required' : null)
+        ?? (metadata?.transfer_status === 'reversed' ? 'Reversed' : null)
+        ?? (metadata?.transfer_status === 'partially_reversed' ? 'Partially reversed' : null)
+        ?? (metadata?.transfer_status === 'not_transferred' ? 'Not transferred' : 'Not recorded')
       addEvent(events, {
         id: event.id,
         at: event.created_at,
@@ -410,6 +414,7 @@ function buildTimeline(booking: BookingRead): TimelineEvent[] {
 
     if (event.type === 'stripe_transfer_reversed') {
       const amount = actionEventMoney(metadata, 'amount')
+      const applicationFeeAmount = actionEventMoney(metadata, 'application_fee_amount')
       const status = metadata?.status === 'failed' ? 'failed' : 'succeeded'
       addEvent(events, {
         id: event.id,
@@ -417,7 +422,10 @@ function buildTimeline(booking: BookingRead): TimelineEvent[] {
         title: status === 'failed' ? 'Stripe Connect transfer reversal failed' : 'Stripe Connect transfer reversed',
         description: amount == null
           ? `Transfer reversal ${status}.`
-          : `Transfer reversal of ${formatCurrency(amount)} ${status}.`,
+          : [
+              `Stripe Connect transfer reversed (${formatCurrency(amount)}) ${status}.`,
+              applicationFeeAmount != null ? `MaidHive application fee: ${formatCurrency(applicationFeeAmount)}.` : null,
+            ].filter(Boolean).join(' '),
         tone: status === 'failed' ? 'danger' : 'warning',
       })
     }
@@ -619,8 +627,14 @@ function TimelineIcon({ tone }: { tone?: TimelineEvent['tone'] }) {
 export default function AdminBookingDetailPage() {
   const { id } = useParams<{ id: string }>()
   const router = useRouter()
+  const searchParams = useSearchParams()
   const [booking, setBooking] = useState<BookingRead | null>(null)
   const [loading, setLoading] = useState(true)
+  const rawReturnTo = searchParams.get('returnTo')
+  const returnHref = rawReturnTo?.startsWith('/admin/disputes') || rawReturnTo?.startsWith('/admin/bookings')
+    ? rawReturnTo
+    : '/admin/bookings'
+  const returnLabel = returnHref.startsWith('/admin/disputes') ? 'Back to disputes' : 'Back to bookings'
 
   useEffect(() => {
     setLoading(true)
@@ -678,10 +692,10 @@ export default function AdminBookingDetailPage() {
           variant="outline"
           size="sm"
           className="w-full sm:w-fit"
-          onClick={() => router.push('/admin/bookings')}
+          onClick={() => router.push(returnHref)}
         >
           <ArrowLeft className="h-4 w-4" />
-          Back to bookings
+          {returnLabel}
         </Button>
         <div className="flex min-w-0 flex-wrap items-center gap-2">
           <Badge variant="outline" className="max-w-full font-mono">#{booking.id.slice(0, 8)}</Badge>

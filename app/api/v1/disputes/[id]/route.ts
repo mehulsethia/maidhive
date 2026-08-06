@@ -16,6 +16,7 @@ import { getDisputeResponseDeadlineLabel } from '@/lib/dispute-case'
 import { Prisma } from '@prisma/client'
 import { cleanerReliabilityService } from '@/server/services/cleaner-reliability.service'
 import { recordBookingActionEvent } from '@/server/services/booking-action-event.service'
+import { getCleanerTransferLifecycle, getCleanerTransferLifecycleLabel } from '@/lib/payment-financial-outcome'
 
 const NO_SHOW_DELAY_MINUTES = 30
 const DISPUTE_WINDOW_MS = config.DISPUTE_WINDOW_HOURS * 60 * 60 * 1000
@@ -45,26 +46,41 @@ async function pauseCleanerPayoutForDispute(bookingId: string) {
       cleanerPayout: true,
       transferredAt: true,
       stripeTransferId: true,
+      transferAmount: true,
+      transferReversedAmount: true,
+      transferReversedAt: true,
+      transferReversalStatus: true,
     },
   })
-  if (!payment) return { paused: true, reason: 'no_payment', cleanerPayout: 0 }
+  if (!payment) return { paused: true, reason: 'no_payment', cleanerPayout: 0, transferStatus: 'not_transferred', transferStatusLabel: 'Not transferred' }
 
   const cleanerPayout = Number(payment.cleanerPayout ?? 0)
-  const hasReleasedPayout =
-    payment.status === 'transferred' ||
-    Boolean(payment.transferredAt) ||
-    Boolean(payment.stripeTransferId)
+  const lifecyclePayment = {
+    status: payment.status,
+    cleaner_payout: payment.cleanerPayout,
+    transferred_at: payment.transferredAt,
+    stripe_transfer_id: payment.stripeTransferId,
+    transfer_amount: payment.transferAmount,
+    transfer_reversed_amount: payment.transferReversedAmount,
+    transfer_reversed_at: payment.transferReversedAt,
+    transfer_reversal_status: payment.transferReversalStatus,
+  }
+  const transferStatus = getCleanerTransferLifecycle(lifecyclePayment)
+  const transferStatusLabel = transferStatus === 'transferred'
+    ? 'Transferred — subject to reversal if required'
+    : getCleanerTransferLifecycleLabel(lifecyclePayment)
+  const hasReleasedPayout = transferStatus !== 'not_transferred'
   if (hasReleasedPayout) {
-    return { paused: false, reason: 'payout_already_released', cleanerPayout: cleanerPayout }
+    return { paused: false, reason: 'payout_already_released', cleanerPayout, transferStatus, transferStatusLabel }
   }
 
-  if (cleanerPayout <= 0) return { paused: true, reason: 'no_cleaner_payout', cleanerPayout }
+  if (cleanerPayout <= 0) return { paused: true, reason: 'no_cleaner_payout', cleanerPayout, transferStatus, transferStatusLabel }
 
   await db.payment.update({
     where: { id: payment.id },
     data: { payoutScheduledAt: null },
   })
-  return { paused: true, reason: 'payout_schedule_cleared', cleanerPayout }
+  return { paused: true, reason: 'payout_schedule_cleared', cleanerPayout, transferStatus, transferStatusLabel }
 }
 
 async function hideReviewsForActiveDispute(bookingId: string) {
@@ -224,7 +240,7 @@ export const POST = requireAuth(async (req: NextRequest, ctx, user) => {
   }
   const dispute = await disputeRepo.update(created.id, { status: 'under_review' })
   const payoutPause = await pauseCleanerPayoutForDispute(bookingRecord.id)
-  if (payoutPause.paused && payoutPause.cleanerPayout > 0) {
+  if (payoutPause.cleanerPayout > 0) {
     await recordBookingActionEvent({
       bookingId: bookingRecord.id,
       type: 'cleaner_payout_paused',
@@ -232,7 +248,8 @@ export const POST = requireAuth(async (req: NextRequest, ctx, user) => {
       metadata: {
         amount: payoutPause.cleanerPayout,
         reason: 'dispute_under_review',
-        transfer_status: 'not_transferred',
+        transfer_status: payoutPause.transferStatus,
+        transfer_status_label: payoutPause.transferStatusLabel,
       },
     })
   }

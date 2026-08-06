@@ -64,6 +64,22 @@ export const GET = requireAdmin(async (req: NextRequest) => {
   const avgRatingByCleanerId = new Map<string, number | null>(
     reviewsAgg.map((entry) => [entry.cleanerId, entry._avg.rating ?? null]),
   )
+  const reliabilityBookingIds = Array.from(new Set(
+    cleaners.flatMap((cleaner) => [
+      ...(cleaner.reliabilityIncidents ?? []).flatMap((incident) => incident.bookingId ? [incident.bookingId] : []),
+      ...(cleaner.strikes ?? []).flatMap((strike) => strike.bookingId ? [strike.bookingId] : []),
+    ]),
+  ))
+  const disputeLinks = reliabilityBookingIds.length
+    ? await db.dispute.findMany({
+        where: {
+          bookingId: { in: reliabilityBookingIds },
+          status: { in: ['resolved', 'closed'] },
+        },
+        select: { id: true, bookingId: true },
+      })
+    : []
+  const disputeIdByBookingId = new Map(disputeLinks.map((dispute) => [dispute.bookingId, dispute.id]))
 
   const formatted = cleaners.map((cleaner) => {
     const fullName = cleaner.user?.name?.trim()
@@ -172,6 +188,8 @@ export const GET = requireAdmin(async (req: NextRequest) => {
       reliability_incidents: (cleaner.reliabilityIncidents ?? []).map((incident) => ({
         id: incident.id,
         type: incident.incidentType,
+        booking_id: incident.bookingId,
+        dispute_id: incident.bookingId ? disputeIdByBookingId.get(incident.bookingId) ?? null : null,
         incident_date: incident.incidentDate,
         booking_count: incident.bookingIds.length,
         occurred_at: incident.occurredAt,
@@ -196,6 +214,8 @@ export const GET = requireAdmin(async (req: NextRequest) => {
       reliability_strikes: (cleaner.strikes ?? []).map((strike) => ({
         id: strike.id,
         type: strike.strikeType,
+        booking_id: strike.bookingId,
+        dispute_id: strike.bookingId ? disputeIdByBookingId.get(strike.bookingId) ?? null : null,
         reason: strike.reason,
         issued_at: strike.createdAt,
         expires_at: strike.expiresAt,

@@ -42,7 +42,12 @@ export function getNotificationHref(role: UserRole, notification: NotificationRe
       if (bookingId) return `${disputeBase(role)}?booking=${encodeURIComponent(bookingId)}`
       return disputeBase(role)
     case 'dispute_resolved':
-      return bookingId ? `${bookingDetailBase(role)}/${bookingId}` : bookingDetailBase(role)
+      if (role === 'admin') return disputeId ? `/admin/disputes?filter=resolved&dispute=${encodeURIComponent(disputeId)}` : '/admin/disputes?filter=resolved'
+      if (bookingId && disputeId) {
+        return `${disputeBase(role)}?booking=${encodeURIComponent(bookingId)}&case=${encodeURIComponent(disputeId)}`
+      }
+      if (bookingId) return `${disputeBase(role)}?booking=${encodeURIComponent(bookingId)}`
+      return disputeBase(role)
     case 'cleaner_application_submitted':
     case 'cleaner_application_approved':
     case 'cleaner_application_rejected':

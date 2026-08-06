@@ -74,14 +74,16 @@ export const POST = requireAdmin(async (req: NextRequest, ctx, user) => {
               reverse_transfer: true,
               expand: ['transfer_reversal'],
             },
-            expectedCleanerReversalCents: originalCleanerPayoutCents,
+            expectedCleanerReversalCents: getExpectedTransferReversalCents(payment, originalCleanerPayoutCents),
             reason: 'full_refund_dispute_resolution',
           })
           const transferReversalPatch = await recordStripeRefundTransferReversal({
             bookingId: dispute.bookingId,
             payment,
             refund,
-            expectedCleanerReversalCents: originalCleanerPayoutCents,
+            expectedCleanerReversalCents: getExpectedTransferReversalCents(payment, originalCleanerPayoutCents),
+            cleanerPayoutAdjustmentCents: originalCleanerPayoutCents,
+            applicationFeeCents: originalPlatformFeeCents,
             reason: 'full_refund_dispute_resolution',
           })
           resolvedRefundAmount = paymentAmount
@@ -240,6 +242,8 @@ export const POST = requireAdmin(async (req: NextRequest, ctx, user) => {
             payment,
             refund,
             expectedCleanerReversalCents,
+            cleanerPayoutAdjustmentCents: Math.max(0, originalCleanerPayoutCents - adjustedCleanerPayoutCents),
+            applicationFeeCents: Math.max(0, originalPlatformFeeCents - adjustedPlatformFeeCents),
             reason: 'partial_refund_dispute_resolution',
           })
           const refundedAt = new Date()
@@ -404,6 +408,20 @@ export const POST = requireAdmin(async (req: NextRequest, ctx, user) => {
         parsed.data.resolution_type,
         resolvedRefundAmount,
       )
+      const participantCopy = getDisputeParticipantResolutionCopy({
+        issueType: dispute.issueType,
+        noShowFinding: parsed.data.no_show_finding,
+        resolutionType: parsed.data.resolution_type,
+        resolutionCopy,
+        role: 'cleaner',
+      })
+      const clientCopy = getDisputeParticipantResolutionCopy({
+        issueType: dispute.issueType,
+        noShowFinding: parsed.data.no_show_finding,
+        resolutionType: parsed.data.resolution_type,
+        resolutionCopy,
+        role: 'client',
+      })
       const reference = bookingReference(booking.id)
       const cleanerPayoutOutcome = getCleanerPayoutOutcomeCopy({
         resolutionType: parsed.data.resolution_type,
@@ -415,18 +433,18 @@ export const POST = requireAdmin(async (req: NextRequest, ctx, user) => {
 
       await pushInAppNotification({
         userId: booking.client.userId,
-        type: 'dispute_resolved',
-        title: 'Dispute resolved',
-        body: resolutionCopy,
-        data: { booking_id: booking.id, dispute_id: updated.id },
-      })
+          type: 'dispute_resolved',
+          title: 'Dispute resolved',
+          body: clientCopy,
+          data: { booking_id: booking.id, dispute_id: updated.id },
+        })
       await pushInAppNotification({
         userId: booking.cleaner.userId,
-        type: 'dispute_resolved',
-        title: 'Dispute resolved',
-        body: resolutionCopy,
-        data: { booking_id: booking.id, dispute_id: updated.id },
-      })
+          type: 'dispute_resolved',
+          title: 'Dispute resolved',
+          body: participantCopy,
+          data: { booking_id: booking.id, dispute_id: updated.id },
+        })
 
       const admins = await db.user.findMany({
         where: { role: 'admin', isActive: true },
@@ -452,7 +470,10 @@ export const POST = requireAdmin(async (req: NextRequest, ctx, user) => {
             bookingReference: reference,
             resolutionOutcome: resolutionCopy,
             refundAmount: resolvedRefundAmount,
-            cleanerPayoutOutcome,
+            cleanerPayoutOutcome: getClientDisputeEmailPayoutOutcome({
+              resolutionType: parsed.data.resolution_type,
+              refundAmount: resolvedRefundAmount,
+            }),
             resolutionNote: parsed.data.resolution_note,
           }),
           loopsEmailService.sendDisputeResolvedOutcome({
@@ -531,13 +552,23 @@ async function recordStripeRefundTransferReversal(args: {
     cleanerPayout?: unknown
     transferAmount?: unknown
     transferReversedAmount?: unknown
+    platformFee?: unknown
   }
   refund: Stripe.Refund
   expectedCleanerReversalCents: number
+  cleanerPayoutAdjustmentCents?: number
+  applicationFeeCents?: number
   reason: string
 }) {
   const existingReversedCents = Math.round(Number(args.payment.transferReversedAmount ?? 0) * 100)
-  const newReversalCents = Math.max(0, args.expectedCleanerReversalCents)
+  const reversalObject = typeof args.refund.transfer_reversal === 'object' && args.refund.transfer_reversal
+    ? args.refund.transfer_reversal as Stripe.TransferReversal
+    : null
+  const transferAmountCents = Math.round(Number(args.payment.transferAmount ?? 0) * 100)
+  const newReversalCents = Math.max(
+    0,
+    Number(reversalObject?.amount ?? 0) || transferAmountCents || args.expectedCleanerReversalCents,
+  )
   const totalReversedAmount = Number(((existingReversedCents + newReversalCents) / 100).toFixed(2))
   if (newReversalCents <= 0) {
     return {
@@ -550,7 +581,7 @@ async function recordStripeRefundTransferReversal(args: {
   const transferReversalId = stripeObjectId(args.refund.transfer_reversal)
   const patch = {
     stripeTransferReversalId: transferReversalId,
-    transferAmount: Number(args.payment.transferAmount ?? args.payment.cleanerPayout ?? 0),
+    transferAmount: Number(args.payment.transferAmount ?? reversalAmount),
     transferReversedAmount: totalReversedAmount,
     transferReversedAt: reversedAt,
     transferReversalStatus: 'succeeded',
@@ -564,6 +595,10 @@ async function recordStripeRefundTransferReversal(args: {
     metadata: {
       amount: reversalAmount,
       total_reversed_amount: totalReversedAmount,
+      cleaner_payout_adjustment_amount: Number(((Math.max(0, args.cleanerPayoutAdjustmentCents ?? args.expectedCleanerReversalCents)) / 100).toFixed(2)),
+      application_fee_amount: args.applicationFeeCents == null
+        ? null
+        : Number((Math.max(0, args.applicationFeeCents) / 100).toFixed(2)),
       status: 'succeeded',
       stripe_transfer_id: args.payment.stripeTransferId,
       stripe_transfer_reversal_id: transferReversalId,
@@ -575,6 +610,18 @@ async function recordStripeRefundTransferReversal(args: {
   })
 
   return patch
+}
+
+function getExpectedTransferReversalCents(
+  payment: {
+    transferAmount?: unknown
+    cleanerPayout?: unknown
+  },
+  fallbackCleanerPayoutCents: number,
+) {
+  const transferAmountCents = Math.round(Number(payment.transferAmount ?? 0) * 100)
+  if (transferAmountCents > 0) return transferAmountCents
+  return Math.max(0, fallbackCleanerPayoutCents)
 }
 
 function stripeObjectId(value: string | { id?: string } | null | undefined) {
@@ -607,6 +654,40 @@ function getCleanerPayoutOutcomeCopy(args: {
     return `Cleaner payout released: ${formatCurrency(cleanerPayout)}.`
   }
   return `Cleaner payout approved for release: ${formatCurrency(cleanerPayout)}.`
+}
+
+function getDisputeParticipantResolutionCopy(args: {
+  role: 'client' | 'cleaner'
+  issueType?: string | null
+  noShowFinding?: string | null
+  resolutionType: string
+  resolutionCopy: string
+}) {
+  const cleanerNoShowConfirmed =
+    args.issueType === 'cleaner_no_show' &&
+    args.noShowFinding === 'confirmed'
+
+  if (args.role === 'cleaner' && cleanerNoShowConfirmed && args.resolutionType === 'full_refund') {
+    return 'Cleaner no-show confirmed. No cleaner payout is due. The client received a full refund.'
+  }
+  if (args.role === 'client' && cleanerNoShowConfirmed && args.resolutionType === 'full_refund') {
+    return 'Cleaner no-show confirmed. You received a full refund.'
+  }
+
+  return args.resolutionCopy
+}
+
+function getClientDisputeEmailPayoutOutcome(args: {
+  resolutionType: string
+  refundAmount?: number | null
+}) {
+  if (args.resolutionType === 'full_refund') return 'No cleaner payout details are shown to clients.'
+  if (args.resolutionType === 'partial_refund') {
+    return args.refundAmount != null && args.refundAmount > 0
+      ? `Client refund issued: ${formatCurrency(args.refundAmount)}.`
+      : 'Client payment outcome recorded.'
+  }
+  return 'No client refund issued.'
 }
 
 function getAdjustedPlatformFeeCents(

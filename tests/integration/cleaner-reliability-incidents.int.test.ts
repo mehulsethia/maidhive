@@ -284,4 +284,42 @@ describe('cleaner reliability incident integration', () => {
     })
     expect(cleanerReliabilityService.recalculate).toHaveBeenCalledWith('cleaner_1', confirmedAt)
   })
+
+  it('does not duplicate no-show incident or strike rows for the same confirmed booking', async () => {
+    const { cleanerReliabilityService } = await import(
+      '@/server/services/cleaner-reliability.service'
+    )
+    vi.spyOn(cleanerReliabilityService, 'recalculate').mockResolvedValue(null)
+    state.reliabilitySnapshot = {
+      isSuperCleaner: false,
+      recoveryCancellationStartedAt: null,
+      recoveryNoShowStartedAt: null,
+      lostAt: null,
+      lossReason: null,
+    }
+
+    const confirmedAt = new Date('2026-07-29T10:00:00.000Z')
+    const input = {
+      cleanerId: 'cleaner_1',
+      bookingId: 'booking_no_show',
+      occurredAt: new Date('2026-07-28T19:00:00.000Z'),
+      confirmedBy: 'admin_1',
+      confirmedAt,
+    }
+
+    await cleanerReliabilityService.recordConfirmedNoShow(input)
+    await cleanerReliabilityService.recordConfirmedNoShow({
+      ...input,
+      confirmedAt: new Date('2026-08-02T10:00:00.000Z'),
+    })
+
+    expect(state.incidents).toHaveLength(1)
+    expect(state.incidents[0].bookingId).toBe('booking_no_show')
+    expect(state.strikes).toHaveLength(1)
+    expect(state.strikes[0]).toMatchObject({
+      bookingId: 'booking_no_show',
+      strikeType: 'reliability_no_show',
+    })
+    expect(state.strikes[0].expiresAt).toEqual(new Date('2026-10-27T10:00:00.000Z'))
+  })
 })

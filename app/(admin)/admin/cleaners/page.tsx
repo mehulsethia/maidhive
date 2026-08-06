@@ -1,6 +1,7 @@
 'use client'
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
+import Link from 'next/link'
 import {
   Briefcase,
   Car,
@@ -79,6 +80,26 @@ function cleanerLifecycle(cleaner: AdminCleaner): Tab {
     stripeOnboardingComplete: cleaner.stripe_onboarding_complete,
     profileComplete: cleaner.profile_complete,
   }) as Tab
+}
+
+function reliabilityDisputeHref(record: { booking_id?: string | null; dispute_id?: string | null }) {
+  if (record.dispute_id) return `/admin/disputes?filter=resolved&dispute=${encodeURIComponent(record.dispute_id)}`
+  if (record.booking_id) return `/admin/bookings/${encodeURIComponent(record.booking_id)}`
+  return null
+}
+
+function ReliabilityBookingLink({ record }: { record: { booking_id?: string | null; dispute_id?: string | null } }) {
+  if (!record.booking_id) return null
+  const href = reliabilityDisputeHref(record)
+  if (!href) return null
+  return (
+    <>
+      {' · '}
+      <Link href={href} className="font-medium text-primary underline underline-offset-2 hover:text-primary/80">
+        Booking #{record.booking_id.slice(0, 8)}
+      </Link>
+    </>
+  )
 }
 
 function CleanerCard({
@@ -275,12 +296,14 @@ function CleanerCard({
                   {cleaner.reliability_incidents?.map((incident) => (
                     <p key={incident.id} className="min-w-0 break-words [overflow-wrap:anywhere]">
                       {incident.incident_date}: {incident.type.replaceAll('_', ' ')} ({incident.booking_count} booking{incident.booking_count === 1 ? '' : 's'})
+                      <ReliabilityBookingLink record={incident} />
                     </p>
                   ))}
                   {cleaner.reliability_strikes?.map((strike) => (
                     <p key={strike.id} className="min-w-0 break-words [overflow-wrap:anywhere]">
                       Strike: {strike.reason}
                       {strike.expires_at ? ` · expires ${formatDate(strike.expires_at)}` : ''}
+                      <ReliabilityBookingLink record={strike} />
                     </p>
                   ))}
                 </div>

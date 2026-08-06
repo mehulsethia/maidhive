@@ -16,10 +16,9 @@ import { Select } from '@/components/ui/select'
 import { Textarea } from '@/components/ui/textarea'
 import { CLEANER_DISPUTE_ISSUES } from '@/lib/dispute-issues'
 import { getDisputeParticipantAction, isDisputeResponseWindowOpen } from '@/lib/dispute-actions'
-import { getCounterpartyResponseInstruction, getDisputeResolvedAt } from '@/lib/dispute-case'
+import { getCounterpartyResponseInstruction } from '@/lib/dispute-case'
 import { reportLoadError, resetLoadError } from '@/lib/load-error-policy'
 import { formatDate } from '@/lib/utils'
-import { getDisputeResolutionOutcome } from '@/lib/dispute-resolution'
 import { MAX_EVIDENCE_IMAGES, MAX_EVIDENCE_SIZE_BYTES, prepareEvidenceFileForUpload } from '@/lib/evidence-upload'
 import type { BookingRead, ClientDispute } from '@/types'
 import { toast } from 'sonner'
@@ -576,19 +575,6 @@ function CleanerReportPageContent() {
                       </span>
                     </div>
                     <DisputeCaseRecord dispute={dispute} className="mt-2" />
-                    {(status === 'resolved' || status === 'closed') && (
-                      <div className="mt-2 rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm">
-                        <p className="text-xs font-semibold uppercase text-emerald-700">Resolution Outcome</p>
-                        <p className="mt-1 font-medium text-emerald-950">
-                          {getDisputeResolutionOutcome(dispute.resolution_type, dispute.refund_amount)}
-                        </p>
-                      </div>
-                    )}
-                    {(status === 'resolved' || status === 'closed') && getDisputeResolvedAt(dispute) && (
-                      <div className="mt-2 text-xs text-slate-500">
-                        Resolved on: {formatDate(getDisputeResolvedAt(dispute)!)}
-                      </div>
-                    )}
                   </article>
                 )
               })}
