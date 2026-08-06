@@ -57,7 +57,7 @@ function getMultipartBoundary(contentType: string | null) {
 
 function inferMultipartBoundary(body: Buffer) {
   if (!body.subarray(0, 2).equals(Buffer.from('--'))) return null
-  const lineEnd = body.indexOf(Buffer.from('\r\n'))
+  const lineEnd = firstLineBreakIndex(body, 2)
   if (lineEnd <= 2) return null
   const boundary = body.subarray(2, lineEnd).toString('utf8').trim()
   if (!boundary || boundary.includes('\r') || boundary.includes('\n')) return null
@@ -72,7 +72,7 @@ function parseContentDisposition(value: string | undefined) {
 
 function parsePartHeaders(headerText: string) {
   const headers = new Map<string, string>()
-  for (const line of headerText.split('\r\n')) {
+  for (const line of headerText.split(/\r?\n/)) {
     const separator = line.indexOf(':')
     if (separator <= 0) continue
     headers.set(line.slice(0, separator).trim().toLowerCase(), line.slice(separator + 1).trim())
@@ -80,7 +80,43 @@ function parsePartHeaders(headerText: string) {
   return headers
 }
 
-async function parseMultipartFile(req: NextRequest): Promise<ParsedUploadFile> {
+function firstLineBreakIndex(body: Buffer, start = 0) {
+  const crlf = body.indexOf(Buffer.from('\r\n'), start)
+  const lf = body.indexOf(Buffer.from('\n'), start)
+  if (crlf === -1) return lf
+  if (lf === -1) return crlf
+  return Math.min(crlf, lf)
+}
+
+function lineBreakLengthAt(body: Buffer, index: number) {
+  return body[index] === 0x0d && body[index + 1] === 0x0a ? 2 : 1
+}
+
+function findNextDelimiter(body: Buffer, boundary: string, start: number) {
+  const crlfDelimiter = body.indexOf(Buffer.from(`\r\n--${boundary}`), start)
+  const lfDelimiter = body.indexOf(Buffer.from(`\n--${boundary}`), start)
+  if (crlfDelimiter === -1) return lfDelimiter
+  if (lfDelimiter === -1) return crlfDelimiter
+  return Math.min(crlfDelimiter, lfDelimiter)
+}
+
+async function parseNativeFormFile(req: Request): Promise<ParsedUploadFile> {
+  const formData = await req.formData()
+  const formFile = formData.get('file')
+  if (!(formFile instanceof File)) {
+    throw new MultipartParseError('No file field found in multipart body', 'missing_file')
+  }
+
+  const bytes = new Uint8Array(await formFile.arrayBuffer())
+  return {
+    name: formFile.name || 'evidence-upload',
+    type: formFile.type || 'application/octet-stream',
+    size: formFile.size,
+    bytes,
+  }
+}
+
+async function parseMultipartFileFallback(req: NextRequest): Promise<ParsedUploadFile> {
   const contentType = req.headers.get('content-type')
   const body = Buffer.from(await req.arrayBuffer())
   if (body.length === 0) {
@@ -92,28 +128,30 @@ async function parseMultipartFile(req: NextRequest): Promise<ParsedUploadFile> {
   }
 
   const delimiter = Buffer.from(`--${boundary}`)
-  const headerSeparator = Buffer.from('\r\n\r\n')
-  const lineBreak = Buffer.from('\r\n')
   let cursor = body.indexOf(delimiter)
 
   while (cursor !== -1) {
     const partStart = cursor + delimiter.length
     if (body.slice(partStart, partStart + 2).toString('utf8') === '--') break
 
-    const headerStart = body.indexOf(lineBreak, partStart)
+    const headerStart = firstLineBreakIndex(body, partStart)
     if (headerStart === -1) {
       throw new MultipartParseError('Multipart part is missing header line break', 'missing_part_header')
     }
 
-    const headerEnd = body.indexOf(headerSeparator, headerStart + lineBreak.length)
+    const headerContentStart = headerStart + lineBreakLengthAt(body, headerStart)
+    const crlfHeaderEnd = body.indexOf(Buffer.from('\r\n\r\n'), headerContentStart)
+    const lfHeaderEnd = body.indexOf(Buffer.from('\n\n'), headerContentStart)
+    const headerEnd = crlfHeaderEnd === -1 ? lfHeaderEnd : lfHeaderEnd === -1 ? crlfHeaderEnd : Math.min(crlfHeaderEnd, lfHeaderEnd)
     if (headerEnd === -1) {
       throw new MultipartParseError('Multipart part is missing header separator', 'missing_header_separator')
     }
+    const headerSeparatorLength = lineBreakLengthAt(body, headerEnd) * 2
 
-    const headers = parsePartHeaders(body.slice(headerStart + lineBreak.length, headerEnd).toString('utf8'))
+    const headers = parsePartHeaders(body.slice(headerContentStart, headerEnd).toString('utf8'))
     const disposition = parseContentDisposition(headers.get('content-disposition'))
-    const dataStart = headerEnd + headerSeparator.length
-    const nextDelimiter = body.indexOf(Buffer.from(`\r\n--${boundary}`), dataStart)
+    const dataStart = headerEnd + headerSeparatorLength
+    const nextDelimiter = findNextDelimiter(body, boundary, dataStart)
     if (nextDelimiter === -1) {
       throw new MultipartParseError('Multipart file part is incomplete', 'incomplete_file_part')
     }
@@ -133,6 +171,14 @@ async function parseMultipartFile(req: NextRequest): Promise<ParsedUploadFile> {
   }
 
   throw new MultipartParseError('No file field found in multipart body', 'missing_file')
+}
+
+async function parseMultipartFile(req: NextRequest): Promise<ParsedUploadFile> {
+  try {
+    return await parseNativeFormFile(req.clone())
+  } catch {
+    return parseMultipartFileFallback(req)
+  }
 }
 
 async function updateDisputeBucketPolicy() {

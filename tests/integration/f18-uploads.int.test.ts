@@ -312,4 +312,34 @@ describe('F18 upload routes integration', () => {
     expect(payload.data.url).toBe('https://example.test/uploaded-file')
     expect(state.uploadCalls).toBe(1)
   })
+
+  it('IT-UPLOAD-09 dispute evidence accepts LF-only multipart bodies when the boundary header is missing', async () => {
+    const route = await import('@/app/api/v1/upload/dispute-evidence/route')
+    const boundary = '----MaidHiveBoundaryForDesktopUploadRegression'
+    const jpegBytes = Buffer.from([0xff, 0xd8, 0xff, 0xe0])
+    const body = Buffer.concat([
+      Buffer.from(
+        `--${boundary}\n` +
+          'Content-Disposition: form-data; name="file"; filename="desktop-upload.jpg"\n' +
+          'Content-Type: image/jpeg\n\n',
+      ),
+      jpegBytes,
+      Buffer.from(`\n--${boundary}--\n`),
+    ])
+
+    const res = await route.POST(
+      new NextRequest('http://localhost/api/v1/upload/dispute-evidence', {
+        method: 'POST',
+        headers: { 'content-type': 'multipart/form-data' },
+        body,
+      }),
+      { params: Promise.resolve({}) } as any,
+    )
+    const payload = await res.json()
+
+    expect(res.status).toBe(200)
+    expect(payload.success).toBe(true)
+    expect(payload.data.url).toBe('https://example.test/uploaded-file')
+    expect(state.uploadCalls).toBe(1)
+  })
 })
