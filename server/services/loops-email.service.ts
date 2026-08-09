@@ -102,6 +102,15 @@ function formatBookingTime(date: Date) {
   }).format(date)
 }
 
+function formatBookingDateTime(date: Date) {
+  return `${new Intl.DateTimeFormat('en-GB', {
+    year: 'numeric',
+    month: 'short',
+    day: 'numeric',
+    timeZone: 'Europe/Nicosia',
+  }).format(date)} at ${formatBookingTime(date)}`
+}
+
 function formatEuro(amount: number) {
   return new Intl.NumberFormat('en-IE', {
     style: 'currency',
@@ -175,7 +184,7 @@ export const loopsEmailService = {
     bookingId: string
     clientName: string
     cleanerName: string
-    date: string
+    scheduledStart: Date
   }) {
     return sendTransactionalEmail({
       transactionalId: ADMIN_DISPUTE_RAISED_TRANSACTIONAL_ID,
@@ -184,7 +193,7 @@ export const loopsEmailService = {
         booking_id: args.bookingId,
         client_name: args.clientName,
         cleaner_name: args.cleanerName,
-        date: args.date,
+        date: formatBookingDateTime(args.scheduledStart),
         admin_link: `${appUrl()}/admin/disputes`,
       },
     })
@@ -450,8 +459,11 @@ export const loopsEmailService = {
     resolutionOutcome: string
     refundAmount?: number | null
     cleanerPayoutOutcome: string
+    financialOutcomeLabel?: string
+    financialOutcome?: string
     resolutionNote: string
   }) {
+    const financialOutcome = args.financialOutcome ?? args.cleanerPayoutOutcome
     return sendTransactionalEmail({
       transactionalId: DISPUTE_RESOLVED_OUTCOME_TRANSACTIONAL_ID,
       email: args.email,
@@ -464,6 +476,8 @@ export const loopsEmailService = {
             ? formatEuro(args.refundAmount)
             : 'Not applicable',
         cleaner_payout_outcome: args.cleanerPayoutOutcome,
+        financial_outcome_label: args.financialOutcomeLabel ?? 'Cleaner payout outcome',
+        financial_outcome: financialOutcome,
         resolution_note: args.resolutionNote.trim() || 'No additional note provided.',
       },
     })

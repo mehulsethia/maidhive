@@ -43,6 +43,7 @@ const participantDisputeSelect = {
   respondedAt: true,
   resolutionType: true,
   noShowFinding: true,
+  resolutionNote: true,
   refundAmount: true,
   resolvedAt: true,
   createdAt: true,

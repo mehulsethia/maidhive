@@ -504,7 +504,9 @@ describe('F10 Payments capture/refund/dispute integration', () => {
         bookingReference: 'MH-NGPAY1',
         resolutionOutcome: 'Partial refund €20.00 issued to client.',
         refundAmount: 20,
-        cleanerPayoutOutcome: 'Client refund issued: €20.00.',
+        cleanerPayoutOutcome: 'Refund issued: €20.00.',
+        financialOutcomeLabel: 'Client refund outcome',
+        financialOutcome: 'Refund issued: €20.00.',
         resolutionNote: 'Half of the requested work was not completed.',
       }),
       expect.objectContaining({
@@ -756,7 +758,9 @@ describe('F10 Payments capture/refund/dispute integration', () => {
         kind: 'dispute_resolved_outcome',
         email: 'client@test.local',
         resolutionOutcome: 'Full refund issued to client.',
-        cleanerPayoutOutcome: 'No cleaner payout details are shown to clients.',
+        cleanerPayoutOutcome: 'Full refund issued.',
+        financialOutcomeLabel: 'Client refund outcome',
+        financialOutcome: 'Full refund issued.',
       }),
       expect.objectContaining({
         kind: 'dispute_resolved_outcome',
@@ -864,6 +868,16 @@ describe('F10 Payments capture/refund/dispute integration', () => {
       noShowFinding: 'rejected',
     })
     expect(cleanerReliabilityService.recordConfirmedNoShow).not.toHaveBeenCalled()
+    expect(state.emails).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        kind: 'dispute_resolved_outcome',
+        email: 'client@test.local',
+        resolutionOutcome: 'No refund — payment released to cleaner.',
+        cleanerPayoutOutcome: 'No refund issued.',
+        financialOutcomeLabel: 'Client refund outcome',
+        financialOutcome: 'No refund issued.',
+      }),
+    ]))
   })
 
   it('does not reapply no-show reliability consequences when resolution is retried after success', async () => {

@@ -88,7 +88,9 @@ describe('Loops dispute emails', () => {
       bookingReference: 'MH-1042',
       resolutionOutcome: 'Partial refund €8.00 issued to client.',
       refundAmount: 8,
-      cleanerPayoutOutcome: 'Cleaner payout adjusted to €16.00 after a €8.00 dispute adjustment.',
+      cleanerPayoutOutcome: 'Refund issued: €8.00.',
+      financialOutcomeLabel: 'Client refund outcome',
+      financialOutcome: 'Refund issued: €8.00.',
       resolutionNote: 'Partial service issue confirmed.',
     })
 
@@ -100,7 +102,9 @@ describe('Loops dispute emails', () => {
         booking_reference: 'MH-1042',
         resolution_outcome: 'Partial refund €8.00 issued to client.',
         refund_amount: '€8.00',
-        cleaner_payout_outcome: 'Cleaner payout adjusted to €16.00 after a €8.00 dispute adjustment.',
+        cleaner_payout_outcome: 'Refund issued: €8.00.',
+        financial_outcome_label: 'Client refund outcome',
+        financial_outcome: 'Refund issued: €8.00.',
         resolution_note: 'Partial service issue confirmed.',
       },
     })

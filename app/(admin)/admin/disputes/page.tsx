@@ -52,6 +52,7 @@ const ISSUE_QUEUE_LABEL: Record<string, string> = {
 
 const DISPUTE_FILTERS = ['all', 'urgent', 'no_show', 'payment', 'resolved'] as const
 type DisputeFilter = (typeof DISPUTE_FILTERS)[number]
+type StartVerification = NonNullable<NonNullable<AdminDispute['booking']>['start_verification']>
 const DISPUTE_FILTER_LABELS: Record<DisputeFilter, string> = {
   all: 'Active',
   urgent: 'Urgent Safety',
@@ -88,23 +89,40 @@ function formatMeters(value?: number | null) {
   return `${Math.round(value)} m`
 }
 
-function formatStartVerificationReason(reason?: string | null) {
+function hasStartLocationCapture(verification: StartVerification | null | undefined) {
+  return (
+    typeof verification?.latitude === 'number' &&
+    Number.isFinite(verification.latitude) &&
+    typeof verification?.longitude === 'number' &&
+    Number.isFinite(verification.longitude)
+  )
+}
+
+function formatStartVerificationReason(verification: StartVerification | null | undefined) {
+  const reason = verification?.failure_reason
+  const locationCaptured = hasStartLocationCapture(verification)
   if (reason === 'gps_permission_denied') return 'Location permission denied'
-  if (reason === 'gps_unavailable') return 'Location unavailable'
+  if (reason === 'gps_unavailable') {
+    return locationCaptured ? 'Unable to verify captured cleaner location' : 'Cleaner location unavailable'
+  }
   if (reason === 'booking_coordinates_unavailable') return 'Booking address coordinates unavailable'
   if (reason === 'gps_accuracy_insufficient') return 'GPS accuracy insufficient'
   if (reason === 'outside_required_radius') return 'Outside permitted arrival area'
   return reason ? reason.replace(/_/g, ' ') : null
 }
 
-function formatStartVerificationStatus(dispute: AdminDispute) {
+function formatStartArrivalVerification(dispute: AdminDispute) {
   const verification = dispute.booking?.start_verification
   if (!verification) return null
   if (verification.verified) return 'Verified'
   if (verification.failure_reason === 'outside_required_radius') return 'Outside permitted area'
-  if (verification.failure_reason === 'gps_permission_denied') return 'Permission denied'
-  if (verification.failure_reason === 'gps_unavailable') return 'Location unavailable'
-  return 'Location unavailable'
+  return 'Unable to verify'
+}
+
+function formatCleanerLocationCaptured(dispute: AdminDispute) {
+  const verification = dispute.booking?.start_verification
+  if (!verification) return null
+  return hasStartLocationCapture(verification) ? 'Yes' : 'No — cleaner location unavailable'
 }
 
 // ── Dispute card ──────────────────────────────────────────────────────────────
@@ -135,8 +153,9 @@ function DisputeCard({
   const clientName = dispute.booking?.client?.user?.name?.trim() || 'Not recorded'
   const cleanerName = dispute.booking?.cleaner?.user?.name?.trim() || 'Not recorded'
   const startVerification = dispute.booking?.start_verification
-  const startVerificationStatus = formatStartVerificationStatus(dispute)
-  const startVerificationReason = formatStartVerificationReason(startVerification?.failure_reason)
+  const startArrivalVerification = formatStartArrivalVerification(dispute)
+  const cleanerLocationCaptured = formatCleanerLocationCaptured(dispute)
+  const startVerificationReason = formatStartVerificationReason(startVerification)
   const reporterLabel = dispute.reporter_role
     ? `${dispute.reporter_role.charAt(0).toUpperCase()}${dispute.reporter_role.slice(1)} Report`
     : 'Reporter Unknown'
@@ -163,18 +182,18 @@ function DisputeCard({
             </div>
             <div className="mt-2 space-y-2 text-sm">
               <DisputeCaseRecord dispute={dispute} noResponseCopy={getNoResponseCopy(dispute)} />
-              {startVerification && startVerificationStatus && (
+              {startVerification && startArrivalVerification && (
                 <div className="rounded-lg border border-blue-200 bg-blue-50 px-3 py-2">
                   <p className="text-xs font-semibold uppercase tracking-wide text-blue-700">Start Job arrival evidence</p>
                   <div className="mt-1 grid gap-1 text-xs text-blue-950 sm:grid-cols-2">
                     <p><span className="font-medium">Started:</span> {formatDate(startVerification.started_at)}</p>
-                    <p><span className="font-medium">GPS verification:</span> {startVerificationStatus}</p>
+                    <p><span className="font-medium">Cleaner location captured:</span> {cleanerLocationCaptured}</p>
+                    <p><span className="font-medium">Arrival verification:</span> {startArrivalVerification}</p>
                     <p><span className="font-medium">GPS distance:</span> {formatMeters(startVerification.distance_m)}</p>
                     <p><span className="font-medium">GPS accuracy:</span> {formatMeters(startVerification.accuracy_m)}</p>
                     <p><span className="font-medium">Permitted radius:</span> {formatMeters(START_VERIFICATION_RADIUS_M)}</p>
-                    <p><span className="font-medium">Started without verified location:</span> {startVerification.verified ? 'No' : 'Yes'}</p>
                     {startVerificationReason && (
-                      <p className="sm:col-span-2"><span className="font-medium">Verification reason:</span> {startVerificationReason}</p>
+                      <p className="sm:col-span-2"><span className="font-medium">Reason:</span> {startVerificationReason}</p>
                     )}
                   </div>
                 </div>

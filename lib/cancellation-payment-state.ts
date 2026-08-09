@@ -15,7 +15,16 @@ export function isNormalCancellationPaymentRelease(booking: BookingRead) {
 
 export function getAdminPaymentStateLabel(booking: BookingRead) {
   if (isNormalCancellationPaymentRelease(booking)) return 'payment released'
-  return String(booking.payment?.status ?? 'not recorded').replace(/_/g, ' ')
+  const status = String(booking.payment?.status ?? 'not recorded')
+  if (status === 'transferred') return 'Captured'
+  if (status === 'captured') return 'Captured'
+  if (status === 'authorized') return 'Authorised'
+  if (status === 'partially_refunded') return 'Partially refunded'
+  if (status === 'refunded') return 'Refunded'
+  if (status === 'released') return 'Payment authorisation released'
+  if (status === 'failed') return 'Failed'
+  if (status === 'pending') return 'Pending'
+  return status.replace(/_/g, ' ')
 }
 
 export function getPaymentReleaseDescription(booking: BookingRead) {

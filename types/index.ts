@@ -743,6 +743,7 @@ export interface ClientDispute {
   responded_at?: string | null
   status: 'open' | 'under_review' | 'resolved' | 'closed'
   resolution_type?: string
+  resolution_note?: string
   no_show_finding?: 'confirmed' | 'rejected'
   refund_amount?: number
   resolved_at?: string

@@ -378,10 +378,10 @@ async function mockCommonApis(page: Page, role: 'admin' | 'client' | 'cleaner') 
           latitude: 34.9174,
           longitude: 33.6291,
           accuracy_m: 35,
-          distance_m: 42,
-          verified: true,
+          distance_m: null,
+          verified: false,
           on_time: true,
-          failure_reason: null,
+          failure_reason: 'booking_coordinates_unavailable',
           started_at: isoHoursFromNow(-48),
         },
       },
@@ -445,13 +445,14 @@ test.describe('F22 full-refund final-outcome responsive regression @smoke', () =
     test('E2E-RESP-16 admin final payment outcome and resolution preview stay responsive', async ({ page }) => {
       await mockCommonApis(page, 'admin')
 
-      await openResponsive(page, '/admin', 'admin dispute overview')
-      await expect(page.getByRole('link', { name: /Under Review 1 Ready for admin decision/ })).toBeVisible()
+      await openResponsive(page, '/admin/disputes', 'admin dispute overview')
+      await expect(page.getByText('Under Review', { exact: true })).toBeVisible()
       await expect(page.getByText('Response received; decision pending')).toHaveCount(0)
 
       await openResponsive(page, `/admin/bookings/${BOOKING_ID}`, 'admin booking detail')
       await expect(page.getByTestId('admin-payment-state').getByText('Cleaner payout', { exact: true })).toBeVisible()
-      await expect(page.getByTestId('admin-payment-state').getByText('Not transferred')).toBeVisible()
+      await expect(page.getByTestId('admin-payment-state').getByText('Transfer status', { exact: true })).toBeVisible()
+      await expect(page.getByTestId('admin-payment-state').getByText('Transfer scheduled')).toBeVisible()
       await expect(page.getByText('Original platform fee')).toBeVisible()
       await expect(page.getByText('Final MaidHive retained fee')).toBeVisible()
       await expect(page.getByTestId('admin-booking-state').getByText('Refund issued')).toBeVisible()
@@ -472,9 +473,16 @@ test.describe('F22 full-refund final-outcome responsive regression @smoke', () =
         await expect(page.getByText('Under Review', { exact: true })).toBeVisible()
         await expect(page.getByText('No response submitted — deadline expired.')).toBeVisible()
         await expect(page.getByText('Start Job arrival evidence', { exact: true })).toBeVisible()
-        await expect(page.getByText('GPS verification:')).toBeVisible()
+        await expect(page.getByText('Cleaner location captured:')).toBeVisible()
+        await expect(page.getByText('Cleaner location captured: Yes')).toBeVisible()
+        await expect(page.getByText('Arrival verification:')).toBeVisible()
+        await expect(page.getByText('Arrival verification: Unable to verify')).toBeVisible()
         await expect(page.getByText('GPS distance:')).toBeVisible()
-        await expect(page.getByText('Started without verified location:')).toBeVisible()
+        await expect(page.getByText('GPS accuracy: 35 m')).toBeVisible()
+        await expect(page.getByText('Reason: Booking address coordinates unavailable')).toBeVisible()
+        await expect(page.getByText('Location unavailable')).toHaveCount(0)
+        await expect(page.getByText('Started without verified location:')).toHaveCount(0)
+        await expect(page.getByText('GPS verification:')).toHaveCount(0)
         await expect(page.getByText('Response received; decision pending')).toHaveCount(0)
         await page.getByRole('button', { name: /^Resolve$/ }).first().click()
         const dialog = page.getByRole('dialog')
@@ -535,7 +543,14 @@ test.describe('F22 full-refund final-outcome responsive regression @smoke', () =
       await expect(page.getByText(/Released after the .* report window from scheduled completion/)).toHaveCount(0)
       await page.getByRole('link', { name: 'View full report' }).click()
       await expect(page).toHaveURL(new RegExp(`/cleaner/report\\?booking=${BOOKING_ID}&case=${DISPUTE_ID}`))
-      await expect(page.getByText('This case has been resolved. It is read-only unless admin reopens it.')).toBeVisible()
+      for (const viewport of VIEWPORTS) {
+        await page.setViewportSize(viewport)
+        await page.goto(`/cleaner/report?booking=${BOOKING_ID}&case=${DISPUTE_ID}`, { waitUntil: 'domcontentloaded' })
+        await expect(page.getByText('This case has been resolved. It is read-only unless admin reopens it.')).toBeVisible()
+        await expect(page.getByText('Final resolution outcome')).toBeVisible()
+        await expect(page.getByText('Full refund issued after dispute review.')).toBeVisible()
+        await expectNoHorizontalOverflow(page, `cleaner report resolution note at ${viewport.name}`)
+      }
 
       await openResponsive(page, '/cleaner/profile?tab=payments', 'cleaner payment history')
       await expect(page.getByText('Payment History')).toBeVisible()
@@ -573,7 +588,14 @@ test.describe('F22 full-refund final-outcome responsive regression @smoke', () =
       await expect(page.getByText('Partial refund')).toHaveCount(0)
       await page.getByRole('link', { name: 'View full report' }).click()
       await expect(page).toHaveURL(new RegExp(`/client/report\\?booking=${BOOKING_ID}&case=${DISPUTE_ID}`))
-      await expect(page.getByText('This case has been resolved. It is read-only unless admin reopens it.')).toBeVisible()
+      for (const viewport of VIEWPORTS) {
+        await page.setViewportSize(viewport)
+        await page.goto(`/client/report?booking=${BOOKING_ID}&case=${DISPUTE_ID}`, { waitUntil: 'domcontentloaded' })
+        await expect(page.getByText('This case has been resolved. It is read-only unless admin reopens it.')).toBeVisible()
+        await expect(page.getByText('Final resolution outcome')).toBeVisible()
+        await expect(page.getByText('Full refund issued after dispute review.')).toBeVisible()
+        await expectNoHorizontalOverflow(page, `client report resolution note at ${viewport.name}`)
+      }
     })
 
     test('E2E-RESP-19 client cancelled lifecycle activity and single financial outcome stay responsive', async ({ page }) => {

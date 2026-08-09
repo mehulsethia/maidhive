@@ -57,7 +57,16 @@ describe('normal cancellation payment releases', () => {
     })
 
     expect(isNormalCancellationPaymentRelease(booking)).toBe(false)
-    expect(getAdminPaymentStateLabel(booking)).toBe('failed')
+    expect(getAdminPaymentStateLabel(booking)).toBe('Failed')
+  })
+
+  it('keeps transferred cleaner payout state out of the client Stripe payment label', () => {
+    const booking = cancelledBooking({
+      status: 'completed',
+      payment: { id: 'payment_1', status: 'transferred', transferred_at: '2026-07-03T12:00:00.000Z' },
+    })
+
+    expect(getAdminPaymentStateLabel(booking)).toBe('Captured')
   })
 
   it('keeps client cancellation charges off cleaner cards', () => {

@@ -463,6 +463,10 @@ export const POST = requireAdmin(async (req: NextRequest, ctx, user) => {
       )
 
       try {
+        const clientRefundOutcome = getClientDisputeEmailRefundOutcome({
+          resolutionType: parsed.data.resolution_type,
+          refundAmount: resolvedRefundAmount,
+        })
         await Promise.all([
           loopsEmailService.sendDisputeResolvedOutcome({
             email: booking.client.user.email,
@@ -470,10 +474,9 @@ export const POST = requireAdmin(async (req: NextRequest, ctx, user) => {
             bookingReference: reference,
             resolutionOutcome: resolutionCopy,
             refundAmount: resolvedRefundAmount,
-            cleanerPayoutOutcome: getClientDisputeEmailPayoutOutcome({
-              resolutionType: parsed.data.resolution_type,
-              refundAmount: resolvedRefundAmount,
-            }),
+            cleanerPayoutOutcome: clientRefundOutcome,
+            financialOutcomeLabel: 'Client refund outcome',
+            financialOutcome: clientRefundOutcome,
             resolutionNote: parsed.data.resolution_note,
           }),
           loopsEmailService.sendDisputeResolvedOutcome({
@@ -677,17 +680,17 @@ function getDisputeParticipantResolutionCopy(args: {
   return args.resolutionCopy
 }
 
-function getClientDisputeEmailPayoutOutcome(args: {
+function getClientDisputeEmailRefundOutcome(args: {
   resolutionType: string
   refundAmount?: number | null
 }) {
-  if (args.resolutionType === 'full_refund') return 'No cleaner payout details are shown to clients.'
+  if (args.resolutionType === 'full_refund') return 'Full refund issued.'
   if (args.resolutionType === 'partial_refund') {
     return args.refundAmount != null && args.refundAmount > 0
-      ? `Client refund issued: ${formatCurrency(args.refundAmount)}.`
-      : 'Client payment outcome recorded.'
+      ? `Refund issued: ${formatCurrency(args.refundAmount)}.`
+      : 'Refund outcome recorded.'
   }
-  return 'No client refund issued.'
+  return 'No refund issued.'
 }
 
 function getAdjustedPlatformFeeCents(

@@ -86,7 +86,7 @@ describe('Loops email contracts', () => {
       bookingId: 'booking_123',
       clientName: 'Client User',
       cleanerName: 'Cleaner User',
-      date: '2026-06-12T10:30:00.000Z',
+      scheduledStart: new Date('2026-06-12T10:30:00.000Z'),
     })
     await loopsEmailService.sendClientAccountCreated({
       email: 'client@example.test',
@@ -113,7 +113,7 @@ describe('Loops email contracts', () => {
         booking_id: 'booking_123',
         client_name: 'Client User',
         cleaner_name: 'Cleaner User',
-        date: '2026-06-12T10:30:00.000Z',
+        date: '12 Jun 2026 at 13:30',
         admin_link: 'https://app.maidhive.test/admin/disputes',
       },
     })

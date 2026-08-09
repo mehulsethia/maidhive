@@ -318,7 +318,7 @@ export const POST = requireAuth(async (req: NextRequest, ctx, user) => {
       bookingId: bookingRecord.id,
       clientName: bookingRecord.client.user.name ?? 'Client',
       cleanerName: bookingRecord.cleaner.user.name ?? 'Cleaner',
-      date: bookingRecord.scheduledStart.toISOString(),
+      scheduledStart: bookingRecord.scheduledStart,
     })
   } catch (emailError) {
     console.error('Failed to send admin dispute raised email via Loops:', emailError)

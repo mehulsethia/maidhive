@@ -145,25 +145,41 @@ function formatMeters(value?: number | null) {
   return `${Math.round(value)} m`
 }
 
-function formatStartVerificationReason(reason?: string | null) {
+function hasStartLocationCapture(verification: BookingRead['start_verification']) {
+  return (
+    typeof verification?.latitude === 'number' &&
+    Number.isFinite(verification.latitude) &&
+    typeof verification.longitude === 'number' &&
+    Number.isFinite(verification.longitude)
+  )
+}
+
+function formatStartVerificationReason(verification: BookingRead['start_verification']) {
+  const reason = verification?.failure_reason
+  const locationCaptured = hasStartLocationCapture(verification)
   if (reason === 'gps_permission_denied') return 'Location permission denied'
-  if (reason === 'gps_unavailable') return 'Location unavailable'
+  if (reason === 'gps_unavailable') {
+    return locationCaptured ? 'Unable to verify captured cleaner location' : 'Cleaner location unavailable'
+  }
   if (reason === 'booking_coordinates_unavailable') return 'Booking address coordinates unavailable'
   if (reason === 'gps_accuracy_insufficient') return 'GPS accuracy insufficient'
   if (reason === 'outside_required_radius') return 'Outside required arrival radius'
   return reason ? reason.replace(/_/g, ' ') : null
 }
 
-function formatStartVerificationStatus(booking: BookingRead) {
+function formatStartArrivalVerification(booking: BookingRead) {
   const verification = booking.start_verification
   if (!booking.started_at) return null
-  if (!verification && booking.start_initiated_by === 'cleaner') return 'Not recorded for cleaner-started booking'
+  if (!verification && booking.start_initiated_by === 'cleaner') return 'Not recorded'
   if (!verification) return null
   if (verification.verified) return 'Verified'
   if (verification.failure_reason === 'outside_required_radius') return 'Outside permitted area'
-  if (verification.failure_reason === 'gps_permission_denied') return 'Permission denied'
-  if (verification.failure_reason === 'gps_unavailable') return 'Location unavailable'
-  return 'Location unavailable'
+  return 'Unable to verify'
+}
+
+function formatCleanerLocationCaptured(verification: BookingRead['start_verification']) {
+  if (!verification) return null
+  return hasStartLocationCapture(verification) ? 'Yes' : 'No — cleaner location unavailable'
 }
 
 function formatStartCoordinates(verification: BookingRead['start_verification']) {
@@ -187,7 +203,7 @@ function getStartVerificationSummary(booking: BookingRead) {
   if (verification.verified) {
     return `Arrival verified. Cleaner started the booking ${formatMeters(verification.distance_m)} from the booking address at ${startedAt}.`
   }
-  const reason = formatStartVerificationReason(verification.failure_reason) ?? 'Location verification was not successful'
+  const reason = formatStartVerificationReason(verification) ?? 'Location verification was not successful'
   const distance = typeof verification.distance_m === 'number'
     ? ` Distance from booking address: ${formatMeters(verification.distance_m)}.`
     : ''
@@ -220,11 +236,11 @@ function describeCleanerPayoutState(booking: BookingRead, finalCleanerPayout: nu
     return 'Paused pending dispute resolution'
   }
   if (transferLifecycle === 'reversed') return 'Not due — transfer reversed'
-  if (transferLifecycle === 'partially_reversed') return 'Adjusted — transfer partially reversed'
-  if (transferLifecycle === 'transferred') return 'Released — transferred to cleaner'
+  if (transferLifecycle === 'partially_reversed') return `Adjusted — ${formatCurrency(finalCleanerPayout)}`
+  if (transferLifecycle === 'transferred') return `Released — ${formatCurrency(finalCleanerPayout)}`
   if (paymentStatus === 'refunded' || finalCleanerPayout <= 0) return 'Not due'
-  if (booking.payment?.payout_scheduled_at) return 'Scheduled'
-  if (paymentStatus === 'captured' || paymentStatus === 'authorized') return 'Awaiting release'
+  if (booking.payment?.payout_scheduled_at) return `Scheduled — ${formatCurrency(finalCleanerPayout)}`
+  if (paymentStatus === 'captured' || paymentStatus === 'authorized') return `Awaiting release — ${formatCurrency(finalCleanerPayout)}`
   return 'Not scheduled'
 }
 
@@ -658,10 +674,11 @@ export default function AdminBookingDetailPage() {
   const subtotal = booking.subtotal ?? booking.total_amount - booking.platform_fee
   const cleaningTypeLabel = getBookingCleaningTypeLabel(booking)
   const serviceClassificationLabel = getBookingServiceClassificationLabel(booking)
-  const startVerificationStatus = formatStartVerificationStatus(booking)
-  const startVerificationReason = formatStartVerificationReason(booking.start_verification?.failure_reason)
+  const startArrivalVerification = formatStartArrivalVerification(booking)
+  const cleanerLocationCaptured = formatCleanerLocationCaptured(booking.start_verification)
+  const startVerificationReason = formatStartVerificationReason(booking.start_verification)
   const startVerificationSummary = getStartVerificationSummary(booking)
-  const shouldShowStartVerification = Boolean(startVerificationStatus)
+  const shouldShowStartVerification = Boolean(startArrivalVerification)
   const cancellationLeadTimeLabel = getCancellationLeadTimeLabel(booking)
   const cancellationPolicyBandLabel = getCancellationPolicyBandLabel(booking)
   const adminCancellationRecordSummary = getAdminCancellationRecordSummary(booking)
@@ -812,7 +829,7 @@ export default function AdminBookingDetailPage() {
             </CardHeader>
             <CardContent className="space-y-3">
               <div className="grid min-w-0 gap-3 sm:grid-cols-2 xl:grid-cols-1" data-testid="admin-payment-state">
-                <DetailRow label="Stripe Payment Status" value={paymentStateLabel} />
+                <DetailRow label="Stripe payment status" value={paymentStateLabel} />
                 <DetailRow label="Cleaner payout" value={cleanerPayoutState} />
                 <DetailRow label="Transfer status" value={transferState} />
                 <DetailRow label="Original booking amount" value={formatCurrency(booking.total_amount)} />
@@ -885,19 +902,16 @@ export default function AdminBookingDetailPage() {
                 <DetailRow label="Started" value={booking.started_at ? formatDate(booking.started_at) : null} />
                 {shouldShowStartVerification && (
                   <>
-                    <DetailRow label="Start GPS verification" value={startVerificationStatus} />
+                    <DetailRow label="Cleaner location captured" value={cleanerLocationCaptured} />
+                    <DetailRow label="Arrival verification" value={startArrivalVerification} />
                     {booking.start_verification && (
                       <>
                         <DetailRow label="Start GPS distance" value={formatMeters(booking.start_verification.distance_m)} />
-                        <DetailRow label="Start GPS accuracy" value={formatMeters(booking.start_verification.accuracy_m)} />
+                        <DetailRow label="GPS accuracy" value={formatMeters(booking.start_verification.accuracy_m)} />
                         <DetailRow label="Permitted verification radius" value={formatMeters(START_VERIFICATION_RADIUS_M)} />
-                        <DetailRow
-                          label="Started without verified location"
-                          value={booking.start_verification.verified ? 'No' : 'Yes'}
-                        />
                         <DetailRow label="Start GPS coordinates" value={formatStartCoordinates(booking.start_verification)} />
                         {startVerificationReason && (
-                          <DetailRow label="Start verification reason" value={startVerificationReason} />
+                          <DetailRow label="Reason" value={startVerificationReason} />
                         )}
                       </>
                     )}
