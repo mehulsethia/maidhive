@@ -91,28 +91,34 @@ export const POST = requireClient(async (req: NextRequest, _ctx, user) => {
         return err('Only EUR payments are supported', 422)
       }
 
-      if (pi.status === 'requires_capture' || existing.status === 'authorized') {
-        return err('Payment already authorized for this booking', 409)
-      }
+      const needsReplacementIntent =
+        existing.status === 'released' ||
+        pi.status === 'canceled'
 
-      if (['succeeded', 'processing'].includes(pi.status) || ['captured', 'transferred'].includes(existing.status)) {
-        return err('Payment already processed for this booking', 409)
-      }
+      if (!needsReplacementIntent) {
+        if (pi.status === 'requires_capture' || existing.status === 'authorized') {
+          return err('Payment already authorized for this booking', 409)
+        }
 
-      if (String(pi.status) !== 'requires_capture' && (pi.amount !== amountCents || (pi.application_fee_amount ?? 0) !== feeCents)) {
-        await stripe.paymentIntents.update(pi.id, {
-          amount: amountCents,
-          application_fee_amount: feeCents,
+        if (['succeeded', 'processing'].includes(pi.status) || ['captured', 'transferred'].includes(existing.status)) {
+          return err('Payment already processed for this booking', 409)
+        }
+
+        if (String(pi.status) !== 'requires_capture' && (pi.amount !== amountCents || (pi.application_fee_amount ?? 0) !== feeCents)) {
+          await stripe.paymentIntents.update(pi.id, {
+            amount: amountCents,
+            application_fee_amount: feeCents,
+          })
+        }
+        await paymentRepo.update(existing.id, {
+          amount: Number(booking.totalAmount),
+          platformFee: Number(booking.platformFee),
+          cleanerPayout: Number(booking.cleanerPayout),
         })
-      }
-      await paymentRepo.update(existing.id, {
-        amount: Number(booking.totalAmount),
-        platformFee: Number(booking.platformFee),
-        cleanerPayout: Number(booking.cleanerPayout),
-      })
 
-      if (pi.client_secret) {
-        return ok({ client_secret: pi.client_secret, payment_intent_id: pi.id })
+        if (pi.client_secret) {
+          return ok({ client_secret: pi.client_secret, payment_intent_id: pi.id })
+        }
       }
     }
 

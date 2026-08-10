@@ -62,6 +62,7 @@ const state = vi.hoisted(() => ({
     cleanerPayout: 66,
   } as any | null,
   paymentUpserts: [] as any[],
+  paymentIntentStatus: 'requires_capture',
   syncCallCount: 0,
   syncResponses: [{ updated: true, reason: 'authorized_draft_pending_notified' }] as Array<{
     updated: boolean
@@ -186,7 +187,8 @@ vi.mock('@/server/stripe', () => ({
         currency: 'eur',
         amount: Math.round(Number(state.booking.totalAmount) * 100),
         application_fee_amount: Math.round(Number(state.booking.platformFee) * 100),
-        status: 'requires_capture',
+        status: state.paymentIntentStatus,
+        client_secret: `${id}_secret`,
         metadata: { booking_id: state.booking.id },
       })),
       update: vi.fn(async () => ({})),
@@ -227,6 +229,7 @@ describe('F06 Payment intent + authorization sync integration', () => {
       cleanerPayout: 66,
     }
     state.paymentUpserts = []
+    state.paymentIntentStatus = 'requires_capture'
     state.syncCallCount = 0
     state.syncResponses = [{ updated: true, reason: 'authorized_draft_pending_notified' }]
   })
@@ -249,6 +252,40 @@ describe('F06 Payment intent + authorization sync integration', () => {
     expect(body.data.payment_intent_id).toBe('pi_new')
     expect(state.paymentUpserts).toHaveLength(1)
     expect(state.paymentUpserts[0].bookingId).toBe(state.booking.id)
+  })
+
+  it('IT-PAYAUTH-01b creates a fresh intent when reauthorising after released payment', async () => {
+    state.booking = {
+      ...state.booking,
+      status: 'accepted',
+      reauthorizationRequired: true,
+    }
+    state.payment = {
+      ...state.payment!,
+      status: 'released',
+      stripePaymentIntentId: 'pi_cancelled',
+      refundReason: 'payment_authorisation_released',
+    }
+    state.paymentIntentStatus = 'canceled'
+
+    const route = await import('@/app/api/v1/payments/intent/route')
+    const res = await route.POST(
+      new NextRequest('http://localhost/api/v1/payments/intent', {
+        method: 'POST',
+        body: JSON.stringify({ booking_id: state.booking.id }),
+        headers: { 'content-type': 'application/json' },
+      }),
+      { params: Promise.resolve({}) } as any,
+    )
+    const body = await res.json()
+
+    expect(res.status).toBe(200)
+    expect(body.success).toBe(true)
+    expect(body.data.payment_intent_id).toBe('pi_new')
+    expect(body.data.client_secret).toBe('sec_new')
+    expect(state.paymentUpserts).toHaveLength(1)
+    expect(state.payment?.stripePaymentIntentId).toBe('pi_new')
+    expect(state.payment?.status).toBe('pending')
   })
 
   it('IT-PAYAUTH-02 confirm capturable intent sets authorized and pending', async () => {
