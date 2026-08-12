@@ -35,6 +35,10 @@ function CheckoutForm({ booking, onSuccess }: { booking: BookingRead; onSuccess:
     exp_year: number | null
   }>>([])
   const [selectedSavedCardId, setSelectedSavedCardId] = useState<string>('')
+  const isReauthorisationFlow = Boolean(booking.reauthorization_required)
+  const successMessage = isReauthorisationFlow
+    ? 'Payment re-authorisation complete. Your booking remains confirmed.'
+    : 'Card authorised. Your booking request is now sent to the cleaner.'
 
   useEffect(() => {
     paymentsApi.listMethods()
@@ -59,7 +63,7 @@ function CheckoutForm({ booking, onSuccess }: { booking: BookingRead; onSuccess:
       setSubmitting(true)
       try {
         await paymentsApi.confirmWithSavedMethod(booking.id, selectedSavedCardId)
-        toast.success('Saved card authorised. Your booking request is now sent to the cleaner.')
+        toast.success(successMessage)
         onSuccess()
       } catch (err: any) {
         toast.error(err.message ?? 'Failed to authorise saved card.')
@@ -72,7 +76,7 @@ function CheckoutForm({ booking, onSuccess }: { booking: BookingRead; onSuccess:
     if (!stripe || !elements) return
 
     setSubmitting(true)
-    const returnUrl = `${window.location.origin}/client/bookings/${booking.id}?payment=authorized`
+    const returnUrl = `${window.location.origin}/client/bookings/${booking.id}?payment=${isReauthorisationFlow ? 'reauthorized' : 'authorized'}`
     const { error } = await stripe.confirmPayment({
       elements,
       redirect: 'if_required',
@@ -87,7 +91,7 @@ function CheckoutForm({ booking, onSuccess }: { booking: BookingRead; onSuccess:
       } catch {
         // webhook normally handles this; sync is fallback
       }
-      toast.success('Card authorised. Your booking request is now sent to the cleaner.')
+      toast.success(successMessage)
       onSuccess()
     }
 
@@ -133,7 +137,7 @@ function CheckoutForm({ booking, onSuccess }: { booking: BookingRead; onSuccess:
       <p className="text-sm font-medium text-slate-700">
         Your card will NOT be charged now. Payment is only captured after the job is completed.
       </p>
-      <p className="text-xs text-slate-500">
+      <p className="whitespace-pre-line text-xs text-slate-500">
         {getClientBookingRequestDeadlineCopy(booking)}
       </p>
       <Button
@@ -174,7 +178,7 @@ export default function CheckoutPage() {
         const intentRes = await paymentsApi.createIntent(bookingId)
         setClientSecret(intentRes.data?.client_secret ?? null)
       } catch (err: any) {
-        toast.error(err.message ?? 'Failed to initialise card authorization')
+        toast.error(err.message ?? 'Failed to initialise card authorisation')
       } finally {
         setLoading(false)
       }

@@ -913,7 +913,7 @@ export const bookingService = {
         userId: isClient ? booking.cleaner.userId : booking.client.userId,
         type: 'booking_time_agreed',
         title: 'Reschedule accepted',
-        body: 'Booking time updated. Client re-authorization is now required.',
+        body: 'Booking time updated. Client re-authorisation is now required.',
         data: { booking_id: bookingId },
       })
       try {
@@ -1747,6 +1747,14 @@ async function resetAuthorizationAfterReschedule(bookingId: string) {
     booking.payment?.id,
     booking.payment?.stripePaymentIntentId,
     booking.payment?.status,
+    {
+      bookingId,
+      amount: booking.payment?.amount ?? booking.totalAmount,
+      previousStatus: booking.payment?.status,
+      reason: 'payment_reauthorisation_required_after_reschedule',
+      actorRole: 'system',
+      occurredAt: new Date(),
+    },
   )
 
   const now = Date.now()
@@ -1758,19 +1766,29 @@ async function resetAuthorizationAfterReschedule(bookingId: string) {
 
   await bookingRepo.update(bookingId, {
     status: 'accepted',
-    confirmedAt: null,
     payBy,
     reauthorizationRequired: true,
     reauthorizationGraceExpiresAt: requiresImmediateReauth ? payBy : null,
   })
 
+  await recordBookingActionEvent({
+    bookingId,
+    type: 'payment_reauthorisation_required',
+    actorRole: 'system',
+    metadata: {
+      deadline: payBy.toISOString(),
+      previous_confirmed_at: booking.confirmedAt?.toISOString() ?? null,
+      reason: 'booking_rescheduled_after_confirmation',
+    },
+  })
+
   await pushInAppNotification({
     userId: booking.client.userId,
     type: 'booking_payment_required',
-    title: 'Card re-authorization required',
+    title: 'Card re-authorisation required',
     body: requiresImmediateReauth
-      ? 'Your rescheduled booking is less than 48 hours away. Re-authorize your card now.'
-      : 'Please re-authorize your card before 48 hours prior to the rescheduled start time.',
+      ? 'Your rescheduled booking is less than 48 hours away. Re-authorise your card now.'
+      : 'Please re-authorise your card before 48 hours prior to the rescheduled start time.',
     data: { booking_id: bookingId },
   })
 }
@@ -1779,7 +1797,7 @@ function assertPaymentAuthorized(paymentStatus: string | null | undefined, actio
   const isPaymentAuthorized = ['authorized', 'captured', 'transferred'].includes(String(paymentStatus ?? ''))
   if (!isPaymentAuthorized) {
     throw new ServiceError(
-      `Cannot ${action} booking before client card authorization is completed`,
+      `Cannot ${action} booking before client card authorisation is completed`,
       400,
     )
   }
@@ -1838,9 +1856,9 @@ async function notifyPendingRequestExpired(booking: BookingWithRelations) {
       ? 'Your request expired because no agreement was reached in time.'
       : 'This request expired before confirmation.'
   const clientBody = isCleanerProposal
-    ? 'You did not respond before expiry. The request expired and your card authorization was released.'
+    ? 'You did not respond before expiry. The request expired and your card authorisation was released.'
     : isClientProposal
-      ? 'Cleaner did not respond before expiry. The request expired and your card authorization was released.'
+      ? 'Cleaner did not respond before expiry. The request expired and your card authorisation was released.'
       : 'This request expired because the cleaner did not accept in time.'
 
   await pushInAppNotification({

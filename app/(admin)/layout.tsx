@@ -31,6 +31,8 @@ const NAV = [
 
 const displayFont = Bricolage_Grotesque({ subsets: ['latin'], weight: ['400', '500', '700', '800'] })
 const monoFont = IBM_Plex_Mono({ subsets: ['latin'], weight: ['400', '500', '600'] })
+const e2eAdminAuthBypassEnabled =
+  process.env.NODE_ENV !== 'production' && process.env.NEXT_PUBLIC_MAIDHIVE_E2E_AUTH_BYPASS === '1'
 
 function adminStageCopy(pathname: string) {
   if (pathname.startsWith('/admin/dashboard')) {
@@ -109,6 +111,10 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
   }
 
   useEffect(() => {
+    if (e2eAdminAuthBypassEnabled && window.localStorage.getItem('maidhive:e2e-admin-session') === '1') {
+      setAuthState('authed')
+      return
+    }
     checkAdmin()
   }, [])
 
@@ -167,6 +173,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
   }
 
   async function signOut() {
+    window.localStorage.removeItem('maidhive:e2e-admin-session')
     const supabase = createClient()
     await supabase.auth.signOut()
     setAuthState('login')

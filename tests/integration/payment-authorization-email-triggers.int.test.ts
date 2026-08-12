@@ -21,6 +21,8 @@ const state = vi.hoisted(() => ({
   clientPendingEmails: [] as any[],
   clientConfirmedEmails: [] as any[],
   calendarUpserts: [] as string[],
+  actionEvents: [] as any[],
+  deletedPaymentRequiredNotifications: [] as any[],
 }))
 
 vi.mock('@/server/repositories/payment.repo', () => ({
@@ -68,6 +70,22 @@ vi.mock('@/server/services/in-app-notification.service', () => ({
   }),
 }))
 
+vi.mock('@/server/repositories/notification.repo', () => ({
+  notificationRepo: {
+    deleteOutstandingBookingPaymentRequired: vi.fn(async (userId: string, bookingId: string) => {
+      state.deletedPaymentRequiredNotifications.push({ userId, bookingId })
+      return { count: 1 }
+    }),
+  },
+}))
+
+vi.mock('@/server/services/booking-action-event.service', () => ({
+  recordBookingActionEvent: vi.fn(async (payload: any) => {
+    state.actionEvents.push(payload)
+    return { id: `event_${state.actionEvents.length}`, ...payload }
+  }),
+}))
+
 vi.mock('@/server/services/google-calendar.service', () => ({
   googleCalendarService: {
     upsertCleanerBookingEvent: vi.fn(async (bookingId: string) => {
@@ -105,6 +123,8 @@ describe('payment authorization email triggers', () => {
     state.clientPendingEmails = []
     state.clientConfirmedEmails = []
     state.calendarUpserts = []
+    state.actionEvents = []
+    state.deletedPaymentRequiredNotifications = []
   })
 
   it('sends cleaner request and client pending emails once when a draft booking is first authorized', async () => {
@@ -170,6 +190,64 @@ describe('payment authorization email triggers', () => {
     ])
     expect(state.cleanerRequestEmails).toHaveLength(0)
     expect(state.clientPendingEmails).toHaveLength(0)
+    expect(state.calendarUpserts).toEqual(['booking_1'])
+  })
+
+  it('completes re-authorisation without overwriting original confirmation history', async () => {
+    const acceptedAt = new Date('2026-08-10T13:25:00.000Z')
+    const confirmedAt = new Date('2026-08-10T13:25:00.000Z')
+    state.payment = {
+      ...state.payment,
+      status: 'pending',
+      amount: 22,
+    }
+    state.booking = {
+      ...state.booking,
+      status: 'accepted',
+      acceptedAt,
+      confirmedAt,
+      reauthorizationRequired: true,
+      reauthorizationGraceExpiresAt: new Date('2026-08-12T08:00:00.000Z'),
+      payBy: new Date('2026-08-12T08:00:00.000Z'),
+    }
+    const { paymentAuthorizationService } = await import('@/server/services/payment-authorization.service')
+
+    const result = await paymentAuthorizationService.syncFromPaymentIntent({
+      id: 'pi_123',
+      currency: 'eur',
+      status: 'requires_capture',
+      metadata: { booking_id: 'booking_1' },
+    } as any)
+
+    expect(result.reason).toBe('reauthorisation_completed_confirmed')
+    expect(state.booking).toMatchObject({
+      status: 'confirmed',
+      confirmedAt,
+      payBy: null,
+      reauthorizationRequired: false,
+      reauthorizationGraceExpiresAt: null,
+    })
+    expect(state.actionEvents).toEqual(expect.arrayContaining([
+      expect.objectContaining({ type: 'payment_authorized' }),
+      expect.objectContaining({
+        type: 'payment_reauthorisation_completed',
+        metadata: expect.objectContaining({
+          amount: 22,
+          previous_confirmed_at: confirmedAt.toISOString(),
+        }),
+      }),
+    ]))
+    expect(state.deletedPaymentRequiredNotifications).toEqual([
+      { userId: seeded.clientUser.id, bookingId: 'booking_1' },
+    ])
+    expect(state.notifications).toEqual([
+      expect.objectContaining({
+        type: 'booking_payment_reauthorisation_complete',
+        title: 'Payment re-authorisation complete',
+        body: 'Your payment re-authorisation has been completed successfully. Your booking remains confirmed.',
+      }),
+    ])
+    expect(state.clientConfirmedEmails).toHaveLength(0)
     expect(state.calendarUpserts).toEqual(['booking_1'])
   })
 })

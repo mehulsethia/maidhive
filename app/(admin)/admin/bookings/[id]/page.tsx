@@ -274,7 +274,7 @@ function buildTimeline(booking: BookingRead): TimelineEvent[] {
     id: 'payment-authorized',
     at: payment.authorized_at,
     title: 'Payment authorised',
-    description: `Card authorization recorded for ${formatCurrency(payment.amount ?? booking.total_amount)}.`,
+    description: `Card authorisation recorded for ${formatCurrency(payment.amount ?? booking.total_amount)}.`,
     tone: 'success',
   } : null)
 
@@ -338,8 +338,34 @@ function buildTimeline(booking: BookingRead): TimelineEvent[] {
         at: event.created_at,
         title: 'Payment authorised',
         description: amount == null
-          ? 'Card authorization was recorded.'
-          : `Card authorization recorded for ${formatCurrency(amount)}.`,
+          ? 'Card authorisation was recorded.'
+          : `Card authorisation recorded for ${formatCurrency(amount)}.`,
+        tone: 'success',
+      })
+    }
+
+    if (event.type === 'payment_reauthorisation_required') {
+      const deadline = actionEventDate(metadata, 'deadline')
+      addEvent(events, {
+        id: event.id,
+        at: event.created_at,
+        title: 'Card re-authorisation required',
+        description: deadline
+          ? `Client must re-authorise the card by ${formatDate(deadline)}.`
+          : 'Client must re-authorise the card to keep this booking active.',
+        tone: 'warning',
+      })
+    }
+
+    if (event.type === 'payment_reauthorisation_completed') {
+      const amount = actionEventMoney(metadata, 'amount')
+      addEvent(events, {
+        id: event.id,
+        at: event.created_at,
+        title: 'Payment re-authorisation completed',
+        description: amount == null
+          ? 'New card authorisation recorded. The booking remains confirmed.'
+          : `New card authorisation recorded for ${formatCurrency(amount)}. The booking remains confirmed.`,
         tone: 'success',
       })
     }
@@ -701,6 +727,14 @@ export default function AdminBookingDetailPage() {
     !disputeFinalized
   const cleanerPayoutState = describeCleanerPayoutState(booking, financialOutcome.finalCleanerPayout)
   const transferState = describeTransferState(booking)
+  const reauthorisationCompletedEvent = booking.action_events?.find((event) => event.type === 'payment_reauthorisation_completed')
+  const hasReauthorisationHistory = Boolean(
+    booking.reauthorization_required ||
+    booking.action_events?.some((event) => (
+      event.type === 'payment_reauthorisation_required' ||
+      event.type === 'payment_reauthorisation_completed'
+    )),
+  )
 
   return (
     <div className="min-w-0 space-y-5">
@@ -898,7 +932,10 @@ export default function AdminBookingDetailPage() {
                 <DetailRow label="Accept by" value={booking.accept_by ? formatDate(booking.accept_by) : null} />
                 <DetailRow label="Pay by" value={booking.pay_by ? formatDate(booking.pay_by) : null} />
                 <DetailRow label="Accepted" value={booking.accepted_at ? formatDate(booking.accepted_at) : null} />
-                <DetailRow label="Confirmed" value={booking.confirmed_at ? formatDate(booking.confirmed_at) : null} />
+                <DetailRow label={hasReauthorisationHistory ? 'Originally confirmed' : 'Confirmed'} value={booking.confirmed_at ? formatDate(booking.confirmed_at) : null} />
+                {reauthorisationCompletedEvent && (
+                  <DetailRow label="Payment re-authorisation completed" value={formatDate(reauthorisationCompletedEvent.created_at)} />
+                )}
                 <DetailRow label="Started" value={booking.started_at ? formatDate(booking.started_at) : null} />
                 {shouldShowStartVerification && (
                   <>

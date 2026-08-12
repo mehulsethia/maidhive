@@ -144,7 +144,7 @@ export default function ClientBookingDetailPage() {
 
   useEffect(() => {
     const paymentFlag = searchParams.get('payment')
-    if (paymentFlag !== 'authorized') return
+    if (paymentFlag !== 'authorized' && paymentFlag !== 'reauthorized') return
 
     paymentsApi
       .syncAuthorization(id)

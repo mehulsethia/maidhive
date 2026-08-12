@@ -1683,7 +1683,7 @@ export default function BookingFlowPage() {
       const intentRes = await paymentsApi.createIntent(b.id)
       const nextClientSecret = intentRes.data?.client_secret ?? null
       if (!nextClientSecret) {
-        throw new Error('Unable to initialize card authorization for this booking')
+        throw new Error('Unable to initialise card authorisation for this booking')
       }
       setClientSecret(nextClientSecret)
       navigateToStep(3)
@@ -1693,7 +1693,7 @@ export default function BookingFlowPage() {
         slot_recheck: 'Could not re-check slot availability. Please refresh and try again.',
         photo_upload: 'Photo upload failed. Please try again without photos or re-upload them.',
         booking_create: 'Booking draft could not be created. Please try again.',
-        payment_intent: 'Booking draft saved, but card authorization setup failed. Please try again.',
+        payment_intent: 'Booking draft saved, but card authorisation setup failed. Please try again.',
       }
       const message =
         rawMessage && rawMessage !== 'Something went wrong. Please try again.'
@@ -1720,7 +1720,7 @@ export default function BookingFlowPage() {
   }
 
   async function handlePaymentSuccess() {
-    if (!booking) throw new Error('Missing booking context for authorization sync')
+    if (!booking) throw new Error('Missing booking context for authorisation sync')
 
     await paymentsApi.syncAuthorization(booking.id)
     if (addressMode === 'new' && saveAddressForLater) {
@@ -1746,7 +1746,7 @@ export default function BookingFlowPage() {
           }
         }
       } catch {
-        // Authorization success should not fail because address save fails.
+        // Authorisation success should not fail because address save fails.
       }
     }
     const bookingRes = await bookingsApi.getById(booking.id)

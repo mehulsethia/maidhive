@@ -46,6 +46,40 @@ type BootstrapOptions = {
   role?: AppRole
 }
 
+function isE2EAuthBypassEnabled() {
+  const flag = process.env.MAIDHIVE_E2E_AUTH_BYPASS ?? process.env.NEXT_PUBLIC_MAIDHIVE_E2E_AUTH_BYPASS
+  return process.env.NODE_ENV !== 'production' && flag === '1'
+}
+
+function buildE2EInitialSession(role: AppRole): InitialSession {
+  const id = `${role}-e2e-user`
+  return {
+    authUser: {
+      id,
+      email: `${role}@e2e.test`,
+      email_confirmed_at: new Date(0).toISOString(),
+    },
+    appUser: {
+      id,
+      email: `${role}@e2e.test`,
+      name: `${role} e2e user`,
+      role,
+      phone: null,
+      avatar_url: null,
+    },
+    counts: {
+      unread_chats: 0,
+      pending_bookings: 0,
+      unread_notifications: 0,
+    },
+    clientProfile: role === 'client' ? { id: 'client-profile' } : null,
+    cleanerProfile:
+      role === 'cleaner'
+        ? { id: 'cleaner-profile', profile_image_url: null, onboarding_completion_pct: 100 }
+        : null,
+  }
+}
+
 async function computeCounts(userId: string, role: AppRole): Promise<SessionCounts> {
   const chatCutoff = new Date(Date.now() - 30 * 60 * 1000)
   const bookingFilter =
@@ -112,6 +146,10 @@ async function computeCounts(userId: string, role: AppRole): Promise<SessionCoun
 }
 
 export async function bootstrapServerSession(options: BootstrapOptions = {}): Promise<InitialSession> {
+  if (isE2EAuthBypassEnabled() && options.role) {
+    return buildE2EInitialSession(options.role)
+  }
+
   const cookieStore = await cookies()
   const supabase = createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,

@@ -5,6 +5,11 @@ import { isSupabaseInvalidRefreshTokenError } from '@/lib/supabase-auth-errors'
 const PROTECTED_PREFIXES = ['/client', '/cleaner', '/admin']
 const AUTH_ROUTES = ['/login', '/signup', '/verify-email']
 
+function isE2EAuthBypassEnabled() {
+  const flag = process.env.MAIDHIVE_E2E_AUTH_BYPASS ?? process.env.NEXT_PUBLIC_MAIDHIVE_E2E_AUTH_BYPASS
+  return process.env.NODE_ENV !== 'production' && flag === '1'
+}
+
 function getPostLoginPath(role: string | null) {
   if (role === 'cleaner') return '/cleaner/dashboard'
   if (role === 'admin') return '/admin/dashboard'
@@ -31,6 +36,10 @@ export async function proxy(request: NextRequest) {
   const isProtected = PROTECTED_PREFIXES.some((p) => pathname.startsWith(p))
   const isAuthRoute = AUTH_ROUTES.some((p) => pathname.startsWith(p))
   const isLanding = pathname === '/'
+
+  if (isE2EAuthBypassEnabled() && isProtected) {
+    return NextResponse.next()
+  }
 
   // Fast path: routes that never need session inspection.
   if (!isProtected && !isAuthRoute && !isLanding) {

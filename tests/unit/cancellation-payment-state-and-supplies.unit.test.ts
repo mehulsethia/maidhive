@@ -53,7 +53,7 @@ describe('normal cancellation payment releases', () => {
   it('does not hide an automatic re-authorisation failure', () => {
     const booking = cancelledBooking({
       cancelled_by: null,
-      cancellation_reason: 'Re-authorization was not completed within the grace period.',
+      cancellation_reason: 'Re-authorisation was not completed within the grace period.',
     })
 
     expect(isNormalCancellationPaymentRelease(booking)).toBe(false)

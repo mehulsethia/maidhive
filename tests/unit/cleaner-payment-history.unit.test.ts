@@ -98,6 +98,21 @@ describe('Cleaner payment history mapping', () => {
     expect(getReleasedCleanerEarnings([completedUnderReview])).toBe(0)
   })
 
+  it('maps active re-authorisation bookings to awaiting client payment action', () => {
+    const reauth = booking({
+      id: 'booking_reauth',
+      status: 'accepted',
+      reauthorization_required: true,
+      payment: { id: 'payment_released', status: 'released' },
+    })
+
+    expect(classifyCleanerPaymentHistoryBooking(reauth)).toMatchObject({
+      paymentType: 'Payment issue',
+      label: 'Payment re-authorisation pending - awaiting client',
+      tone: 'warn',
+    })
+  })
+
   it('maps cancelled bookings to cancellation payout labels', () => {
     const noPayout = booking({
       id: 'booking_cancelled_no_payout',

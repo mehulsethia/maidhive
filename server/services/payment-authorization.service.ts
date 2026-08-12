@@ -1,6 +1,7 @@
 import type Stripe from 'stripe'
 import { paymentRepo } from '../repositories/payment.repo'
 import { bookingRepo } from '../repositories/booking.repo'
+import { notificationRepo } from '../repositories/notification.repo'
 import { loopsEmailService } from './loops-email.service'
 import { pushInAppNotification } from './in-app-notification.service'
 import { googleCalendarService } from './google-calendar.service'
@@ -113,9 +114,10 @@ export const paymentAuthorizationService = {
     }
 
     if (booking.status === 'accepted') {
+      const isReauthorisationFlow = Boolean(booking.reauthorizationRequired)
       await bookingRepo.update(booking.id, {
         status: 'confirmed',
-        confirmedAt: new Date(),
+        confirmedAt: booking.confirmedAt ?? booking.acceptedAt ?? authorizedAt,
         payBy: null,
         reauthorizationRequired: false,
         reauthorizationGraceExpiresAt: null,
@@ -123,11 +125,35 @@ export const paymentAuthorizationService = {
       void googleCalendarService.upsertCleanerBookingEvent(booking.id).catch((e) => {
         console.error('Failed to sync cleaner Google Calendar event:', e)
       })
+
+      if (isReauthorisationFlow) {
+        await recordBookingActionEvent({
+          bookingId: booking.id,
+          type: 'payment_reauthorisation_completed',
+          actorRole: 'system',
+          metadata: {
+            amount: Number(payment.amount),
+            status: 'authorized',
+            previous_confirmed_at: booking.confirmedAt ? booking.confirmedAt.toISOString() : null,
+          },
+          createdAt: authorizedAt,
+        })
+        await notificationRepo.deleteOutstandingBookingPaymentRequired(booking.client.userId, booking.id)
+        await pushInAppNotification({
+          userId: booking.client.userId,
+          type: 'booking_payment_reauthorisation_complete',
+          title: 'Payment re-authorisation complete',
+          body: 'Your payment re-authorisation has been completed successfully. Your booking remains confirmed.',
+          data: { booking_id: booking.id },
+        })
+        return { updated: true, reason: 'reauthorisation_completed_confirmed' as const }
+      }
+
       await pushInAppNotification({
         userId: booking.client.userId,
         type: 'booking_confirmed',
         title: 'Booking confirmed',
-        body: 'Payment authorization is complete and your booking is now confirmed.',
+        body: 'Payment authorisation is complete and your booking is now confirmed.',
         data: { booking_id: booking.id },
       })
       try {

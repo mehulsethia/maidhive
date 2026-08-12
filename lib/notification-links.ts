@@ -31,6 +31,8 @@ export function getNotificationHref(role: UserRole, notification: NotificationRe
     case 'booking_cancelled':
     case 'booking_completed':
     case 'booking_confirmed':
+    case 'booking_payment_required':
+    case 'booking_payment_reauthorisation_complete':
     case 'payment_captured':
     case 'payment_transferred':
     case 'payout_released':

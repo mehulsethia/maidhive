@@ -156,7 +156,7 @@ export const POST = requireClient(async (req: NextRequest, _ctx, user) => {
       statusCode: error?.statusCode,
     })
     const message = String(error?.message ?? '')
-    if (message) return err(`Unable to initialize card authorization: ${message}`, 500)
-    return err('Unable to initialize card authorization right now. Please try again.', 500)
+    if (message) return err(`Unable to initialise card authorisation: ${message}`, 500)
+    return err('Unable to initialise card authorisation right now. Please try again.', 500)
   }
 })

@@ -12,6 +12,8 @@ import type { NotificationRead } from '@/types'
 // Notification type → route to navigate on click
 const NOTIFICATION_LINKS: Record<string, (data?: Record<string, any>) => string> = {
   booking_confirmed:          (d) => d?.booking_id ? `/client/bookings/${d.booking_id}` : '/client/dashboard',
+  booking_payment_required:   (d) => d?.booking_id ? `/client/bookings/${d.booking_id}` : '/client/dashboard',
+  booking_payment_reauthorisation_complete: (d) => d?.booking_id ? `/client/bookings/${d.booking_id}` : '/client/dashboard',
   payment_captured:           (d) => d?.booking_id ? `/client/bookings/${d.booking_id}` : '/client/dashboard',
   stripe_onboarding_complete: () => '/cleaner/dashboard',
   booking_accepted:           (d) => d?.booking_id ? `/cleaner/bookings/${d.booking_id}` : '/cleaner/dashboard',

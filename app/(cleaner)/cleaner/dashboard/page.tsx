@@ -604,6 +604,7 @@ export default function CleanerDashboardPage() {
                   disputeStatus: b.dispute?.status,
                   noPayoutFinalized,
                 })
+                const isReauthorisationPending = Boolean(b.reauthorization_required)
                 return (
                   <Link
                     key={b.id}
@@ -642,6 +643,11 @@ export default function CleanerDashboardPage() {
                         {b.status === 'cancelled' || noPayoutFinalized ? 'Final payout: ' : activeDispute || b.status === 'disputed' ? `${earningsLabel} ` : ''}
                         {formatCurrency(displayFinalPayout)}
                       </p>
+                      {isReauthorisationPending && (
+                        <p className="max-w-[11rem] text-right text-xs font-medium text-amber-700">
+                          Payment re-authorisation pending - awaiting client.
+                        </p>
+                      )}
                     </div>
                   </Link>
                 )

@@ -42,6 +42,7 @@ export function classifyCleanerPaymentHistoryBooking(
   nowMs = Date.now(),
 ): Omit<CleanerPaymentHistoryEntry, 'booking'> | null {
   const paymentStatus = String(booking.payment?.status ?? '').trim()
+  const isReauthorisationPending = Boolean(booking.reauthorization_required)
   const cancellationContext = `${booking.cancellation_reason ?? ''} ${booking.payment?.refund_reason ?? ''}`
     .toLowerCase()
     .replace(/[_-]/g, ' ')
@@ -119,6 +120,13 @@ export function classifyCleanerPaymentHistoryBooking(
   }
 
   if (['accepted', 'confirmed', 'in_progress'].includes(booking.status)) {
+    if (isReauthorisationPending) {
+      return {
+        paymentType: 'Payment issue',
+        label: 'Payment re-authorisation pending - awaiting client',
+        tone: 'warn',
+      }
+    }
     if (['authorized', 'captured', 'transferred'].includes(paymentStatus)) {
       return { paymentType: 'Booking payout', label: 'Payment authorised', tone: 'ok' }
     }

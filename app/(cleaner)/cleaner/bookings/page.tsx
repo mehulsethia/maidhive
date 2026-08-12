@@ -407,6 +407,7 @@ export default function CleanerBookingsPage() {
                   disputeStatus: b.dispute?.status,
                   noPayoutFinalized,
                 })
+                const isReauthorisationPending = Boolean(b.reauthorization_required)
                 const unlockAtMs = scheduledStartMs - PHONE_REVEAL_PRE_START_MS
                 const sameDayCreated =
                   Number.isFinite(createdAtMs) &&
@@ -498,9 +499,16 @@ export default function CleanerBookingsPage() {
                           <CancellationPaymentBreakdown booking={b} compact audience="cleaner" />
                         </div>
                       ) : (
-                        <p className="mt-2 text-sm font-semibold text-emerald-700">
-                          {noPayoutFinalized ? 'Final payout:' : earningsLabel} {formatCurrency(payoutSummary.finalCleanerPayout)}
-                        </p>
+                        <div className="mt-2 space-y-1">
+                          <p className="text-sm font-semibold text-emerald-700">
+                            {noPayoutFinalized ? 'Final payout:' : earningsLabel} {formatCurrency(payoutSummary.finalCleanerPayout)}
+                          </p>
+                          {isReauthorisationPending && (
+                            <p className="text-xs font-medium text-amber-700">
+                              Payment re-authorisation pending - awaiting client.
+                            </p>
+                          )}
+                        </div>
                       )}
                     </div>
                   </div>

@@ -526,7 +526,7 @@ export const paymentLifecycleService = {
         data: {
           status: isReauthFlow ? 'cancelled' : 'expired',
           cancellationReason: isReauthFlow
-            ? 'Re-authorization was not completed within the grace period after reschedule. No penalties applied.'
+            ? 'Re-authorisation was not completed within the grace period after reschedule. No penalties applied.'
             : null,
           cancelledAt: isReauthFlow ? new Date() : null,
         },
@@ -536,19 +536,19 @@ export const paymentLifecycleService = {
       await pushInAppNotification({
         userId: booking.client.userId,
         type: isReauthFlow ? 'booking_cancelled' : 'booking_request_expired',
-        title: isReauthFlow ? 'Booking cancelled after unresolved re-authorization' : 'Booking payment window expired',
+        title: isReauthFlow ? 'Booking cancelled after unresolved re-authorisation' : 'Booking payment window expired',
         body: isReauthFlow
-          ? 'Re-authorization remained unresolved after the 24-hour grace period. Booking was auto-cancelled with no penalties.'
-          : 'This booking was closed because payment authorization did not complete in time.',
+          ? 'Re-authorisation remained unresolved after the 24-hour grace period. Booking was auto-cancelled with no penalties.'
+          : 'This booking was closed because payment authorisation did not complete in time.',
         data: { booking_id: booking.id },
       })
       await pushInAppNotification({
         userId: booking.cleaner.userId,
         type: isReauthFlow ? 'booking_cancelled' : 'booking_request_expired',
-        title: isReauthFlow ? 'Booking cancelled after unresolved re-authorization' : 'Booking payment window expired',
+        title: isReauthFlow ? 'Booking cancelled after unresolved re-authorisation' : 'Booking payment window expired',
         body: isReauthFlow
-          ? 'Client did not complete re-authorization during the grace period. Booking was auto-cancelled with no penalties.'
-          : 'This booking was closed because client authorization did not complete in time.',
+          ? 'Client did not complete re-authorisation during the grace period. Booking was auto-cancelled with no penalties.'
+          : 'This booking was closed because client authorisation did not complete in time.',
         data: { booking_id: booking.id },
       })
 

@@ -222,7 +222,7 @@ async function main() {
         userId: clientUserId,
         type: 'booking_confirmed',
         title: 'Booking confirmed',
-        body: 'Payment authorization is complete and your booking is now confirmed.',
+        body: 'Payment authorisation is complete and your booking is now confirmed.',
         data: { booking_id: booking.id },
         createdAt: booking.confirmedAt,
         ref: `${bookingRef}:confirmed`,

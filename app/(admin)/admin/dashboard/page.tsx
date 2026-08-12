@@ -354,7 +354,7 @@ export default function AdminDashboard() {
                   <Badge variant="warning">{issue.payment_status}</Badge>
                 </div>
                 <p className="mt-1 text-sm text-slate-800">Client: {issue.client_name}</p>
-                <p className="text-xs text-muted-foreground">Re-authorize by {issue.failed_at ? formatDate(issue.failed_at) : 'soon'}</p>
+                <p className="text-xs text-muted-foreground">Re-authorise by {issue.failed_at ? formatDate(issue.failed_at) : 'soon'}</p>
               </div>
             ))
           ) : (

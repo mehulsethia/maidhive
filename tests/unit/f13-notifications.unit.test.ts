@@ -23,6 +23,26 @@ describe('F13 Notifications + deep links unit coverage', () => {
     expect(getNotificationHref('cleaner', notification)).toBe('/cleaner/bookings/booking_123')
   })
 
+  it('routes payment re-authorisation notifications to the client booking detail', () => {
+    const required: any = {
+      type: 'booking_payment_required',
+      data: { booking_id: 'booking_reauth_1' },
+    }
+    const completed: any = {
+      type: 'booking_payment_reauthorisation_complete',
+      data: { booking_id: 'booking_reauth_1' },
+    }
+
+    expect(getNotificationHref('client', required)).toBe('/client/bookings/booking_reauth_1')
+    expect(getNotificationHref('client', completed)).toBe('/client/bookings/booking_reauth_1')
+  })
+
+  it('falls back to the client bookings list when payment re-authorisation context is missing', () => {
+    const missingBooking: any = { type: 'booking_payment_required', data: {} }
+
+    expect(getNotificationHref('client', missingBooking)).toBe('/client/bookings')
+  })
+
   it('UT-NOTIF-02 malformed or missing context falls back to safe role default routes', () => {
     const missingBooking: any = { type: 'booking_confirmed', data: {} }
     const unknownType: any = { type: 'unknown_event', data: { booking_id: 12345 } }

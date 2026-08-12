@@ -43,6 +43,18 @@ export const notificationRepo = {
       where: { id, userId },
     }),
 
+  deleteOutstandingBookingPaymentRequired: (userId: string, bookingId: string) =>
+    db.notification.deleteMany({
+      where: {
+        userId,
+        type: 'booking_payment_required',
+        data: {
+          path: ['booking_id'],
+          equals: bookingId,
+        },
+      },
+    }),
+
   countUnread: (userId: string) =>
     db.notification.count({
       where: {

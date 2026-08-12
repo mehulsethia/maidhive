@@ -48,14 +48,14 @@ export async function POST(req: NextRequest) {
             await pushInAppNotification({
               userId: booking.client.userId,
               type: 'booking_payment_required',
-              title: 'Re-authorization failed',
+              title: 'Re-authorisation failed',
               body: 'Please fix your payment method within 24 hours to keep this rescheduled booking active.',
               data: { booking_id: booking.id },
             })
             await pushInAppNotification({
               userId: booking.cleaner.userId,
               type: 'booking_payment_required',
-              title: 'Waiting for client re-authorization',
+              title: 'Waiting for client re-authorisation',
               body: 'Client has up to 24 hours to resolve payment for this rescheduled booking.',
               data: { booking_id: booking.id },
             })

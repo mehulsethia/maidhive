@@ -417,6 +417,7 @@ export default function CleanerBookingDetailPage() {
   })
   const cancellationOutcome = getCancellationPaymentOutcome(booking)
   const isClosedNonPayableStatus = ['cancelled', 'declined', 'expired'].includes(booking.status)
+  const isReauthorisationPending = Boolean(booking.reauthorization_required)
   const clientTrust = getClientTrustMetadata(booking.client)
   const memberSinceRaw = clientTrust.memberSince
   const memberSinceLabel = memberSinceRaw
@@ -613,7 +614,9 @@ export default function CleanerBookingDetailPage() {
                       </div>
                     )}
                     <p className="text-xs text-muted-foreground mt-0.5">
-                      {cleanerCancelledPayoutMessage
+                      {isReauthorisationPending
+                        ? 'Payment re-authorisation pending - awaiting client. You do not need to take any payment action.'
+                        : cleanerCancelledPayoutMessage
                         ? cleanerCancelledPayoutMessage.description
                         : noPayoutFinalized
                           ? 'No payout is due for this booking after the resolved dispute.'
