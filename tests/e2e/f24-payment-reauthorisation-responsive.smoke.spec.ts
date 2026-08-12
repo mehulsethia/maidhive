@@ -372,6 +372,7 @@ test.describe('F24 payment re-authorisation responsive regression @smoke', () =>
       await expect(bookingState.getByText('Payment re-authorisation completed', { exact: true })).toBeVisible()
       const actionLog = page.getByTestId('admin-booking-action-log')
       await expect(actionLog.getByText('Payment authorisation released — €22.00', { exact: true })).toBeVisible()
+      await expect(actionLog.getByText(/booking requires client payment re-authorisation after reschedule/)).toBeVisible()
       await expect(actionLog.getByText('Card re-authorisation required', { exact: true })).toBeVisible()
       await expect(actionLog.getByText(/Client must re-authorise the card by/)).toBeVisible()
       await expect(actionLog.getByText('Payment re-authorisation completed', { exact: true })).toBeVisible()

@@ -392,6 +392,8 @@ function buildTimeline(booking: BookingRead): TimelineEvent[] {
         ? 'the cleaner cancelled the booking before capture'
         : reason?.includes('client_cancelled')
           ? 'the client cancelled the booking before capture'
+          : reason?.includes('reauthorisation')
+            ? 'the booking requires client payment re-authorisation after reschedule'
           : 'the booking was cancelled before capture'
       addEvent(events, {
         id: event.id,
