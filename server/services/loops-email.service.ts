@@ -9,6 +9,8 @@ const ADMIN_NEW_CLEANER_APPLICATION_TRANSACTIONAL_ID = 'cmo5hnj710d3y0jzuabzw6i6
 const ADMIN_DISPUTE_RAISED_TRANSACTIONAL_ID = 'cmo5hoydy048w0i0p3io44dlm'
 const CLIENT_ACCOUNT_CREATED_TRANSACTIONAL_ID = 'cmo2r81uz0ec30iyxo9lozvlg'
 const CLIENT_BOOKING_CONFIRMED_TRANSACTIONAL_ID = 'cmo2rcbtv2p880izkqlj9rxj9'
+const CLIENT_PAYMENT_REAUTHORISATION_REQUIRED_TRANSACTIONAL_ID = 'cmspo37ns0my90jzph23irblu'
+const CLIENT_PAYMENT_REAUTHORISATION_COMPLETE_TRANSACTIONAL_ID = 'cmspo7dcn0t190j33ih0mruqe'
 const CLIENT_BOOKING_STARTED_TRANSACTIONAL_ID =
   process.env.LOOPS_CLIENT_BOOKING_STARTED_TRANSACTIONAL_ID ?? ''
 const CLIENT_BOOKING_CREATED_PENDING_TRANSACTIONAL_ID =
@@ -242,6 +244,52 @@ export const loopsEmailService = {
         transport_note: transportNote,
         supplies_note: suppliesNote,
         booking_link: `${appUrl()}/client/bookings/${args.bookingId}`,
+      },
+    })
+  },
+
+  async sendClientPaymentReauthorisationRequired(args: {
+    email: string
+    fullName: string
+    cleanerName: string
+    scheduledStart: Date
+    bookingTotal: number
+    reauthorisationDeadline: Date
+    bookingId: string
+  }) {
+    return sendTransactionalEmail({
+      transactionalId: CLIENT_PAYMENT_REAUTHORISATION_REQUIRED_TRANSACTIONAL_ID,
+      email: args.email,
+      dataVariables: {
+        first_name: firstName(args.fullName),
+        booking_reference: args.bookingId,
+        cleaner_name: args.cleanerName,
+        booking_date_time: formatBookingDateTime(args.scheduledStart),
+        booking_total: formatEuro(args.bookingTotal),
+        reauthorisation_deadline: formatBookingDateTime(args.reauthorisationDeadline),
+        booking_link: absoluteAppLink(`/client/bookings/${args.bookingId}`),
+      },
+    })
+  },
+
+  async sendClientPaymentReauthorisationComplete(args: {
+    email: string
+    clientName: string
+    cleanerName: string
+    scheduledStart: Date
+    durationHours: number
+    bookingId: string
+  }) {
+    return sendTransactionalEmail({
+      transactionalId: CLIENT_PAYMENT_REAUTHORISATION_COMPLETE_TRANSACTIONAL_ID,
+      email: args.email,
+      dataVariables: {
+        client_name: args.clientName,
+        cleaner_name: args.cleanerName,
+        booking_date: formatBookingDate(args.scheduledStart),
+        booking_time: formatBookingTime(args.scheduledStart),
+        duration: `${args.durationHours} hour${args.durationHours === 1 ? '' : 's'}`,
+        booking_link: absoluteAppLink(`/client/bookings/${args.bookingId}`),
       },
     })
   },

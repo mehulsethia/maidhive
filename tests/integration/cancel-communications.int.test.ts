@@ -26,6 +26,7 @@ const state = vi.hoisted(() => ({
   clientCancellationPayloads: [] as any[],
   clientCancelledByCleanerEmails: 0,
   clientRejectedEmails: 0,
+  clientReauthorisationRequiredPayloads: [] as any[],
   amendmentDeclinedPayloads: [] as any[],
   actionEvents: [] as any[],
   paymentUpdates: [] as any[],
@@ -62,7 +63,7 @@ vi.mock('@/server/repositories/client.repo', () => ({
 vi.mock('@/server/repositories/cleaner.repo', () => ({
   cleanerRepo: {
     findByUserId: vi.fn(async (userId: string) =>
-      userId === seeded.cleanerUser.id ? { id: 'cleaner_profile_1', userId } : null),
+      userId === seeded.cleanerUser.id ? { id: 'cleaner_profile_1', userId, stripeOnboardingComplete: true } : null),
   },
 }))
 
@@ -133,8 +134,13 @@ vi.mock('@/server/services/loops-email.service', () => ({
       return true
     }),
     sendCleanerCancellationWarningOrStrike: vi.fn(async () => true),
+    sendCleanerBookingAcceptedConfirmation: vi.fn(async () => true),
     sendClientBookingRejectedOrExpired: vi.fn(async () => {
       state.clientRejectedEmails += 1
+      return true
+    }),
+    sendClientPaymentReauthorisationRequired: vi.fn(async (payload: any) => {
+      state.clientReauthorisationRequiredPayloads.push(payload)
       return true
     }),
     sendAmendmentRequestDeclined: vi.fn(async (payload: any) => {
@@ -189,6 +195,7 @@ describe('Booking cancellation communications', () => {
     state.clientCancellationPayloads = []
     state.clientCancelledByCleanerEmails = 0
     state.clientRejectedEmails = 0
+    state.clientReauthorisationRequiredPayloads = []
     state.amendmentDeclinedPayloads = []
     state.actionEvents = []
     state.paymentUpdates = []
@@ -338,6 +345,86 @@ describe('Booking cancellation communications', () => {
       }),
     }))
     expect(state.clientCancelledByCleanerEmails).toBe(1)
+  })
+
+  it('sends a dedicated client email when post-confirmation reschedule requires payment re-authorisation', async () => {
+    vi.useFakeTimers()
+    vi.setSystemTime(new Date('2026-08-10T12:00:00.000Z'))
+    const originalStart = new Date('2026-08-15T07:30:00.000Z')
+    const proposedStart = new Date('2026-08-16T07:30:00.000Z')
+    const proposedEnd = new Date('2026-08-16T09:30:00.000Z')
+    state.booking = {
+      id: 'booking_reauth_email_1',
+      status: 'confirmed',
+      clientId: 'client_profile_1',
+      cleanerId: 'cleaner_profile_1',
+      acceptedAt: new Date('2026-08-09T10:00:00.000Z'),
+      confirmedAt: new Date('2026-08-09T10:00:00.000Z'),
+      scheduledStart: originalStart,
+      scheduledEnd: new Date('2026-08-15T09:30:00.000Z'),
+      proposedStart,
+      proposedEnd,
+      proposalBy: 'client',
+      proposalContext: 'post_confirmation',
+      proposalExpiresAt: new Date('2026-08-10T13:00:00.000Z'),
+      durationHours: 2,
+      totalAmount: 22,
+      cleanerPayout: 20,
+      platformFee: 2,
+      postCleanerProposals: 0,
+      postClientProposals: 1,
+      payment: { id: 'payment_reauth_1', status: 'authorized', amount: 22, stripePaymentIntentId: 'pi_reauth_1' },
+      client: { userId: seeded.clientUser.id, user: { email: seeded.clientUser.email, name: seeded.clientUser.name } },
+      cleaner: { userId: seeded.cleanerUser.id, user: { email: seeded.cleanerUser.email, name: seeded.cleanerUser.name } },
+    }
+
+    const { bookingService } = await import('@/server/services/booking.service')
+    const updated = await bookingService.applyAction(
+      state.booking.id,
+      seeded.cleanerUser as any,
+      { action: 'accept_proposal' },
+    )
+
+    expect(updated.status).toBe('accepted')
+    expect(updated.reauthorizationRequired).toBe(true)
+    expect(updated.payBy).toEqual(new Date('2026-08-14T07:30:00.000Z'))
+    expect(state.notifications).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        userId: seeded.clientUser.id,
+        type: 'booking_payment_required',
+        title: 'Card re-authorisation required',
+        data: { booking_id: 'booking_reauth_email_1' },
+      }),
+    ]))
+    expect(state.clientReauthorisationRequiredPayloads).toEqual([
+      expect.objectContaining({
+        email: seeded.clientUser.email,
+        fullName: seeded.clientUser.name,
+        cleanerName: seeded.cleanerUser.name,
+        scheduledStart: proposedStart,
+        bookingTotal: 22,
+        reauthorisationDeadline: new Date('2026-08-14T07:30:00.000Z'),
+        bookingId: 'booking_reauth_email_1',
+      }),
+    ])
+    expect(state.actionEvents).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        type: 'payment_authorisation_released',
+        metadata: expect.objectContaining({
+          amount: 22,
+          payment_state_before: 'authorized',
+          payment_state_after: 'released',
+          reason: 'payment_reauthorisation_required_after_reschedule',
+        }),
+      }),
+      expect.objectContaining({
+        type: 'payment_reauthorisation_required',
+        metadata: expect.objectContaining({
+          deadline: '2026-08-14T07:30:00.000Z',
+          previous_confirmed_at: '2026-08-09T10:00:00.000Z',
+        }),
+      }),
+    ]))
   })
 
   it('records under-12 cleaner cancellation notifications as last-minute incidents', async () => {

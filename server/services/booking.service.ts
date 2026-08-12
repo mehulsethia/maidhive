@@ -925,15 +925,6 @@ export const bookingService = {
       } catch (emailError) {
         console.error('Failed to send cleaner reschedule accepted email via Loops:', emailError)
       }
-      try {
-        await loopsEmailService.sendClientBookingCreatedPending({
-          email: booking.client.user.email,
-          fullName: booking.client.user.name ?? 'Client',
-          cleanerName: booking.cleaner.user.name ?? 'Cleaner',
-        })
-      } catch (emailError) {
-        console.error('Failed to send client reschedule accepted email via Loops:', emailError)
-      }
       const refreshed = await bookingRepo.findById(updated.id)
       if (!refreshed) throw new ServiceError('Booking not found after reschedule update', 404)
       return refreshed
@@ -1791,6 +1782,20 @@ async function resetAuthorizationAfterReschedule(bookingId: string) {
       : 'Please re-authorise your card before 48 hours prior to the rescheduled start time.',
     data: { booking_id: bookingId },
   })
+
+  try {
+    await loopsEmailService.sendClientPaymentReauthorisationRequired({
+      email: booking.client.user.email,
+      fullName: booking.client.user.name ?? 'Client',
+      cleanerName: booking.cleaner.user.name ?? 'Cleaner',
+      scheduledStart: booking.scheduledStart,
+      bookingTotal: Number(booking.totalAmount),
+      reauthorisationDeadline: payBy,
+      bookingId: booking.id,
+    })
+  } catch (emailError) {
+    console.error('Failed to send client payment re-authorisation required email via Loops:', emailError)
+  }
 }
 
 function assertPaymentAuthorized(paymentStatus: string | null | undefined, action: string) {

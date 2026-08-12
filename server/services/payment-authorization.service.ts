@@ -146,6 +146,18 @@ export const paymentAuthorizationService = {
           body: 'Your payment re-authorisation has been completed successfully. Your booking remains confirmed.',
           data: { booking_id: booking.id },
         })
+        try {
+          await loopsEmailService.sendClientPaymentReauthorisationComplete({
+            email: booking.client.user.email,
+            clientName: booking.client.user.name ?? 'Client',
+            cleanerName: booking.cleaner.user.name ?? 'Cleaner',
+            scheduledStart: booking.scheduledStart,
+            durationHours: Number(booking.durationHours),
+            bookingId: booking.id,
+          })
+        } catch (emailError) {
+          console.error('Failed to send client payment re-authorisation complete email via Loops:', emailError)
+        }
         return { updated: true, reason: 'reauthorisation_completed_confirmed' as const }
       }
 

@@ -20,6 +20,7 @@ const state = vi.hoisted(() => ({
   cleanerRequestEmails: [] as any[],
   clientPendingEmails: [] as any[],
   clientConfirmedEmails: [] as any[],
+  clientReauthorisationCompleteEmails: [] as any[],
   calendarUpserts: [] as string[],
   actionEvents: [] as any[],
   deletedPaymentRequiredNotifications: [] as any[],
@@ -58,6 +59,10 @@ vi.mock('@/server/services/loops-email.service', () => ({
     }),
     sendClientBookingConfirmed: vi.fn(async (payload: any) => {
       state.clientConfirmedEmails.push(payload)
+      return true
+    }),
+    sendClientPaymentReauthorisationComplete: vi.fn(async (payload: any) => {
+      state.clientReauthorisationCompleteEmails.push(payload)
       return true
     }),
   },
@@ -122,6 +127,7 @@ describe('payment authorization email triggers', () => {
     state.cleanerRequestEmails = []
     state.clientPendingEmails = []
     state.clientConfirmedEmails = []
+    state.clientReauthorisationCompleteEmails = []
     state.calendarUpserts = []
     state.actionEvents = []
     state.deletedPaymentRequiredNotifications = []
@@ -248,6 +254,14 @@ describe('payment authorization email triggers', () => {
       }),
     ])
     expect(state.clientConfirmedEmails).toHaveLength(0)
+    expect(state.clientReauthorisationCompleteEmails).toEqual([
+      expect.objectContaining({
+        email: seeded.clientUser.email,
+        clientName: seeded.clientUser.name,
+        cleanerName: seeded.cleanerUser.name,
+        bookingId: 'booking_1',
+      }),
+    ])
     expect(state.calendarUpserts).toEqual(['booking_1'])
   })
 })

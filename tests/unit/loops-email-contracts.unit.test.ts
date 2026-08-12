@@ -65,10 +65,12 @@ describe('Loops email contracts', () => {
       'sendClientBookingCreatedPending',
       'sendClientBookingRejectedOrExpired',
       'sendClientBookingStarted',
-      'sendClientSelfCancellationConfirmation',
       'sendClientPaymentReceipt',
+      'sendClientPaymentReauthorisationComplete',
+      'sendClientPaymentReauthorisationRequired',
       'sendClientProposalDeclinedClosed',
       'sendClientReviewRequest',
+      'sendClientSelfCancellationConfirmation',
       'sendDisputeRaisedAgainstNotification',
       'sendDisputeResolvedOutcome',
       'sendDisputeSubmittedConfirmation',
@@ -131,6 +133,56 @@ describe('Loops email contracts', () => {
       dataVariables: {
         first_name: 'Cleaner',
         cta_link: 'https://app.maidhive.test/cleaner/onboarding',
+      },
+    })
+  })
+
+  it('sends client payment re-authorisation emails with exact IDs and variables', async () => {
+    const { loopsEmailService, fetchMock } = await loadLoopsEmailService()
+    const scheduledStart = new Date('2026-08-15T07:30:00.000Z')
+    const deadline = new Date('2026-08-12T08:00:00.000Z')
+
+    await loopsEmailService.sendClientPaymentReauthorisationRequired({
+      email: 'client@example.test',
+      fullName: 'Client User',
+      cleanerName: 'Cleaner User',
+      scheduledStart,
+      bookingTotal: 22,
+      reauthorisationDeadline: deadline,
+      bookingId: 'booking_reauth_1',
+    })
+    await loopsEmailService.sendClientPaymentReauthorisationComplete({
+      email: 'client@example.test',
+      clientName: 'Client User',
+      cleanerName: 'Cleaner User',
+      scheduledStart,
+      durationHours: 2,
+      bookingId: 'booking_reauth_1',
+    })
+
+    expect(requestBody(fetchMock, 0)).toEqual({
+      transactionalId: 'cmspo37ns0my90jzph23irblu',
+      email: 'client@example.test',
+      dataVariables: {
+        first_name: 'Client',
+        booking_reference: 'booking_reauth_1',
+        cleaner_name: 'Cleaner User',
+        booking_date_time: '15 Aug 2026 at 10:30',
+        booking_total: '€22.00',
+        reauthorisation_deadline: '12 Aug 2026 at 11:00',
+        booking_link: 'https://app.maidhive.test/client/bookings/booking_reauth_1',
+      },
+    })
+    expect(requestBody(fetchMock, 1)).toEqual({
+      transactionalId: 'cmspo7dcn0t190j33ih0mruqe',
+      email: 'client@example.test',
+      dataVariables: {
+        client_name: 'Client User',
+        cleaner_name: 'Cleaner User',
+        booking_date: '15 Aug 2026',
+        booking_time: '10:30',
+        duration: '2 hours',
+        booking_link: 'https://app.maidhive.test/client/bookings/booking_reauth_1',
       },
     })
   })
