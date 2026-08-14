@@ -21,7 +21,10 @@ import { UserAvatar } from '@/components/ui/user-avatar'
 import {
   ALTERNATIVE_PROPOSAL_WINDOW_DAYS,
   PLATFORM_BOOKING_WINDOW_DAYS,
+  RESCHEDULE_NO_LONGER_AVAILABLE_BODY,
+  RESCHEDULE_NO_LONGER_AVAILABLE_TITLE,
   getCleanerProposalEligibility,
+  isPostConfirmationRescheduleNoLongerAcceptable,
   maxAlternativeProposalDateInputValue,
   maxPreConfirmationProposalDateInputValue,
   toDateInputValueCyprus,
@@ -454,6 +457,10 @@ export default function CleanerBookingDetailPage() {
   const isPostConfirmationProposal = Boolean(hasProposal && proposalContext === 'post_confirmation')
   const isAmendProposal = Boolean(hasProposal && proposalContext === 'amend_start')
   const hasOpenProposalFlow = hasProposal && ['pending', 'accepted', 'confirmed'].includes(booking.status)
+  const isPostConfirmationProposalExpiredByStart = isPostConfirmationRescheduleNoLongerAcceptable(
+    { ...booking, proposal_context: proposalContext },
+    nowTick,
+  )
   const isClientPostConfirmationProposal = isPostConfirmationProposal && booking.proposal_by === 'client'
   const isCleanerPostConfirmationProposal = isPostConfirmationProposal && booking.proposal_by === 'cleaner'
   const canPostConfirmProposeAlternative =
@@ -464,7 +471,8 @@ export default function CleanerBookingDetailPage() {
     (booking.post_cleaner_proposals ?? 0) < 1
   const canRespondToClientPostConfirmationProposal =
     isClientPostConfirmationProposal &&
-    moreThan24HoursAway
+    moreThan24HoursAway &&
+    !isPostConfirmationProposalExpiredByStart
   const canRespondToClientAmendProposal =
     isAmendProposal &&
     booking.proposal_by === 'client' &&
@@ -493,7 +501,7 @@ export default function CleanerBookingDetailPage() {
       : maxPreConfirmationProposalDateInputValue()
   const canCounterClientProposal =
     isClientPostConfirmationProposal
-      ? (booking.post_cleaner_proposals ?? 0) < 1
+      ? !isPostConfirmationProposalExpiredByStart && (booking.post_cleaner_proposals ?? 0) < 1
       : isAmendProposal
         ? false
         : false
@@ -717,12 +725,17 @@ export default function CleanerBookingDetailPage() {
               : `Client countered with ${formatDate(booking.proposed_start!)}. Accept or decline before request expiry.`}
           </p>
         )}
-        {!isCancelledPreConfirmation && isCleanerPostConfirmationProposal && (
+        {!isCancelledPreConfirmation && isPostConfirmationProposalExpiredByStart ? (
+          <div className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">
+            <p className="font-semibold">{RESCHEDULE_NO_LONGER_AVAILABLE_TITLE}</p>
+            <p>{RESCHEDULE_NO_LONGER_AVAILABLE_BODY}</p>
+          </div>
+        ) : !isCancelledPreConfirmation && isCleanerPostConfirmationProposal && (
           <p className="rounded-xl border border-blue-200 bg-blue-50 px-3 py-2 text-sm text-blue-700">
             You proposed a reschedule: {formatDate(booking.scheduled_start)} → {formatDate(booking.proposed_start!)}. Waiting for client response before the 24-hour cutoff.
           </p>
         )}
-        {!isCancelledPreConfirmation && isClientPostConfirmationProposal && (
+        {!isCancelledPreConfirmation && !isPostConfirmationProposalExpiredByStart && isClientPostConfirmationProposal && (
           <p className="rounded-xl border border-blue-200 bg-blue-50 px-3 py-2 text-sm text-blue-700">
             Client proposed a reschedule: {formatDate(booking.scheduled_start)} → {formatDate(booking.proposed_start!)}. Accept, decline, or counter once before the 24-hour cutoff.
           </p>
@@ -737,7 +750,7 @@ export default function CleanerBookingDetailPage() {
             Client requested Amend Start Time: {formatDate(booking.scheduled_start)} → {formatDate(booking.proposed_start!)}. The other party can accept or decline this amendment request. {AMENDMENT_EXPIRY_OUTCOME_COPY}
           </p>
         )}
-        {!isCancelledPreConfirmation && hasOpenProposalFlow && proposalCountdownLabel && (
+        {!isCancelledPreConfirmation && !isPostConfirmationProposalExpiredByStart && hasOpenProposalFlow && proposalCountdownLabel && (
           <p className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
             Response window: {proposalCountdownLabel} remaining.
           </p>

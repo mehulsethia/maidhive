@@ -387,7 +387,7 @@ describe('Booking cancellation communications', () => {
 
     expect(updated.status).toBe('accepted')
     expect(updated.reauthorizationRequired).toBe(true)
-    expect(updated.payBy).toEqual(new Date('2026-08-14T07:30:00.000Z'))
+    expect(updated.payBy).toEqual(new Date('2026-08-11T12:00:00.000Z'))
     expect(state.notifications).toEqual(expect.arrayContaining([
       expect.objectContaining({
         userId: seeded.clientUser.id,
@@ -403,7 +403,7 @@ describe('Booking cancellation communications', () => {
         cleanerName: seeded.cleanerUser.name,
         scheduledStart: proposedStart,
         bookingTotal: 22,
-        reauthorisationDeadline: new Date('2026-08-14T07:30:00.000Z'),
+        reauthorisationDeadline: new Date('2026-08-11T12:00:00.000Z'),
         bookingId: 'booking_reauth_email_1',
       }),
     ])
@@ -420,11 +420,63 @@ describe('Booking cancellation communications', () => {
       expect.objectContaining({
         type: 'payment_reauthorisation_required',
         metadata: expect.objectContaining({
-          deadline: '2026-08-14T07:30:00.000Z',
+          deadline: '2026-08-11T12:00:00.000Z',
           previous_confirmed_at: '2026-08-09T10:00:00.000Z',
         }),
       }),
     ]))
+  })
+
+  it('rejects stale post-confirmation reschedule acceptance before releasing payment authorisation', async () => {
+    vi.useFakeTimers()
+    vi.setSystemTime(new Date('2026-08-10T12:00:00.000Z'))
+    const originalStart = new Date('2026-08-15T07:30:00.000Z')
+    const proposedStart = new Date('2026-08-10T15:30:00.000Z')
+    const proposedEnd = new Date('2026-08-10T17:30:00.000Z')
+    state.booking = {
+      id: 'booking_reauth_stale_accept_1',
+      status: 'confirmed',
+      clientId: 'client_profile_1',
+      cleanerId: 'cleaner_profile_1',
+      acceptedAt: new Date('2026-08-09T10:00:00.000Z'),
+      confirmedAt: new Date('2026-08-09T10:00:00.000Z'),
+      scheduledStart: originalStart,
+      scheduledEnd: new Date('2026-08-15T09:30:00.000Z'),
+      proposedStart,
+      proposedEnd,
+      proposalBy: 'client',
+      proposalContext: 'post_confirmation',
+      proposalExpiresAt: new Date('2026-08-14T07:30:00.000Z'),
+      durationHours: 2,
+      totalAmount: 22,
+      cleanerPayout: 20,
+      platformFee: 2,
+      postCleanerProposals: 0,
+      postClientProposals: 1,
+      payment: { id: 'payment_reauth_stale_1', status: 'authorized', amount: 22, stripePaymentIntentId: 'pi_reauth_stale_1' },
+      client: { userId: seeded.clientUser.id, user: { email: seeded.clientUser.email, name: seeded.clientUser.name } },
+      cleaner: { userId: seeded.cleanerUser.id, user: { email: seeded.cleanerUser.email, name: seeded.cleanerUser.name } },
+    }
+
+    const { bookingService } = await import('@/server/services/booking.service')
+
+    await expect(bookingService.applyAction(
+      state.booking.id,
+      seeded.cleanerUser as any,
+      { action: 'accept_proposal' },
+    )).rejects.toMatchObject({
+      message: 'Reschedule no longer available. This reschedule can no longer be accepted because the proposed start time is less than 4 hours away. Your original booking remains unchanged.',
+      status: 400,
+    })
+
+    expect(state.booking.status).toBe('confirmed')
+    expect(state.booking.scheduledStart).toEqual(originalStart)
+    expect(state.booking.scheduledEnd).toEqual(new Date('2026-08-15T09:30:00.000Z'))
+    expect(state.booking.payment.status).toBe('authorized')
+    expect(state.paymentUpdates).toEqual([])
+    expect(state.notifications).toEqual([])
+    expect(state.clientReauthorisationRequiredPayloads).toEqual([])
+    expect(state.actionEvents).toEqual([])
   })
 
   it('records under-12 cleaner cancellation notifications as last-minute incidents', async () => {

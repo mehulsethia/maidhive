@@ -1,8 +1,11 @@
 import type { BookingRead } from '@/types'
 
 export const RESCHEDULE_CUTOFF_HOURS = 24
+export const POST_CONFIRMATION_REAUTH_ACCEPT_MIN_LEAD_HOURS = 4
 export const ALTERNATIVE_PROPOSAL_WINDOW_DAYS = 14
 export const PLATFORM_BOOKING_WINDOW_DAYS = 28
+export const RESCHEDULE_NO_LONGER_AVAILABLE_TITLE = 'Reschedule no longer available'
+export const RESCHEDULE_NO_LONGER_AVAILABLE_BODY = 'This reschedule can no longer be accepted because the proposed start time is less than 4 hours away. Your original booking remains unchanged.'
 const MS_PER_HOUR = 60 * 60 * 1000
 const MS_PER_DAY = 24 * 60 * 60 * 1000
 const APP_TIMEZONE = 'Europe/Nicosia'
@@ -135,6 +138,19 @@ export function maxPreConfirmationProposalDateInputValue(nowLike: string | Date 
   if (Number.isNaN(base.getTime())) return ''
   const maxAllowed = new Date(base.getTime() + PLATFORM_BOOKING_WINDOW_DAYS * MS_PER_DAY)
   return toDateInputValueCyprus(maxAllowed)
+}
+
+export function isPostConfirmationRescheduleNoLongerAcceptable(
+  booking: Pick<BookingRead, 'status' | 'proposal_context' | 'proposed_start'>,
+  nowMs = Date.now(),
+): boolean {
+  if (!['accepted', 'confirmed'].includes(booking.status)) return false
+  if (booking.proposal_context !== 'post_confirmation') return false
+  if (!booking.proposed_start) return false
+
+  const proposedStartMs = new Date(booking.proposed_start).getTime()
+  if (!Number.isFinite(proposedStartMs)) return false
+  return proposedStartMs - nowMs < POST_CONFIRMATION_REAUTH_ACCEPT_MIN_LEAD_HOURS * MS_PER_HOUR
 }
 
 export function toTimeInputValue(dateLike: string | Date): string {

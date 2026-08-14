@@ -222,7 +222,7 @@ test.describe('F24 payment re-authorisation responsive regression @smoke', () =>
         id: 'notification-required',
         type: 'booking_payment_required',
         title: 'Card re-authorisation required',
-        body: 'Please re-authorise your card before 48 hours prior to the rescheduled start time.',
+        body: 'Please re-authorise your card by the deadline shown on your booking to keep the rescheduled booking active.',
         data: { booking_id: BOOKING_ID },
         is_read: false,
         created_at: isoHoursFromNow(-3),

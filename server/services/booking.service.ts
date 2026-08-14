@@ -32,7 +32,8 @@ const AMEND_WITHIN_HOURS = 24
 const AMEND_MAX_SHIFT_HOURS = 3
 const AMEND_FAST_RESPONSE_MINUTES = 15
 const AMEND_STANDARD_RESPONSE_MINUTES = 60
-const REAUTH_IMMEDIATE_THRESHOLD_HOURS = 48
+const POST_CONFIRMATION_REAUTH_ACCEPT_MIN_LEAD_HOURS = 4
+const REAUTH_PRE_START_CUTOFF_HOURS = 2
 const REAUTH_FAILURE_GRACE_HOURS = 24
 const BOOKING_PRE_BUFFER_MS = 15 * 60 * 1000
 const BOOKING_POST_BUFFER_MS = 15 * 60 * 1000
@@ -902,6 +903,7 @@ export const bookingService = {
 
       assertPostConfirmationRescheduleWindow(booking.scheduledStart)
       assertPostConfirmationProposalOpen(booking.proposalExpiresAt)
+      assertPostConfirmationReauthAcceptWindow(booking.proposedStart)
       const updated = await bookingRepo.update(bookingId, {
         scheduledStart: booking.proposedStart,
         scheduledEnd: booking.proposedEnd,
@@ -1610,6 +1612,16 @@ function assertPostConfirmationProposalOpen(proposalExpiresAt: Date | null) {
   }
 }
 
+function assertPostConfirmationReauthAcceptWindow(proposedStart: Date) {
+  const minimumAcceptableStart = Date.now() + POST_CONFIRMATION_REAUTH_ACCEPT_MIN_LEAD_HOURS * 60 * 60 * 1000
+  if (proposedStart.getTime() < minimumAcceptableStart) {
+    throw new ServiceError(
+      'Reschedule no longer available. This reschedule can no longer be accepted because the proposed start time is less than 4 hours away. Your original booking remains unchanged.',
+      400,
+    )
+  }
+}
+
 function assertPostConfirmationRescheduleNotUsed(booking: BookingWithRelations) {
   if (
     !booking.proposalBy &&
@@ -1749,17 +1761,13 @@ async function resetAuthorizationAfterReschedule(bookingId: string) {
   )
 
   const now = Date.now()
-  const hoursToStart = (booking.scheduledStart.getTime() - now) / (60 * 60 * 1000)
-  const requiresImmediateReauth = hoursToStart < REAUTH_IMMEDIATE_THRESHOLD_HOURS
-  const payBy = requiresImmediateReauth
-    ? new Date(Math.min(booking.scheduledStart.getTime(), now + REAUTH_FAILURE_GRACE_HOURS * 60 * 60 * 1000))
-    : new Date(booking.scheduledStart.getTime() - REAUTH_IMMEDIATE_THRESHOLD_HOURS * 60 * 60 * 1000)
+  const payBy = computePaymentReauthorisationDeadline(booking.scheduledStart, now)
 
   await bookingRepo.update(bookingId, {
     status: 'accepted',
     payBy,
     reauthorizationRequired: true,
-    reauthorizationGraceExpiresAt: requiresImmediateReauth ? payBy : null,
+    reauthorizationGraceExpiresAt: payBy,
   })
 
   await recordBookingActionEvent({
@@ -1777,9 +1785,7 @@ async function resetAuthorizationAfterReschedule(bookingId: string) {
     userId: booking.client.userId,
     type: 'booking_payment_required',
     title: 'Card re-authorisation required',
-    body: requiresImmediateReauth
-      ? 'Your rescheduled booking is less than 48 hours away. Re-authorise your card now.'
-      : 'Please re-authorise your card before 48 hours prior to the rescheduled start time.',
+    body: 'Please re-authorise your card by the deadline shown on your booking to keep the rescheduled booking active.',
     data: { booking_id: bookingId },
   })
 
@@ -1796,6 +1802,12 @@ async function resetAuthorizationAfterReschedule(bookingId: string) {
   } catch (emailError) {
     console.error('Failed to send client payment re-authorisation required email via Loops:', emailError)
   }
+}
+
+function computePaymentReauthorisationDeadline(scheduledStart: Date, nowMs = Date.now()) {
+  const graceDeadline = nowMs + REAUTH_FAILURE_GRACE_HOURS * 60 * 60 * 1000
+  const preStartDeadline = scheduledStart.getTime() - REAUTH_PRE_START_CUTOFF_HOURS * 60 * 60 * 1000
+  return new Date(Math.min(graceDeadline, preStartDeadline))
 }
 
 function assertPaymentAuthorized(paymentStatus: string | null | undefined, action: string) {

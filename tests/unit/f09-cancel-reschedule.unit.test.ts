@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { bookingActionSchema, cancelBookingSchema } from '@/server/schemas/booking.schema'
 import { computeConfirmedCancellationPolicy, moneyFromCents } from '@/lib/cancellation-policy'
 import { getCancellationPaymentOutcome } from '@/lib/booking-payment-outcome'
+import { isPostConfirmationRescheduleNoLongerAcceptable } from '@/lib/booking-proposal'
 import type { BookingRead } from '@/types'
 
 describe('F09 cancel/reschedule policy unit coverage', () => {
@@ -43,6 +44,25 @@ describe('F09 cancel/reschedule policy unit coverage', () => {
 
     expect(amendValid.success).toBe(true)
     expect(counterValid.success).toBe(true)
+  })
+
+  it('UT-CANCEL-03b marks post-confirmation reschedules expired when proposed start is less than 4 hours away', () => {
+    const booking = {
+      status: 'confirmed',
+      proposal_context: 'post_confirmation',
+      proposed_start: '2026-08-14T13:59:59.000Z',
+    } as BookingRead
+    const nowMs = new Date('2026-08-14T10:00:00.000Z').getTime()
+
+    expect(isPostConfirmationRescheduleNoLongerAcceptable(booking, nowMs)).toBe(true)
+    expect(isPostConfirmationRescheduleNoLongerAcceptable({
+      ...booking,
+      proposed_start: '2026-08-14T14:00:00.000Z',
+    }, nowMs)).toBe(false)
+    expect(isPostConfirmationRescheduleNoLongerAcceptable({
+      ...booking,
+      proposal_context: 'amend_start',
+    }, nowMs)).toBe(false)
   })
 
   it('UT-CANCEL-04 start action location payload enforces valid coordinate bounds', () => {

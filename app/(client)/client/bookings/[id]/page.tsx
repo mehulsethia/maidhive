@@ -22,6 +22,9 @@ import { Label } from '@/components/ui/label'
 import { Input } from '@/components/ui/input'
 import {
   ALTERNATIVE_PROPOSAL_WINDOW_DAYS,
+  RESCHEDULE_NO_LONGER_AVAILABLE_BODY,
+  RESCHEDULE_NO_LONGER_AVAILABLE_TITLE,
+  isPostConfirmationRescheduleNoLongerAcceptable,
   maxAlternativeProposalDateInputValue,
   maxPreConfirmationProposalDateInputValue,
   toDateInputValueCyprus,
@@ -452,8 +455,13 @@ export default function ClientBookingDetailPage() {
   const proposalContext =
     booking.proposal_context ??
     (booking.status === 'pending' ? 'pre_confirmation' : booking.status === 'accepted' || booking.status === 'confirmed' ? 'post_confirmation' : null)
+  const isPostConfirmationProposalExpiredByStart = isPostConfirmationRescheduleNoLongerAcceptable(
+    { ...booking, proposal_context: proposalContext },
+    nowTick,
+  )
   const canCounterProposal = cleanerProposed
     && hasProposal
+    && !isPostConfirmationProposalExpiredByStart
     && (
       proposalContext === 'pre_confirmation'
         ? moreThan24HoursAway && (booking.client_proposals ?? 0) < 1
@@ -464,7 +472,7 @@ export default function ClientBookingDetailPage() {
             : false
     )
   const hasOpenProposalFlow = hasProposal && ['pending', 'accepted', 'confirmed'].includes(booking.status)
-  const canRespondToCleanerProposal = hasOpenProposalFlow && cleanerProposed
+  const canRespondToCleanerProposal = hasOpenProposalFlow && cleanerProposed && !isPostConfirmationProposalExpiredByStart
   const canReportInProgress = booking.status === 'in_progress' && !hasDisputeCase
   const isCompletedReleased = isCompletedBookingReleased({
     status: booking.status,
@@ -691,7 +699,12 @@ export default function ClientBookingDetailPage() {
               </CardContent>
             </Card>
 
-            {hasOpenProposalFlow && (
+            {isPostConfirmationProposalExpiredByStart ? (
+              <div className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">
+                <p className="font-semibold">{RESCHEDULE_NO_LONGER_AVAILABLE_TITLE}</p>
+                <p>{RESCHEDULE_NO_LONGER_AVAILABLE_BODY}</p>
+              </div>
+            ) : hasOpenProposalFlow && (
               <p className="rounded-xl border border-blue-200 bg-blue-50 px-3 py-2 text-sm text-blue-700">
                 {cleanerProposed
                   ? isAmendProposal
@@ -699,10 +712,10 @@ export default function ClientBookingDetailPage() {
                     : `Cleaner proposed ${formatDate(booking.scheduled_start)} → ${formatDate(booking.proposed_start!)}. Accept, decline, or counter once before expiry.`
                   : clientProposed && isAmendProposal
                     ? `You requested Amend Start Time: ${formatDate(booking.scheduled_start)} → ${formatDate(booking.proposed_start!)}. Waiting for cleaner response. ${AMENDMENT_EXPIRY_OUTCOME_COPY}`
-                    : `You proposed a reschedule: ${formatDate(booking.scheduled_start)} → ${formatDate(booking.proposed_start!)}. Waiting for cleaner response before the 24-hour cutoff.`}
+                  : `You proposed a reschedule: ${formatDate(booking.scheduled_start)} → ${formatDate(booking.proposed_start!)}. Waiting for cleaner response before the 24-hour cutoff.`}
               </p>
             )}
-            {hasOpenProposalFlow && proposalCountdownLabel && (
+            {!isPostConfirmationProposalExpiredByStart && hasOpenProposalFlow && proposalCountdownLabel && (
               <p className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
                 Response window: {proposalCountdownLabel} remaining.
               </p>
