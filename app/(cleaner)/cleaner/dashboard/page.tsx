@@ -27,6 +27,7 @@ import { setupVisiblePolling } from '@/lib/visible-polling'
 import { getCleanerEarningsLabel } from '@/lib/cleaner-earnings-label'
 import { getCleanerPayoutSummary } from '@/lib/cleaner-payout'
 import { isFinalNoCleanerPayoutOutcome } from '@/lib/payment-financial-outcome'
+import { isPaymentReauthorisationPending } from '@/lib/booking-reauthorisation'
 import { getCleanerCancellationOriginLabel } from '@/lib/cancellation-origin'
 import { getCancellationPaymentOutcome } from '@/lib/booking-payment-outcome'
 import { toast } from 'sonner'
@@ -604,7 +605,7 @@ export default function CleanerDashboardPage() {
                   disputeStatus: b.dispute?.status,
                   noPayoutFinalized,
                 })
-                const isReauthorisationPending = Boolean(b.reauthorization_required)
+                const isReauthorisationPending = isPaymentReauthorisationPending(b)
                 return (
                   <Link
                     key={b.id}

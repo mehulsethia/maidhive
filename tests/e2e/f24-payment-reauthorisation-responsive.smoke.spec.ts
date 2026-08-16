@@ -222,7 +222,7 @@ test.describe('F24 payment re-authorisation responsive regression @smoke', () =>
         id: 'notification-required',
         type: 'booking_payment_required',
         title: 'Card re-authorisation required',
-        body: 'Please re-authorise your card by the deadline shown on your booking to keep the rescheduled booking active.',
+        body: 'Please re-authorise your card by 12 Aug 2026 at 11:00 to keep the rescheduled booking active.',
         data: { booking_id: BOOKING_ID },
         is_read: false,
         created_at: isoHoursFromNow(-3),
@@ -321,6 +321,106 @@ test.describe('F24 payment re-authorisation responsive regression @smoke', () =>
     }
   })
 
+  test('cleaner unresolved re-authorisation cancellation state stays responsive without pending actions', async ({ page }) => {
+    test.skip(!e2eAuthBypassEnabled, 'Set MAIDHIVE_E2E_AUTH_BYPASS=1 for routed responsive auth bypass')
+
+    const booking = bookingFixture({
+      status: 'cancelled',
+      pay_by: null,
+      reauthorization_required: false,
+      reauthorization_grace_expires_at: null,
+      cancelled_at: isoHoursFromNow(-1),
+      cancelled_by: null,
+      cancellation_reason: 'Payment re-authorisation was not completed by the deadline after reschedule. No penalties applied.',
+      payment: {
+        id: 'payment-reauth',
+        status: 'released',
+        amount: 22,
+        platform_fee: 2,
+        cleaner_payout: 0,
+        currency: 'eur',
+        refund_reason: 'payment_authorisation_released',
+        authorized_at: isoHoursFromNow(-48),
+        released_at: isoHoursFromNow(-1),
+        created_at: isoHoursFromNow(-50),
+      },
+    })
+
+    await mockSharedShell(page, 'cleaner')
+    await mockCleanerProfile(page)
+    await page.route(`**/api/v1/bookings/${BOOKING_ID}`, (route) => fulfill(route, booking))
+    await page.route('**/api/v1/bookings?**', (route) => fulfill(route, {
+      bookings: [booking],
+      items: [booking],
+      total: 1,
+      page: 1,
+      page_size: 50,
+      has_next: false,
+    }))
+    await page.route('**/api/v1/notifications**', (route) => fulfill(route, {
+      notifications: [],
+      total: 0,
+      page: 1,
+      page_size: 250,
+    }))
+
+    for (const viewport of VIEWPORTS) {
+      await page.setViewportSize(viewport)
+      await page.goto(`/cleaner/bookings/${BOOKING_ID}`, { waitUntil: 'domcontentloaded' })
+      await expect(page.getByText('Cancelled', { exact: true }).first()).toBeVisible()
+      await expect(page.getByText('Phone access is now closed for this booking.', { exact: true })).toBeVisible()
+      await expect(page.getByText('No payout is due because payment re-authorisation was not completed by the deadline.', { exact: true })).toBeVisible()
+      await expect(page.getByText('No cleaner compensation', { exact: true }).first()).toBeVisible()
+      await expect(page.getByRole('heading', { name: 'Next actions' })).toHaveCount(0)
+      await expect(page.getByText(/Payment re-authorisation pending - awaiting client/)).toHaveCount(0)
+      await expect(page.getByText(/Report issues during the booking/)).toHaveCount(0)
+      await expectNoNextOverlay(page)
+      await expectNoHorizontalOverflow(page, `cleaner cancelled re-authorisation booking detail at ${viewport.name}`)
+
+      await page.goto('/cleaner/bookings', { waitUntil: 'domcontentloaded' })
+      await expect(page.getByText('No cleaner compensation — €0.00', { exact: true })).toBeVisible()
+      await expect(page.getByText(/Payment re-authorisation pending - awaiting client/)).toHaveCount(0)
+      await expectNoNextOverlay(page)
+      await expectNoHorizontalOverflow(page, `cleaner cancelled re-authorisation bookings list at ${viewport.name}`)
+
+      await page.goto('/cleaner/dashboard', { waitUntil: 'domcontentloaded' })
+      await expect(page.getByText('Cancelled', { exact: true }).first()).toBeVisible()
+      await expect(page.getByText('Final payout: €0.00', { exact: true })).toBeVisible()
+      await expect(page.getByText(/Payment re-authorisation pending - awaiting client/)).toHaveCount(0)
+      await expectNoNextOverlay(page)
+      await expectNoHorizontalOverflow(page, `cleaner cancelled re-authorisation dashboard at ${viewport.name}`)
+    }
+  })
+
+  test('admin pending re-authorisation payment state shows released amount as previous', async ({ page }) => {
+    test.skip(!e2eAuthBypassEnabled, 'Set MAIDHIVE_E2E_AUTH_BYPASS=1 for routed responsive auth bypass')
+
+    await seedAdminBypass(page)
+    const booking = bookingFixture()
+
+    await mockSharedShell(page, 'admin')
+    await page.route('**/api/v1/notifications**', (route) => fulfill(route, {
+      notifications: [],
+      total: 0,
+      page: 1,
+      page_size: 250,
+    }))
+    await page.route(`**/api/v1/admin/bookings/${BOOKING_ID}`, (route) => fulfill(route, booking))
+
+    for (const viewport of VIEWPORTS) {
+      await page.setViewportSize(viewport)
+      await page.goto(`/admin/bookings/${BOOKING_ID}`, { waitUntil: 'domcontentloaded' })
+      const paymentState = page.getByTestId('admin-payment-state')
+      await expect(paymentState.getByText('Stripe payment status', { exact: true })).toBeVisible()
+      await expect(paymentState.getByText('Payment authorisation released', { exact: true })).toBeVisible()
+      await expect(paymentState.getByText('Previous authorised amount', { exact: true })).toBeVisible()
+      await expect(paymentState.getByText('€22.00 — released', { exact: true })).toBeVisible()
+      await expect(paymentState.getByText('Authorised client amount', { exact: true })).toHaveCount(0)
+      await expectNoNextOverlay(page)
+      await expectNoHorizontalOverflow(page, `admin pending re-authorisation payment state at ${viewport.name}`)
+    }
+  })
+
   test('admin re-authorisation action log and original confirmation stay responsive', async ({ page }) => {
     test.skip(!e2eAuthBypassEnabled, 'Set MAIDHIVE_E2E_AUTH_BYPASS=1 for routed responsive auth bypass')
 
@@ -370,6 +470,9 @@ test.describe('F24 payment re-authorisation responsive regression @smoke', () =>
       const bookingState = page.getByTestId('admin-booking-state')
       await expect(bookingState.getByText('Originally confirmed', { exact: true })).toBeVisible()
       await expect(bookingState.getByText('Payment re-authorisation completed', { exact: true })).toBeVisible()
+      const paymentState = page.getByTestId('admin-payment-state')
+      await expect(paymentState.getByText('Authorised client amount', { exact: true })).toBeVisible()
+      await expect(paymentState.getByText('Previous authorised amount', { exact: true })).toHaveCount(0)
       const actionLog = page.getByTestId('admin-booking-action-log')
       await expect(actionLog.getByText('Payment authorisation released — €22.00', { exact: true })).toBeVisible()
       await expect(actionLog.getByText(/booking requires client payment re-authorisation after reschedule/)).toBeVisible()

@@ -3,6 +3,7 @@ import { getCancellationPaymentOutcome } from '@/lib/booking-payment-outcome'
 import { getCancellationOriginLabel } from '@/lib/cancellation-origin'
 import { getCleanerPayoutSummary } from '@/lib/cleaner-payout'
 import { isFinalNoCleanerPayoutOutcome } from '@/lib/payment-financial-outcome'
+import { isPaymentReauthorisationCancelled, isPaymentReauthorisationPending } from '@/lib/booking-reauthorisation'
 import { formatCurrency } from '@/lib/utils'
 import type { BookingRead, BookingStatus } from '@/types'
 
@@ -42,7 +43,7 @@ export function classifyCleanerPaymentHistoryBooking(
   nowMs = Date.now(),
 ): Omit<CleanerPaymentHistoryEntry, 'booking'> | null {
   const paymentStatus = String(booking.payment?.status ?? '').trim()
-  const isReauthorisationPending = Boolean(booking.reauthorization_required)
+  const isReauthorisationPending = isPaymentReauthorisationPending(booking)
   const cancellationContext = `${booking.cancellation_reason ?? ''} ${booking.payment?.refund_reason ?? ''}`
     .toLowerCase()
     .replace(/[_-]/g, ' ')
@@ -79,6 +80,10 @@ export function classifyCleanerPaymentHistoryBooking(
   }
 
   if (booking.status === 'cancelled') {
+    if (isPaymentReauthorisationCancelled(booking)) {
+      return { paymentType: 'Booking cancellation', label: 'Cancelled — no payout due', tone: 'warn', amount: 0 }
+    }
+
     const cancellationOrigin = getCancellationOriginLabel(booking)
     if (cancellationOrigin === 'Cancelled by cleaner') {
       return {

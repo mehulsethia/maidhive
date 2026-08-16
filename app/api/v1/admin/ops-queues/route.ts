@@ -72,7 +72,10 @@ export const GET = requireAdmin(async () => {
       }),
       db.booking.findMany({
         where: {
-          status: 'confirmed',
+          OR: [
+            { status: 'confirmed' },
+            { status: 'accepted', reauthorizationRequired: true },
+          ],
           scheduledStart: { gte: now, lte: todayEnd },
         },
         include: { cleaner: { include: { user: true } }, client: { include: { user: true } } },
@@ -81,7 +84,10 @@ export const GET = requireAdmin(async () => {
       }),
       db.booking.findMany({
         where: {
-          status: 'confirmed',
+          OR: [
+            { status: 'confirmed' },
+            { status: 'accepted', reauthorizationRequired: true },
+          ],
           scheduledStart: { gte: tomorrowStart, lte: tomorrowEnd },
         },
         include: { cleaner: { include: { user: true } }, client: { include: { user: true } } },
@@ -293,6 +299,7 @@ export const GET = requireAdmin(async () => {
       today_items: upcomingTodayJobs.map((booking) => ({
         id: booking.id,
         status: booking.status,
+        payment_status: booking.reauthorizationRequired ? 'reauthorization_required' : null,
         city: booking.city,
         scheduled_start: booking.scheduledStart.toISOString(),
         cleaner_name: bestEffortName(booking.cleaner.user?.name, booking.cleaner.user?.email),
@@ -301,6 +308,7 @@ export const GET = requireAdmin(async () => {
       tomorrow_items: upcomingTomorrowJobs.map((booking) => ({
         id: booking.id,
         status: booking.status,
+        payment_status: booking.reauthorizationRequired ? 'reauthorization_required' : null,
         city: booking.city,
         scheduled_start: booking.scheduledStart.toISOString(),
         cleaner_name: bestEffortName(booking.cleaner.user?.name, booking.cleaner.user?.email),

@@ -23,6 +23,7 @@ import {
   PLATFORM_BOOKING_WINDOW_DAYS,
   RESCHEDULE_NO_LONGER_AVAILABLE_BODY,
   RESCHEDULE_NO_LONGER_AVAILABLE_TITLE,
+  formatProposalResponseDeadlineInCyprus,
   getCleanerProposalEligibility,
   isPostConfirmationRescheduleNoLongerAcceptable,
   maxAlternativeProposalDateInputValue,
@@ -52,6 +53,7 @@ import { getCancellationOriginLabel } from '@/lib/cancellation-origin'
 import { getCleanerCancellationConfirmationCopy } from '@/lib/cleaner-cancellation-copy'
 import { getCleanerPayoutSummary } from '@/lib/cleaner-payout'
 import { isFinalNoCleanerPayoutOutcome } from '@/lib/payment-financial-outcome'
+import { isPaymentReauthorisationCancelled, isPaymentReauthorisationPending } from '@/lib/booking-reauthorisation'
 import {
   getResolutionReportHref,
   getResolutionSummaryRows,
@@ -420,7 +422,9 @@ export default function CleanerBookingDetailPage() {
   })
   const cancellationOutcome = getCancellationPaymentOutcome(booking)
   const isClosedNonPayableStatus = ['cancelled', 'declined', 'expired'].includes(booking.status)
-  const isReauthorisationPending = Boolean(booking.reauthorization_required)
+  const isReauthorisationPending = isPaymentReauthorisationPending(booking)
+  const isReauthorisationCancelled = isPaymentReauthorisationCancelled(booking)
+  const showNextActions = !isReauthorisationCancelled
   const clientTrust = getClientTrustMetadata(booking.client)
   const memberSinceRaw = clientTrust.memberSince
   const memberSinceLabel = memberSinceRaw
@@ -506,8 +510,8 @@ export default function CleanerBookingDetailPage() {
         ? false
         : false
   const proposalExpiresMs = getEffectiveProposalExpiryMs(booking)
-  const proposalCountdownLabel = proposalExpiresMs && proposalExpiresMs > nowTick
-    ? `${Math.ceil((proposalExpiresMs - nowTick) / 60_000)} min`
+  const proposalResponseDeadlineLabel = proposalExpiresMs && proposalExpiresMs > nowTick
+    ? formatProposalResponseDeadlineInCyprus(proposalExpiresMs, nowTick)
     : null
   const cancellationOriginLabel = getCancellationOriginLabel(booking)
   const resolvedCase = hasResolvedBookingCase(booking)
@@ -624,6 +628,8 @@ export default function CleanerBookingDetailPage() {
                     <p className="text-xs text-muted-foreground mt-0.5">
                       {isReauthorisationPending
                         ? 'Payment re-authorisation pending - awaiting client. You do not need to take any payment action.'
+                        : isReauthorisationCancelled
+                          ? 'No payout is due because payment re-authorisation was not completed by the deadline.'
                         : cleanerCancelledPayoutMessage
                         ? cleanerCancelledPayoutMessage.description
                         : noPayoutFinalized
@@ -672,7 +678,7 @@ export default function CleanerBookingDetailPage() {
               <h2 className="text-lg font-semibold tracking-[-0.02em] text-slate-900">
                 Client contact
               </h2>
-              {isPostCompletionPhoneLocked || revealExpired ? (
+              {booking.status === 'cancelled' || isPostCompletionPhoneLocked || revealExpired ? (
                 <p className="text-sm text-slate-500">Phone access is now closed for this booking.</p>
               ) : canRevealPhoneWindow ? (
                 phoneRevealed ? (
@@ -702,12 +708,13 @@ export default function CleanerBookingDetailPage() {
             </CardContent>
           </Card>
 
-          <Card>
-            <CardHeader className="pb-1">
-              <CardTitle className="text-base">Next actions</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-2">
-              <div className="flex flex-col gap-2">
+          {showNextActions && (
+            <Card>
+              <CardHeader className="pb-1">
+                <CardTitle className="text-base">Next actions</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-2">
+                <div className="flex flex-col gap-2">
         {isCancelledPreConfirmation && (
           <p className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">
             This booking request was cancelled by the client before confirmation.
@@ -732,12 +739,12 @@ export default function CleanerBookingDetailPage() {
           </div>
         ) : !isCancelledPreConfirmation && isCleanerPostConfirmationProposal && (
           <p className="rounded-xl border border-blue-200 bg-blue-50 px-3 py-2 text-sm text-blue-700">
-            You proposed a reschedule: {formatDate(booking.scheduled_start)} → {formatDate(booking.proposed_start!)}. Waiting for client response before the 24-hour cutoff.
+            You proposed a reschedule: {formatDate(booking.scheduled_start)} → {formatDate(booking.proposed_start!)}. Waiting for client response{proposalResponseDeadlineLabel ? `. ${proposalResponseDeadlineLabel}.` : ' before expiry.'}
           </p>
         )}
         {!isCancelledPreConfirmation && !isPostConfirmationProposalExpiredByStart && isClientPostConfirmationProposal && (
           <p className="rounded-xl border border-blue-200 bg-blue-50 px-3 py-2 text-sm text-blue-700">
-            Client proposed a reschedule: {formatDate(booking.scheduled_start)} → {formatDate(booking.proposed_start!)}. Accept, decline, or counter once before the 24-hour cutoff.
+            Client proposed a reschedule: {formatDate(booking.scheduled_start)} → {formatDate(booking.proposed_start!)}. Accept, decline, or counter once{proposalResponseDeadlineLabel ? `. ${proposalResponseDeadlineLabel}.` : ' before expiry.'}
           </p>
         )}
         {!isCancelledPreConfirmation && isAmendProposal && booking.proposal_by === 'cleaner' && (
@@ -750,9 +757,9 @@ export default function CleanerBookingDetailPage() {
             Client requested Amend Start Time: {formatDate(booking.scheduled_start)} → {formatDate(booking.proposed_start!)}. The other party can accept or decline this amendment request. {AMENDMENT_EXPIRY_OUTCOME_COPY}
           </p>
         )}
-        {!isCancelledPreConfirmation && !isPostConfirmationProposalExpiredByStart && hasOpenProposalFlow && proposalCountdownLabel && (
+        {!isCancelledPreConfirmation && !isPostConfirmationProposalExpiredByStart && hasOpenProposalFlow && proposalResponseDeadlineLabel && (
           <p className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
-            Response window: {proposalCountdownLabel} remaining.
+            {proposalResponseDeadlineLabel}.
           </p>
         )}
         {!isCancelledPreConfirmation && booking.status === 'pending' && (
@@ -972,9 +979,10 @@ export default function CleanerBookingDetailPage() {
             {`Report issues during the booking and up to ${disputeWindowLabel()} after scheduled completion.`}
           </p>
         )}
-              </div>
-            </CardContent>
-          </Card>
+                </div>
+              </CardContent>
+            </Card>
+          )}
 
           {showChat && currentUserId ? (
             <Card>
@@ -1029,7 +1037,7 @@ export default function CleanerBookingDetailPage() {
         <div className="space-y-4">
           <p className="text-sm text-muted-foreground">
             {proposalAction === 'propose_alternative'
-              ? 'You can request a new date or time for this booking. The booking will only change once the other party accepts the proposal. If they decline or do not respond before the 24-hour cutoff, the original booking time will remain unchanged.'
+              ? 'You can request a new date or time for this booking. The booking will only change once the other party accepts the proposal. If they decline or do not respond before the response deadline, the original booking time will remain unchanged.'
               : proposalAction === 'amend_start_time'
                 ? `Small same-day adjustment only (up to +/-3 hours). The other party can accept or decline this amendment request. ${AMENDMENT_EXPIRY_OUTCOME_COPY}`
                 : 'You can counter once. After both sides use their counter, only accept or decline is allowed.'}
@@ -1040,7 +1048,7 @@ export default function CleanerBookingDetailPage() {
               <li>New time must be within 14 days of the original booking date</li>
               <li>Must fit cleaner availability, booking duration, and buffer rules</li>
               <li>The other party may accept, decline, or send one counter proposal</li>
-              <li>If no agreement is reached before the 24-hour cutoff, the original booking time will remain unchanged</li>
+              <li>If no agreement is reached before the response deadline, the original booking time will remain unchanged</li>
               <li>No penalty applies if a reschedule proposal is declined or expires</li>
               <li>Once a reschedule is successfully agreed, no further reschedules are allowed</li>
             </ul>

@@ -153,6 +153,54 @@ export function isPostConfirmationRescheduleNoLongerAcceptable(
   return proposedStartMs - nowMs < POST_CONFIRMATION_REAUTH_ACCEPT_MIN_LEAD_HOURS * MS_PER_HOUR
 }
 
+function dateMs(value: string | Date | null | undefined) {
+  if (!value) return null
+  const ms = new Date(value).getTime()
+  return Number.isFinite(ms) ? ms : null
+}
+
+function cyprusDateStr(date: Date) {
+  return new Intl.DateTimeFormat('en-CA', { timeZone: APP_TIMEZONE }).format(date)
+}
+
+export function getPostConfirmationRescheduleEffectiveDeadlineMs(
+  booking: Pick<BookingRead, 'proposal_context' | 'proposal_expires_at' | 'proposed_start'>,
+) {
+  const proposalExpiresMs = dateMs(booking.proposal_expires_at)
+  if (booking.proposal_context !== 'post_confirmation') return proposalExpiresMs
+
+  const proposedStartMs = dateMs(booking.proposed_start)
+  if (proposedStartMs === null) return proposalExpiresMs
+
+  const latestAcceptMs = proposedStartMs - POST_CONFIRMATION_REAUTH_ACCEPT_MIN_LEAD_HOURS * MS_PER_HOUR
+  if (proposalExpiresMs === null) return latestAcceptMs
+  return Math.min(proposalExpiresMs, latestAcceptMs)
+}
+
+function formatTime24InCyprus(value: Date) {
+  return value.toLocaleTimeString('en-GB', {
+    timeZone: APP_TIMEZONE,
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false,
+  })
+}
+
+export function formatProposalResponseDeadlineInCyprus(deadlineMs: number, nowMs = Date.now()) {
+  const deadline = new Date(deadlineMs)
+  if (!Number.isFinite(deadline.getTime())) return null
+  const time = formatTime24InCyprus(deadline)
+  const deadlineDate = cyprusDateStr(deadline)
+  const todayDate = cyprusDateStr(new Date(nowMs))
+  if (deadlineDate === todayDate) return `Respond by ${time} today`
+  const dayMonth = deadline.toLocaleDateString('en-GB', {
+    timeZone: APP_TIMEZONE,
+    day: 'numeric',
+    month: 'short',
+  })
+  return `Respond by ${time} on ${dayMonth}`
+}
+
 export function toTimeInputValue(dateLike: string | Date): string {
   const parsed = new Date(dateLike)
   if (Number.isNaN(parsed.getTime())) return ''

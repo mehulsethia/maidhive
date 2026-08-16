@@ -2,7 +2,11 @@ import { describe, expect, it } from 'vitest'
 import { bookingActionSchema, cancelBookingSchema } from '@/server/schemas/booking.schema'
 import { computeConfirmedCancellationPolicy, moneyFromCents } from '@/lib/cancellation-policy'
 import { getCancellationPaymentOutcome } from '@/lib/booking-payment-outcome'
-import { isPostConfirmationRescheduleNoLongerAcceptable } from '@/lib/booking-proposal'
+import {
+  formatProposalResponseDeadlineInCyprus,
+  getPostConfirmationRescheduleEffectiveDeadlineMs,
+  isPostConfirmationRescheduleNoLongerAcceptable,
+} from '@/lib/booking-proposal'
 import type { BookingRead } from '@/types'
 
 describe('F09 cancel/reschedule policy unit coverage', () => {
@@ -63,6 +67,22 @@ describe('F09 cancel/reschedule policy unit coverage', () => {
       ...booking,
       proposal_context: 'amend_start',
     }, nowMs)).toBe(false)
+  })
+
+  it('UT-CANCEL-03c caps post-confirmation reschedule response deadline at four hours before proposed start', () => {
+    const booking = {
+      proposal_context: 'post_confirmation',
+      proposal_expires_at: '2026-08-16T07:00:00.000Z',
+      proposed_start: '2026-08-14T18:30:00.000Z',
+    } as BookingRead
+
+    const deadlineMs = getPostConfirmationRescheduleEffectiveDeadlineMs(booking)
+
+    expect(new Date(deadlineMs ?? 0).toISOString()).toBe('2026-08-14T14:30:00.000Z')
+    expect(formatProposalResponseDeadlineInCyprus(
+      deadlineMs ?? 0,
+      new Date('2026-08-14T13:32:00.000Z').getTime(),
+    )).toBe('Respond by 17:30 today')
   })
 
   it('UT-CANCEL-04 start action location payload enforces valid coordinate bounds', () => {

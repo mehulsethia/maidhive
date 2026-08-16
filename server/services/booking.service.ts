@@ -147,6 +147,11 @@ export const bookingService = {
           Boolean(booking.proposalExpiresAt) &&
           booking.proposalExpiresAt!.getTime() <= nowMs
         ) ||
+        (
+          proposalContext === 'post_confirmation' &&
+          Boolean(booking.proposedStart) &&
+          booking.proposedStart!.getTime() <= nowMs + POST_CONFIRMATION_REAUTH_ACCEPT_MIN_LEAD_HOURS * 60 * 60 * 1000
+        ) ||
         amendProposalStartExpired
       )
 
@@ -160,6 +165,10 @@ export const bookingService = {
           proposalContext: { in: ['post_confirmation', 'amend_start'] },
           OR: [
             { proposalExpiresAt: { lte: new Date(nowMs) } },
+            {
+              proposalContext: 'post_confirmation',
+              proposedStart: { lte: new Date(nowMs + POST_CONFIRMATION_REAUTH_ACCEPT_MIN_LEAD_HOURS * 60 * 60 * 1000) },
+            },
             {
               proposalContext: 'amend_start',
               proposedStart: { lte: new Date(nowMs) },
@@ -581,6 +590,7 @@ export const bookingService = {
       assertPostConfirmationRescheduleWindow(booking.scheduledStart)
       const originalStart = booking.originalScheduledStart ?? booking.scheduledStart
       assertPostConfirmationDateLimit(originalStart, proposedStart)
+      assertPostConfirmationReauthAcceptWindow(proposedStart)
       if (booking.proposalBy) {
         throw new ServiceError('A proposal is already active for this booking', 400)
       }
@@ -591,7 +601,10 @@ export const bookingService = {
         throw new ServiceError('Client can only make one counter-proposal in post-confirmation rescheduling', 400)
       }
 
-      const proposalExpiresAt = new Date(booking.scheduledStart.getTime() - RESCHEDULE_CUTOFF_HOURS * 60 * 60 * 1000)
+      const proposalExpiresAt = computePostConfirmationRescheduleResponseDeadline(
+        new Date(booking.scheduledStart.getTime() - RESCHEDULE_CUTOFF_HOURS * 60 * 60 * 1000),
+        proposedStart,
+      )
       const updated = await bookingRepo.update(bookingId, {
         proposedStart,
         proposedEnd,
@@ -605,7 +618,7 @@ export const bookingService = {
         userId: actor === 'cleaner' ? booking.client.userId : booking.cleaner.userId,
         type: 'booking_proposed_new_time',
         title: `${actor === 'cleaner' ? 'Cleaner' : 'Client'} proposed a reschedule`,
-        body: `${actor === 'cleaner' ? 'Cleaner' : 'Client'} requested ${formatBookingTimeForMessage(proposedStart)} (original ${formatBookingTimeForMessage(booking.scheduledStart)}). Accept, decline, or counter once before cutoff.`,
+        body: `${actor === 'cleaner' ? 'Cleaner' : 'Client'} requested ${formatBookingTimeForMessage(proposedStart)} (original ${formatBookingTimeForMessage(booking.scheduledStart)}). Accept, decline, or counter once by ${formatBookingTimeForMessage(proposalExpiresAt)}.`,
         data: { booking_id: bookingId },
       })
       try {
@@ -715,14 +728,18 @@ export const bookingService = {
       assertPostConfirmationRescheduleWindow(booking.scheduledStart)
       const originalStart = booking.originalScheduledStart ?? booking.scheduledStart
       assertPostConfirmationDateLimit(originalStart, proposedStart)
+      assertPostConfirmationReauthAcceptWindow(proposedStart)
       if (actor === 'client' && booking.postClientProposals >= 1) {
         throw new ServiceError('Client has already used the single allowed counter-proposal', 400)
       }
       if (actor === 'cleaner' && booking.postCleanerProposals >= 1) {
         throw new ServiceError('Cleaner has already used the single allowed counter-proposal', 400)
       }
-      const proposalExpiresAt = booking.proposalExpiresAt ??
-        new Date(booking.scheduledStart.getTime() - RESCHEDULE_CUTOFF_HOURS * 60 * 60 * 1000)
+      const proposalExpiresAt = computePostConfirmationRescheduleResponseDeadline(
+        booking.proposalExpiresAt ??
+          new Date(booking.scheduledStart.getTime() - RESCHEDULE_CUTOFF_HOURS * 60 * 60 * 1000),
+        proposedStart,
+      )
 
       const updated = await bookingRepo.update(bookingId, {
         proposedStart,
@@ -737,7 +754,7 @@ export const bookingService = {
         userId: actor === 'cleaner' ? booking.client.userId : booking.cleaner.userId,
         type: 'booking_counter_proposal',
         title: 'Reschedule counter-offer received',
-        body: `${actor === 'cleaner' ? 'Cleaner' : 'Client'} proposed ${formatBookingTimeForMessage(proposedStart)} (original ${formatBookingTimeForMessage(booking.scheduledStart)}).`,
+        body: `${actor === 'cleaner' ? 'Cleaner' : 'Client'} proposed ${formatBookingTimeForMessage(proposedStart)} (original ${formatBookingTimeForMessage(booking.scheduledStart)}). Respond by ${formatBookingTimeForMessage(proposalExpiresAt)}.`,
         data: { booking_id: bookingId },
       })
       try {
@@ -904,11 +921,21 @@ export const bookingService = {
       assertPostConfirmationRescheduleWindow(booking.scheduledStart)
       assertPostConfirmationProposalOpen(booking.proposalExpiresAt)
       assertPostConfirmationReauthAcceptWindow(booking.proposedStart)
-      const updated = await bookingRepo.update(bookingId, {
+      const acceptedAt = new Date()
+      const updated = await bookingRepo.updateWithActionEvent(bookingId, {
         scheduledStart: booking.proposedStart,
         scheduledEnd: booking.proposedEnd,
         ...clearedProposalState(),
         ...appliedRescheduleUsageMarker(),
+      }, {
+        type: 'post_confirmation_reschedule_accepted',
+        actorRole: isClient ? 'client' : 'cleaner',
+        metadata: {
+          previous_scheduled_start: booking.scheduledStart.toISOString(),
+          new_scheduled_start: booking.proposedStart.toISOString(),
+          accepted_at: acceptedAt.toISOString(),
+          proposed_by: booking.proposalBy,
+        },
       })
       await resetAuthorizationAfterReschedule(updated.id)
       await pushInAppNotification({
@@ -1684,6 +1711,13 @@ function minDate(a: Date, b: Date) {
   return a.getTime() <= b.getTime() ? a : b
 }
 
+function computePostConfirmationRescheduleResponseDeadline(proposalExpiresAt: Date, proposedStart: Date) {
+  const latestAcceptAt = new Date(
+    proposedStart.getTime() - POST_CONFIRMATION_REAUTH_ACCEPT_MIN_LEAD_HOURS * 60 * 60 * 1000,
+  )
+  return minDate(proposalExpiresAt, latestAcceptAt)
+}
+
 function clearedProposalState(options?: { preserveRescheduleUsage?: boolean; preserveAmendUsage?: boolean }) {
   const preserveRescheduleUsage = Boolean(options?.preserveRescheduleUsage)
   const preserveAmendUsage = Boolean(options?.preserveAmendUsage)
@@ -1785,7 +1819,7 @@ async function resetAuthorizationAfterReschedule(bookingId: string) {
     userId: booking.client.userId,
     type: 'booking_payment_required',
     title: 'Card re-authorisation required',
-    body: 'Please re-authorise your card by the deadline shown on your booking to keep the rescheduled booking active.',
+    body: `Please re-authorise your card by ${formatBookingDateAtTimeForMessage(payBy)} to keep the rescheduled booking active.`,
     data: { booking_id: bookingId },
   })
 

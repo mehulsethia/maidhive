@@ -3,6 +3,9 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 const state = vi.hoisted(() => ({
   autoStartDue: [] as Array<{ id: string; scheduledStart: Date }>,
   autoCompleteDue: [] as Array<{ id: string; status: string; scheduledEnd: Date; dispute: { status: string } | null }>,
+  acceptedExpired: [] as any[],
+  bookingUpdates: [] as any[],
+  notifications: [] as any[],
   startCalls: [] as string[],
   completeCalls: [] as string[],
 }))
@@ -11,10 +14,17 @@ vi.mock('@/server/db', () => ({
   db: {
     booking: {
       findMany: vi.fn(async (query: any) => {
+        if (query?.where?.status === 'accepted' && query?.where?.payBy?.lt) {
+          return state.acceptedExpired
+        }
         if (query?.where?.status?.in?.includes('accepted')) {
           return state.autoStartDue
         }
         return state.autoCompleteDue
+      }),
+      update: vi.fn(async (args: any) => {
+        state.bookingUpdates.push(args)
+        return { id: args.where.id, ...args.data }
       }),
     },
     payment: {
@@ -38,11 +48,15 @@ vi.mock('@/server/services/loops-email.service', () => ({
   loopsEmailService: {
     sendCleanerPayoutNotification: vi.fn(async () => true),
     sendClientPaymentReceipt: vi.fn(async () => true),
+    sendClientBookingRejectedOrExpired: vi.fn(async () => true),
   },
 }))
 
 vi.mock('@/server/services/in-app-notification.service', () => ({
-  pushInAppNotification: vi.fn(async () => true),
+  pushInAppNotification: vi.fn(async (payload: any) => {
+    state.notifications.push(payload)
+    return true
+  }),
 }))
 
 vi.mock('@/server/services/booking.service', () => ({
@@ -63,6 +77,9 @@ describe('F08 lifecycle unit coverage', () => {
     vi.resetModules()
     state.autoStartDue = []
     state.autoCompleteDue = []
+    state.acceptedExpired = []
+    state.bookingUpdates = []
+    state.notifications = []
     state.startCalls = []
     state.completeCalls = []
   })
@@ -122,5 +139,53 @@ describe('F08 lifecycle unit coverage', () => {
     expect(summary.completed).toBe(1)
     expect(summary.failed).toBe(0)
     expect(state.completeCalls).toEqual(['b3'])
+  })
+
+  it('UT-LIFECYCLE-04 auto-cancels unresolved re-authorisation by deadline without grace-period copy', async () => {
+    state.acceptedExpired = [
+      {
+        id: 'booking_reauth_expired',
+        status: 'accepted',
+        payBy: new Date('2026-08-14T16:30:00.000Z'),
+        reauthorizationRequired: true,
+        payment: { id: 'payment_released', status: 'released' },
+        client: {
+          userId: 'client_user_1',
+          user: { email: 'client@test.local', name: 'Client' },
+        },
+        cleaner: {
+          userId: 'cleaner_user_1',
+          user: { email: 'cleaner@test.local', name: 'Cleaner' },
+        },
+      },
+    ]
+
+    const { paymentLifecycleService } = await import('@/server/services/payment-lifecycle.service')
+    const summary = await paymentLifecycleService.expireBookingDeadlines()
+
+    expect(summary.expired_accepted).toBe(1)
+    expect(state.bookingUpdates).toContainEqual(expect.objectContaining({
+      where: { id: 'booking_reauth_expired' },
+      data: expect.objectContaining({
+        status: 'cancelled',
+        cancellationReason: 'Payment re-authorisation was not completed by the deadline after reschedule. No penalties applied.',
+        reauthorizationRequired: false,
+        reauthorizationGraceExpiresAt: null,
+        payBy: null,
+      }),
+    }))
+    expect(state.notifications).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        userId: 'client_user_1',
+        title: 'Booking cancelled after unresolved re-authorisation',
+        body: 'Payment re-authorisation was not completed by the deadline. Your booking was automatically cancelled with no penalties.',
+      }),
+      expect.objectContaining({
+        userId: 'cleaner_user_1',
+        title: 'Booking cancelled after unresolved re-authorisation',
+        body: 'The client did not complete payment re-authorisation by the deadline. The booking was automatically cancelled with no penalty to you.',
+      }),
+    ]))
+    expect(state.notifications.map((notification) => notification.body).join(' ')).not.toMatch(/grace period|24-hour/i)
   })
 })

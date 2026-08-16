@@ -623,6 +623,7 @@ export interface AdminOpsQueueItemDispute {
 export interface AdminOpsQueueItemBooking {
   id: string
   status: string
+  payment_status?: string | null
   city: string
   scheduled_start: string
   cleaner_name: string

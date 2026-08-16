@@ -53,7 +53,7 @@ describe('normal cancellation payment releases', () => {
   it('does not hide an automatic re-authorisation failure', () => {
     const booking = cancelledBooking({
       cancelled_by: null,
-      cancellation_reason: 'Re-authorisation was not completed within the grace period.',
+      cancellation_reason: 'Payment re-authorisation was not completed by the deadline after reschedule. No penalties applied.',
     })
 
     expect(isNormalCancellationPaymentRelease(booking)).toBe(false)
@@ -82,6 +82,19 @@ describe('normal cancellation payment releases', () => {
     expect(clientMarkup).not.toContain('€0.00')
     expect(cleanerMarkup).not.toContain('cancellation charge')
     expect(cleanerMarkup).toContain('No cleaner compensation')
+  })
+
+  it('shows the final no-compensation state for unresolved re-authorisation cancellations', () => {
+    const booking = cancelledBooking({
+      cancelled_by: null,
+      cancellation_reason: 'Payment re-authorisation was not completed by the deadline after reschedule. No penalties applied.',
+      payment: { id: 'payment_1', status: 'released', cleaner_payout: 0 },
+    })
+    const cleanerMarkup = renderToStaticMarkup(
+      createElement(CancellationPaymentBreakdown, { booking, compact: true, audience: 'cleaner' }),
+    )
+
+    expect(cleanerMarkup).toContain('No cleaner compensation — €0.00')
   })
 
   it('shows only cleaner compensation for a charged client cancellation', () => {

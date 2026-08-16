@@ -357,6 +357,20 @@ function buildTimeline(booking: BookingRead): TimelineEvent[] {
       })
     }
 
+    if (event.type === 'post_confirmation_reschedule_accepted') {
+      const previousStart = actionEventDate(metadata, 'previous_scheduled_start')
+      const newStart = actionEventDate(metadata, 'new_scheduled_start')
+      addEvent(events, {
+        id: event.id,
+        at: event.created_at,
+        title: 'Reschedule accepted',
+        description: previousStart && newStart
+          ? `Booking rescheduled from ${formatDate(previousStart)} to ${formatDate(newStart)}.`
+          : 'Post-confirmation reschedule accepted.',
+        tone: 'success',
+      })
+    }
+
     if (event.type === 'payment_reauthorisation_completed') {
       const amount = actionEventMoney(metadata, 'amount')
       addEvent(events, {
@@ -737,6 +751,10 @@ export default function AdminBookingDetailPage() {
       event.type === 'payment_reauthorisation_completed'
     )),
   )
+  const isReleasedReauthorisationPending =
+    booking.status === 'accepted' &&
+    Boolean(booking.reauthorization_required) &&
+    booking.payment?.status === 'released'
 
   return (
     <div className="min-w-0 space-y-5">
@@ -888,7 +906,12 @@ export default function AdminBookingDetailPage() {
                       <>
                         <DetailRow label="Expected cleaner payout" value={formatCurrency(financialOutcome.originalCleanerPayout)} />
                         <DetailRow label="Expected MaidHive fee" value={formatCurrency(financialOutcome.originalPlatformFee)} />
-                        <DetailRow label="Authorised client amount" value={formatCurrency(financialOutcome.originalClientPayment)} />
+                        <DetailRow
+                          label={isReleasedReauthorisationPending ? 'Previous authorised amount' : 'Authorised client amount'}
+                          value={isReleasedReauthorisationPending
+                            ? `${formatCurrency(financialOutcome.originalClientPayment)} — released`
+                            : formatCurrency(financialOutcome.originalClientPayment)}
+                        />
                       </>
                     ) : (
                       <>

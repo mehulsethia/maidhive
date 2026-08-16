@@ -44,9 +44,13 @@ vi.mock('@/server/repositories/booking.repo', () => ({
       if (state.booking?.id === id) state.booking = updated
       return updated
     }),
-    updateWithActionEvent: vi.fn(async (_id: string, patch: any, event: any) => {
-      state.actionEvents.push(event)
-      return { ...state.booking, ...patch }
+    updateWithActionEvent: vi.fn(async (id: string, patch: any, event: any) => {
+      state.actionEvents.push({ bookingId: id, ...event })
+      const base = state.bookingsById[id] ?? state.booking
+      const updated = { ...base, ...patch }
+      state.bookingsById[id] = updated
+      if (state.booking?.id === id) state.booking = updated
+      return updated
     }),
     findRemainingTodayForCleaner: vi.fn(async () => state.remainingToday),
     findActiveForCleaner: vi.fn(async () => []),
@@ -393,6 +397,7 @@ describe('Booking cancellation communications', () => {
         userId: seeded.clientUser.id,
         type: 'booking_payment_required',
         title: 'Card re-authorisation required',
+        body: 'Please re-authorise your card by 11 Aug 2026 at 15:00 to keep the rescheduled booking active.',
         data: { booking_id: 'booking_reauth_email_1' },
       }),
     ]))
@@ -408,6 +413,15 @@ describe('Booking cancellation communications', () => {
       }),
     ])
     expect(state.actionEvents).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        type: 'post_confirmation_reschedule_accepted',
+        actorRole: 'cleaner',
+        metadata: expect.objectContaining({
+          previous_scheduled_start: originalStart.toISOString(),
+          new_scheduled_start: proposedStart.toISOString(),
+          proposed_by: 'client',
+        }),
+      }),
       expect.objectContaining({
         type: 'payment_authorisation_released',
         metadata: expect.objectContaining({
@@ -425,6 +439,11 @@ describe('Booking cancellation communications', () => {
         }),
       }),
     ]))
+    expect(state.actionEvents.map((event) => event.type)).toEqual([
+      'post_confirmation_reschedule_accepted',
+      'payment_authorisation_released',
+      'payment_reauthorisation_required',
+    ])
   })
 
   it('rejects stale post-confirmation reschedule acceptance before releasing payment authorisation', async () => {

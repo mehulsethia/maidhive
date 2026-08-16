@@ -13,6 +13,8 @@ describe('F12 Messaging/chat gating unit coverage', () => {
   it('UT-CHAT-01 chat history visibility allows only eligible booking states', () => {
     expect(canViewChatHistoryForBooking({ status: 'confirmed' })).toBe(true)
     expect(canViewChatHistoryForBooking({ status: 'in_progress' })).toBe(true)
+    expect(canViewChatHistoryForBooking({ status: 'accepted', reauthorization_required: true })).toBe(true)
+    expect(canViewChatHistoryForBooking({ status: 'accepted' })).toBe(false)
     expect(canViewChatHistoryForBooking({ status: 'draft' })).toBe(false)
     expect(canViewChatHistoryForBooking({ status: 'pending' })).toBe(false)
     expect(canViewChatHistoryForBooking({ status: 'cancelled', _count: { messages: 0 } })).toBe(false)

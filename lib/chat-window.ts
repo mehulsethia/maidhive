@@ -38,11 +38,15 @@ export function getChatReadOnlyMessage(bookingStatus?: string | null) {
 export function canViewChatHistoryForBooking(booking: {
   status?: string | null
   scheduled_end?: string | Date | null
+  reauthorization_required?: boolean | null
+  reauthorizationRequired?: boolean | null
   _count?: {
     messages?: number | null
   } | null
 }) {
   const status = String(booking.status ?? '')
+  const isReauthorisationPending = Boolean(booking.reauthorization_required ?? booking.reauthorizationRequired)
+  if (status === 'accepted' && isReauthorisationPending) return true
   if (status === 'cancelled') {
     const messageCount = Number(booking._count?.messages ?? 0)
     return Number.isFinite(messageCount) && messageCount > 0

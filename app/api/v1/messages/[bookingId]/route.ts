@@ -32,6 +32,7 @@ export const GET = requireAuth(async (_req, ctx, user) => {
     !canViewChatHistoryForBooking({
       status: booking.status,
       scheduled_end: booking.scheduledEnd,
+      reauthorizationRequired: booking.reauthorizationRequired,
       _count: booking._count,
     })
   ) {
@@ -61,6 +62,7 @@ export const POST = requireAuth(async (req: NextRequest, ctx, user) => {
     !canViewChatHistoryForBooking({
       status: booking.status,
       scheduled_end: booking.scheduledEnd,
+      reauthorizationRequired: booking.reauthorizationRequired,
       _count: booking._count,
     })
   ) {

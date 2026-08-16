@@ -24,6 +24,7 @@ import {
   ALTERNATIVE_PROPOSAL_WINDOW_DAYS,
   RESCHEDULE_NO_LONGER_AVAILABLE_BODY,
   RESCHEDULE_NO_LONGER_AVAILABLE_TITLE,
+  formatProposalResponseDeadlineInCyprus,
   isPostConfirmationRescheduleNoLongerAcceptable,
   maxAlternativeProposalDateInputValue,
   maxPreConfirmationProposalDateInputValue,
@@ -94,6 +95,25 @@ function formatReportWindowDeadline(valueMs: number) {
     minute: '2-digit',
     hour12: false,
   }).replace(',', ' at')
+}
+
+function formatReauthorisationDeadlineInCyprus(value?: string | null) {
+  if (!value) return null
+  const parsed = new Date(value)
+  if (!Number.isFinite(parsed.getTime())) return null
+  const time = parsed.toLocaleTimeString('en-GB', {
+    timeZone: 'Europe/Nicosia',
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false,
+  })
+  const date = parsed.toLocaleDateString('en-GB', {
+    timeZone: 'Europe/Nicosia',
+    day: 'numeric',
+    month: 'short',
+    year: 'numeric',
+  })
+  return `${time} on ${date}`
 }
 
 export default function ClientBookingDetailPage() {
@@ -367,6 +387,7 @@ export default function ClientBookingDetailPage() {
   const payoutPauseConfirmed = String(paymentStatus ?? '') !== 'transferred' && !booking.payment?.transferred_at
   const overdueUnpaidDraftLike = isOverdueUnpaidDraftLike(booking)
   const canAuthorize = booking.status === 'accepted' && !isAuthorized
+  const isReauthorisationPending = Boolean(booking.reauthorization_required)
   const canContinuePayment = !overdueUnpaidDraftLike && (booking.status === 'draft' || (booking.status === 'pending' && !isPaymentAuthorized(booking.payment?.status)))
   const canCancelDraft = !overdueUnpaidDraftLike && (booking.status === 'draft' || (booking.status === 'pending' && !isPaymentAuthorized(booking.payment?.status)))
   const canCancelBookingRequest = booking.status === 'pending' && isPaymentAuthorized(booking.payment?.status)
@@ -524,8 +545,11 @@ export default function ClientBookingDetailPage() {
   const disputeAction = getDisputeParticipantAction('client', booking.dispute, currentUserId)
   const disputeResponseDeadlineLabel = getDisputeResponseDeadlineLabel(booking.dispute)
   const proposalExpiresMs = getEffectiveProposalExpiryMs(booking)
-  const proposalCountdownLabel = proposalExpiresMs && proposalExpiresMs > nowTick
-    ? `${Math.ceil((proposalExpiresMs - nowTick) / 60_000)} min`
+  const proposalResponseDeadlineLabel = proposalExpiresMs && proposalExpiresMs > nowTick
+    ? formatProposalResponseDeadlineInCyprus(proposalExpiresMs, nowTick)
+    : null
+  const reauthorisationDeadlineLabel = isReauthorisationPending
+    ? formatReauthorisationDeadlineInCyprus(booking.pay_by ?? booking.reauthorization_grace_expires_at)
     : null
   const resolvedCase = hasResolvedBookingCase(booking)
   const resolutionRows = resolvedCase ? getResolutionSummaryRows(booking, 'client') : null
@@ -709,15 +733,15 @@ export default function ClientBookingDetailPage() {
                 {cleanerProposed
                   ? isAmendProposal
                     ? `Cleaner requested Amend Start Time: ${formatDate(booking.scheduled_start)} → ${formatDate(booking.proposed_start!)}. The other party can accept or decline this amendment request. ${AMENDMENT_EXPIRY_OUTCOME_COPY}`
-                    : `Cleaner proposed ${formatDate(booking.scheduled_start)} → ${formatDate(booking.proposed_start!)}. Accept, decline, or counter once before expiry.`
+                    : `Cleaner proposed ${formatDate(booking.scheduled_start)} → ${formatDate(booking.proposed_start!)}. Accept, decline, or counter once${proposalResponseDeadlineLabel ? `. ${proposalResponseDeadlineLabel}.` : ' before expiry.'}`
                   : clientProposed && isAmendProposal
                     ? `You requested Amend Start Time: ${formatDate(booking.scheduled_start)} → ${formatDate(booking.proposed_start!)}. Waiting for cleaner response. ${AMENDMENT_EXPIRY_OUTCOME_COPY}`
-                  : `You proposed a reschedule: ${formatDate(booking.scheduled_start)} → ${formatDate(booking.proposed_start!)}. Waiting for cleaner response before the 24-hour cutoff.`}
+                  : `You proposed a reschedule: ${formatDate(booking.scheduled_start)} → ${formatDate(booking.proposed_start!)}. Waiting for cleaner response${proposalResponseDeadlineLabel ? `. ${proposalResponseDeadlineLabel}.` : ' before expiry.'}`}
               </p>
             )}
-            {!isPostConfirmationProposalExpiredByStart && hasOpenProposalFlow && proposalCountdownLabel && (
+            {!isPostConfirmationProposalExpiredByStart && hasOpenProposalFlow && proposalResponseDeadlineLabel && (
               <p className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
-                Response window: {proposalCountdownLabel} remaining.
+                {proposalResponseDeadlineLabel}.
               </p>
             )}
             {booking.status === 'pending' && booking.accept_by && (
@@ -728,9 +752,21 @@ export default function ClientBookingDetailPage() {
               </p>
             )}
             {booking.status === 'accepted' && canAuthorize && (
-              <p className="rounded-xl border border-blue-200 bg-blue-50 px-3 py-2 text-sm text-blue-700">
-                Authorise your card now to keep this booking active. Your card is reserved, not charged yet.
-              </p>
+              isReauthorisationPending ? (
+                <div className="rounded-xl border border-blue-200 bg-blue-50 px-3 py-2 text-sm text-blue-700">
+                  <p className="font-semibold">Payment re-authorisation required</p>
+                  <p>
+                    {reauthorisationDeadlineLabel
+                      ? `Authorise your card by ${reauthorisationDeadlineLabel} to keep this booking active. Your card will not be charged at this stage.`
+                      : 'Authorise your card now to keep this booking active. Your card will not be charged at this stage.'}
+                  </p>
+                  <p>If payment re-authorisation is not completed by this deadline, the booking will be automatically cancelled.</p>
+                </div>
+              ) : (
+                <p className="rounded-xl border border-blue-200 bg-blue-50 px-3 py-2 text-sm text-blue-700">
+                  Authorise your card now to keep this booking active. Your card is reserved, not charged yet.
+                </p>
+              )
             )}
 
             <Card className="border-slate-200 bg-white/90">
@@ -1062,7 +1098,7 @@ export default function ClientBookingDetailPage() {
         <div className="space-y-3">
           <p className="text-sm text-muted-foreground">
             {proposalAction === 'propose_alternative'
-              ? 'You can request a new date or time for this booking. The booking will only change once the other party accepts the proposal. If they decline or do not respond before the 24-hour cutoff, the original booking time will remain unchanged.'
+              ? 'You can request a new date or time for this booking. The booking will only change once the other party accepts the proposal. If they decline or do not respond before the response deadline, the original booking time will remain unchanged.'
               : `Choose an available slot on the same day. Cleaner can only accept or decline this amendment request. ${AMENDMENT_EXPIRY_OUTCOME_COPY}`}
           </p>
           {proposalAction === 'propose_alternative' && (
@@ -1071,7 +1107,7 @@ export default function ClientBookingDetailPage() {
               <li>New time must be within 14 days of the original booking date</li>
               <li>Must fit cleaner availability, booking duration, and buffer rules</li>
               <li>The other party may accept, decline, or send one counter proposal</li>
-              <li>If no agreement is reached before the 24-hour cutoff, the original booking time will remain unchanged</li>
+              <li>If no agreement is reached before the response deadline, the original booking time will remain unchanged</li>
               <li>No penalty applies if a reschedule proposal is declined or expires</li>
               <li>Once a reschedule is successfully agreed, no further reschedules are allowed</li>
             </ul>

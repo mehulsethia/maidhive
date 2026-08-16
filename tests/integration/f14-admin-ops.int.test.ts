@@ -232,6 +232,32 @@ vi.mock('@/server/db', () => {
               },
             ]
           }
+          if (args?.where?.OR?.some?.((clause: any) => clause.status === 'confirmed')) {
+            if (bookingFindManyCall === 4) {
+              return [
+                {
+                  id: 'booking_upcoming_reauth_1',
+                  status: 'accepted',
+                  reauthorizationRequired: true,
+                  city: 'Larnaca',
+                  scheduledStart: new Date(Date.now() + 24 * 60 * 60 * 1000),
+                  cleaner: { user: { name: 'Cleaner Reauth', email: 'cr@test.local' } },
+                  client: { user: { name: 'Client Reauth', email: 'clr@test.local' } },
+                },
+              ]
+            }
+            return [
+              {
+                id: 'booking_upcoming_confirmed_1',
+                status: 'confirmed',
+                reauthorizationRequired: false,
+                city: 'Larnaca',
+                scheduledStart: new Date(Date.now() + 2 * 60 * 60 * 1000),
+                cleaner: { user: { name: 'Cleaner Upcoming', email: 'cu@test.local' } },
+                client: { user: { name: 'Client Upcoming', email: 'clu@test.local' } },
+              },
+            ]
+          }
           if (args?.where?.status === 'confirmed') {
             return [
               {
@@ -396,7 +422,10 @@ describe('F14 Admin routes integration', () => {
     expect([
       ...body.data.upcoming_jobs.today_items,
       ...body.data.upcoming_jobs.tomorrow_items,
-    ].map((item: any) => item.status)).toEqual(['confirmed', 'confirmed'])
+    ].map((item: any) => [item.status, item.payment_status])).toEqual([
+      ['confirmed', null],
+      ['accepted', 'reauthorization_required'],
+    ])
     expect(state.paymentFindManyArgs.where.booking.is.NOT).toEqual({
       status: 'cancelled',
       cancelledBy: { not: null },

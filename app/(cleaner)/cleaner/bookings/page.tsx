@@ -44,6 +44,7 @@ import { hasPendingAmendmentRequest } from '@/lib/booking-amendment'
 import { getCleanerCancellationOriginLabel } from '@/lib/cancellation-origin'
 import { getCleanerPayoutSummary } from '@/lib/cleaner-payout'
 import { isFinalNoCleanerPayoutOutcome } from '@/lib/payment-financial-outcome'
+import { isPaymentReauthorisationPending } from '@/lib/booking-reauthorisation'
 import type { BookingRead, BookingStatus, CleanerBookingStats } from '@/types'
 import { toast } from 'sonner'
 
@@ -407,7 +408,7 @@ export default function CleanerBookingsPage() {
                   disputeStatus: b.dispute?.status,
                   noPayoutFinalized,
                 })
-                const isReauthorisationPending = Boolean(b.reauthorization_required)
+                const isReauthorisationPending = isPaymentReauthorisationPending(b)
                 const unlockAtMs = scheduledStartMs - PHONE_REVEAL_PRE_START_MS
                 const sameDayCreated =
                   Number.isFinite(createdAtMs) &&

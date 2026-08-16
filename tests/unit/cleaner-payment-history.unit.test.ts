@@ -113,6 +113,23 @@ describe('Cleaner payment history mapping', () => {
     })
   })
 
+  it('maps unresolved re-authorisation cancellations to final no-payout history', () => {
+    const cancelledReauth = booking({
+      id: 'booking_reauth_cancelled',
+      status: 'cancelled',
+      reauthorization_required: false,
+      cancellation_reason: 'Payment re-authorisation was not completed by the deadline after reschedule. No penalties applied.',
+      payment: { id: 'payment_released', status: 'released', cleaner_payout: 0 },
+    })
+
+    expect(classifyCleanerPaymentHistoryBooking(cancelledReauth)).toMatchObject({
+      paymentType: 'Booking cancellation',
+      label: 'Cancelled — no payout due',
+      amount: 0,
+      tone: 'warn',
+    })
+  })
+
   it('maps cancelled bookings to cancellation payout labels', () => {
     const noPayout = booking({
       id: 'booking_cancelled_no_payout',

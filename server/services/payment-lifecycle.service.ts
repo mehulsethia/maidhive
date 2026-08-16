@@ -526,9 +526,12 @@ export const paymentLifecycleService = {
         data: {
           status: isReauthFlow ? 'cancelled' : 'expired',
           cancellationReason: isReauthFlow
-            ? 'Re-authorisation was not completed within the grace period after reschedule. No penalties applied.'
+            ? 'Payment re-authorisation was not completed by the deadline after reschedule. No penalties applied.'
             : null,
           cancelledAt: isReauthFlow ? new Date() : null,
+          reauthorizationRequired: isReauthFlow ? false : undefined,
+          reauthorizationGraceExpiresAt: isReauthFlow ? null : undefined,
+          payBy: isReauthFlow ? null : undefined,
         },
       })
       accepted += 1
@@ -538,7 +541,7 @@ export const paymentLifecycleService = {
         type: isReauthFlow ? 'booking_cancelled' : 'booking_request_expired',
         title: isReauthFlow ? 'Booking cancelled after unresolved re-authorisation' : 'Booking payment window expired',
         body: isReauthFlow
-          ? 'Re-authorisation remained unresolved after the 24-hour grace period. Booking was auto-cancelled with no penalties.'
+          ? 'Payment re-authorisation was not completed by the deadline. Your booking was automatically cancelled with no penalties.'
           : 'This booking was closed because payment authorisation did not complete in time.',
         data: { booking_id: booking.id },
       })
@@ -547,7 +550,7 @@ export const paymentLifecycleService = {
         type: isReauthFlow ? 'booking_cancelled' : 'booking_request_expired',
         title: isReauthFlow ? 'Booking cancelled after unresolved re-authorisation' : 'Booking payment window expired',
         body: isReauthFlow
-          ? 'Client did not complete re-authorisation during the grace period. Booking was auto-cancelled with no penalties.'
+          ? 'The client did not complete payment re-authorisation by the deadline. The booking was automatically cancelled with no penalty to you.'
           : 'This booking was closed because client authorisation did not complete in time.',
         data: { booking_id: booking.id },
       })

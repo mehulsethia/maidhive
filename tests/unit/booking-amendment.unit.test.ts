@@ -62,7 +62,7 @@ describe('booking amendment helpers', () => {
     })).toBe(new Date(proposedStart).getTime())
 
     expect(getEffectiveProposalExpiryMs({
-      proposal_context: 'post_confirmation',
+      proposal_context: 'pre_confirmation',
       proposal_expires_at: expiresAt,
       proposed_start: proposedStart,
     })).toBe(new Date(expiresAt).getTime())

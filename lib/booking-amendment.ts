@@ -1,4 +1,5 @@
 import type { BookingRead } from '@/types'
+import { getPostConfirmationRescheduleEffectiveDeadlineMs } from '@/lib/booking-proposal'
 
 export const AMEND_MAX_SHIFT_MS = 3 * 60 * 60 * 1000
 export const AMENDMENT_EXPIRY_OUTCOME_COPY =
@@ -40,6 +41,10 @@ export function hasPendingAmendmentRequest(booking: Pick<BookingRead, 'proposal_
 export function getEffectiveProposalExpiryMs(
   booking: Pick<BookingRead, 'proposal_context' | 'proposal_expires_at' | 'proposed_start'>,
 ) {
+  if (booking.proposal_context === 'post_confirmation') {
+    return getPostConfirmationRescheduleEffectiveDeadlineMs(booking)
+  }
+
   const proposalExpiresMs = dateMs(booking.proposal_expires_at)
   if (booking.proposal_context !== 'amend_start') return proposalExpiresMs
 

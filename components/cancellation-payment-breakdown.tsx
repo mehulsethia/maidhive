@@ -2,6 +2,7 @@ import {
   getCancellationPaymentOutcome,
   getClientCancellationPaymentOutcome,
 } from '@/lib/booking-payment-outcome'
+import { isPaymentReauthorisationCancelled } from '@/lib/booking-reauthorisation'
 import { getCancellationOriginLabel } from '@/lib/cancellation-origin'
 import { formatCurrency } from '@/lib/utils'
 import type { BookingRead } from '@/types'
@@ -29,6 +30,7 @@ export function CancellationPaymentBreakdown({
   const outcome = getCancellationPaymentOutcome(booking)
   if (!outcome) return null
   const clientPaymentOutcome = getClientCancellationPaymentOutcome(booking)
+  const reauthorisationCancelled = isPaymentReauthorisationCancelled(booking)
 
   if (compact) {
     if (audience === 'cleaner') {
@@ -44,7 +46,9 @@ export function CancellationPaymentBreakdown({
       return (
         <div className="min-w-0 space-y-0.5">
           <p className="text-sm font-semibold text-emerald-700">
-            {outcome.cleanerPayoutDue > 0
+            {reauthorisationCancelled
+              ? `No cleaner compensation — ${formatCurrency(0)}`
+              : outcome.cleanerPayoutDue > 0
               ? `Cleaner compensation: ${formatCurrency(outcome.cleanerPayoutDue)}`
               : 'No cleaner compensation'}
           </p>
@@ -87,7 +91,10 @@ export function CancellationPaymentBreakdown({
     return (
       <div className="min-w-0 space-y-2 rounded-2xl border border-emerald-100 bg-emerald-50/70 p-4 text-sm">
         <h4 className="font-semibold tracking-tight text-emerald-950">Compensation outcome</h4>
-        <Row label="Cleaner compensation" value={formatCurrency(outcome.cleanerPayoutDue)} />
+        <Row
+          label={reauthorisationCancelled ? 'No cleaner compensation' : 'Cleaner compensation'}
+          value={formatCurrency(reauthorisationCancelled ? 0 : outcome.cleanerPayoutDue)}
+        />
         <Row label="Original booking value" value={formatCurrency(outcome.originalAmount)} />
         <Row label="Compensation released" value={formatCurrency(compensationReleased)} />
       </div>

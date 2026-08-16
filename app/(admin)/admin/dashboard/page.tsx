@@ -329,7 +329,12 @@ export default function AdminDashboard() {
                 <div key={job.id} className="rounded-xl border border-slate-200 bg-slate-50/60 p-3">
                   <div className="flex items-center justify-between gap-2">
                     <p className="text-sm font-medium text-slate-900">{job.city}</p>
-                    <Badge variant="outline">{job.status}</Badge>
+                    <div className="flex flex-wrap justify-end gap-1">
+                      {job.payment_status === 'reauthorization_required' && (
+                        <Badge variant="warning">Payment re-authorisation pending</Badge>
+                      )}
+                      <Badge variant="outline">{job.status}</Badge>
+                    </div>
                   </div>
                   <p className="mt-1 text-xs text-slate-600">{job.client_name} → {job.cleaner_name}</p>
                   <p className="text-xs text-muted-foreground">{formatDate(job.scheduled_start)}</p>
