@@ -67,4 +67,15 @@ describe('booking amendment helpers', () => {
       proposed_start: proposedStart,
     })).toBe(new Date(expiresAt).getTime())
   })
+
+  it('caps post-confirmation proposal expiry at four hours before the proposed start', () => {
+    const oldBookingCutoff = '2026-08-16T07:00:00.000Z'
+    const proposedStart = '2026-08-14T18:30:00.000Z'
+
+    expect(getEffectiveProposalExpiryMs({
+      proposal_context: 'post_confirmation',
+      proposal_expires_at: oldBookingCutoff,
+      proposed_start: proposedStart,
+    })).toBe(new Date('2026-08-14T14:30:00.000Z').getTime())
+  })
 })

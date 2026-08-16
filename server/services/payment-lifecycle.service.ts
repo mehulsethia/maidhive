@@ -555,14 +555,40 @@ export const paymentLifecycleService = {
         data: { booking_id: booking.id },
       })
 
-      try {
-        await loopsEmailService.sendClientBookingRejectedOrExpired({
-          email: booking.client.user.email,
-          fullName: booking.client.user.name ?? 'Client',
-          cleanerName: booking.cleaner.user.name ?? 'Cleaner',
-        })
-      } catch (emailError) {
-        console.error('Failed to send client booking expired email via Loops:', emailError)
+      if (isReauthFlow) {
+        try {
+          await loopsEmailService.sendClientPaymentReauthorisationCancelled({
+            email: booking.client.user.email,
+            clientName: booking.client.user.name ?? 'Client',
+            cleanerName: booking.cleaner.user.name ?? 'Cleaner',
+            scheduledStart: booking.scheduledStart,
+            durationHours: Number(booking.durationHours),
+          })
+        } catch (emailError) {
+          console.error('Failed to send client payment re-authorisation cancellation email via Loops:', emailError)
+        }
+        try {
+          await loopsEmailService.sendCleanerPaymentReauthorisationCancelled({
+            email: booking.cleaner.user.email,
+            cleanerName: booking.cleaner.user.name ?? 'Cleaner',
+            clientName: booking.client.user.name ?? 'Client',
+            scheduledStart: booking.scheduledStart,
+            durationHours: Number(booking.durationHours),
+            bookingId: booking.id,
+          })
+        } catch (emailError) {
+          console.error('Failed to send cleaner payment re-authorisation cancellation email via Loops:', emailError)
+        }
+      } else {
+        try {
+          await loopsEmailService.sendClientBookingRejectedOrExpired({
+            email: booking.client.user.email,
+            fullName: booking.client.user.name ?? 'Client',
+            cleanerName: booking.cleaner.user.name ?? 'Cleaner',
+          })
+        } catch (emailError) {
+          console.error('Failed to send client booking expired email via Loops:', emailError)
+        }
       }
 
       if (booking.payment && booking.payment.status === 'pending') {

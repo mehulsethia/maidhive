@@ -56,6 +56,8 @@ describe('Loops email contracts', () => {
       'sendCleanerClientDeclinedProposal',
       'sendCleanerNewBookingRequest',
       'sendCleanerPayoutNotification',
+      'sendCleanerPaymentReauthorisationCancelled',
+      'sendCleanerRescheduleReauthorisationPending',
       'sendCleanerSignup',
       'sendClientAccountCreated',
       'sendClientAlternateTimeProposed',
@@ -66,6 +68,7 @@ describe('Loops email contracts', () => {
       'sendClientBookingRejectedOrExpired',
       'sendClientBookingStarted',
       'sendClientPaymentReceipt',
+      'sendClientPaymentReauthorisationCancelled',
       'sendClientPaymentReauthorisationComplete',
       'sendClientPaymentReauthorisationRequired',
       'sendClientProposalDeclinedClosed',
@@ -183,6 +186,71 @@ describe('Loops email contracts', () => {
         booking_time: '10:30',
         duration: '2 hours',
         booking_link: 'https://app.maidhive.test/client/bookings/booking_reauth_1',
+      },
+    })
+  })
+
+  it('sends payment re-authorisation cancellation and cleaner reschedule templates with exact IDs and variables', async () => {
+    const { loopsEmailService, fetchMock } = await loadLoopsEmailService()
+    const scheduledStart = new Date('2026-08-15T07:30:00.000Z')
+    const deadline = new Date('2026-08-12T08:00:00.000Z')
+
+    await loopsEmailService.sendCleanerRescheduleReauthorisationPending({
+      email: 'cleaner@example.test',
+      cleanerName: 'Cleaner User',
+      scheduledStart,
+      reauthorisationDeadline: deadline,
+      bookingId: 'booking_reauth_1',
+    })
+    await loopsEmailService.sendClientPaymentReauthorisationCancelled({
+      email: 'client@example.test',
+      clientName: 'Client User',
+      cleanerName: 'Cleaner User',
+      scheduledStart,
+      durationHours: 2,
+    })
+    await loopsEmailService.sendCleanerPaymentReauthorisationCancelled({
+      email: 'cleaner@example.test',
+      cleanerName: 'Cleaner User',
+      clientName: 'Client User',
+      scheduledStart,
+      durationHours: 2,
+      bookingId: 'booking_reauth_1',
+    })
+
+    expect(requestBody(fetchMock, 0)).toEqual({
+      transactionalId: 'cmsw4ofo2008f0jyj43m54k4g',
+      email: 'cleaner@example.test',
+      dataVariables: {
+        cleaner_name: 'Cleaner User',
+        booking_date: '15 Aug 2026',
+        booking_time: '10:30',
+        reauthorisation_deadline: '12 Aug 2026 at 11:00',
+        booking_url: 'https://app.maidhive.test/cleaner/bookings/booking_reauth_1',
+      },
+    })
+    expect(requestBody(fetchMock, 1)).toEqual({
+      transactionalId: 'cmsw4tueh00sn0jzijb4g1h2z',
+      email: 'client@example.test',
+      dataVariables: {
+        client_first_name: 'Client',
+        cleaner_name: 'Cleaner User',
+        booking_date: '15 Aug 2026',
+        booking_time: '10:30',
+        duration: '2 hours',
+        cleaners_url: 'https://app.maidhive.test/client/cleaners',
+      },
+    })
+    expect(requestBody(fetchMock, 2)).toEqual({
+      transactionalId: 'cmsw4x6hc3ybb0jywjkw1zp5j',
+      email: 'cleaner@example.test',
+      dataVariables: {
+        cleaner_first_name: 'Cleaner',
+        client_name: 'Client User',
+        booking_date: '15 Aug 2026',
+        booking_time: '10:30',
+        duration: '2 hours',
+        booking_url: 'https://app.maidhive.test/cleaner/bookings/booking_reauth_1',
       },
     })
   })

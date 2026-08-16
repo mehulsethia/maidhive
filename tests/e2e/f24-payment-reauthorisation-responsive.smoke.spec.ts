@@ -255,6 +255,7 @@ test.describe('F24 payment re-authorisation responsive regression @smoke', () =>
       page: 1,
       page_size: 250,
     }))
+    await page.route(`**/api/v1/messages/${BOOKING_ID}`, (route) => fulfill(route, []))
 
     for (const viewport of VIEWPORTS) {
       await page.setViewportSize(viewport)
@@ -275,6 +276,13 @@ test.describe('F24 payment re-authorisation responsive regression @smoke', () =>
       await expect(relatedLinks.first()).toHaveAttribute('href', `/client/bookings/${BOOKING_ID}`)
       await expectNoNextOverlay(page)
       await expectNoHorizontalOverflow(page, `client re-authorisation notifications at ${viewport.name}`)
+
+      await page.goto(`/client/bookings/${BOOKING_ID}`, { waitUntil: 'domcontentloaded' })
+      await expect(page.getByText('Payment re-authorisation required', { exact: true })).toBeVisible()
+      await expect(page.getByText(/Authorise your card by 11:00 on 12 Aug 2026 to keep this booking active\./)).toBeVisible()
+      await expect(page.getByText('If payment re-authorisation is not completed by this deadline, the booking will be automatically cancelled.', { exact: true })).toBeVisible()
+      await expectNoNextOverlay(page)
+      await expectNoHorizontalOverflow(page, `client re-authorisation booking detail at ${viewport.name}`)
     }
   })
 
@@ -371,6 +379,7 @@ test.describe('F24 payment re-authorisation responsive regression @smoke', () =>
       await expect(page.getByText('Phone access is now closed for this booking.', { exact: true })).toBeVisible()
       await expect(page.getByText('No payout is due because payment re-authorisation was not completed by the deadline.', { exact: true })).toBeVisible()
       await expect(page.getByText('No cleaner compensation', { exact: true }).first()).toBeVisible()
+      await expect(page.getByText('No cleaner compensation — €0.00', { exact: true })).toBeVisible()
       await expect(page.getByRole('heading', { name: 'Next actions' })).toHaveCount(0)
       await expect(page.getByText(/Payment re-authorisation pending - awaiting client/)).toHaveCount(0)
       await expect(page.getByText(/Report issues during the booking/)).toHaveCount(0)

@@ -480,9 +480,16 @@ export default function ClientBookingDetailPage() {
     { ...booking, proposal_context: proposalContext },
     nowTick,
   )
+  const proposalExpiresMs = getEffectiveProposalExpiryMs(booking)
+  const isPostConfirmationProposalDeadlineExpired =
+    proposalContext === 'post_confirmation' &&
+    proposalExpiresMs !== null &&
+    proposalExpiresMs <= nowTick
+  const isPostConfirmationProposalUnavailable =
+    isPostConfirmationProposalExpiredByStart || isPostConfirmationProposalDeadlineExpired
   const canCounterProposal = cleanerProposed
     && hasProposal
-    && !isPostConfirmationProposalExpiredByStart
+    && !isPostConfirmationProposalUnavailable
     && (
       proposalContext === 'pre_confirmation'
         ? moreThan24HoursAway && (booking.client_proposals ?? 0) < 1
@@ -493,7 +500,7 @@ export default function ClientBookingDetailPage() {
             : false
     )
   const hasOpenProposalFlow = hasProposal && ['pending', 'accepted', 'confirmed'].includes(booking.status)
-  const canRespondToCleanerProposal = hasOpenProposalFlow && cleanerProposed && !isPostConfirmationProposalExpiredByStart
+  const canRespondToCleanerProposal = hasOpenProposalFlow && cleanerProposed && !isPostConfirmationProposalUnavailable
   const canReportInProgress = booking.status === 'in_progress' && !hasDisputeCase
   const isCompletedReleased = isCompletedBookingReleased({
     status: booking.status,
@@ -544,7 +551,6 @@ export default function ClientBookingDetailPage() {
   const reportWindowExpired = Boolean(reportableStatus && reportAnchorMs && Date.now() > reportDeadlineMs)
   const disputeAction = getDisputeParticipantAction('client', booking.dispute, currentUserId)
   const disputeResponseDeadlineLabel = getDisputeResponseDeadlineLabel(booking.dispute)
-  const proposalExpiresMs = getEffectiveProposalExpiryMs(booking)
   const proposalResponseDeadlineLabel = proposalExpiresMs && proposalExpiresMs > nowTick
     ? formatProposalResponseDeadlineInCyprus(proposalExpiresMs, nowTick)
     : null
@@ -723,7 +729,7 @@ export default function ClientBookingDetailPage() {
               </CardContent>
             </Card>
 
-            {isPostConfirmationProposalExpiredByStart ? (
+            {isPostConfirmationProposalUnavailable ? (
               <div className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">
                 <p className="font-semibold">{RESCHEDULE_NO_LONGER_AVAILABLE_TITLE}</p>
                 <p>{RESCHEDULE_NO_LONGER_AVAILABLE_BODY}</p>
@@ -739,7 +745,7 @@ export default function ClientBookingDetailPage() {
                   : `You proposed a reschedule: ${formatDate(booking.scheduled_start)} → ${formatDate(booking.proposed_start!)}. Waiting for cleaner response${proposalResponseDeadlineLabel ? `. ${proposalResponseDeadlineLabel}.` : ' before expiry.'}`}
               </p>
             )}
-            {!isPostConfirmationProposalExpiredByStart && hasOpenProposalFlow && proposalResponseDeadlineLabel && (
+            {!isPostConfirmationProposalUnavailable && hasOpenProposalFlow && proposalResponseDeadlineLabel && (
               <p className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
                 {proposalResponseDeadlineLabel}.
               </p>

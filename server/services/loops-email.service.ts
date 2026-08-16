@@ -11,6 +11,7 @@ const CLIENT_ACCOUNT_CREATED_TRANSACTIONAL_ID = 'cmo2r81uz0ec30iyxo9lozvlg'
 const CLIENT_BOOKING_CONFIRMED_TRANSACTIONAL_ID = 'cmo2rcbtv2p880izkqlj9rxj9'
 const CLIENT_PAYMENT_REAUTHORISATION_REQUIRED_TRANSACTIONAL_ID = 'cmspo37ns0my90jzph23irblu'
 const CLIENT_PAYMENT_REAUTHORISATION_COMPLETE_TRANSACTIONAL_ID = 'cmspo7dcn0t190j33ih0mruqe'
+const CLIENT_PAYMENT_REAUTHORISATION_CANCELLED_TRANSACTIONAL_ID = 'cmsw4tueh00sn0jzijb4g1h2z'
 const CLIENT_BOOKING_STARTED_TRANSACTIONAL_ID =
   process.env.LOOPS_CLIENT_BOOKING_STARTED_TRANSACTIONAL_ID ?? ''
 const CLIENT_BOOKING_CREATED_PENDING_TRANSACTIONAL_ID =
@@ -29,10 +30,12 @@ const CLEANER_SIGNUP_TRANSACTIONAL_ID = 'cmo5hbjfv0lbm0iya3k626pjl'
 const CLEANER_APPLICATION_APPROVED_TRANSACTIONAL_ID = 'cmo5hdvco009s0i06469pwe16'
 const CLEANER_NEW_BOOKING_REQUEST_TRANSACTIONAL_ID = 'cmo5hgm9p00hn0i0fzxhtjsv8'
 const CLEANER_BOOKING_ACCEPTED_CONFIRMATION_TRANSACTIONAL_ID = 'cmo5hi2ru00fv0i1swohcrzm2'
+const CLEANER_RESCHEDULE_REAUTHORISATION_PENDING_TRANSACTIONAL_ID = 'cmsw4ofo2008f0jyj43m54k4g'
 const CLEANER_APPLICATION_REJECTED_TRANSACTIONAL_ID = 'cmo5hfgqp00aa0i08rmzp2w8f'
 const CLEANER_PAYOUT_NOTIFICATION_TRANSACTIONAL_ID = 'cmo5hj1953kp50i0ewrbk3wd4'
 const CLEANER_CANCELLATION_WARNING_OR_STRIKE_TRANSACTIONAL_ID = 'cmo5hk2jk09ci0i0x0iala79a'
 const CLEANER_BOOKING_CANCELLED_BY_CLIENT_TRANSACTIONAL_ID = 'cmq4ueii70dzh0j2gq00j0bya'
+const CLEANER_PAYMENT_REAUTHORISATION_CANCELLED_TRANSACTIONAL_ID = 'cmsw4x6hc3ybb0jywjkw1zp5j'
 const CLIENT_ALT_TIME_PROPOSED_TRANSACTIONAL_ID =
   process.env.LOOPS_CLIENT_ALT_TIME_PROPOSED_TRANSACTIONAL_ID ?? 'cmoy0itw205fk0ix97hljg7jz'
 const CLEANER_CLIENT_ALT_TIME_PROPOSED_TRANSACTIONAL_ID =
@@ -290,6 +293,27 @@ export const loopsEmailService = {
         booking_time: formatBookingTime(args.scheduledStart),
         duration: `${args.durationHours} hour${args.durationHours === 1 ? '' : 's'}`,
         booking_link: absoluteAppLink(`/client/bookings/${args.bookingId}`),
+      },
+    })
+  },
+
+  async sendClientPaymentReauthorisationCancelled(args: {
+    email: string
+    clientName: string
+    cleanerName: string
+    scheduledStart: Date
+    durationHours: number
+  }) {
+    return sendTransactionalEmail({
+      transactionalId: CLIENT_PAYMENT_REAUTHORISATION_CANCELLED_TRANSACTIONAL_ID,
+      email: args.email,
+      dataVariables: {
+        client_first_name: firstName(args.clientName),
+        cleaner_name: args.cleanerName,
+        booking_date: formatBookingDate(args.scheduledStart),
+        booking_time: formatBookingTime(args.scheduledStart),
+        duration: `${args.durationHours} hour${args.durationHours === 1 ? '' : 's'}`,
+        cleaners_url: absoluteAppLink('/client/cleaners'),
       },
     })
   },
@@ -608,6 +632,48 @@ export const loopsEmailService = {
       dataVariables: {
         first_name: firstName(args.fullName),
         booking_link: `${appUrl()}/cleaner/bookings/${args.bookingId}`,
+      },
+    })
+  },
+
+  async sendCleanerRescheduleReauthorisationPending(args: {
+    email: string
+    cleanerName: string
+    scheduledStart: Date
+    reauthorisationDeadline: Date
+    bookingId: string
+  }) {
+    return sendTransactionalEmail({
+      transactionalId: CLEANER_RESCHEDULE_REAUTHORISATION_PENDING_TRANSACTIONAL_ID,
+      email: args.email,
+      dataVariables: {
+        cleaner_name: args.cleanerName,
+        booking_date: formatBookingDate(args.scheduledStart),
+        booking_time: formatBookingTime(args.scheduledStart),
+        reauthorisation_deadline: formatBookingDateTime(args.reauthorisationDeadline),
+        booking_url: absoluteAppLink(`/cleaner/bookings/${args.bookingId}`),
+      },
+    })
+  },
+
+  async sendCleanerPaymentReauthorisationCancelled(args: {
+    email: string
+    cleanerName: string
+    clientName: string
+    scheduledStart: Date
+    durationHours: number
+    bookingId: string
+  }) {
+    return sendTransactionalEmail({
+      transactionalId: CLEANER_PAYMENT_REAUTHORISATION_CANCELLED_TRANSACTIONAL_ID,
+      email: args.email,
+      dataVariables: {
+        cleaner_first_name: firstName(args.cleanerName),
+        client_name: args.clientName,
+        booking_date: formatBookingDate(args.scheduledStart),
+        booking_time: formatBookingTime(args.scheduledStart),
+        duration: `${args.durationHours} hour${args.durationHours === 1 ? '' : 's'}`,
+        booking_url: absoluteAppLink(`/cleaner/bookings/${args.bookingId}`),
       },
     })
   },

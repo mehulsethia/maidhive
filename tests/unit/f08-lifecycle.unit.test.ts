@@ -6,6 +6,9 @@ const state = vi.hoisted(() => ({
   acceptedExpired: [] as any[],
   bookingUpdates: [] as any[],
   notifications: [] as any[],
+  clientReauthorisationCancelledPayloads: [] as any[],
+  cleanerReauthorisationCancelledPayloads: [] as any[],
+  clientRejectedEmails: 0,
   startCalls: [] as string[],
   completeCalls: [] as string[],
 }))
@@ -48,7 +51,18 @@ vi.mock('@/server/services/loops-email.service', () => ({
   loopsEmailService: {
     sendCleanerPayoutNotification: vi.fn(async () => true),
     sendClientPaymentReceipt: vi.fn(async () => true),
-    sendClientBookingRejectedOrExpired: vi.fn(async () => true),
+    sendClientBookingRejectedOrExpired: vi.fn(async () => {
+      state.clientRejectedEmails += 1
+      return true
+    }),
+    sendClientPaymentReauthorisationCancelled: vi.fn(async (payload: any) => {
+      state.clientReauthorisationCancelledPayloads.push(payload)
+      return true
+    }),
+    sendCleanerPaymentReauthorisationCancelled: vi.fn(async (payload: any) => {
+      state.cleanerReauthorisationCancelledPayloads.push(payload)
+      return true
+    }),
   },
 }))
 
@@ -80,6 +94,9 @@ describe('F08 lifecycle unit coverage', () => {
     state.acceptedExpired = []
     state.bookingUpdates = []
     state.notifications = []
+    state.clientReauthorisationCancelledPayloads = []
+    state.cleanerReauthorisationCancelledPayloads = []
+    state.clientRejectedEmails = 0
     state.startCalls = []
     state.completeCalls = []
   })
@@ -148,6 +165,8 @@ describe('F08 lifecycle unit coverage', () => {
         status: 'accepted',
         payBy: new Date('2026-08-14T16:30:00.000Z'),
         reauthorizationRequired: true,
+        scheduledStart: new Date('2026-08-14T18:30:00.000Z'),
+        durationHours: 2,
         payment: { id: 'payment_released', status: 'released' },
         client: {
           userId: 'client_user_1',
@@ -187,5 +206,25 @@ describe('F08 lifecycle unit coverage', () => {
       }),
     ]))
     expect(state.notifications.map((notification) => notification.body).join(' ')).not.toMatch(/grace period|24-hour/i)
+    expect(state.clientRejectedEmails).toBe(0)
+    expect(state.clientReauthorisationCancelledPayloads).toEqual([
+      expect.objectContaining({
+        email: 'client@test.local',
+        clientName: 'Client',
+        cleanerName: 'Cleaner',
+        scheduledStart: new Date('2026-08-14T18:30:00.000Z'),
+        durationHours: 2,
+      }),
+    ])
+    expect(state.cleanerReauthorisationCancelledPayloads).toEqual([
+      expect.objectContaining({
+        email: 'cleaner@test.local',
+        cleanerName: 'Cleaner',
+        clientName: 'Client',
+        scheduledStart: new Date('2026-08-14T18:30:00.000Z'),
+        durationHours: 2,
+        bookingId: 'booking_reauth_expired',
+      }),
+    ])
   })
 })

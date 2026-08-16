@@ -88,12 +88,22 @@ export function CancellationPaymentBreakdown({
     const compensationReleased = booking.payment?.status === 'transferred' || booking.payment?.transferred_at
       ? outcome.cleanerPayoutDue
       : 0
+    if (reauthorisationCancelled) {
+      return (
+        <div className="min-w-0 space-y-2 rounded-2xl border border-emerald-100 bg-emerald-50/70 p-4 text-sm">
+          <h4 className="font-semibold tracking-tight text-emerald-950">Compensation outcome</h4>
+          <p className="font-medium text-slate-900">{`No cleaner compensation — ${formatCurrency(0)}`}</p>
+          <Row label="Original booking value" value={formatCurrency(outcome.originalAmount)} />
+          <Row label="Compensation released" value={formatCurrency(0)} />
+        </div>
+      )
+    }
     return (
       <div className="min-w-0 space-y-2 rounded-2xl border border-emerald-100 bg-emerald-50/70 p-4 text-sm">
         <h4 className="font-semibold tracking-tight text-emerald-950">Compensation outcome</h4>
         <Row
-          label={reauthorisationCancelled ? 'No cleaner compensation' : 'Cleaner compensation'}
-          value={formatCurrency(reauthorisationCancelled ? 0 : outcome.cleanerPayoutDue)}
+          label="Cleaner compensation"
+          value={formatCurrency(outcome.cleanerPayoutDue)}
         />
         <Row label="Original booking value" value={formatCurrency(outcome.originalAmount)} />
         <Row label="Compensation released" value={formatCurrency(compensationReleased)} />

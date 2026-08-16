@@ -662,14 +662,14 @@ export const bookingService = {
       assertHalfHourBoundary(proposedStart)
       const proposedEnd = new Date(proposedStart.getTime() + Number(booking.durationHours) * 60 * 60 * 1000)
       const isPreConfirmation = booking.status === 'pending' && booking.proposalContext !== 'post_confirmation'
-      await validateBookingWindow(
-        booking.cleanerId,
-        proposedStart,
-        proposedEnd,
-        { enforceMaxAdvanceWindow: isPreConfirmation },
-      )
 
       if (isPreConfirmation) {
+        await validateBookingWindow(
+          booking.cleanerId,
+          proposedStart,
+          proposedEnd,
+          { enforceMaxAdvanceWindow: true },
+        )
         assertWithinRequestWindow(requestAcceptBy)
         assertRescheduleWindow(booking.scheduledStart)
         if (actor === 'client' && booking.clientProposals >= 1) {
@@ -724,11 +724,19 @@ export const bookingService = {
         throw new ServiceError('Counter-offers are not allowed for Amend Start Time. Accept or decline this amendment request.', 400)
       }
 
+      assertPostConfirmationProposalOpen(booking.proposalExpiresAt)
+      assertPostConfirmationReauthAcceptWindow(booking.proposedStart)
       assertPostConfirmationRescheduleNotUsed(booking)
       assertPostConfirmationRescheduleWindow(booking.scheduledStart)
       const originalStart = booking.originalScheduledStart ?? booking.scheduledStart
       assertPostConfirmationDateLimit(originalStart, proposedStart)
       assertPostConfirmationReauthAcceptWindow(proposedStart)
+      await validateBookingWindow(
+        booking.cleanerId,
+        proposedStart,
+        proposedEnd,
+        { enforceMaxAdvanceWindow: false },
+      )
       if (actor === 'client' && booking.postClientProposals >= 1) {
         throw new ServiceError('Client has already used the single allowed counter-proposal', 400)
       }
@@ -937,7 +945,7 @@ export const bookingService = {
           proposed_by: booking.proposalBy,
         },
       })
-      await resetAuthorizationAfterReschedule(updated.id)
+      const reauthorisation = await resetAuthorizationAfterReschedule(updated.id)
       await pushInAppNotification({
         userId: isClient ? booking.cleaner.userId : booking.client.userId,
         type: 'booking_time_agreed',
@@ -946,13 +954,15 @@ export const bookingService = {
         data: { booking_id: bookingId },
       })
       try {
-        await loopsEmailService.sendCleanerBookingAcceptedConfirmation({
+        await loopsEmailService.sendCleanerRescheduleReauthorisationPending({
           email: booking.cleaner.user.email,
-          fullName: booking.cleaner.user.name ?? 'Cleaner',
+          cleanerName: booking.cleaner.user.name ?? 'Cleaner',
+          scheduledStart: updated.scheduledStart,
+          reauthorisationDeadline: reauthorisation.deadline,
           bookingId: booking.id,
         })
       } catch (emailError) {
-        console.error('Failed to send cleaner reschedule accepted email via Loops:', emailError)
+        console.error('Failed to send cleaner reschedule re-authorisation pending email via Loops:', emailError)
       }
       const refreshed = await bookingRepo.findById(updated.id)
       if (!refreshed) throw new ServiceError('Booking not found after reschedule update', 404)
@@ -1836,6 +1846,8 @@ async function resetAuthorizationAfterReschedule(bookingId: string) {
   } catch (emailError) {
     console.error('Failed to send client payment re-authorisation required email via Loops:', emailError)
   }
+
+  return { deadline: payBy }
 }
 
 function computePaymentReauthorisationDeadline(scheduledStart: Date, nowMs = Date.now()) {

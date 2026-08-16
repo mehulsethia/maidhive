@@ -46,6 +46,15 @@ const state = vi.hoisted(() => ({
       cleanerId: 'cleaner_profile_1',
       _count: { messages: 2 },
     },
+    booking_reauth_pending: {
+      id: 'booking_reauth_pending',
+      status: 'accepted',
+      reauthorizationRequired: true,
+      scheduledEnd: new Date(Date.now() + 60 * 60 * 1000),
+      clientId: 'client_profile_1',
+      cleanerId: 'cleaner_profile_1',
+      _count: { messages: 1 },
+    },
   } as Record<string, any>,
   sentMessages: [] as any[],
 }))
@@ -116,6 +125,9 @@ describe('F12 chat + permissions integration', () => {
     state.bookings.booking_allowed.scheduledEnd = new Date(Date.now() + 60 * 60 * 1000)
     state.bookings.booking_pending.status = 'pending'
     state.bookings.booking_cancelled.status = 'cancelled'
+    state.bookings.booking_reauth_pending.status = 'accepted'
+    state.bookings.booking_reauth_pending.reauthorizationRequired = true
+    state.bookings.booking_reauth_pending.scheduledEnd = new Date(Date.now() + 60 * 60 * 1000)
     state.sentMessages = []
   })
 
@@ -186,5 +198,46 @@ describe('F12 chat + permissions integration', () => {
     expect(res.status).toBe(400)
     expect(body.success).toBe(false)
     expect(String(body.message)).toContain('Chat is unavailable')
+  })
+
+  it('IT-CHAT-04 re-authorisation pending bookings keep chat readable and writable for both parties', async () => {
+    const route = await import('@/app/api/v1/messages/[bookingId]/route')
+
+    state.currentUser = seededUsers.client as User
+    const clientGet = await route.GET(
+      new NextRequest('http://localhost/api/v1/messages/booking_reauth_pending'),
+      { params: Promise.resolve({ bookingId: 'booking_reauth_pending' }) } as any,
+    )
+    const clientPost = await route.POST(
+      new NextRequest('http://localhost/api/v1/messages/booking_reauth_pending', {
+        method: 'POST',
+        body: JSON.stringify({ content: 'Payment is being re-authorised.' }),
+        headers: { 'content-type': 'application/json' },
+      }),
+      { params: Promise.resolve({ bookingId: 'booking_reauth_pending' }) } as any,
+    )
+
+    state.currentUser = seededUsers.cleaner as User
+    const cleanerGet = await route.GET(
+      new NextRequest('http://localhost/api/v1/messages/booking_reauth_pending'),
+      { params: Promise.resolve({ bookingId: 'booking_reauth_pending' }) } as any,
+    )
+    const cleanerPost = await route.POST(
+      new NextRequest('http://localhost/api/v1/messages/booking_reauth_pending', {
+        method: 'POST',
+        body: JSON.stringify({ content: 'Thanks, I can still see the new time.' }),
+        headers: { 'content-type': 'application/json' },
+      }),
+      { params: Promise.resolve({ bookingId: 'booking_reauth_pending' }) } as any,
+    )
+
+    expect(clientGet.status).toBe(200)
+    expect(clientPost.status).toBe(201)
+    expect(cleanerGet.status).toBe(200)
+    expect(cleanerPost.status).toBe(201)
+    expect(state.sentMessages.map((message) => message.senderId)).toEqual([
+      seededUsers.client.id,
+      seededUsers.cleaner.id,
+    ])
   })
 })
