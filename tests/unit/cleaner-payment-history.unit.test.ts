@@ -118,7 +118,7 @@ describe('Cleaner payment history mapping', () => {
       id: 'booking_reauth_cancelled',
       status: 'cancelled',
       reauthorization_required: false,
-      cancellation_reason: 'Payment re-authorisation was not completed by the deadline after reschedule. No penalties applied.',
+      cancellation_reason: 'Payment re-authorisation deadline expired',
       payment: { id: 'payment_released', status: 'released', cleaner_payout: 0 },
     })
 

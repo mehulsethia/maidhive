@@ -8,6 +8,7 @@ import { AMENDMENT_EXPIRED_BODY, AMENDMENT_EXPIRED_TITLE } from '@/lib/booking-a
 import type Stripe from 'stripe'
 import { cleanerReliabilityService } from './cleaner-reliability.service'
 import { recordBookingActionEvent } from './booking-action-event.service'
+import { PAYMENT_REAUTHORISATION_DEADLINE_EXPIRED_REASON } from '@/lib/booking-reauthorisation'
 
 const AUTO_COMPLETION_GRACE_MINUTES = 5
 
@@ -521,20 +522,36 @@ export const paymentLifecycleService = {
 
     for (const booking of acceptedExpired) {
       const isReauthFlow = Boolean(booking.reauthorizationRequired)
+      const cancelledAt = isReauthFlow ? new Date() : null
       await db.booking.update({
         where: { id: booking.id },
         data: {
           status: isReauthFlow ? 'cancelled' : 'expired',
           cancellationReason: isReauthFlow
-            ? 'Payment re-authorisation was not completed by the deadline after reschedule. No penalties applied.'
+            ? PAYMENT_REAUTHORISATION_DEADLINE_EXPIRED_REASON
             : null,
-          cancelledAt: isReauthFlow ? new Date() : null,
+          cancelledAt,
           reauthorizationRequired: isReauthFlow ? false : undefined,
           reauthorizationGraceExpiresAt: isReauthFlow ? null : undefined,
           payBy: isReauthFlow ? null : undefined,
         },
       })
       accepted += 1
+
+      if (isReauthFlow && cancelledAt) {
+        await recordBookingActionEvent({
+          bookingId: booking.id,
+          type: 'payment_reauthorisation_expired',
+          actorRole: 'system',
+          createdAt: cancelledAt,
+          metadata: {
+            deadline: booking.payBy?.toISOString() ?? null,
+            scheduled_start: booking.scheduledStart.toISOString(),
+            reason: 'payment_reauthorisation_deadline_expired',
+            no_penalties_applied: true,
+          },
+        })
+      }
 
       await pushInAppNotification({
         userId: booking.client.userId,

@@ -9,6 +9,7 @@ const state = vi.hoisted(() => ({
   clientReauthorisationCancelledPayloads: [] as any[],
   cleanerReauthorisationCancelledPayloads: [] as any[],
   clientRejectedEmails: 0,
+  actionEvents: [] as any[],
   startCalls: [] as string[],
   completeCalls: [] as string[],
 }))
@@ -73,6 +74,13 @@ vi.mock('@/server/services/in-app-notification.service', () => ({
   }),
 }))
 
+vi.mock('@/server/services/booking-action-event.service', () => ({
+  recordBookingActionEvent: vi.fn(async (payload: any) => {
+    state.actionEvents.push(payload)
+    return payload
+  }),
+}))
+
 vi.mock('@/server/services/booking.service', () => ({
   bookingService: {
     startBySystem: vi.fn(async (id: string) => {
@@ -97,6 +105,7 @@ describe('F08 lifecycle unit coverage', () => {
     state.clientReauthorisationCancelledPayloads = []
     state.cleanerReauthorisationCancelledPayloads = []
     state.clientRejectedEmails = 0
+    state.actionEvents = []
     state.startCalls = []
     state.completeCalls = []
   })
@@ -187,10 +196,21 @@ describe('F08 lifecycle unit coverage', () => {
       where: { id: 'booking_reauth_expired' },
       data: expect.objectContaining({
         status: 'cancelled',
-        cancellationReason: 'Payment re-authorisation was not completed by the deadline after reschedule. No penalties applied.',
+        cancellationReason: 'Payment re-authorisation deadline expired',
         reauthorizationRequired: false,
         reauthorizationGraceExpiresAt: null,
         payBy: null,
+      }),
+    }))
+    expect(state.actionEvents).toContainEqual(expect.objectContaining({
+      bookingId: 'booking_reauth_expired',
+      type: 'payment_reauthorisation_expired',
+      actorRole: 'system',
+      metadata: expect.objectContaining({
+        deadline: '2026-08-14T16:30:00.000Z',
+        scheduled_start: '2026-08-14T18:30:00.000Z',
+        reason: 'payment_reauthorisation_deadline_expired',
+        no_penalties_applied: true,
       }),
     }))
     expect(state.notifications).toEqual(expect.arrayContaining([

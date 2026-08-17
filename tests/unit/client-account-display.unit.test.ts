@@ -16,6 +16,8 @@ import {
 import {
   getAdminCancellationRecordSummary,
   getCancellationPolicyBandLabel,
+  getCancellationPolicyLabel,
+  getCancellationReasonLabel,
 } from '@/lib/cancellation-record'
 import type { BookingRead } from '@/types'
 
@@ -216,5 +218,19 @@ describe('client account display rules', () => {
     expect(getAdminCancellationRecordSummary(booking)).toContain('Cancelled by cleaner')
     expect(getAdminCancellationRecordSummary(booking)).toContain('15 hours 30 minutes before scheduled start')
     expect(getAdminCancellationRecordSummary(booking)).toContain('Policy band: Cleaner cancellation 12–24 hours before start')
+  })
+
+  it('uses dedicated no-penalty classification for unresolved payment re-authorisation cancellations', () => {
+    const booking = cancelledBooking({
+      cancelled_by: null,
+      scheduled_start: '2026-08-14T18:30:00.000Z',
+      cancelled_at: '2026-08-14T16:30:00.000Z',
+      cancellation_reason: 'Payment re-authorisation deadline expired',
+    })
+
+    expect(getCancellationReasonLabel(booking)).toBe('Payment re-authorisation deadline expired')
+    expect(getCancellationPolicyLabel(booking)).toBe('No penalties applied')
+    expect(getCancellationPolicyBandLabel(booking)).toBeNull()
+    expect(getAdminCancellationRecordSummary(booking)).toBeNull()
   })
 })

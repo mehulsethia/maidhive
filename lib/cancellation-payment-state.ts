@@ -1,10 +1,12 @@
 import { getCancellationOriginLabel } from '@/lib/cancellation-origin'
+import { isPaymentReauthorisationCancelled } from '@/lib/booking-reauthorisation'
 import type { BookingRead } from '@/types'
 
 const TWENTY_FOUR_HOURS_MS = 24 * 60 * 60 * 1000
 
 export function isNormalCancellationPaymentRelease(booking: BookingRead) {
   if (booking.status !== 'cancelled' || !booking.payment) return false
+  if (isPaymentReauthorisationCancelled(booking)) return false
   if (booking.payment.status === 'released') return true
 
   return (

@@ -339,7 +339,7 @@ test.describe('F24 payment re-authorisation responsive regression @smoke', () =>
       reauthorization_grace_expires_at: null,
       cancelled_at: isoHoursFromNow(-1),
       cancelled_by: null,
-      cancellation_reason: 'Payment re-authorisation was not completed by the deadline after reschedule. No penalties applied.',
+      cancellation_reason: 'Payment re-authorisation deadline expired',
       payment: {
         id: 'payment-reauth',
         status: 'released',
@@ -427,6 +427,83 @@ test.describe('F24 payment re-authorisation responsive regression @smoke', () =>
       await expect(paymentState.getByText('Authorised client amount', { exact: true })).toHaveCount(0)
       await expectNoNextOverlay(page)
       await expectNoHorizontalOverflow(page, `admin pending re-authorisation payment state at ${viewport.name}`)
+    }
+  })
+
+  test('admin re-authorisation expiry audit history keeps original creation time and no-penalty classification', async ({ page }) => {
+    test.skip(!e2eAuthBypassEnabled, 'Set MAIDHIVE_E2E_AUTH_BYPASS=1 for routed responsive auth bypass')
+
+    await seedAdminBypass(page)
+    const booking = bookingFixture({
+      status: 'cancelled',
+      scheduled_start: '2026-08-14T18:30:00.000Z',
+      scheduled_end: '2026-08-14T20:30:00.000Z',
+      original_scheduled_start: '2026-08-17T07:00:00.000Z',
+      pay_by: null,
+      reauthorization_required: false,
+      reauthorization_grace_expires_at: null,
+      cancelled_at: '2026-08-14T16:30:00.000Z',
+      cancelled_by: null,
+      cancellation_reason: 'Payment re-authorisation deadline expired',
+      action_events: [
+        {
+          id: 'event-reschedule-accepted',
+          type: 'post_confirmation_reschedule_accepted',
+          actor_role: 'client',
+          metadata: {
+            previous_scheduled_start: '2026-08-17T07:00:00.000Z',
+            new_scheduled_start: '2026-08-14T18:30:00.000Z',
+            accepted_at: '2026-08-14T13:15:00.000Z',
+            proposed_by: 'cleaner',
+          },
+          created_at: '2026-08-14T13:15:00.000Z',
+        },
+        ...(bookingFixture().action_events as any[]),
+        {
+          id: 'event-reauth-expired',
+          type: 'payment_reauthorisation_expired',
+          actor_role: 'system',
+          metadata: {
+            deadline: '2026-08-14T16:30:00.000Z',
+            scheduled_start: '2026-08-14T18:30:00.000Z',
+            reason: 'payment_reauthorisation_deadline_expired',
+            no_penalties_applied: true,
+          },
+          created_at: '2026-08-14T16:30:00.000Z',
+        },
+      ],
+    })
+
+    await mockSharedShell(page, 'admin')
+    await page.route('**/api/v1/notifications**', (route) => fulfill(route, {
+      notifications: [],
+      total: 0,
+      page: 1,
+      page_size: 250,
+    }))
+    await page.route(`**/api/v1/admin/bookings/${BOOKING_ID}`, (route) => fulfill(route, booking))
+
+    for (const viewport of VIEWPORTS) {
+      await page.setViewportSize(viewport)
+      await page.goto(`/admin/bookings/${BOOKING_ID}`, { waitUntil: 'domcontentloaded' })
+      const bookingState = page.getByTestId('admin-booking-state')
+      await expect(bookingState.getByText('Cancellation reason', { exact: true })).toBeVisible()
+      await expect(bookingState.getByText('Payment re-authorisation deadline expired', { exact: true })).toBeVisible()
+      await expect(bookingState.getByText('Cancellation policy', { exact: true })).toBeVisible()
+      await expect(bookingState.getByText('No penalties applied', { exact: true })).toBeVisible()
+      await expect(bookingState.getByText('Cancellation policy band', { exact: true })).toHaveCount(0)
+      await expect(bookingState.getByText('Platform cancellation under 12 hours before start', { exact: true })).toHaveCount(0)
+
+      const actionLog = page.getByTestId('admin-booking-action-log')
+      await expect(actionLog.getByText('Booking created', { exact: true })).toBeVisible()
+      await expect(actionLog.getByText('One-off clean requested for 17 Aug 2026 at 10:00.', { exact: true })).toBeVisible()
+      await expect(actionLog.getByText('Reschedule accepted', { exact: true })).toBeVisible()
+      await expect(actionLog.getByText('Booking rescheduled from 17 Aug 2026 at 10:00 to 14 Aug 2026 at 21:30.', { exact: true })).toBeVisible()
+      await expect(actionLog.getByText('Re-authorisation was not completed by the required deadline after reschedule. No penalties applied.', { exact: true })).toBeVisible()
+      await expect(actionLog.getByText('One-off clean requested for 14 Aug 2026 at 21:30.', { exact: true })).toHaveCount(0)
+      await expect(actionLog.getByText(/grace period after reschedule/i)).toHaveCount(0)
+      await expectNoNextOverlay(page)
+      await expectNoHorizontalOverflow(page, `admin re-authorisation expiry audit history at ${viewport.name}`)
     }
   })
 

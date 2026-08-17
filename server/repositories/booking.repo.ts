@@ -242,6 +242,7 @@ export const bookingRepo = {
       type: string
       actorRole?: string
       metadata?: Prisma.InputJsonValue
+      createdAt?: Date
     },
   ) =>
     db.$transaction(async (tx) => {

@@ -938,6 +938,7 @@ export const bookingService = {
       }, {
         type: 'post_confirmation_reschedule_accepted',
         actorRole: isClient ? 'client' : 'cleaner',
+        createdAt: acceptedAt,
         metadata: {
           previous_scheduled_start: booking.scheduledStart.toISOString(),
           new_scheduled_start: booking.proposedStart.toISOString(),

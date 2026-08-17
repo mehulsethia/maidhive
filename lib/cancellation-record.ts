@@ -1,5 +1,9 @@
 import { computeConfirmedCancellationPolicy } from '@/lib/cancellation-policy'
 import { getCancellationOriginLabel } from '@/lib/cancellation-origin'
+import {
+  isPaymentReauthorisationCancelled,
+  PAYMENT_REAUTHORISATION_DEADLINE_EXPIRED_REASON,
+} from '@/lib/booking-reauthorisation'
 import type { BookingRead } from '@/types'
 
 function plural(value: number, unit: string) {
@@ -22,6 +26,8 @@ export function getCancellationLeadTimeLabel(booking: BookingRead) {
 
 export function getCancellationPolicyBandLabel(booking: BookingRead) {
   if (!booking.cancelled_at) return null
+  if (isPaymentReauthorisationCancelled(booking)) return null
+
   const origin = getCancellationOriginLabel(booking)
   const policy = computeConfirmedCancellationPolicy({
     scheduledStart: booking.scheduled_start,
@@ -41,6 +47,16 @@ export function getCancellationPolicyBandLabel(booking: BookingRead) {
   if (policy.window === 'more_than_24h') return `${actorPrefix} more than 24 hours before start`
   if (policy.window === 'between_12h_and_24h') return `${actorPrefix} 12–24 hours before start`
   return `${actorPrefix} under 12 hours before start`
+}
+
+export function getCancellationReasonLabel(booking: BookingRead) {
+  if (isPaymentReauthorisationCancelled(booking)) return PAYMENT_REAUTHORISATION_DEADLINE_EXPIRED_REASON
+  return getCancellationOriginLabel(booking)
+}
+
+export function getCancellationPolicyLabel(booking: BookingRead) {
+  if (isPaymentReauthorisationCancelled(booking)) return 'No penalties applied'
+  return getCancellationPolicyBandLabel(booking)
 }
 
 export function getAdminCancellationRecordSummary(booking: BookingRead) {

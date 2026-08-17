@@ -449,9 +449,11 @@ describe('Booking cancellation communications', () => {
       expect.objectContaining({
         type: 'post_confirmation_reschedule_accepted',
         actorRole: 'cleaner',
+        createdAt: new Date('2026-08-10T12:00:00.000Z'),
         metadata: expect.objectContaining({
           previous_scheduled_start: originalStart.toISOString(),
           new_scheduled_start: proposedStart.toISOString(),
+          accepted_at: '2026-08-10T12:00:00.000Z',
           proposed_by: 'client',
         }),
       }),

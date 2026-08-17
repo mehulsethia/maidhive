@@ -54,9 +54,15 @@ import {
 import {
   getAdminCancellationRecordSummary,
   getCancellationLeadTimeLabel,
+  getCancellationPolicyLabel,
   getCancellationPolicyBandLabel,
+  getCancellationReasonLabel,
 } from '@/lib/cancellation-record'
 import { getCancellationOriginLabel } from '@/lib/cancellation-origin'
+import {
+  isPaymentReauthorisationCancelled,
+  PAYMENT_REAUTHORISATION_DEADLINE_EXPIRED_ACTION_LOG,
+} from '@/lib/booking-reauthorisation'
 import { START_VERIFICATION_RADIUS_M } from '@/lib/super-cleaner'
 import { formatCurrency, formatDate } from '@/lib/utils'
 import type { BookingRead } from '@/types'
@@ -106,8 +112,20 @@ function actionEventString(metadata: Record<string, unknown> | null | undefined,
   return typeof value === 'string' ? value : null
 }
 
+function formatActionLogDate(value: string | Date) {
+  return formatDate(value).replace(/, (?=\d{2}:\d{2}$)/, ' at ')
+}
+
 function hasActionEvent(booking: BookingRead, ...types: string[]) {
   return (booking.action_events ?? []).some((event) => types.includes(event.type))
+}
+
+function getBookingCreatedScheduledStart(booking: BookingRead) {
+  if (booking.original_scheduled_start && isValidDate(booking.original_scheduled_start)) {
+    return booking.original_scheduled_start
+  }
+  const rescheduleAccepted = (booking.action_events ?? []).find((event) => event.type === 'post_confirmation_reschedule_accepted')
+  return actionEventDate(rescheduleAccepted?.metadata, 'previous_scheduled_start') ?? booking.scheduled_start
 }
 
 function actionEventSource(
@@ -260,7 +278,7 @@ function buildTimeline(booking: BookingRead): TimelineEvent[] {
     id: 'created',
     at: booking.created_at,
     title: 'Booking created',
-    description: `${getBookingCleaningTypeLabel(booking)} requested for ${formatDate(booking.scheduled_start)}.`,
+    description: `${getBookingCleaningTypeLabel(booking)} requested for ${formatActionLogDate(getBookingCreatedScheduledStart(booking))}.`,
   })
 
   addEvent(events, payment?.created_at ? {
@@ -365,7 +383,7 @@ function buildTimeline(booking: BookingRead): TimelineEvent[] {
         at: event.created_at,
         title: 'Reschedule accepted',
         description: previousStart && newStart
-          ? `Booking rescheduled from ${formatDate(previousStart)} to ${formatDate(newStart)}.`
+          ? `Booking rescheduled from ${formatActionLogDate(previousStart)} to ${formatActionLogDate(newStart)}.`
           : 'Post-confirmation reschedule accepted.',
         tone: 'success',
       })
@@ -381,6 +399,16 @@ function buildTimeline(booking: BookingRead): TimelineEvent[] {
           ? 'New card authorisation recorded. The booking remains confirmed.'
           : `New card authorisation recorded for ${formatCurrency(amount)}. The booking remains confirmed.`,
         tone: 'success',
+      })
+    }
+
+    if (event.type === 'payment_reauthorisation_expired') {
+      addEvent(events, {
+        id: event.id,
+        at: event.created_at,
+        title: 'Booking cancelled',
+        description: PAYMENT_REAUTHORISATION_DEADLINE_EXPIRED_ACTION_LOG,
+        tone: 'danger',
       })
     }
 
@@ -612,11 +640,12 @@ function buildTimeline(booking: BookingRead): TimelineEvent[] {
     tone: 'warning',
   } : null)
 
-  addEvent(events, booking.cancelled_at ? {
+  addEvent(events, booking.cancelled_at && !hasActionEvent(booking, 'payment_reauthorisation_expired') ? {
     id: 'cancelled',
     at: booking.cancelled_at,
     title: getCancellationOriginLabel(booking) ?? 'Booking cancelled',
     description: clientCancellationCopy?.actionLogDescription
+      || (isPaymentReauthorisationCancelled(booking) ? PAYMENT_REAUTHORISATION_DEADLINE_EXPIRED_ACTION_LOG : null)
       || getAdminCancellationRecordSummary(booking)
       || booking.cancellation_reason
       || 'No cancellation reason was recorded.',
@@ -723,6 +752,8 @@ export default function AdminBookingDetailPage() {
   const shouldShowStartVerification = Boolean(startArrivalVerification)
   const cancellationLeadTimeLabel = getCancellationLeadTimeLabel(booking)
   const cancellationPolicyBandLabel = getCancellationPolicyBandLabel(booking)
+  const cancellationReasonLabel = getCancellationReasonLabel(booking)
+  const cancellationPolicyLabel = getCancellationPolicyLabel(booking)
   const adminCancellationRecordSummary = getAdminCancellationRecordSummary(booking)
   const paymentStateLabel = getAdminPaymentStateLabel(booking)
   const cancellationOutcome = (
@@ -996,7 +1027,11 @@ export default function AdminBookingDetailPage() {
                 )}
                 <DetailRow label="Cancelled" value={booking.cancelled_at ? formatDate(booking.cancelled_at) : null} />
                 <DetailRow label="Cancellation lead time" value={cancellationLeadTimeLabel} />
-                <DetailRow label="Cancellation policy band" value={cancellationPolicyBandLabel} />
+                <DetailRow label="Cancellation reason" value={cancellationReasonLabel} />
+                <DetailRow
+                  label={isPaymentReauthorisationCancelled(booking) ? 'Cancellation policy' : 'Cancellation policy band'}
+                  value={isPaymentReauthorisationCancelled(booking) ? cancellationPolicyLabel : cancellationPolicyBandLabel}
+                />
               </div>
               {(getAdminClientCancellationCopy(booking)?.stateLabel || adminCancellationRecordSummary || booking.cancellation_reason) && (
                 <p className="break-words rounded-lg border border-rose-100 bg-rose-50 px-3 py-2 text-sm text-rose-800">
