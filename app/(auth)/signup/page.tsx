@@ -93,10 +93,11 @@ function SignupForm() {
       <div className="hidden lg:flex flex-col bg-gray-50 p-8 lg:p-10">
         <div className="relative rounded-xl overflow-hidden shadow-lg flex-1">
           <Image
-            src="/images/Become%20a%20Cleaner.png"
+            src="/images/account-access-cleaner.jpg"
             alt="Cleaner performing a domestic cleaning task inside a residential home"
             fill
             className="object-cover"
+            priority
             sizes="400px"
           />
         </div>

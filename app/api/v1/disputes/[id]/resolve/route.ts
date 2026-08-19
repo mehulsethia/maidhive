@@ -16,6 +16,10 @@ import { cleanerReliabilityService } from '@/server/services/cleaner-reliability
 import { recordBookingActionEvent } from '@/server/services/booking-action-event.service'
 import type Stripe from 'stripe'
 
+function appUrl() {
+  return (process.env.NEXT_PUBLIC_APP_URL ?? 'http://localhost:3000').replace(/\/+$/, '')
+}
+
 export const POST = requireAdmin(async (req: NextRequest, ctx, user) => {
   try {
     const { id } = await ctx.params
@@ -475,9 +479,8 @@ export const POST = requireAdmin(async (req: NextRequest, ctx, user) => {
             resolutionOutcome: resolutionCopy,
             refundAmount: resolvedRefundAmount,
             cleanerPayoutOutcome: clientRefundOutcome,
-            financialOutcomeLabel: 'Client refund outcome',
-            financialOutcome: clientRefundOutcome,
             resolutionNote: parsed.data.resolution_note,
+            bookingLink: `${appUrl()}/client/bookings/${booking.id}`,
           }),
           loopsEmailService.sendDisputeResolvedOutcome({
             email: booking.cleaner.user.email,
@@ -487,6 +490,7 @@ export const POST = requireAdmin(async (req: NextRequest, ctx, user) => {
             refundAmount: resolvedRefundAmount,
             cleanerPayoutOutcome,
             resolutionNote: parsed.data.resolution_note,
+            bookingLink: `${appUrl()}/cleaner/bookings/${booking.id}`,
           }),
         ])
       } catch (emailError) {

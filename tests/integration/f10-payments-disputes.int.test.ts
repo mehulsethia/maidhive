@@ -505,9 +505,8 @@ describe('F10 Payments capture/refund/dispute integration', () => {
         resolutionOutcome: 'Partial refund €20.00 issued to client.',
         refundAmount: 20,
         cleanerPayoutOutcome: 'Refund issued: €20.00.',
-        financialOutcomeLabel: 'Client refund outcome',
-        financialOutcome: 'Refund issued: €20.00.',
         resolutionNote: 'Half of the requested work was not completed.',
+        bookingLink: 'http://localhost:3000/client/bookings/booking_pay_1',
       }),
       expect.objectContaining({
         kind: 'dispute_resolved_outcome',
@@ -517,6 +516,7 @@ describe('F10 Payments capture/refund/dispute integration', () => {
         refundAmount: 20,
         cleanerPayoutOutcome: 'Cleaner payout adjusted to €52.00 after a €20.00 dispute adjustment.',
         resolutionNote: 'Half of the requested work was not completed.',
+        bookingLink: 'http://localhost:3000/cleaner/bookings/booking_pay_1',
       }),
     ]))
   })
@@ -759,14 +759,14 @@ describe('F10 Payments capture/refund/dispute integration', () => {
         email: 'client@test.local',
         resolutionOutcome: 'Full refund issued to client.',
         cleanerPayoutOutcome: 'Full refund issued.',
-        financialOutcomeLabel: 'Client refund outcome',
-        financialOutcome: 'Full refund issued.',
+        bookingLink: 'http://localhost:3000/client/bookings/booking_pay_1',
       }),
       expect.objectContaining({
         kind: 'dispute_resolved_outcome',
         email: 'cleaner@test.local',
         resolutionOutcome: 'Full refund issued to client.',
         cleanerPayoutOutcome: 'Cleaner payout was not released.',
+        bookingLink: 'http://localhost:3000/cleaner/bookings/booking_pay_1',
       }),
     ]))
     expect(state.actionEvents).toEqual(expect.arrayContaining([
@@ -874,8 +874,7 @@ describe('F10 Payments capture/refund/dispute integration', () => {
         email: 'client@test.local',
         resolutionOutcome: 'No refund — payment released to cleaner.',
         cleanerPayoutOutcome: 'No refund issued.',
-        financialOutcomeLabel: 'Client refund outcome',
-        financialOutcome: 'No refund issued.',
+        bookingLink: 'http://localhost:3000/client/bookings/booking_pay_1',
       }),
     ]))
   })
@@ -950,10 +949,7 @@ describe('F10 Payments capture/refund/dispute integration', () => {
         expect.objectContaining({
           kind: 'dispute_submitted_confirmation',
           email: 'client@test.local',
-          bookingReference: 'MH-NGPAY1',
-          issueType: 'Service issue',
           disputePath: '/client/report?booking=booking_pay_1',
-          statusMessage: 'This booking is now Under Review, and the cleaner payout has been paused until the case is resolved.',
         }),
         expect.objectContaining({
           kind: 'dispute_raised_against_notification',
@@ -961,9 +957,20 @@ describe('F10 Payments capture/refund/dispute integration', () => {
           bookingReference: 'MH-NGPAY1',
           issueType: 'Service issue',
           disputePath: '/cleaner/report?booking=booking_pay_1',
-          responseWindowMessage: expectedResponseWindowMessage,
         }),
       ]),
+    )
+    expect(state.emails.find((email) => email.kind === 'dispute_submitted_confirmation')).not.toEqual(
+      expect.objectContaining({
+        bookingReference: expect.anything(),
+        issueType: expect.anything(),
+        statusMessage: expect.anything(),
+      }),
+    )
+    expect(state.emails.find((email) => email.kind === 'dispute_raised_against_notification')).not.toEqual(
+      expect.objectContaining({
+        responseWindowMessage: expect.anything(),
+      }),
     )
     expect(state.notifications).toEqual(expect.arrayContaining([
       expect.objectContaining({
@@ -1014,10 +1021,7 @@ describe('F10 Payments capture/refund/dispute integration', () => {
         expect.objectContaining({
           kind: 'dispute_submitted_confirmation',
           email: 'cleaner@test.local',
-          bookingReference: 'MH-NGPAY1',
-          issueType: 'Access issue',
           disputePath: '/cleaner/report?booking=booking_pay_1',
-          statusMessage: 'This booking is now Under Review, and the cleaner payout has been paused until the case is resolved.',
         }),
         expect.objectContaining({
           kind: 'dispute_raised_against_notification',
@@ -1025,9 +1029,20 @@ describe('F10 Payments capture/refund/dispute integration', () => {
           bookingReference: 'MH-NGPAY1',
           issueType: 'Access issue',
           disputePath: '/client/report?booking=booking_pay_1',
-          responseWindowMessage: expectedResponseWindowMessage,
         }),
       ]),
+    )
+    expect(state.emails.find((email) => email.kind === 'dispute_submitted_confirmation')).not.toEqual(
+      expect.objectContaining({
+        bookingReference: expect.anything(),
+        issueType: expect.anything(),
+        statusMessage: expect.anything(),
+      }),
+    )
+    expect(state.emails.find((email) => email.kind === 'dispute_raised_against_notification')).not.toEqual(
+      expect.objectContaining({
+        responseWindowMessage: expect.anything(),
+      }),
     )
     expect(state.notifications).toEqual(expect.arrayContaining([
       expect.objectContaining({

@@ -38,6 +38,7 @@ describe('Loops amendment emails', () => {
       email: 'client@example.test',
       fullName: 'Client User',
       scheduledStart,
+      bookingLink: 'https://app.maidhive.test/client/bookings/booking_1',
     })
 
     expect(fetchMock).toHaveBeenCalledWith(
@@ -57,6 +58,7 @@ describe('Loops amendment emails', () => {
         FirstName: 'Client',
         Date: '12 Jun 2026',
         Time: '13:30',
+        booking_link: 'https://app.maidhive.test/client/bookings/booking_1',
       },
     })
   })
@@ -71,6 +73,7 @@ describe('Loops amendment emails', () => {
       fullName: 'Cleaner User',
       originalStart,
       newStart,
+      bookingLink: 'https://app.maidhive.test/cleaner/bookings/booking_1',
     })
 
     expect(lastRequestBody(fetchMock)).toEqual({
@@ -82,6 +85,7 @@ describe('Loops amendment emails', () => {
         OriginalTime: '13:30',
         NewDate: '12 Jun 2026',
         NewTime: '15:00',
+        booking_link: 'https://app.maidhive.test/cleaner/bookings/booking_1',
       },
     })
   })
@@ -94,6 +98,7 @@ describe('Loops amendment emails', () => {
       email: 'client@example.test',
       fullName: 'Client User',
       originalStart,
+      bookingLink: 'https://app.maidhive.test/client/bookings/booking_1',
     })
 
     expect(lastRequestBody(fetchMock)).toEqual({
@@ -103,6 +108,7 @@ describe('Loops amendment emails', () => {
         FirstName: 'Client',
         OriginalDate: '12 Jun 2026',
         OriginalTime: '13:30',
+        booking_link: 'https://app.maidhive.test/client/bookings/booking_1',
       },
     })
   })

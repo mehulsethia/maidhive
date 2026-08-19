@@ -338,10 +338,7 @@ export const POST = requireAuth(async (req: NextRequest, ctx, user) => {
       loopsEmailService.sendDisputeSubmittedConfirmation({
         email: reporter.user.email,
         fullName: reporter.user.name ?? 'User',
-        bookingReference: reference,
-        issueType: issueLabel,
         disputePath: reporter.disputePath,
-        statusMessage: clientPauseMessage,
       }),
       loopsEmailService.sendDisputeRaisedAgainstNotification({
         email: counterparty.user.email,
@@ -349,7 +346,6 @@ export const POST = requireAuth(async (req: NextRequest, ctx, user) => {
         bookingReference: reference,
         issueType: issueLabel,
         disputePath: counterparty.disputePath,
-        responseWindowMessage,
       }),
     ])
   } catch (emailError) {

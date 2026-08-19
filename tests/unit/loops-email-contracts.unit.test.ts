@@ -283,6 +283,7 @@ describe('Loops email contracts', () => {
       email: 'client@example.test',
       fullName: 'Client User',
       cleanerName: 'Cleaner User',
+      bookingId: 'booking_pending',
     })
     await loopsEmailService.sendClientBookingRejectedOrExpired({
       email: 'client@example.test',
@@ -351,7 +352,11 @@ describe('Loops email contracts', () => {
     })
     expect(requestBody(fetchMock, 2)).toMatchObject({
       transactionalId: 'cmo2rjqam00ao0iy8jfycoz03',
-      dataVariables: { first_name: 'Client', cleaner_name: 'Cleaner User' },
+      dataVariables: {
+        client_name: 'Client User',
+        cleaner_name: 'Cleaner User',
+        booking_link: 'https://app.maidhive.test/client/bookings/booking_pending',
+      },
     })
     expect(requestBody(fetchMock, 3)).toEqual({
       transactionalId: 'cmo2rozk700gw0izg1w1rhfrf',
@@ -410,6 +415,7 @@ describe('Loops email contracts', () => {
         cancellation_window_message: 'You cancelled between 12 and 24 hours before the scheduled start.',
         cancellation_charge_message: 'Cancellation charge: €5.00.',
         refund_or_release_message: 'Refund issued: €30.20.',
+        browse_cleaners_page_link: 'https://app.maidhive.test/client/cleaners',
       },
     })
   })
@@ -472,7 +478,10 @@ describe('Loops email contracts', () => {
     })
     expect(requestBody(fetchMock, 1)).toMatchObject({
       transactionalId: 'cmo5hdvco009s0i06469pwe16',
-      dataVariables: { first_name: 'Cleaner' },
+      dataVariables: {
+        first_name: 'Cleaner',
+        cleaner_dashboard_link: 'https://app.maidhive.test/cleaner/dashboard',
+      },
     })
     expect(requestBody(fetchMock, 2)).toEqual({
       transactionalId: 'cmo5hgm9p00hn0i0fzxhtjsv8',
@@ -495,7 +504,10 @@ describe('Loops email contracts', () => {
     })
     expect(requestBody(fetchMock, 4)).toMatchObject({
       transactionalId: 'cmo5hfgqp00aa0i08rmzp2w8f',
-      dataVariables: { first_name: 'Cleaner' },
+      dataVariables: {
+        first_name: 'Cleaner',
+        cleaner_profile_page_link: 'https://app.maidhive.test/cleaner/profile',
+      },
     })
     expect(requestBody(fetchMock, 5)).toMatchObject({
       transactionalId: 'cmo5hj1953kp50i0ewrbk3wd4',
@@ -518,6 +530,7 @@ describe('Loops email contracts', () => {
       cleanerName: 'Cleaner User',
       originalStart,
       proposedStart,
+      bookingId: 'booking_8',
     })
     await loopsEmailService.sendCleanerClientAlternateTimeProposed({
       email: 'cleaner@example.test',
@@ -525,8 +538,7 @@ describe('Loops email contracts', () => {
       clientName: 'Client User',
       originalStart,
       proposedStart,
-      requestType: 'Amend Start Time request',
-      expiryOutcome: 'Original booking time remains active if declined.',
+      bookingId: 'booking_9',
     })
     await loopsEmailService.sendClientProposalDeclinedClosed({
       email: 'client@example.test',
@@ -546,12 +558,11 @@ describe('Loops email contracts', () => {
       dataVariables: {
         clientName: 'Client User',
         cleanerName: 'Cleaner User',
-        requestType: 'Alternative time proposal',
         originalDate: '12 Jun 2026',
         originalTime: '13:30',
         proposedDate: '12 Jun 2026',
         proposedTime: '15:00',
-        expiryOutcome: 'If this request is declined or expires, the original booking time will remain unchanged.',
+        booking_amendment_review_page_link: 'https://app.maidhive.test/client/bookings/booking_8',
       },
     })
     expect(requestBody(fetchMock, 1)).toEqual({
@@ -560,12 +571,11 @@ describe('Loops email contracts', () => {
       dataVariables: {
         cleanerName: 'Cleaner User',
         clientName: 'Client User',
-        requestType: 'Amend Start Time request',
         originalDate: '12 Jun 2026',
         originalTime: '13:30',
         proposedDate: '12 Jun 2026',
         proposedTime: '15:00',
-        expiryOutcome: 'Original booking time remains active if declined.',
+        booking_amendment_review_page_link: 'https://app.maidhive.test/cleaner/bookings/booking_9',
       },
     })
     expect(requestBody(fetchMock, 2)).toMatchObject({

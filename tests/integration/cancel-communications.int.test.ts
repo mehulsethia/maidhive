@@ -32,6 +32,7 @@ const state = vi.hoisted(() => ({
   clientReauthorisationCancelledPayloads: [] as any[],
   cleanerReauthorisationCancelledPayloads: [] as any[],
   amendmentDeclinedPayloads: [] as any[],
+  amendmentAcceptedPayloads: [] as any[],
   actionEvents: [] as any[],
   paymentUpdates: [] as any[],
   removeCalendarCalls: 0,
@@ -172,7 +173,10 @@ vi.mock('@/server/services/loops-email.service', () => ({
     }),
     sendClientAlternateTimeProposed: vi.fn(async () => true),
     sendCleanerClientAlternateTimeProposed: vi.fn(async () => true),
-    sendAmendmentRequestAccepted: vi.fn(async () => true),
+    sendAmendmentRequestAccepted: vi.fn(async (payload: any) => {
+      state.amendmentAcceptedPayloads.push(payload)
+      return true
+    }),
   },
 }))
 
@@ -224,6 +228,7 @@ describe('Booking cancellation communications', () => {
     state.clientReauthorisationCancelledPayloads = []
     state.cleanerReauthorisationCancelledPayloads = []
     state.amendmentDeclinedPayloads = []
+    state.amendmentAcceptedPayloads = []
     state.actionEvents = []
     state.paymentUpdates = []
     state.removeCalendarCalls = 0
@@ -902,6 +907,7 @@ describe('Booking cancellation communications', () => {
         email: seeded.clientUser.email,
         fullName: seeded.clientUser.name,
         originalStart: state.booking.scheduledStart,
+        bookingLink: 'http://localhost:3000/client/bookings/booking_client_amend_1',
       }),
     ])
     expect(state.actionEvents).toContainEqual(expect.objectContaining({
@@ -940,6 +946,7 @@ describe('Booking cancellation communications', () => {
         email: seeded.cleanerUser.email,
         fullName: seeded.cleanerUser.name,
         originalStart: state.booking.scheduledStart,
+        bookingLink: 'http://localhost:3000/cleaner/bookings/booking_cleaner_amend_1',
       }),
     ])
     expect(state.actionEvents).toContainEqual(expect.objectContaining({
@@ -949,6 +956,53 @@ describe('Booking cancellation communications', () => {
         original_time_unchanged: true,
         proposed_by: 'cleaner',
       }),
+    }))
+  })
+
+  it('sends accepted amendment emails with recipient-specific booking links', async () => {
+    vi.useFakeTimers()
+    vi.setSystemTime(new Date('2026-06-20T09:00:00.000Z'))
+    state.booking = {
+      id: 'booking_accept_amend_1',
+      status: 'confirmed',
+      clientId: 'client_profile_1',
+      cleanerId: 'cleaner_profile_1',
+      scheduledStart: new Date('2026-06-20T12:00:00.000Z'),
+      scheduledEnd: new Date('2026-06-20T14:00:00.000Z'),
+      proposedStart: new Date('2026-06-20T13:00:00.000Z'),
+      proposedEnd: new Date('2026-06-20T15:00:00.000Z'),
+      proposalBy: 'cleaner',
+      proposalContext: 'amend_start',
+      proposalExpiresAt: new Date('2026-06-20T13:00:00.000Z'),
+      cleanerProposals: 1,
+      clientProposals: 0,
+      payment: null,
+      client: { userId: seeded.clientUser.id, user: { email: seeded.clientUser.email, name: seeded.clientUser.name } },
+      cleaner: { userId: seeded.cleanerUser.id, user: { email: seeded.cleanerUser.email, name: seeded.cleanerUser.name } },
+    }
+
+    const { bookingService } = await import('@/server/services/booking.service')
+    await bookingService.applyAction(state.booking.id, seeded.clientUser as any, { action: 'accept_proposal' })
+
+    expect(state.amendmentAcceptedPayloads).toEqual([
+      expect.objectContaining({
+        email: seeded.cleanerUser.email,
+        fullName: seeded.cleanerUser.name,
+        originalStart: new Date('2026-06-20T12:00:00.000Z'),
+        newStart: new Date('2026-06-20T13:00:00.000Z'),
+        bookingLink: 'http://localhost:3000/cleaner/bookings/booking_accept_amend_1',
+      }),
+      expect.objectContaining({
+        email: seeded.clientUser.email,
+        fullName: seeded.clientUser.name,
+        originalStart: new Date('2026-06-20T12:00:00.000Z'),
+        newStart: new Date('2026-06-20T13:00:00.000Z'),
+        bookingLink: 'http://localhost:3000/client/bookings/booking_accept_amend_1',
+      }),
+    ])
+    expect(state.actionEvents).toContainEqual(expect.objectContaining({
+      type: 'amend_start_accepted',
+      actorRole: 'client',
     }))
   })
 

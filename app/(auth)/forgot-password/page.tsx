@@ -38,10 +38,11 @@ export default function ForgotPasswordPage() {
       <div className="hidden lg:flex flex-col bg-gray-50 p-5 lg:p-6">
         <div className="relative overflow-hidden rounded-xl shadow-lg flex-1 min-h-[360px]">
           <Image
-            src="/images/Become%20a%20Cleaner.png"
+            src="/images/account-access-cleaner.jpg"
             alt="Cleaner performing a domestic cleaning task inside a residential home"
             fill
             className="object-cover"
+            priority
             sizes="400px"
           />
           <div className="absolute inset-0 bg-[linear-gradient(135deg,rgba(2,15,36,0.66),rgba(8,38,85,0.24)_48%,rgba(11,43,87,0.78))]" />

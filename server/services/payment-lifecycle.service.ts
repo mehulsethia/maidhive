@@ -12,6 +12,10 @@ import { PAYMENT_REAUTHORISATION_DEADLINE_EXPIRED_REASON } from '@/lib/booking-r
 
 const AUTO_COMPLETION_GRACE_MINUTES = 5
 
+function appUrl() {
+  return (process.env.NEXT_PUBLIC_APP_URL ?? 'http://localhost:3000').replace(/\/+$/, '')
+}
+
 export const paymentLifecycleService = {
   async processAutoStarts(limit = 200) {
     const now = new Date()
@@ -684,6 +688,7 @@ export const paymentLifecycleService = {
             email: booking.client.user.email,
             fullName: booking.client.user.name ?? 'Client',
             scheduledStart: booking.scheduledStart,
+            bookingLink: `${appUrl()}/client/bookings/${booking.id}`,
           })
         } catch (emailError) {
           console.error('Failed to send client amendment expiry email via Loops:', emailError)
@@ -693,6 +698,7 @@ export const paymentLifecycleService = {
             email: booking.cleaner.user.email,
             fullName: booking.cleaner.user.name ?? 'Cleaner',
             scheduledStart: booking.scheduledStart,
+            bookingLink: `${appUrl()}/cleaner/bookings/${booking.id}`,
           })
         } catch (emailError) {
           console.error('Failed to send cleaner amendment expiry email via Loops:', emailError)

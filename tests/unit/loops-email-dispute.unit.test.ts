@@ -37,21 +37,15 @@ describe('Loops dispute emails', () => {
     await loopsEmailService.sendDisputeSubmittedConfirmation({
       email: 'client@example.test',
       fullName: 'Client User',
-      bookingReference: 'MH-1042',
-      issueType: 'Service issue',
       disputePath: '/client/report?booking=booking_1042',
-      statusMessage: 'This booking is now Under Review, and the cleaner payout has been paused until the case is resolved.',
     })
 
     expect(lastRequestBody(fetchMock)).toEqual({
-      transactionalId: 'cmqf1rb7r7z9q0jx99f8lq615',
+      transactionalId: 'cmo2rwfnv2p3t0izcpaqf74tc',
       email: 'client@example.test',
       dataVariables: {
         first_name: 'Client',
-        booking_reference: 'MH-1042',
-        issue_type: 'Service issue',
         dispute_link: 'https://app.maidhive.test/client/report?booking=booking_1042',
-        status_message: 'This booking is now Under Review, and the cleaner payout has been paused until the case is resolved.',
       },
     })
   })
@@ -89,9 +83,8 @@ describe('Loops dispute emails', () => {
       resolutionOutcome: 'Partial refund €8.00 issued to client.',
       refundAmount: 8,
       cleanerPayoutOutcome: 'Refund issued: €8.00.',
-      financialOutcomeLabel: 'Client refund outcome',
-      financialOutcome: 'Refund issued: €8.00.',
       resolutionNote: 'Partial service issue confirmed.',
+      bookingLink: 'https://app.maidhive.test/client/bookings/booking_1042',
     })
 
     expect(lastRequestBody(fetchMock)).toEqual({
@@ -103,9 +96,8 @@ describe('Loops dispute emails', () => {
         resolution_outcome: 'Partial refund €8.00 issued to client.',
         refund_amount: '€8.00',
         cleaner_payout_outcome: 'Refund issued: €8.00.',
-        financial_outcome_label: 'Client refund outcome',
-        financial_outcome: 'Refund issued: €8.00.',
         resolution_note: 'Partial service issue confirmed.',
+        booking_link: 'https://app.maidhive.test/client/bookings/booking_1042',
       },
     })
   })

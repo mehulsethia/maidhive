@@ -103,6 +103,7 @@ export const paymentAuthorizationService = {
               email: booking.client.user.email,
               fullName: booking.client.user.name ?? 'Client',
               cleanerName: booking.cleaner.user.name ?? 'Cleaner',
+              bookingId: booking.id,
             })
           } catch (emailError) {
             console.error('Failed to send client booking created pending email via Loops:', emailError)

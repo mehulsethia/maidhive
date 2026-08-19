@@ -43,6 +43,10 @@ const COMPLETE_JOB_AUTO_GRACE_MINUTES = 5
 const START_JOB_EARLY_MINUTES = 15
 const START_JOB_LATE_BUFFER_HOURS = 24
 
+function appUrl() {
+  return (process.env.NEXT_PUBLIC_APP_URL ?? 'http://localhost:3000').replace(/\/+$/, '')
+}
+
 function formatEuroAmount(amount: unknown) {
   const numeric = Number(amount ?? 0)
   return new Intl.NumberFormat('en-IE', {
@@ -570,6 +574,7 @@ export const bookingService = {
               cleanerName: booking.cleaner.user.name ?? 'Cleaner',
               originalStart: booking.scheduledStart,
               proposedStart,
+              bookingId,
             })
           } else {
             await loopsEmailService.sendCleanerClientAlternateTimeProposed({
@@ -578,6 +583,7 @@ export const bookingService = {
               clientName: booking.client.user.name ?? 'Client',
               originalStart: booking.scheduledStart,
               proposedStart,
+              bookingId,
             })
           }
         } catch (emailError) {
@@ -629,6 +635,7 @@ export const bookingService = {
             cleanerName: booking.cleaner.user.name ?? 'Cleaner',
             originalStart: booking.scheduledStart,
             proposedStart,
+            bookingId,
           })
         } else {
           await loopsEmailService.sendCleanerClientAlternateTimeProposed({
@@ -637,6 +644,7 @@ export const bookingService = {
             clientName: booking.client.user.name ?? 'Client',
             originalStart: booking.scheduledStart,
             proposedStart,
+            bookingId,
           })
         }
       } catch (emailError) {
@@ -703,6 +711,7 @@ export const bookingService = {
               cleanerName: booking.cleaner.user.name ?? 'Cleaner',
               originalStart: booking.scheduledStart,
               proposedStart,
+              bookingId,
             })
           } else {
             await loopsEmailService.sendCleanerClientAlternateTimeProposed({
@@ -711,6 +720,7 @@ export const bookingService = {
               clientName: booking.client.user.name ?? 'Client',
               originalStart: booking.scheduledStart,
               proposedStart,
+              bookingId,
             })
           }
         } catch (emailError) {
@@ -773,6 +783,7 @@ export const bookingService = {
             cleanerName: booking.cleaner.user.name ?? 'Cleaner',
             originalStart: booking.scheduledStart,
             proposedStart,
+            bookingId,
           })
         } else {
           await loopsEmailService.sendCleanerClientAlternateTimeProposed({
@@ -781,6 +792,7 @@ export const bookingService = {
             clientName: booking.client.user.name ?? 'Client',
             originalStart: booking.scheduledStart,
             proposedStart,
+            bookingId,
           })
         }
       } catch (emailError) {
@@ -853,6 +865,7 @@ export const bookingService = {
               email: booking.client.user.email,
               fullName: booking.client.user.name ?? 'Client',
               cleanerName: booking.cleaner.user.name ?? 'Cleaner',
+              bookingId: booking.id,
             })
           }
         } catch (emailError) {
@@ -906,6 +919,7 @@ export const bookingService = {
             fullName: booking.cleaner.user.name ?? 'Cleaner',
             originalStart: booking.scheduledStart,
             newStart: booking.proposedStart,
+            bookingLink: `${appUrl()}/cleaner/bookings/${booking.id}`,
           })
         } catch (emailError) {
           console.error('Failed to send cleaner amended-time acceptance email via Loops:', emailError)
@@ -916,6 +930,7 @@ export const bookingService = {
             fullName: booking.client.user.name ?? 'Client',
             originalStart: booking.scheduledStart,
             newStart: booking.proposedStart,
+            bookingLink: `${appUrl()}/client/bookings/${booking.id}`,
           })
         } catch (emailError) {
           console.error('Failed to send client amended-time acceptance email via Loops:', emailError)
@@ -1076,6 +1091,9 @@ export const bookingService = {
             email: amendmentRequester.email,
             fullName: amendmentRequester.name ?? (booking.proposalBy === 'cleaner' ? 'Cleaner' : 'Client'),
             originalStart: booking.scheduledStart,
+            bookingLink: booking.proposalBy === 'cleaner'
+              ? `${appUrl()}/cleaner/bookings/${booking.id}`
+              : `${appUrl()}/client/bookings/${booking.id}`,
           })
         } else {
           await loopsEmailService.sendClientBookingRejectedOrExpired({
@@ -1163,8 +1181,7 @@ export const bookingService = {
             cleanerName: booking.cleaner.user.name ?? 'Cleaner',
             originalStart: booking.scheduledStart,
             proposedStart,
-            requestType: 'Amend Start Time request',
-            expiryOutcome: AMENDMENT_EXPIRY_OUTCOME_COPY,
+            bookingId,
           })
         } else {
           await loopsEmailService.sendCleanerClientAlternateTimeProposed({
@@ -1173,8 +1190,7 @@ export const bookingService = {
             clientName: booking.client.user.name ?? 'Client',
             originalStart: booking.scheduledStart,
             proposedStart,
-            requestType: 'Amend Start Time request',
-            expiryOutcome: AMENDMENT_EXPIRY_OUTCOME_COPY,
+            bookingId,
           })
         }
       } catch (emailError) {
@@ -1979,6 +1995,7 @@ async function notifyPostConfirmationProposalExpired(booking: BookingWithRelatio
       email: booking.client.user.email,
       fullName: booking.client.user.name ?? 'Client',
       scheduledStart: booking.scheduledStart,
+      bookingLink: `${appUrl()}/client/bookings/${booking.id}`,
     })
   } catch (emailError) {
     console.error('Failed to send client amendment expiry email via Loops:', emailError)
@@ -1988,6 +2005,7 @@ async function notifyPostConfirmationProposalExpired(booking: BookingWithRelatio
       email: booking.cleaner.user.email,
       fullName: booking.cleaner.user.name ?? 'Cleaner',
       scheduledStart: booking.scheduledStart,
+      bookingLink: `${appUrl()}/cleaner/bookings/${booking.id}`,
     })
   } catch (emailError) {
     console.error('Failed to send cleaner amendment expiry email via Loops:', emailError)

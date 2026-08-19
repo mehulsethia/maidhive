@@ -86,10 +86,11 @@ function LoginForm() {
       <div className="hidden lg:flex flex-col bg-gray-50 p-5 lg:p-6">
         <div className="relative rounded-xl overflow-hidden shadow-lg flex-1 min-h-[360px]">
           <Image
-            src="/images/Become%20a%20Cleaner.png"
+            src="/images/account-access-cleaner.jpg"
             alt="Cleaner performing a domestic cleaning task inside a residential home"
             fill
             className="object-cover"
+            priority
             sizes="400px"
           />
         </div>

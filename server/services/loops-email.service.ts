@@ -23,7 +23,7 @@ const CLIENT_BOOKING_COMPLETED_TRANSACTIONAL_ID =
   process.env.LOOPS_CLIENT_BOOKING_COMPLETED_TRANSACTIONAL_ID ?? ''
 const CLIENT_BOOKING_CANCELLED_BY_CLEANER_TRANSACTIONAL_ID = 'cmo2ruvdu07yk0iw5gw79hvew'
 const CLIENT_SELF_CANCELLATION_CONFIRMATION_TRANSACTIONAL_ID = 'cmr27985005h00j2p70wb14a6'
-const DISPUTE_SUBMITTED_CONFIRMATION_TRANSACTIONAL_ID = 'cmqf1rb7r7z9q0jx99f8lq615'
+const DISPUTE_SUBMITTED_CONFIRMATION_TRANSACTIONAL_ID = 'cmo2rwfnv2p3t0izcpaqf74tc'
 const DISPUTE_RAISED_AGAINST_NOTIFICATION_TRANSACTIONAL_ID = 'cmqf1u9ly4ujo0jyq9kfdcfbw'
 const DISPUTE_RESOLVED_OUTCOME_TRANSACTIONAL_ID = 'cmrgn2k8m29v60jzktfiu6iap'
 const CLEANER_SIGNUP_TRANSACTIONAL_ID = 'cmo5hbjfv0lbm0iya3k626pjl'
@@ -347,13 +347,15 @@ export const loopsEmailService = {
     email: string
     fullName: string
     cleanerName: string
+    bookingId: string
   }) {
     return sendTransactionalEmail({
       transactionalId: CLIENT_BOOKING_CREATED_PENDING_TRANSACTIONAL_ID,
       email: args.email,
       dataVariables: {
-        first_name: firstName(args.fullName),
+        client_name: args.fullName,
         cleaner_name: args.cleanerName,
+        booking_link: `${appUrl()}/client/bookings/${args.bookingId}`,
       },
     })
   },
@@ -478,6 +480,7 @@ export const loopsEmailService = {
         cancellation_window_message: args.cancellationWindowMessage,
         cancellation_charge_message: args.cancellationChargeMessage,
         refund_or_release_message: args.refundOrReleaseMessage,
+        browse_cleaners_page_link: `${appUrl()}/client/cleaners`,
       },
     })
   },
@@ -485,20 +488,14 @@ export const loopsEmailService = {
   async sendDisputeSubmittedConfirmation(args: {
     email: string
     fullName: string
-    bookingReference: string
-    issueType: string
     disputePath: string
-    statusMessage?: string
   }) {
     return sendTransactionalEmail({
       transactionalId: DISPUTE_SUBMITTED_CONFIRMATION_TRANSACTIONAL_ID,
       email: args.email,
       dataVariables: {
         first_name: firstName(args.fullName),
-        booking_reference: args.bookingReference,
-        issue_type: args.issueType,
         dispute_link: absoluteAppLink(args.disputePath),
-        ...(args.statusMessage ? { status_message: args.statusMessage } : {}),
       },
     })
   },
@@ -509,7 +506,6 @@ export const loopsEmailService = {
     bookingReference: string
     issueType: string
     disputePath: string
-    responseWindowMessage?: string
   }) {
     return sendTransactionalEmail({
       transactionalId: DISPUTE_RAISED_AGAINST_NOTIFICATION_TRANSACTIONAL_ID,
@@ -519,7 +515,6 @@ export const loopsEmailService = {
         booking_reference: args.bookingReference,
         issue_type: args.issueType,
         dispute_link: absoluteAppLink(args.disputePath),
-        ...(args.responseWindowMessage ? { response_window_message: args.responseWindowMessage } : {}),
       },
     })
   },
@@ -531,11 +526,9 @@ export const loopsEmailService = {
     resolutionOutcome: string
     refundAmount?: number | null
     cleanerPayoutOutcome: string
-    financialOutcomeLabel?: string
-    financialOutcome?: string
     resolutionNote: string
+    bookingLink: string
   }) {
-    const financialOutcome = args.financialOutcome ?? args.cleanerPayoutOutcome
     return sendTransactionalEmail({
       transactionalId: DISPUTE_RESOLVED_OUTCOME_TRANSACTIONAL_ID,
       email: args.email,
@@ -548,9 +541,8 @@ export const loopsEmailService = {
             ? formatEuro(args.refundAmount)
             : 'Not applicable',
         cleaner_payout_outcome: args.cleanerPayoutOutcome,
-        financial_outcome_label: args.financialOutcomeLabel ?? 'Cleaner payout outcome',
-        financial_outcome: financialOutcome,
         resolution_note: args.resolutionNote.trim() || 'No additional note provided.',
+        booking_link: args.bookingLink,
       },
     })
   },
@@ -595,6 +587,7 @@ export const loopsEmailService = {
       email: args.email,
       dataVariables: {
         first_name: firstName(args.fullName),
+        cleaner_dashboard_link: `${appUrl()}/cleaner/dashboard`,
       },
     })
   },
@@ -684,6 +677,7 @@ export const loopsEmailService = {
       email: args.email,
       dataVariables: {
         first_name: firstName(args.fullName),
+        cleaner_profile_page_link: `${appUrl()}/cleaner/profile`,
       },
     })
   },
@@ -719,8 +713,7 @@ export const loopsEmailService = {
     cleanerName: string
     originalStart: Date
     proposedStart: Date
-    requestType?: string
-    expiryOutcome?: string
+    bookingId: string
   }) {
     return sendTransactionalEmail({
       transactionalId: CLIENT_ALT_TIME_PROPOSED_TRANSACTIONAL_ID,
@@ -728,12 +721,11 @@ export const loopsEmailService = {
       dataVariables: {
         clientName: args.clientName,
         cleanerName: args.cleanerName,
-        requestType: args.requestType ?? 'Alternative time proposal',
         originalDate: formatBookingDate(args.originalStart),
         originalTime: formatBookingTime(args.originalStart),
         proposedDate: formatBookingDate(args.proposedStart),
         proposedTime: formatBookingTime(args.proposedStart),
-        expiryOutcome: args.expiryOutcome ?? 'If this request is declined or expires, the original booking time will remain unchanged.',
+        booking_amendment_review_page_link: `${appUrl()}/client/bookings/${args.bookingId}`,
       },
     })
   },
@@ -744,8 +736,7 @@ export const loopsEmailService = {
     clientName: string
     originalStart: Date
     proposedStart: Date
-    requestType?: string
-    expiryOutcome?: string
+    bookingId: string
   }) {
     return sendTransactionalEmail({
       transactionalId: CLEANER_CLIENT_ALT_TIME_PROPOSED_TRANSACTIONAL_ID,
@@ -753,12 +744,11 @@ export const loopsEmailService = {
       dataVariables: {
         cleanerName: args.cleanerName,
         clientName: args.clientName,
-        requestType: args.requestType ?? 'Alternative time proposal',
         originalDate: formatBookingDate(args.originalStart),
         originalTime: formatBookingTime(args.originalStart),
         proposedDate: formatBookingDate(args.proposedStart),
         proposedTime: formatBookingTime(args.proposedStart),
-        expiryOutcome: args.expiryOutcome ?? 'If this request is declined or expires, the original booking time will remain unchanged.',
+        booking_amendment_review_page_link: `${appUrl()}/cleaner/bookings/${args.bookingId}`,
       },
     })
   },
@@ -800,6 +790,7 @@ export const loopsEmailService = {
     email: string
     fullName: string
     scheduledStart: Date
+    bookingLink: string
   }) {
     return sendTransactionalEmail({
       transactionalId: AMENDMENT_REQUEST_EXPIRY_TRANSACTIONAL_ID,
@@ -808,6 +799,7 @@ export const loopsEmailService = {
         FirstName: firstName(args.fullName),
         Date: formatBookingDate(args.scheduledStart),
         Time: formatBookingTime(args.scheduledStart),
+        booking_link: args.bookingLink,
       },
     })
   },
@@ -817,6 +809,7 @@ export const loopsEmailService = {
     fullName: string
     originalStart: Date
     newStart: Date
+    bookingLink: string
   }) {
     return sendTransactionalEmail({
       transactionalId: AMENDMENT_REQUEST_ACCEPTED_TRANSACTIONAL_ID,
@@ -827,6 +820,7 @@ export const loopsEmailService = {
         OriginalTime: formatBookingTime(args.originalStart),
         NewDate: formatBookingDate(args.newStart),
         NewTime: formatBookingTime(args.newStart),
+        booking_link: args.bookingLink,
       },
     })
   },
@@ -835,6 +829,7 @@ export const loopsEmailService = {
     email: string
     fullName: string
     originalStart: Date
+    bookingLink: string
   }) {
     return sendTransactionalEmail({
       transactionalId: AMENDMENT_REQUEST_DECLINED_TRANSACTIONAL_ID,
@@ -843,6 +838,7 @@ export const loopsEmailService = {
         FirstName: firstName(args.fullName),
         OriginalDate: formatBookingDate(args.originalStart),
         OriginalTime: formatBookingTime(args.originalStart),
+        booking_link: args.bookingLink,
       },
     })
   },

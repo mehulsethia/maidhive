@@ -113,11 +113,10 @@ export default function ClientLandingPage() {
             <div className="relative hidden lg:block animate-fade-in-right">
               <div className="relative rounded-2xl overflow-hidden shadow-2xl aspect-[4/3]">
                 <Image
-                  src="/images/hero-client.gif"
-                  alt="Professional cleaner at work"
+                  src="/images/home-cleaner-hero.jpg"
+                  alt="Cleaner wiping a kitchen counter inside a residential home"
                   fill
                   className="object-cover"
-                  unoptimized
                   priority
                   sizes="(min-width: 1024px) 50vw, 100vw"
                 />
