@@ -152,7 +152,7 @@ function bookingFixture(overrides: Record<string, unknown> = {}) {
     cleaner_payout: 6,
     total_amount: 8,
     special_instructions: [
-      'Job type: Regular clean',
+      'Job type: Regular home cleaning',
       'Cleaning supplies: I will provide cleaning supplies',
       'What needs to be cleaned: Kitchen and bathroom',
     ].join('\n'),

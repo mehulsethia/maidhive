@@ -25,6 +25,12 @@ import { MAX_SAVED_ADDRESSES, MVP_CITY, normalizeCyprusPostcode } from '@/lib/lo
 import { pickupFullLabel } from '@/lib/transport-pickup'
 import { getClientBookingRequestDeadlineCopy } from '@/lib/booking-expiry-copy'
 import { calculatePlatformFee, isMinimumPlatformFeeApplied, roundMoney } from '@/lib/platform-fee'
+import {
+  getBookingCleaningTypeLabel,
+  getBookingServiceClassificationLabel,
+  normalizeBookingCleaningTypeLabel,
+  normalizePropertyConditionLabel,
+} from '@/lib/booking-service-labels'
 import type { CleanerRead, PriceBreakdown, BookingRead, ClientProfileRead, ClientAddressRead } from '@/types'
 import { toast } from 'sonner'
 import { SuperCleanerBadge } from '@/components/super-cleaner-badge'
@@ -33,13 +39,6 @@ const stripePromise = loadStripe(process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY!
 const displayFont = Bricolage_Grotesque({ subsets: ['latin'], weight: ['400', '500', '700', '800'] })
 const monoFont = IBM_Plex_Mono({ subsets: ['latin'], weight: ['400', '500', '600'] })
 
-const SERVICE_LABELS: Record<string, string> = {
-  standard: 'Standard Clean',
-  deep_clean: 'Deep Clean',
-  end_of_tenancy: 'End of Tenancy',
-  move_in: 'Move-in Clean',
-}
-
 const DURATION_OPTIONS = [1, 1.5, 2, 2.5, 3, 3.5, 4, 4.5, 5, 5.5, 6, 6.5, 7, 7.5, 8]
 const NOTES_MIN_CHARS = 12
 const MAX_JOB_PHOTOS = 5
@@ -47,18 +46,18 @@ const MAX_SPECIAL_INSTRUCTIONS_CHARS = 5000
 const BOOKING_FLOW_DRAFT_VERSION = 1
 
 const JOB_TYPE_OPTIONS = [
-  { value: 'regular_clean', label: 'Regular clean', serviceType: 'standard' as const },
-  { value: 'one_off_clean', label: 'One-off clean', serviceType: 'standard' as const },
-  { value: 'deep_clean', label: 'Deep clean', serviceType: 'deep_clean' as const },
-  { value: 'move_out_end_of_tenancy', label: 'Move-out / End of tenancy', serviceType: 'end_of_tenancy' as const },
+  { value: 'regular_clean', label: 'Regular home cleaning', serviceType: 'standard' as const },
+  { value: 'one_off_clean', label: 'One-off cleaning', serviceType: 'standard' as const },
+  { value: 'deep_clean', label: 'Deep cleaning', serviceType: 'deep_clean' as const },
+  { value: 'move_out_end_of_tenancy', label: 'End-of-tenancy cleaning', serviceType: 'end_of_tenancy' as const },
 ] as const
 
 const BEDROOM_OPTIONS = ['Studio', '1', '2', '3', '4', '5+'] as const
 const BATHROOM_OPTIONS = ['1', '2', '3', '4+'] as const
 
 const PROPERTY_CONDITION_OPTIONS = [
-  { value: 'light_well_maintained', label: 'Light / well maintained' },
-  { value: 'normal', label: 'Normal' },
+  { value: 'light_well_maintained', label: 'Light clean / well maintained' },
+  { value: 'normal', label: 'Standard clean' },
   { value: 'needs_extra_attention', label: 'Needs extra attention' },
   { value: 'very_dirty_heavy_clean', label: 'Very dirty / heavy clean' },
 ] as const
@@ -173,10 +172,10 @@ function parseBookingSnapshotDetails(specialInstructions?: string | null): Booki
         .filter((url) => /^https?:\/\//i.test(url))
     : []
   return {
-    jobType: readLine('Job type'),
+    jobType: normalizeBookingCleaningTypeLabel(readLine('Job type')),
     bedrooms: readLine('Bedrooms'),
     bathrooms: readLine('Bathrooms'),
-    propertyCondition: readLine('Property condition'),
+    propertyCondition: normalizePropertyConditionLabel(readLine('Property condition')),
     supplies: readLine('Cleaning supplies'),
     needsCleaning: readLine('What needs to be cleaned'),
     photos,
@@ -1789,8 +1788,8 @@ export default function BookingFlowPage() {
   const cleanerNeedsClientSupplies = cleaner.cleaning_supplies === 'client_supplies'
   const effectiveSuppliesProvider = cleanerNeedsClientSupplies ? 'client_provides' : suppliesProvider
   const bookingSnapshot = booking ? parseBookingSnapshotDetails(booking.special_instructions) : null
-  const bookingCleaningTypeLabel = bookingSnapshot?.jobType || (booking ? SERVICE_LABELS[booking.service_type] ?? booking.service_type : 'Not provided')
-  const bookingServiceClassificationLabel = booking ? SERVICE_LABELS[booking.service_type] ?? booking.service_type : null
+  const bookingCleaningTypeLabel = booking ? getBookingCleaningTypeLabel(booking) : 'Not provided'
+  const bookingServiceClassificationLabel = booking ? getBookingServiceClassificationLabel(booking) : null
 
   return (
     <>

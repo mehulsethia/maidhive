@@ -92,7 +92,7 @@ function bookingFixture(overrides: Record<string, unknown> = {}) {
     platform_fee: 2,
     cleaner_payout: 20,
     total_amount: 22,
-    special_instructions: 'Job type: Regular clean\nCleaning supplies: I will provide cleaning supplies',
+    special_instructions: 'Job type: Regular home cleaning\nCleaning supplies: I will provide cleaning supplies',
     accepted_at: '2026-08-10T13:25:00.000Z',
     confirmed_at: '2026-08-10T13:25:00.000Z',
     pay_by: '2026-08-12T08:00:00.000Z',
@@ -496,11 +496,11 @@ test.describe('F24 payment re-authorisation responsive regression @smoke', () =>
 
       const actionLog = page.getByTestId('admin-booking-action-log')
       await expect(actionLog.getByText('Booking created', { exact: true })).toBeVisible()
-      await expect(actionLog.getByText('One-off clean requested for 17 Aug 2026 at 10:00.', { exact: true })).toBeVisible()
+      await expect(actionLog.getByText('One-off cleaning requested for 17 Aug 2026 at 10:00.', { exact: true })).toBeVisible()
       await expect(actionLog.getByText('Reschedule accepted', { exact: true })).toBeVisible()
       await expect(actionLog.getByText('Booking rescheduled from 17 Aug 2026 at 10:00 to 14 Aug 2026 at 21:30.', { exact: true })).toBeVisible()
       await expect(actionLog.getByText('Re-authorisation was not completed by the required deadline after reschedule. No penalties applied.', { exact: true })).toBeVisible()
-      await expect(actionLog.getByText('One-off clean requested for 14 Aug 2026 at 21:30.', { exact: true })).toHaveCount(0)
+      await expect(actionLog.getByText('One-off cleaning requested for 14 Aug 2026 at 21:30.', { exact: true })).toHaveCount(0)
       await expect(actionLog.getByText(/grace period after reschedule/i)).toHaveCount(0)
       await expectNoNextOverlay(page)
       await expectNoHorizontalOverflow(page, `admin re-authorisation expiry audit history at ${viewport.name}`)

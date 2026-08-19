@@ -123,7 +123,7 @@ function makeBooking(disputeStatus: 'under_review' | 'resolved') {
     platform_fee: 2,
     cleaner_payout: 20,
     total_amount: 22,
-    special_instructions: 'Job type: One-off clean\nCleaning supplies: Provided by client',
+    special_instructions: 'Job type: One-off cleaning\nCleaning supplies: Provided by client',
     accepted_at: isoHoursFromNow(-72),
     confirmed_at: isoHoursFromNow(-71),
     created_at: isoHoursFromNow(-96),
@@ -554,7 +554,7 @@ test.describe('F22 full-refund final-outcome responsive regression @smoke', () =
 
       await openResponsive(page, '/cleaner/profile?tab=payments', 'cleaner payment history')
       await expect(page.getByText('Payment History')).toBeVisible()
-      await expect(page.getByText('One-off clean', { exact: true })).toBeVisible()
+      await expect(page.getByText('One-off cleaning', { exact: true })).toBeVisible()
       await expect(page.getByText('€0.00')).toBeVisible()
       await expect(page.getByText('No payout')).toBeVisible()
       await expect(page.getByText('Awaiting release')).toHaveCount(0)

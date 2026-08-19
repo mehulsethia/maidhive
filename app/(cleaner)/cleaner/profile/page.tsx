@@ -54,7 +54,7 @@ const SERVICE_OPTIONS = [
   'Ironing',
   'Windows',
   'Deep cleaning',
-  'Move in/out',
+  'End-of-tenancy cleaning',
 ]
 const BIO_MAX_CHARS = 1000
 const MIN_HOURLY_RATE = 6

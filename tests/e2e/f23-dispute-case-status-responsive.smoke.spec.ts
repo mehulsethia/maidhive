@@ -154,7 +154,7 @@ function makeBooking({ withResponse = true } = {}) {
     platform_fee: 3.2,
     cleaner_payout: 32,
     total_amount: 35.2,
-    special_instructions: 'Job type: One-off clean\nCleaning supplies: Provided by client',
+    special_instructions: 'Job type: One-off cleaning\nCleaning supplies: Provided by client',
     accepted_at: isoHoursFromNow(-54),
     confirmed_at: isoHoursFromNow(-53),
     created_at: isoHoursFromNow(-72),
@@ -293,7 +293,7 @@ test.describe('F23 dispute case status responsive regression @smoke', () => {
 
       await assertResponsiveRoute(page, '/client/dashboard', 'client dashboard recent activity', async (page) => {
         await expect(page.getByText('Case status: Under Review')).toBeVisible()
-        await expect(page.getByRole('link', { name: /One-off clean Responsive Cleaner/ }).getByText('Completed', { exact: true })).toBeVisible()
+        await expect(page.getByRole('link', { name: /One-off cleaning Responsive Cleaner/ }).getByText('Completed', { exact: true })).toBeVisible()
       })
 
       await assertResponsiveRoute(page, '/client/bookings', 'client bookings list', async (page) => {

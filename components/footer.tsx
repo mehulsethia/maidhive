@@ -14,13 +14,13 @@ export default function Footer() {
               <span className="text-lg font-bold">MaidHive</span>
             </Link>
             <p className="text-sm text-gray-400 leading-relaxed">
-              Connecting trusted cleaners with homeowners through a secure, transparent platform.
+              Connecting clients with independent cleaners through a secure, transparent platform.
             </p>
           </div>
 
-          {/* For customers */}
+          {/* For clients */}
           <div>
-            <h4 className="text-sm font-semibold text-gray-300 mb-4">For customers</h4>
+            <h4 className="text-sm font-semibold text-gray-300 mb-4">For clients</h4>
             <ul className="space-y-3 text-sm">
               <li>
                 <Link href="/#how-it-works" className="text-gray-400 hover:text-white transition-colors">
@@ -33,8 +33,8 @@ export default function Footer() {
                 </Link>
               </li>
               <li>
-                <Link href="/#faq" className="text-gray-400 hover:text-white transition-colors">
-                  FAQs
+                <Link href="/faqs/clients" className="text-gray-400 hover:text-white transition-colors">
+                  Client FAQs
                 </Link>
               </li>
             </ul>
@@ -55,8 +55,8 @@ export default function Footer() {
                 </Link>
               </li>
               <li>
-                <Link href="/for-cleaners#faq" className="text-gray-400 hover:text-white transition-colors">
-                  FAQs
+                <Link href="/faqs/cleaners" className="text-gray-400 hover:text-white transition-colors">
+                  Cleaner FAQs
                 </Link>
               </li>
             </ul>

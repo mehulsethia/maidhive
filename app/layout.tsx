@@ -8,7 +8,7 @@ const inter = Inter({ subsets: ['latin'], variable: '--font-inter' })
 
 export const metadata: Metadata = {
   title: 'MaidHive — Book trusted cleaners near you',
-  description: 'Find, book, and pay verified professional cleaners in your area.',
+  description: 'Book trusted, approved cleaners in Larnaca — with clear pricing, structured policies, and secure payments through MaidHive.',
   icons: {
     icon: '/favicon.png',
     shortcut: '/favicon.png',

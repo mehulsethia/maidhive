@@ -18,6 +18,7 @@ import { CLEANER_DISPUTE_ISSUES } from '@/lib/dispute-issues'
 import { getDisputeParticipantAction, isDisputeResponseWindowOpen } from '@/lib/dispute-actions'
 import { getCounterpartyResponseInstruction } from '@/lib/dispute-case'
 import { reportLoadError, resetLoadError } from '@/lib/load-error-policy'
+import { getBookingCleaningTypeLabel } from '@/lib/booking-service-labels'
 import { formatDate } from '@/lib/utils'
 import { MAX_EVIDENCE_IMAGES, MAX_EVIDENCE_SIZE_BYTES, prepareEvidenceFileForUpload } from '@/lib/evidence-upload'
 import type { BookingRead, ClientDispute } from '@/types'
@@ -354,7 +355,7 @@ function CleanerReportPageContent() {
     const q = search.toLowerCase()
     return (
       dispute.reason.toLowerCase().includes(q) ||
-      String(dispute.booking?.service_type ?? '').toLowerCase().includes(q) ||
+      (dispute.booking ? getBookingCleaningTypeLabel(dispute.booking).toLowerCase().includes(q) : false) ||
       getFriendlyBookingReference(dispute).toLowerCase().includes(q) ||
       String(getDisputeBookingId(dispute)).toLowerCase().includes(q)
     )
@@ -564,7 +565,9 @@ function CleanerReportPageContent() {
                     <div className="flex flex-wrap items-start justify-between gap-2">
                       <div>
                         <p className={`${displayFont.className} text-base font-semibold tracking-[-0.01em] text-slate-900`}>
-                          <span className="break-words">{dispute.booking?.service_type ?? 'Service booking'}</span>
+                          <span className="break-words">
+                            {dispute.booking ? getBookingCleaningTypeLabel(dispute.booking) : 'Service booking'}
+                          </span>
                         </p>
                         <p className={`${monoFont.className} text-[0.68rem] tracking-wide text-slate-500`}>
                           Booking Reference: {bookingReference}

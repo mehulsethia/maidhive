@@ -59,7 +59,7 @@ const SERVICE_FILTER_OPTIONS = [
   'Ironing',
   'Windows',
   'Deep cleaning',
-  'Move in/out',
+  'End-of-tenancy cleaning',
 ]
 
 export default function ClientCleanersPage() {

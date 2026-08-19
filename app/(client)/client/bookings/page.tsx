@@ -28,6 +28,7 @@ import { getCancellationOriginLabel } from '@/lib/cancellation-origin'
 import { getClientPaymentSummary } from '@/lib/client-payment-summary'
 import { getDisputeCaseStatusLabel, getDisputeCaseStatusVariant } from '@/lib/dispute-case'
 import { canOfferStandardServiceReview } from '@/lib/booking-review-eligibility'
+import { SERVICE_CLASSIFICATION_LABELS, normalizeBookingCleaningTypeLabel } from '@/lib/booking-service-labels'
 import type { BookingRead, BookingStatus, ClientBookingStats, ClientDispute } from '@/types'
 import { toast } from 'sonner'
 
@@ -51,12 +52,7 @@ const STATUS_FILTERS: Array<{ key: ClientStatusFilter; label: string }> = [
 ]
 type DashboardStatusFilter = 'active' | 'completed' | 'closed'
 
-const SERVICE_LABELS: Record<string, string> = {
-  standard: 'Standard Clean',
-  deep_clean: 'Deep Clean',
-  end_of_tenancy: 'End of Tenancy',
-  move_in: 'Move-in Clean',
-}
+const SERVICE_LABELS = SERVICE_CLASSIFICATION_LABELS
 
 const LIVE_REFRESH_MS = Number(process.env.NEXT_PUBLIC_BOOKINGS_LIVE_REFRESH_MS ?? 45000)
 const BOOKINGS_PAGE_SIZE = 50
@@ -65,7 +61,7 @@ function getBookingDisplayTitle(booking: BookingRead) {
   const instructions = String(booking.special_instructions ?? '')
   const match = instructions.match(/(?:^|\n)Job type:\s*([^\n]+)/i)
   const jobType = match?.[1]?.trim()
-  return jobType || SERVICE_LABELS[booking.service_type] || booking.service_type
+  return normalizeBookingCleaningTypeLabel(jobType || SERVICE_LABELS[booking.service_type] || booking.service_type)
 }
 
 const DISPUTE_WINDOW_MS = getDisputeWindowMs()

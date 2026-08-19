@@ -1,6 +1,7 @@
 'use client'
 
 import { getCleaningSuppliesResponsibility } from '@/lib/cleaning-supplies'
+import { normalizeBookingCleaningTypeLabel, normalizePropertyConditionLabel } from '@/lib/booking-service-labels'
 
 type ParsedBookingInstructions = {
   jobType?: string
@@ -44,7 +45,7 @@ function parseSpecialInstructions(raw: string): ParsedBookingInstructions {
 
   for (const line of lines) {
     if (line.startsWith('Job type:')) {
-      parsed.jobType = sanitizeValue(line.replace('Job type:', ''))
+      parsed.jobType = normalizeBookingCleaningTypeLabel(sanitizeValue(line.replace('Job type:', '')))
       continue
     }
     if (line.startsWith('Bedrooms:')) {
@@ -56,7 +57,7 @@ function parseSpecialInstructions(raw: string): ParsedBookingInstructions {
       continue
     }
     if (line.startsWith('Property condition:')) {
-      parsed.propertyCondition = sanitizeValue(line.replace('Property condition:', ''))
+      parsed.propertyCondition = normalizePropertyConditionLabel(sanitizeValue(line.replace('Property condition:', '')))
       continue
     }
     if (line.startsWith('Cleaning supplies:')) {

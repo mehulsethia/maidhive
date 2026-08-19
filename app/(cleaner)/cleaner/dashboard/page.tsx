@@ -30,6 +30,7 @@ import { isFinalNoCleanerPayoutOutcome } from '@/lib/payment-financial-outcome'
 import { isPaymentReauthorisationPending } from '@/lib/booking-reauthorisation'
 import { getCleanerCancellationOriginLabel } from '@/lib/cancellation-origin'
 import { getCancellationPaymentOutcome } from '@/lib/booking-payment-outcome'
+import { SERVICE_CLASSIFICATION_LABELS, normalizeBookingCleaningTypeLabel } from '@/lib/booking-service-labels'
 import { toast } from 'sonner'
 
 const REQUEST_STATUSES: BookingStatus[] = ['pending']
@@ -37,18 +38,12 @@ const UPCOMING_STATUSES: BookingStatus[] = ['accepted', 'confirmed']
 const ACTIVE_STATUSES: BookingStatus[] = ['in_progress']
 const COMPLETED_STATUSES: BookingStatus[] = ['completed', 'disputed']
 
-const SERVICE_LABELS: Record<string, string> = {
-  standard: 'Standard Clean',
-  deep_clean: 'Deep Clean',
-  end_of_tenancy: 'End of Tenancy',
-  move_in: 'Move-in Clean',
-}
+const SERVICE_LABELS = SERVICE_CLASSIFICATION_LABELS
 
 function resolveJobTypeTitle(booking: BookingRead) {
   const snapshotMatch = booking.special_instructions?.match(/(?:^|\n)Job type:\s*([^\n]+)/i)
   const snapshotJobType = snapshotMatch?.[1]?.trim()
-  if (snapshotJobType) return snapshotJobType
-  return SERVICE_LABELS[booking.service_type] ?? booking.service_type
+  return normalizeBookingCleaningTypeLabel(snapshotJobType || SERVICE_LABELS[booking.service_type] || booking.service_type)
 }
 
 export default function CleanerDashboardPage() {

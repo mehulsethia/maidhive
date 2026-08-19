@@ -5,19 +5,14 @@ import { ScrollReveal, StaggerChildren } from '@/components/scroll-reveal'
 import Footer from '@/components/footer'
 import {
   ArrowRight,
+  CalendarDays,
   CheckCircle2,
-  Clock,
   CreditCard,
-  DollarSign,
+  Euro,
   FileCheck,
   Handshake,
-  HeartHandshake,
-  Repeat,
   Shield,
-  ShieldCheck,
   Star,
-  UserCheck,
-  Users,
 } from 'lucide-react'
 
 export default function CleanerLandingPage() {
@@ -25,21 +20,19 @@ export default function CleanerLandingPage() {
     <main className="min-h-screen flex flex-col">
       <LandingHeader />
 
-      {/* ─── Hero ─── */}
+      {/* Hero */}
       <section className="relative bg-gradient-to-br from-gray-950 via-gray-900 to-primary/30 overflow-hidden">
         <div className="absolute inset-0 bg-[radial-gradient(circle_at_20%_80%,rgba(59,91,219,0.15),transparent_50%)]" />
         <div className="absolute inset-0 bg-[radial-gradient(circle_at_80%_20%,rgba(59,91,219,0.1),transparent_50%)]" />
 
         <div className="relative max-w-7xl mx-auto px-4 sm:px-6 py-20 lg:py-28">
           <div className="grid lg:grid-cols-2 gap-12 items-center">
-            {/* Left */}
             <div className="animate-fade-in">
               <h1 className="text-4xl sm:text-5xl lg:text-6xl font-bold text-white tracking-tight leading-[1.1] mb-6">
                 Become a MaidHive Cleaner
               </h1>
               <p className="text-lg text-gray-300 leading-relaxed mb-8 max-w-lg">
-                Set your hourly rate, accept bookings on your schedule, and get
-                paid securely through the platform.
+                Set your own hourly rate, choose when you work, and receive booking requests that fit your availability.
               </p>
 
               <Link
@@ -53,9 +46,9 @@ export default function CleanerLandingPage() {
               <div className="mt-10 flex flex-col gap-3">
                 {[
                   'Flexible hours — choose when you work',
-                  'Transparent platform fee — no hidden deductions',
-                  'Secure payouts after completed jobs',
-                  'Build your reputation with real reviews',
+                  'Set your own hourly rate',
+                  'No platform fees deducted from your earnings',
+                  'Build your reputation with real client reviews',
                 ].map((item) => (
                   <div key={item} className="flex items-center gap-3">
                     <CheckCircle2 className="h-5 w-5 text-primary shrink-0" />
@@ -65,32 +58,48 @@ export default function CleanerLandingPage() {
               </div>
             </div>
 
-            {/* Right — Hero image */}
             <div className="relative hidden lg:block animate-fade-in-right">
-              <div className="relative rounded-2xl overflow-hidden shadow-2xl aspect-[4/3]">
-                <Image
-                  src="/images/hero-cleaner.png"
-                  alt="Professional cleaner hero preview"
-                  fill
-                  className="object-cover"
-                  priority
-                  sizes="(min-width: 1024px) 50vw, 100vw"
-                />
-                <div className="absolute inset-0 bg-gradient-to-t from-gray-900/40 to-transparent" />
+              <div className="rounded-2xl border border-white/15 bg-white/95 p-6 shadow-2xl">
+                <p className="text-xs font-semibold uppercase tracking-[0.18em] text-primary">Booking request</p>
+                <div className="mt-5 rounded-xl border border-gray-200 bg-gray-50 p-5">
+                  <div className="flex items-start justify-between gap-4">
+                    <div>
+                      <h3 className="font-semibold text-gray-900">One-off cleaning</h3>
+                      <p className="mt-1 text-sm text-gray-500">Saturday, 10:00 AM</p>
+                    </div>
+                    <span className="rounded-full bg-primary/10 px-3 py-1 text-xs font-semibold text-primary">New</span>
+                  </div>
+                  <div className="mt-5 grid grid-cols-3 gap-3 text-sm">
+                    <div>
+                      <p className="text-gray-500">Rate</p>
+                      <p className="font-semibold text-gray-900">€10/hr</p>
+                    </div>
+                    <div>
+                      <p className="text-gray-500">Duration</p>
+                      <p className="font-semibold text-gray-900">3 hours</p>
+                    </div>
+                    <div>
+                      <p className="text-gray-500">Earnings</p>
+                      <p className="font-semibold text-gray-900">€30.00</p>
+                    </div>
+                  </div>
+                  <button className="mt-6 w-full rounded-lg bg-primary px-4 py-3 text-sm font-semibold text-white">
+                    Accept request
+                  </button>
+                </div>
               </div>
             </div>
           </div>
         </div>
       </section>
 
-      {/* ─── How it works ─── */}
+      {/* How it works */}
       <section id="how-it-works" className="py-24 bg-white">
         <div className="max-w-7xl mx-auto px-4 sm:px-6">
           <ScrollReveal className="text-center mb-16">
             <h2 className="text-3xl sm:text-4xl font-bold text-gray-900 mb-4">
               How it works
             </h2>
-            <p className="text-gray-500 text-lg">Get started in four simple steps</p>
           </ScrollReveal>
 
           <StaggerChildren className="grid sm:grid-cols-2 lg:grid-cols-4 gap-8" stagger={120}>
@@ -98,22 +107,22 @@ export default function CleanerLandingPage() {
               {
                 step: '1',
                 title: 'Apply and get approved',
-                desc: 'Submit your application with basic details and references. We review within 48 hours.',
+                desc: 'Complete your cleaner application and submit the required onboarding information. MaidHive reviews your application before your profile can go live.',
               },
               {
                 step: '2',
                 title: 'Set your availability',
-                desc: 'Choose when and where you want to work. Update your schedule anytime.',
+                desc: 'Choose the days and times you want to work and keep your availability updated whenever your schedule changes.',
               },
               {
                 step: '3',
-                title: 'Accept bookings near you',
-                desc: 'Browse available jobs in your area. Accept the ones that fit your schedule.',
+                title: 'Respond to booking requests',
+                desc: 'Receive booking requests from clients and accept the ones that fit your availability.',
               },
               {
                 step: '4',
-                title: 'Get paid after each job',
-                desc: 'Earnings are automatically transferred to your account within 48 hours.',
+                title: 'Complete jobs and get paid',
+                desc: 'Complete your booking through MaidHive. Your payout is released after the 24-hour reporting window, provided there is no unresolved payment or dispute issue.',
               },
             ].map((item) => (
               <div key={item.step} className="text-center group">
@@ -128,36 +137,34 @@ export default function CleanerLandingPage() {
         </div>
       </section>
 
-      {/* ─── Clear earnings ─── */}
+      {/* Clear earnings */}
       <section className="py-24 bg-gray-50">
         <div className="max-w-7xl mx-auto px-4 sm:px-6">
           <div className="grid lg:grid-cols-2 gap-16 items-center">
-            {/* Left content */}
             <ScrollReveal animation="fade-right">
               <h2 className="text-3xl sm:text-4xl font-bold text-gray-900 mb-4">
                 Clear earnings, no surprises
               </h2>
               <p className="text-gray-500 text-lg leading-relaxed mb-8">
-                MaidHive is built on transparency. You see exactly what you&apos;ll
-                earn before accepting any job, and we never take hidden fees.
+                Set your own hourly rate and see exactly what you will earn from a booking before you accept it. MaidHive does not deduct a platform fee from your hourly earnings.
               </p>
 
               <div className="space-y-5">
                 {[
                   {
-                    icon: DollarSign,
-                    title: 'Cleaner sets hourly rate',
-                    desc: 'You control your rate within market ranges. Build your reputation and increase rates over time.',
-                  },
-                  {
-                    icon: CreditCard,
-                    title: 'Client pays hourly rate + hours',
-                    desc: 'Earnings are transferred to your bank account 48 hours after completing a job. No waiting weeks for payment.',
+                    icon: Euro,
+                    title: 'Cleaner sets their hourly rate',
+                    desc: 'Choose your hourly rate within MaidHive’s permitted range and update it as your profile develops.',
                   },
                   {
                     icon: FileCheck,
-                    title: 'MaidHive keeps 10%',
-                    desc: 'Our fee covers payment processing, customer verification, insurance, and platform support. No hidden charges.',
+                    title: 'Know your earnings before accepting',
+                    desc: 'Every booking request shows the duration and your expected earnings before you decide whether to accept it.',
+                  },
+                  {
+                    icon: CreditCard,
+                    title: 'No platform fee deducted from your earnings',
+                    desc: 'Your cleaner earnings are based on the hourly rate you set and the booked duration. MaidHive’s platform fee is charged separately to the client.',
                   },
                 ].map((item) => (
                   <div key={item.title} className="flex items-start gap-4">
@@ -173,63 +180,67 @@ export default function CleanerLandingPage() {
               </div>
             </ScrollReveal>
 
-            {/* Right — Earnings image */}
-            <ScrollReveal animation="fade-left" className="relative rounded-2xl overflow-hidden shadow-xl border border-gray-100 aspect-[4/3]">
-              <Image
-                src="/images/Earnings-cleaner.png"
-                alt="Cleaner earnings breakdown"
-                fill
-                className="object-cover"
-                sizes="(min-width: 1024px) 50vw, 100vw"
-              />
+            <ScrollReveal animation="fade-left" className="rounded-2xl border border-gray-100 bg-white p-8 shadow-xl">
+              <p className="text-sm font-medium text-gray-500">Example: 3-hour clean</p>
+              <div className="mt-6 space-y-4 rounded-xl border border-gray-200 p-5">
+                <div className="flex items-center justify-between gap-4 text-sm">
+                  <span className="text-gray-600">Cleaner hourly rate:</span>
+                  <span className="font-semibold text-gray-900">€10/hour</span>
+                </div>
+                <div className="flex items-center justify-between gap-4 text-sm">
+                  <span className="text-gray-600">Booking duration:</span>
+                  <span className="font-semibold text-gray-900">3 hours</span>
+                </div>
+                <div className="border-t border-gray-200 pt-4 flex items-center justify-between gap-4">
+                  <span className="font-semibold text-gray-900">Cleaner earnings:</span>
+                  <span className="text-2xl font-bold text-primary">€30.00</span>
+                </div>
+              </div>
             </ScrollReveal>
           </div>
         </div>
       </section>
 
-      {/* ─── Why cleaners choose MaidHive ─── */}
+      {/* Why cleaners choose MaidHive */}
       <section className="py-24 bg-white">
         <div className="max-w-7xl mx-auto px-4 sm:px-6">
           <ScrollReveal className="text-center mb-16">
             <h2 className="text-3xl sm:text-4xl font-bold text-gray-900 mb-4">
               Why cleaners choose MaidHive
             </h2>
-            <p className="text-gray-500 text-lg">
-              A fair, structured platform built for independent professionals
-            </p>
           </ScrollReveal>
 
           <StaggerChildren className="grid sm:grid-cols-2 lg:grid-cols-3 gap-6" stagger={100}>
             {[
               {
-                icon: ShieldCheck,
-                title: 'Verified customers only',
-                desc: 'All customers are identity-verified and reviewed before they can book.',
+                icon: CalendarDays,
+                title: 'Flexible working',
+                desc: 'Set your availability and choose which booking requests you want to accept.',
               },
               {
-                icon: FileCheck,
-                title: 'Clear cancellation rules',
-                desc: 'Structured policies protect your time. Customers pay cancellation fees.',
+                icon: Euro,
+                title: 'Clear earnings',
+                desc: 'See the booking duration, your hourly rate and expected earnings before accepting a request.',
               },
               {
                 icon: CreditCard,
                 title: 'Platform-handled payments',
-                desc: 'Never chase clients for money. All payments are managed through the platform.',
+                desc: 'Client payments are managed through MaidHive, so you do not need to collect payment directly from the client.',
+              },
+              {
+                icon: Shield,
+                title: 'Clear cancellation rules',
+                desc: 'Structured cancellation and no-show rules help protect both cleaners and clients when plans change.',
               },
               {
                 icon: Handshake,
                 title: 'Dispute support',
-                desc: 'Dedicated support for every job that needs resolution. Fair for all parties.',
+                desc: 'Bookings can be reported through MaidHive where a payment, no-show or service issue needs review.',
               },
               {
-                icon: Shield,
-                title: 'Insurance coverage',
-                desc: 'Liability insurance included for all jobs booked through MaidHive.',
-              },
-              {
-                icon: Repeat,
-                title: 'Build repeat clients',
-                desc: 'Great work leads to recurring bookings with the same customers.',
+                icon: Star,
+                title: 'Build your reputation',
+                desc: 'Completed bookings and genuine client reviews help you build your profile and reputation on MaidHive.',
               },
             ].map((f) => (
               <div
@@ -247,7 +258,7 @@ export default function CleanerLandingPage() {
         </div>
       </section>
 
-      {/* ─── Work on your terms ─── */}
+      {/* Work on your terms */}
       <section className="py-24 bg-gray-50">
         <div className="max-w-7xl mx-auto px-4 sm:px-6">
           <ScrollReveal className="text-center mb-16">
@@ -255,8 +266,7 @@ export default function CleanerLandingPage() {
               Work on your terms
             </h2>
             <p className="text-gray-500 text-lg">
-              MaidHive gives you control over your schedule and the jobs you accept.
-              Build your business, your way.
+              Choose when you’re available and decide which booking requests work for you.
             </p>
           </ScrollReveal>
 
@@ -264,14 +274,13 @@ export default function CleanerLandingPage() {
             <ScrollReveal animation="fade-right" className="bg-white rounded-2xl p-8 border border-gray-100 shadow-sm">
               <h3 className="font-semibold text-gray-900 text-lg mb-4">Choose when you work</h3>
               <p className="text-sm text-gray-500 leading-relaxed mb-6">
-                Set your availability by day and time. Update it as often as you
-                need. You&apos;re only offered jobs that match your schedule.
+                Set your availability by day and time and update it whenever your schedule changes.
               </p>
               <ul className="space-y-3">
                 {[
                   'No minimum hours required',
-                  'Work weekends only, or build a full schedule',
-                  'Block out holidays and time off instantly',
+                  'Work the days and times that suit you',
+                  'Block unavailable dates when needed',
                 ].map((item) => (
                   <li key={item} className="flex items-center gap-3 text-sm text-gray-600">
                     <CheckCircle2 className="h-4 w-4 text-primary shrink-0" />
@@ -282,16 +291,15 @@ export default function CleanerLandingPage() {
             </ScrollReveal>
 
             <ScrollReveal animation="fade-left" className="bg-white rounded-2xl p-8 border border-gray-100 shadow-sm">
-              <h3 className="font-semibold text-gray-900 text-lg mb-4">Select your jobs</h3>
+              <h3 className="font-semibold text-gray-900 text-lg mb-4">Choose your bookings</h3>
               <p className="text-sm text-gray-500 leading-relaxed mb-6">
-                Review each booking before accepting. See the location,
-                duration, rate, and customer rating before you commit.
+                Review each booking request before accepting it, including the booking time, duration and relevant job details.
               </p>
               <ul className="space-y-3">
                 {[
-                  'Accept only jobs in your preferred area',
-                  'Build relationships with repeat customers',
-                  'No pressure to accept every request',
+                  'Accept only the requests that work for you',
+                  'Build relationships with repeat clients',
+                  'No requirement to accept every request',
                 ].map((item) => (
                   <li key={item} className="flex items-center gap-3 text-sm text-gray-600">
                     <CheckCircle2 className="h-4 w-4 text-primary shrink-0" />
@@ -304,15 +312,14 @@ export default function CleanerLandingPage() {
         </div>
       </section>
 
-      {/* ─── CTA Banner ─── */}
+      {/* CTA */}
       <section className="bg-gradient-to-br from-gray-950 via-gray-900 to-primary/30 py-20">
         <ScrollReveal className="max-w-3xl mx-auto px-4 sm:px-6 text-center" animation="zoom-in">
           <h2 className="text-3xl sm:text-4xl font-bold text-white mb-4">
             Ready to grow your cleaning business?
           </h2>
           <p className="text-gray-300 text-lg mb-4 max-w-xl mx-auto">
-            Join hundreds of professional cleaners who trust MaidHive
-            for reliable bookings, fair pay, and platform support.
+            Join MaidHive and build your cleaning business with flexible bookings, clear earnings and platform support.
           </p>
 
           <Link
@@ -322,43 +329,36 @@ export default function CleanerLandingPage() {
             Apply as a cleaner
             <ArrowRight className="h-4 w-4" />
           </Link>
-
-          <p className="text-xs text-gray-400 mt-4">
-            Applications are reviewed within 48 hours to maintain quality and trust
-          </p>
         </ScrollReveal>
       </section>
 
-      {/* ─── Cross-sell to client ─── */}
+      {/* Cross-sell to client */}
       <section className="py-24 bg-white">
         <div className="max-w-7xl mx-auto px-4 sm:px-6">
           <div className="grid lg:grid-cols-2 gap-16 items-center">
-            {/* Image */}
             <ScrollReveal animation="fade-right" className="relative rounded-2xl overflow-hidden aspect-[4/3] shadow-xl">
               <Image
-                src="/images/trusted-cleaner.avif"
-                alt="Clean modern home"
+                src="/images/Become%20a%20Cleaner.png"
+                alt="Cleaner carrying out general cleaning inside a home"
                 fill
                 className="object-cover"
                 sizes="(min-width: 1024px) 50vw, 100vw"
               />
             </ScrollReveal>
 
-            {/* Content */}
             <ScrollReveal animation="fade-left">
               <h2 className="text-3xl sm:text-4xl font-bold text-gray-900 mb-4">
-                Need a trusted cleaner for your home?
+                Looking for a cleaner instead?
               </h2>
               <p className="text-gray-500 text-lg leading-relaxed mb-8">
-                MaidHive helps homeowners and renters book verified
-                cleaners with clear pricing and secure payments.
+                Book approved cleaners in Larnaca with clear hourly pricing and secure payments through MaidHive.
               </p>
 
               <div className="space-y-5 mb-10">
                 {[
-                  { title: 'Verified local cleaners', desc: 'Connect with trusted clients nearby.' },
-                  { title: 'Transparent pricing', desc: 'See your earnings upfront.' },
-                  { title: 'Secure payment after completion', desc: 'Guaranteed payment, every time.' },
+                  { title: 'Approved local cleaners', desc: 'Browse approved cleaner profiles and choose who you want to book.' },
+                  { title: 'Clear hourly pricing', desc: 'See the cleaner’s hourly rate before you send a booking request.' },
+                  { title: 'Secure payments', desc: 'Payments are handled securely through MaidHive.' },
                 ].map((item) => (
                   <div key={item.title} className="flex items-start gap-3">
                     <CheckCircle2 className="h-5 w-5 text-primary mt-0.5 shrink-0" />
@@ -376,9 +376,6 @@ export default function CleanerLandingPage() {
               >
                 Find a cleaner
               </Link>
-              <p className="text-xs text-gray-400 mt-4">
-                Book with confidence. Platform-managed from start to finish.
-              </p>
             </ScrollReveal>
           </div>
         </div>

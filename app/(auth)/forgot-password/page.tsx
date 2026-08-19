@@ -38,8 +38,8 @@ export default function ForgotPasswordPage() {
       <div className="hidden lg:flex flex-col bg-gray-50 p-5 lg:p-6">
         <div className="relative overflow-hidden rounded-xl shadow-lg flex-1 min-h-[360px]">
           <Image
-            src="/images/join-maidhive.avif"
-            alt="Professional cleaning team"
+            src="/images/Become%20a%20Cleaner.png"
+            alt="Cleaner performing a domestic cleaning task inside a residential home"
             fill
             className="object-cover"
             sizes="400px"

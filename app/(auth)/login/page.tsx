@@ -86,8 +86,8 @@ function LoginForm() {
       <div className="hidden lg:flex flex-col bg-gray-50 p-5 lg:p-6">
         <div className="relative rounded-xl overflow-hidden shadow-lg flex-1 min-h-[360px]">
           <Image
-            src="/images/join-maidhive.avif"
-            alt="Professional cleaning team"
+            src="/images/Become%20a%20Cleaner.png"
+            alt="Cleaner performing a domestic cleaning task inside a residential home"
             fill
             className="object-cover"
             sizes="400px"
@@ -97,9 +97,12 @@ function LoginForm() {
 
       {/* Right — Form */}
       <div className="flex flex-col justify-center p-5 sm:p-8 lg:p-14">
-        <h2 className="text-2xl font-semibold text-gray-900 mb-8">
-          Log in to your account
+        <h2 className="text-2xl font-semibold text-gray-900 mb-2">
+          Log in to MaidHive
         </h2>
+        <p className="mb-8 text-sm text-gray-500">
+          Access your MaidHive account and manage your bookings, profile and account details.
+        </p>
 
         <form onSubmit={handleSubmit} className="space-y-5">
           <div>

@@ -149,6 +149,7 @@ describe('cleaning supplies responsibility', () => {
       value: 'Job type: Regular clean\nCleaning supplies: I will provide cleaning supplies',
     }))
 
+    expect(markup).toContain('Regular home cleaning')
     expect(markup).toContain('Cleaning supplies:')
     expect(markup).toContain('Provided by client')
     expect(markup).not.toContain('I will provide cleaning supplies')

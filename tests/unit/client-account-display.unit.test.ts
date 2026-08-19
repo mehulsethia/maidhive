@@ -203,8 +203,8 @@ describe('client account display rules', () => {
       special_instructions: 'Job type: One-off clean\nCleaning supplies: cleaner_brings',
     })
 
-    expect(getBookingCleaningTypeLabel(booking)).toBe('One-off clean')
-    expect(getBookingServiceClassificationLabel(booking)).toBe('Standard Clean')
+    expect(getBookingCleaningTypeLabel(booking)).toBe('One-off cleaning')
+    expect(getBookingServiceClassificationLabel(booking)).toBe('Regular home cleaning')
   })
 
   it('summarises cleaner cancellation actor and precise 12-24 hour policy band for admin records', () => {

@@ -59,15 +59,11 @@ import {
   getResolutionSummaryRows,
   hasResolvedBookingCase,
 } from '@/lib/resolved-booking-case'
+import { SERVICE_CLASSIFICATION_LABELS, normalizeBookingCleaningTypeLabel } from '@/lib/booking-service-labels'
 import type { BookingRead } from '@/types'
 import { toast } from 'sonner'
 
-const SERVICE_LABELS: Record<string, string> = {
-  standard: 'Standard Clean',
-  deep_clean: 'Deep Clean',
-  end_of_tenancy: 'End of Tenancy',
-  move_in: 'Move-in Clean',
-}
+const SERVICE_LABELS = SERVICE_CLASSIFICATION_LABELS
 const START_JOB_EARLY_WINDOW_MS = 15 * 60 * 1000
 const RESCHEDULE_CUTOFF_MS = 24 * 60 * 60 * 1000
 const AMEND_MAX_SHIFT_MS = 3 * 60 * 60 * 1000
@@ -78,8 +74,7 @@ const DISPUTE_WINDOW_HOURS = Number(process.env.NEXT_PUBLIC_DISPUTE_WINDOW_HOURS
 function resolveJobTypeTitle(booking: BookingRead) {
   const snapshotMatch = booking.special_instructions?.match(/(?:^|\n)Job type:\s*([^\n]+)/i)
   const snapshotJobType = snapshotMatch?.[1]?.trim()
-  if (snapshotJobType) return snapshotJobType
-  return SERVICE_LABELS[booking.service_type] ?? booking.service_type
+  return normalizeBookingCleaningTypeLabel(snapshotJobType || SERVICE_LABELS[booking.service_type] || booking.service_type)
 }
 
 function cyprusDateStr(date: Date) {

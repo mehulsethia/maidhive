@@ -214,7 +214,7 @@ async function mockAdminApis(page: Page) {
               user_email: 'responsive.cleaner@example.com',
               user_phone: '+357 99 123456',
               bio: 'Cleaner profile used for responsive checks.',
-              skills: ['One-off clean'],
+              skills: ['One-off cleaning'],
               cleaning_supplies: 'own_supplies',
               years_experience: 3,
               hourly_rate: 15,

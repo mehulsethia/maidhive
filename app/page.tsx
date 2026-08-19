@@ -26,8 +26,8 @@ import {
 const HOW_IT_WORKS_STEPS = [
   {
     step: '01',
-    title: 'Choose an approved cleaner',
-    desc: 'Browse verified profiles with real reviews and transparent pricing.',
+    title: 'Approved cleaners',
+    desc: 'Browse approved cleaner profiles with real reviews and transparent pricing.',
     icon: UserCheck,
     image: '/images/Property%201=Variant.jpg',
   },
@@ -41,14 +41,14 @@ const HOW_IT_WORKS_STEPS = [
   {
     step: '03',
     title: 'Get your home cleaned',
-    desc: 'Your cleaner arrives on time and completes the service professionally.',
+    desc: 'Your cleaner completes the booked cleaning service at your property.',
     icon: Sparkles,
     image: '/images/Property%203=Cleaning.jpg',
   },
   {
     step: '04',
     title: 'Pay securely after completion',
-    desc: 'Payment is processed only after you confirm the work is done.',
+    desc: 'Your payment is authorised before the booking and only charged after the cleaning is completed.',
     icon: CreditCard,
     image: '/images/Property%204=Giving%20money.jpg',
   },
@@ -84,8 +84,7 @@ export default function ClientLandingPage() {
                 A better way to book a cleaner
               </h1>
               <p className="text-lg text-gray-300 leading-relaxed mb-8 max-w-lg">
-                MaidHive connects you to trusted local cleaners with transparent
-                pricing and secure payments, all managed directly on the platform.
+                Book approved cleaners in Larnaca with clear hourly pricing and secure payments &mdash; all managed through MaidHive.
               </p>
 
               <Link
@@ -98,7 +97,7 @@ export default function ClientLandingPage() {
 
               <div className="mt-10 flex flex-col gap-3">
                 {[
-                  'Approved cleaners with background checks',
+                  'Approved cleaners',
                   'Clear pricing, no hidden fees',
                   'Secure payment after completion',
                 ].map((item) => (
@@ -200,7 +199,7 @@ export default function ClientLandingPage() {
               Why MaidHive
             </h2>
             <p className="text-gray-500 text-lg">
-              Reliable cleaners, transparent pricing, and a process you can trust.
+              Approved cleaners, transparent pricing, and platform-managed payments.
             </p>
           </ScrollReveal>
 
@@ -210,19 +209,19 @@ export default function ClientLandingPage() {
               {
                 icon: UserCheck,
                 title: 'Choose an approved cleaner',
-                desc: 'Browse ID-verified profiles with real reviews and transparent hourly rates. Every cleaner is approved before joining MaidHive.',
+                desc: 'Browse approved cleaner profiles with real reviews and transparent hourly rates. Cleaners submit identification as part of onboarding and must be approved before their profile becomes visible to clients.',
                 color: 'bg-primary/10 text-primary',
               },
               {
                 icon: Shield,
-                title: 'Secure payments, always protected',
-                desc: 'Payments authorized at booking, charged only after completion. Your money is never at risk.',
+                title: 'Secure platform payments',
+                desc: 'Payment is authorised before the booking and only charged after the cleaning is completed.',
                 color: 'bg-emerald-50 text-emerald-600',
               },
               {
                 icon: DollarSign,
-                title: 'Transparent pricing',
-                desc: 'See exact hourly rates upfront. No hidden platform fees, no last-minute charges. What you see is what you pay.',
+                title: 'Clear pricing',
+                desc: 'See the cleaner’s hourly rate and your booking total before you confirm your booking.',
                 color: 'bg-amber-50 text-amber-600',
               },
             ].map((f) => (
@@ -245,19 +244,19 @@ export default function ClientLandingPage() {
               {
                 icon: ClipboardCheck,
                 title: 'Clear cancellation policies',
-                desc: 'Straightforward rules that protect both clients and cleaners equally. Everyone knows where they stand before the job begins.',
+                desc: 'Cancellation rules are shown clearly so you know what applies before your booking is confirmed.',
                 color: 'bg-blue-50 text-blue-600',
               },
               {
                 icon: Shield,
                 title: 'Structured dispute handling',
-                desc: 'If something goes wrong, our team reviews the case and ensures a fair resolution for both sides — every time.',
+                desc: 'If an issue is reported, MaidHive can review the booking information and available evidence before determining the appropriate outcome.',
                 color: 'bg-violet-50 text-violet-600',
               },
               {
                 icon: Star,
-                title: 'Verified reviews you can trust',
-                desc: 'Every review is from a real completed booking. No fake ratings, just honest feedback.',
+                title: 'Reviews from completed bookings',
+                desc: 'Reviews can only be submitted following completed MaidHive bookings.',
                 color: 'bg-rose-50 text-rose-600',
               },
             ].map((f) => (
@@ -293,22 +292,22 @@ export default function ClientLandingPage() {
               {
                 icon: Home,
                 title: 'Regular home cleaning',
-                desc: 'Consistent, reliable cleaning on your schedule. Choose weekly or bi-weekly visits to keep your home always fresh.',
+                desc: 'Everyday home cleaning for routine cleaning tasks and general upkeep.',
               },
               {
                 icon: Sparkles,
                 title: 'One-off cleaning',
-                desc: 'A thorough clean whenever you need it. Perfect for special occasions, guests arriving, or a seasonal refresh.',
+                desc: 'A thorough clean whenever you need it. Ideal for special occasions, guests arriving or a seasonal refresh.',
               },
               {
                 icon: ClipboardCheck,
-                title: 'Deep cleaning sessions',
-                desc: 'An intensive clean covering every surface, corner, and hard-to-reach area. Ideal for spring cleaning or moving into a new home.',
+                title: 'Deep cleaning',
+                desc: 'A more intensive clean for homes that need extra attention, including detailed cleaning across key areas of the property.',
               },
               {
                 icon: Building,
                 title: 'End-of-tenancy cleaning',
-                desc: 'A comprehensive clean carried out to professional standards, helping ensure you get your full deposit back.',
+                desc: 'A thorough clean for a rental property at the end of a tenancy, covering the key areas that need attention before moving out.',
               },
             ].map((s) => (
               <div
@@ -332,14 +331,11 @@ export default function ClientLandingPage() {
           <h2 className="text-3xl sm:text-4xl font-bold text-white mb-4">
             Ready to book with confidence?
           </h2>
-          <p className="text-gray-300 text-lg mb-10">
-            Used by homeowners and renters who value reliability
-          </p>
           <Link
             href="/signup"
-            className="inline-flex items-center gap-2 bg-white hover:bg-gray-100 text-gray-900 font-semibold px-8 py-3.5 rounded-lg text-base transition-all shadow-lg"
+            className="inline-flex items-center gap-2 bg-white hover:bg-gray-100 text-gray-900 font-semibold px-8 py-3.5 rounded-lg text-base transition-all shadow-lg mt-6"
           >
-            Find a trusted cleaner
+            Find a cleaner
             <ArrowRight className="h-4 w-4" />
           </Link>
         </ScrollReveal>
@@ -366,16 +362,14 @@ export default function ClientLandingPage() {
                 Become a cleaner
               </h2>
               <p className="text-gray-500 text-lg leading-relaxed mb-8">
-                Join MaidHive and work with flexible hours, fair compensation,
-                and the backing of a professional platform. Set your rates and
-                build your client base.
+                Join MaidHive and work with flexible hours, clear earnings and platform-managed payments. Set your own hourly rate and choose the booking requests that work for you.
               </p>
 
               <div className="space-y-5 mb-10">
                 {[
-                  { title: 'Choose an approved cleaner', desc: 'Choose when and where you work.' },
-                  { title: 'Fair pay, weekly deposits', desc: 'Reliable income with transparent rates.' },
-                  { title: 'Join a trusted network', desc: 'Be part of an approved professional community.' },
+                  { title: 'Choose when you work', desc: 'Set your availability and choose which booking requests you accept.' },
+                  { title: 'Set your own hourly rate', desc: 'Choose your rate within MaidHive’s allowed range and receive payouts securely through the platform.' },
+                  { title: 'Build your reputation', desc: 'Complete bookings and build your profile through genuine client reviews.' },
                 ].map((item) => (
                   <div key={item.title} className="flex items-start gap-3">
                     <CheckCircle2 className="h-5 w-5 text-primary mt-0.5 shrink-0" />

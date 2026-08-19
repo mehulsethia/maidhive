@@ -93,8 +93,8 @@ function SignupForm() {
       <div className="hidden lg:flex flex-col bg-gray-50 p-8 lg:p-10">
         <div className="relative rounded-xl overflow-hidden shadow-lg flex-1">
           <Image
-            src="/images/join-maidhive.avif"
-            alt="Professional cleaning team"
+            src="/images/Become%20a%20Cleaner.png"
+            alt="Cleaner performing a domestic cleaning task inside a residential home"
             fill
             className="object-cover"
             sizes="400px"
@@ -104,6 +104,13 @@ function SignupForm() {
 
       {/* Right — Form */}
       <div className="flex flex-col justify-center p-5 sm:p-6 lg:p-10">
+        <h2 className="text-2xl font-semibold text-gray-900 mb-2">
+          Join MaidHive
+        </h2>
+        <p className="mb-5 text-sm text-gray-500">
+          Create your MaidHive account to get started as a client or cleaner.
+        </p>
+
         {/* Role toggle */}
         <div className="grid grid-cols-2 gap-1 bg-gray-100 rounded-xl p-1 mb-5">
           {(['client', 'cleaner'] as const).map((r) => (

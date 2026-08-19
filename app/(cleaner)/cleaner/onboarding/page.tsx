@@ -31,7 +31,7 @@ const SERVICE_OPTIONS = [
   'Ironing',
   'Windows',
   'Deep cleaning',
-  'Move in/out',
+  'End-of-tenancy cleaning',
 ]
 const QUIZ_PASS_PERCENT = 80
 type StandardsCard = {
